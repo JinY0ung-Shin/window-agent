@@ -1,50 +1,50 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { MainLayout } from "./components/layout/MainLayout";
+import { DashboardPage } from "./pages/DashboardPage";
+import { ChatPage } from "./pages/ChatPage";
+import { useUiStore } from "./stores/uiStore";
+import { useChatStore } from "./stores/chatStore";
+import "./index.css";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+function AppRoutes() {
+  const { activePage, setActivePage } = useUiStore();
+  const initStreamListener = useChatStore((s) => s.initStreamListener);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    initStreamListener();
+  }, [initStreamListener]);
+
+  useEffect(() => {
+    const path = window.location.pathname.replace("/", "") || "dashboard";
+    if (path === "dashboard" || path === "chat") {
+      setActivePage(path);
+    }
+  }, [setActivePage]);
+
+  useEffect(() => {
+    const current = window.location.pathname.replace("/", "");
+    if (current !== activePage) {
+      window.history.pushState(null, "", `/${activePage}`);
+    }
+  }, [activePage]);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <MainLayout>
+      <Routes>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      </Routes>
+    </MainLayout>
+  );
+}
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+function App() {
+  return (
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   );
 }
 
