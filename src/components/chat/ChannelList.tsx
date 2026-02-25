@@ -3,6 +3,13 @@ import { cn, formatDate } from "../../lib/utils";
 
 const channelEmoji: Record<string, string> = {
   "김비서": "👩‍💼",
+  "박개발": "💻",
+  "이분석": "📊",
+  "최기획": "📝",
+  "정조사": "🔍",
+  "한디자": "🎨",
+  "강관리": "📁",
+  "윤자동": "🔧",
 };
 
 export function ChannelList() {
@@ -19,7 +26,7 @@ export function ChannelList() {
       </div>
       <div className="flex-1 overflow-auto py-2 px-2">
         {channels.map((ch) => {
-          const emoji = channelEmoji[ch.name] || "🤖";
+          const emoji = ch.avatar || channelEmoji[ch.name] || "🤖";
           const isActive = activeChannelId === ch.id;
           return (
             <button

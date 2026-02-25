@@ -1,4 +1,5 @@
-use crate::ai::claude::{ClaudeClient, ClaudeError};
+use crate::ai::backend::{AiBackend, AiError};
+use crate::ai::claude::ClaudeClient;
 use crate::ai::types::{ApiConfig, ChatMessage, ChatStreamPayload};
 use tauri::Emitter;
 use tokio::sync::mpsc;
@@ -64,7 +65,7 @@ impl SecretaryAgent {
         &self,
         messages: Vec<ChatMessage>,
         app_handle: tauri::AppHandle,
-    ) -> Result<String, ClaudeError> {
+    ) -> Result<String, AiError> {
         let (tx, mut rx) = mpsc::unbounded_channel::<String>();
 
         let agent_id = SECRETARY_AGENT_ID.to_string();
@@ -102,7 +103,7 @@ impl SecretaryAgent {
     pub async fn handle_message(
         &self,
         messages: Vec<ChatMessage>,
-    ) -> Result<String, ClaudeError> {
+    ) -> Result<String, AiError> {
         self.client.send_message(messages).await
     }
 }

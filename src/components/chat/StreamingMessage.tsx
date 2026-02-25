@@ -1,12 +1,17 @@
 import { useChatStore } from "../../stores/chatStore";
 
-export function StreamingMessage() {
+interface StreamingMessageProps {
+  avatar?: string;
+}
+
+export function StreamingMessage({ avatar }: StreamingMessageProps) {
   const streamingContent = useChatStore((s) => s.streamingContent);
+  const displayAvatar = avatar || "🤖";
 
   return (
     <div className="flex gap-3 px-4 py-2">
       <div className="w-8 h-8 rounded-full bg-accent-500/15 flex items-center justify-center text-sm shrink-0 mt-0.5">
-        👩‍💼
+        {displayAvatar}
       </div>
       <div className="max-w-[70%]">
         <div className="bg-surface-700 rounded-2xl rounded-tl-sm px-4 py-2.5 shadow-sm">

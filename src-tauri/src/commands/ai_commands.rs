@@ -1,5 +1,6 @@
-use crate::agents::secretary::{SecretaryAgent, SECRETARY_AGENT_ID};
+use crate::agents::runner::AgentRunner;
 use crate::ai::types::ChatMessage;
+use crate::db::models;
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -20,14 +21,21 @@ pub async fn chat_with_agent(
     agent_id: String,
     message: String,
 ) -> Result<ChatResponse, String> {
-    // Get API key and URL from environment
-    let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
-        "ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다. .env 파일을 확인하세요.".to_string()
-    })?;
-    let api_url = std::env::var("ANTHROPIC_API_URL")
-        .unwrap_or_else(|_| "https://api.anthropic.com/v1/messages".to_string());
-    let model = std::env::var("ANTHROPIC_MODEL")
-        .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
+    // Load agent from DB
+    let agent = {
+        let conn = state
+            .db
+            .conn
+            .lock()
+            .map_err(|e| format!("DB lock error: {}", e))?;
+        models::get_agent_by_id(&conn, &agent_id)
+            .map_err(|e| format!("DB error: {}", e))?
+            .ok_or_else(|| format!("Agent not found: {}", agent_id))?
+    };
+
+    // Create runner from agent config
+    let runner = AgentRunner::from_agent(&agent)
+        .map_err(|e| format!("Failed to create agent runner: {}", e))?;
 
     // Save user message to DB
     {
@@ -83,16 +91,7 @@ pub async fn chat_with_agent(
         msgs
     };
 
-    // Route to the appropriate agent
-    let result = match agent_id.as_str() {
-        SECRETARY_AGENT_ID => {
-            let agent = SecretaryAgent::new(api_key, api_url, model);
-            agent.handle_message_streaming(history, app).await
-        }
-        _ => {
-            return Err(format!("Unknown agent: {}", agent_id));
-        }
-    };
+    let result = runner.handle_message_streaming(history, app).await;
 
     match result {
         Ok(full_response) => {

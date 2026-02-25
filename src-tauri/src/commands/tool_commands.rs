@@ -15,8 +15,8 @@ pub struct ExecuteToolRequest {
 }
 
 #[tauri::command]
-pub fn execute_tool(
-    state: State<AppState>,
+pub async fn execute_tool(
+    state: State<'_, AppState>,
     request: ExecuteToolRequest,
 ) -> Result<Value, String> {
     let exec_id = models::new_id();
@@ -39,7 +39,7 @@ pub fn execute_tool(
     }
 
     // Execute the tool
-    let result = tools::execute_tool(&request.tool_name, request.params);
+    let result = tools::execute_tool(&request.tool_name, request.params).await;
 
     // Determine status from result
     let success = result

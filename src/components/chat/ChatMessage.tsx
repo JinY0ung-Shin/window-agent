@@ -1,8 +1,14 @@
 import type { Message } from "../../services/types";
 import { cn, formatTime } from "../../lib/utils";
 
-export function ChatMessage({ message }: { message: Message }) {
+interface ChatMessageProps {
+  message: Message;
+  agentAvatar?: string;
+}
+
+export function ChatMessage({ message, agentAvatar }: ChatMessageProps) {
   const isUser = message.role === "user";
+  const avatar = isUser ? "👤" : (agentAvatar || "🤖");
 
   return (
     <div
@@ -16,7 +22,7 @@ export function ChatMessage({ message }: { message: Message }) {
             : "bg-accent-500/15"
         )}
       >
-        {isUser ? "👤" : "👩‍💼"}
+        {avatar}
       </div>
       <div className={cn("max-w-[70%] min-w-0", isUser ? "text-right" : "")}>
         <div

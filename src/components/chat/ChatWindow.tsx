@@ -4,9 +4,24 @@ import { ChatMessage } from "./ChatMessage";
 import { StreamingMessage } from "./StreamingMessage";
 import { ChatInput } from "./ChatInput";
 
+const agentEmoji: Record<string, string> = {
+  "김비서": "👩‍💼",
+  "박개발": "💻",
+  "이분석": "📊",
+  "최기획": "📝",
+  "정조사": "🔍",
+  "한디자": "🎨",
+  "강관리": "📁",
+  "윤자동": "🔧",
+};
+
 export function ChatWindow() {
-  const { messages, streaming, activeChannelId } = useChatStore();
+  const { messages, streaming, activeChannelId, channels } = useChatStore();
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const activeChannel = channels.find((c) => c.id === activeChannelId);
+  const channelName = activeChannel?.name || "에이전트";
+  const channelAvatar = activeChannel?.avatar || agentEmoji[channelName] || "🤖";
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,10 +44,10 @@ export function ChatWindow() {
       {/* Channel Header Bar */}
       <div className="h-12 px-4 flex items-center gap-3 border-b border-surface-700 bg-surface-800/50 backdrop-blur-sm shrink-0">
         <div className="w-7 h-7 rounded-full bg-surface-700/60 flex items-center justify-center text-sm">
-          👩‍💼
+          {channelAvatar}
         </div>
         <div>
-          <p className="text-sm font-medium text-text-primary">김비서</p>
+          <p className="text-sm font-medium text-text-primary">{channelName}</p>
           <p className="text-[10px] text-success">응답 대기 중</p>
         </div>
       </div>
@@ -41,16 +56,16 @@ export function ChatWindow() {
         {messages.length === 0 && (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
-              <div className="text-4xl mb-3">👩‍💼</div>
-              <p className="text-sm text-text-secondary font-medium">안녕하세요, 김비서입니다</p>
+              <div className="text-4xl mb-3">{channelAvatar}</div>
+              <p className="text-sm text-text-secondary font-medium">안녕하세요, {channelName}입니다</p>
               <p className="text-xs text-text-muted mt-1">무엇을 도와드릴까요?</p>
             </div>
           </div>
         )}
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} message={msg} />
+          <ChatMessage key={msg.id} message={msg} agentAvatar={channelAvatar} />
         ))}
-        {streaming && <StreamingMessage />}
+        {streaming && <StreamingMessage avatar={channelAvatar} />}
         <div ref={bottomRef} />
       </div>
       <ChatInput />

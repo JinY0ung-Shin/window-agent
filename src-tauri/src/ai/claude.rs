@@ -1,25 +1,16 @@
-use crate::ai::types::*;
+use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
 use tokio::sync::mpsc;
+
+use crate::ai::backend::{AiBackend, AiError};
+use crate::ai::types::*;
 
 const API_VERSION: &str = "2023-06-01";
 
 pub struct ClaudeClient {
     client: Client,
     config: ApiConfig,
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum ClaudeError {
-    #[error("HTTP request failed: {0}")]
-    Request(#[from] reqwest::Error),
-    #[error("API error: {0}")]
-    Api(String),
-    #[error("Stream parse error: {0}")]
-    Parse(String),
-    #[error("Channel send error")]
-    Channel,
 }
 
 impl ClaudeClient {
@@ -29,9 +20,11 @@ impl ClaudeClient {
             config,
         }
     }
+}
 
-    /// Send a non-streaming message to the Claude API
-    pub async fn send_message(&self, messages: Vec<ChatMessage>) -> Result<String, ClaudeError> {
+#[async_trait]
+impl AiBackend for ClaudeClient {
+    async fn send_message(&self, messages: Vec<ChatMessage>) -> Result<String, AiError> {
         let request = ApiRequest {
             model: self.config.model.clone(),
             max_tokens: self.config.max_tokens,
@@ -53,7 +46,7 @@ impl ClaudeClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(ClaudeError::Api(format!("{}: {}", status, body)));
+            return Err(AiError::Api(format!("{}: {}", status, body)));
         }
 
         let api_response: ApiResponse = response.json().await?;
@@ -67,13 +60,11 @@ impl ClaudeClient {
         Ok(text)
     }
 
-    /// Send a streaming message to the Claude API.
-    /// Text chunks are sent through the mpsc sender as they arrive.
-    pub async fn send_message_streaming(
+    async fn send_message_streaming(
         &self,
         messages: Vec<ChatMessage>,
         sender: mpsc::UnboundedSender<String>,
-    ) -> Result<String, ClaudeError> {
+    ) -> Result<String, AiError> {
         let request = ApiRequest {
             model: self.config.model.clone(),
             max_tokens: self.config.max_tokens,
@@ -95,7 +86,7 @@ impl ClaudeClient {
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
-            return Err(ClaudeError::Api(format!("{}: {}", status, body)));
+            return Err(AiError::Api(format!("{}: {}", status, body)));
         }
 
         let mut full_response = String::new();
@@ -107,7 +98,6 @@ impl ClaudeClient {
             let chunk_str = String::from_utf8_lossy(&chunk);
             buffer.push_str(&chunk_str);
 
-            // Process complete SSE lines from the buffer
             while let Some(pos) = buffer.find("\n\n") {
                 let event_block = buffer[..pos].to_string();
                 buffer = buffer[pos + 2..].to_string();
@@ -115,13 +105,12 @@ impl ClaudeClient {
                 if let Some(text) = parse_sse_event(&event_block) {
                     full_response.push_str(&text);
                     if sender.send(text).is_err() {
-                        return Err(ClaudeError::Channel);
+                        return Err(AiError::Channel);
                     }
                 }
             }
         }
 
-        // Process any remaining data in the buffer
         if !buffer.trim().is_empty() {
             if let Some(text) = parse_sse_event(&buffer) {
                 full_response.push_str(&text);
@@ -145,7 +134,6 @@ fn parse_sse_event(event_block: &str) -> Option<String> {
 
     let data = data_line?;
 
-    // Skip [DONE] marker if present
     if data.trim() == "[DONE]" {
         return None;
     }
@@ -161,7 +149,10 @@ fn parse_sse_event(event_block: &str) -> Option<String> {
             }
         }
         StreamEvent::Error { error } => {
-            eprintln!("Claude API stream error: {} - {}", error.error_type, error.message);
+            eprintln!(
+                "Claude API stream error: {} - {}",
+                error.error_type, error.message
+            );
             None
         }
         _ => None,

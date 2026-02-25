@@ -4,6 +4,9 @@ import { cn } from "../../lib/utils";
 const navItems: { id: Page; label: string; emoji: string }[] = [
   { id: "dashboard", label: "대시보드", emoji: "📊" },
   { id: "chat", label: "채팅", emoji: "💬" },
+  { id: "hr", label: "인사관리", emoji: "👤" },
+  { id: "tasks", label: "업무보드", emoji: "📋" },
+  { id: "settings", label: "설정", emoji: "⚙️" },
 ];
 
 export function Sidebar() {

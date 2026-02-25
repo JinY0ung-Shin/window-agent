@@ -32,10 +32,11 @@ pub fn run() {
                 Database::new(db_path.to_str().unwrap()).expect("failed to open database");
             database.init_tables().expect("failed to init tables");
 
-            // Seed default agent
+            // Seed agents and departments
             {
                 let conn = database.conn.lock().unwrap();
-                db::models::seed_secretary_agent(&conn).ok(); // INSERT OR IGNORE
+                agents::seed::seed_all_agents(&conn).ok();
+                agents::seed::seed_default_departments(&conn).ok();
             }
 
             // Register managed state
@@ -46,12 +47,41 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            // Chat
             commands::chat_commands::send_message,
             commands::chat_commands::get_messages,
+            // Agent
             commands::agent_commands::get_agents,
             commands::agent_commands::get_agent_status,
+            // Tools
             commands::tool_commands::execute_tool,
+            // AI
             commands::ai_commands::chat_with_agent,
+            // HR
+            commands::hr_commands::hire_agent,
+            commands::hr_commands::fire_agent,
+            commands::hr_commands::update_agent,
+            commands::hr_commands::get_departments,
+            commands::hr_commands::create_department,
+            // Tasks
+            commands::task_commands::create_task,
+            commands::task_commands::update_task,
+            commands::task_commands::delete_task,
+            commands::task_commands::get_all_tasks,
+            commands::task_commands::get_tasks_by_status,
+            commands::task_commands::update_task_status_cmd,
+            // Permissions
+            commands::permission_commands::get_permissions,
+            commands::permission_commands::update_permission,
+            commands::permission_commands::get_folder_whitelist,
+            commands::permission_commands::add_folder_to_whitelist,
+            commands::permission_commands::remove_folder_from_whitelist,
+            commands::permission_commands::get_program_whitelist,
+            commands::permission_commands::add_program_to_whitelist,
+            commands::permission_commands::remove_program_from_whitelist,
+            // Collaboration
+            commands::collaboration_commands::send_agent_message,
+            commands::collaboration_commands::get_agent_messages,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

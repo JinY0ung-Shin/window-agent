@@ -1,5 +1,43 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AiBackendType {
+    Claude,
+    OpenAI,
+    Ollama,
+    Custom,
+}
+
+impl Default for AiBackendType {
+    fn default() -> Self {
+        Self::Claude
+    }
+}
+
+impl std::fmt::Display for AiBackendType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Claude => write!(f, "claude"),
+            Self::OpenAI => write!(f, "openai"),
+            Self::Ollama => write!(f, "ollama"),
+            Self::Custom => write!(f, "custom"),
+        }
+    }
+}
+
+impl std::str::FromStr for AiBackendType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "claude" => Ok(Self::Claude),
+            "openai" => Ok(Self::OpenAI),
+            "ollama" => Ok(Self::Ollama),
+            "custom" => Ok(Self::Custom),
+            _ => Err(format!("Unknown AI backend: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,

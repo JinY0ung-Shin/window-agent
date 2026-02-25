@@ -3,9 +3,14 @@ import { useEffect } from "react";
 import { MainLayout } from "./components/layout/MainLayout";
 import { DashboardPage } from "./pages/DashboardPage";
 import { ChatPage } from "./pages/ChatPage";
-import { useUiStore } from "./stores/uiStore";
+import { HRPage } from "./pages/HRPage";
+import { TaskBoardPage } from "./pages/TaskBoardPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { useUiStore, type Page } from "./stores/uiStore";
 import { useChatStore } from "./stores/chatStore";
 import "./index.css";
+
+const validPages: Page[] = ["dashboard", "chat", "hr", "tasks", "settings"];
 
 function AppRoutes() {
   const { activePage, setActivePage } = useUiStore();
@@ -19,8 +24,8 @@ function AppRoutes() {
 
   useEffect(() => {
     const path = location.pathname.replace("/", "") || "dashboard";
-    if (path === "dashboard" || path === "chat") {
-      setActivePage(path);
+    if (validPages.includes(path as Page)) {
+      setActivePage(path as Page);
     }
   }, [location.pathname, setActivePage]);
 
@@ -36,6 +41,9 @@ function AppRoutes() {
       <Routes>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/chat" element={<ChatPage />} />
+        <Route path="/hr" element={<HRPage />} />
+        <Route path="/tasks" element={<TaskBoardPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </MainLayout>

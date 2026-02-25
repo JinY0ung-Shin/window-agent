@@ -10,6 +10,13 @@ const statusConfig: Record<AgentStatus, { label: string; color: string; dot: str
 
 const agentEmoji: Record<string, string> = {
   "김비서": "👩‍💼",
+  "박개발": "💻",
+  "이분석": "📊",
+  "최기획": "📝",
+  "정조사": "🔍",
+  "한디자": "🎨",
+  "강관리": "📁",
+  "윤자동": "🔧",
 };
 
 export function AgentStatusCard({ agent }: { agent: Agent }) {
@@ -18,7 +25,7 @@ export function AgentStatusCard({ agent }: { agent: Agent }) {
     agent.totalTasks > 0
       ? Math.round((agent.completedTasks / agent.totalTasks) * 100)
       : 0;
-  const emoji = agentEmoji[agent.name] || "🤖";
+  const emoji = agent.avatar || agentEmoji[agent.name] || "🤖";
 
   return (
     <div className="bg-surface-700/40 rounded-xl p-4 hover:bg-surface-700/60 transition-all group">

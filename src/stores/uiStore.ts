@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Page = "dashboard" | "chat";
+export type Page = "dashboard" | "chat" | "hr" | "tasks" | "settings";
 
 interface UiState {
   activePage: Page;
