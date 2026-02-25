@@ -20,11 +20,14 @@ pub async fn chat_with_agent(
     agent_id: String,
     message: String,
 ) -> Result<ChatResponse, String> {
-    // Get API key from environment
+    // Get API key and URL from environment
     let api_key = std::env::var("ANTHROPIC_API_KEY").map_err(|_| {
-        "ANTHROPIC_API_KEY environment variable not set. Please set it to use AI features."
-            .to_string()
+        "ANTHROPIC_API_KEY 환경변수가 설정되지 않았습니다. .env 파일을 확인하세요.".to_string()
     })?;
+    let api_url = std::env::var("ANTHROPIC_API_URL")
+        .unwrap_or_else(|_| "https://api.anthropic.com/v1/messages".to_string());
+    let model = std::env::var("ANTHROPIC_MODEL")
+        .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
 
     // Save user message to DB
     {
@@ -83,7 +86,7 @@ pub async fn chat_with_agent(
     // Route to the appropriate agent
     let result = match agent_id.as_str() {
         SECRETARY_AGENT_ID => {
-            let agent = SecretaryAgent::new(api_key);
+            let agent = SecretaryAgent::new(api_key, api_url, model);
             agent.handle_message_streaming(history, app).await
         }
         _ => {

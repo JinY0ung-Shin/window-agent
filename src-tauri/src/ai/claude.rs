@@ -3,7 +3,6 @@ use futures::StreamExt;
 use reqwest::Client;
 use tokio::sync::mpsc;
 
-const API_URL: &str = "https://api.anthropic.com/v1/messages";
 const API_VERSION: &str = "2023-06-01";
 
 pub struct ClaudeClient {
@@ -43,7 +42,7 @@ impl ClaudeClient {
 
         let response = self
             .client
-            .post(API_URL)
+            .post(&self.config.api_url)
             .header("x-api-key", &self.config.api_key)
             .header("anthropic-version", API_VERSION)
             .header("content-type", "application/json")
@@ -85,7 +84,7 @@ impl ClaudeClient {
 
         let response = self
             .client
-            .post(API_URL)
+            .post(&self.config.api_url)
             .header("x-api-key", &self.config.api_key)
             .header("anthropic-version", API_VERSION)
             .header("content-type", "application/json")

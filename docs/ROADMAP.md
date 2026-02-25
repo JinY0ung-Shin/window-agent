@@ -715,12 +715,12 @@ ToolExecution (도구 실행 기록)
 
 ## 개발 로드맵
 
-### Phase 1: 기반 구축 (MVP)
-- [ ] Tauri + React 프로젝트 셋업
-- [ ] 기본 UI 레이아웃 (대시보드, 채팅)
-- [ ] 단일 AI 백엔드 연결 (Claude API)
-- [ ] 기본 도구 구현 (file.read, file.write, process.shell)
-- [ ] 비서 에이전트 1명으로 기본 대화 기능
+### Phase 1: 기반 구축 (MVP) ✅ 완료
+- [x] Tauri + React 프로젝트 셋업
+- [x] 기본 UI 레이아웃 (대시보드, 채팅) + UI 리디자인 (카드/이모지/그림자)
+- [x] 단일 AI 백엔드 연결 (커스텀 프록시 지원, 환경변수 기반 설정)
+- [x] 기본 도구 구현 (file_read, file_write, shell_execute)
+- [x] 비서 에이전트 "김비서" 기본 대화 + 스트리밍 응답
 
 ### Phase 2: 핵심 기능
 - [ ] 에이전트 8명 구현

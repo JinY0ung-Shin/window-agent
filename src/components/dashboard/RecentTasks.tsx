@@ -16,9 +16,13 @@ export function RecentTasks() {
   );
 
   return (
-    <div>
-      <h2 className="text-sm font-semibold text-text-primary mb-3">
-        최근 작업
+    <div className="card">
+      <h2 className="section-title">
+        <span>📝</span>
+        <span>최근 작업</span>
+        <span className="ml-auto text-xs font-normal text-text-muted bg-surface-700/60 px-2 py-0.5 rounded-full">
+          {tasks.length}건
+        </span>
       </h2>
       <div className="space-y-2">
         {sorted.map((task) => {
@@ -26,7 +30,7 @@ export function RecentTasks() {
           return (
             <div
               key={task.id}
-              className="bg-surface-800 rounded-lg p-3 border border-surface-700 flex items-center justify-between gap-3"
+              className="bg-surface-700/40 rounded-xl p-3 flex items-center justify-between gap-3 hover:bg-surface-700/60 transition-colors"
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-text-primary truncate">{task.title}</p>
@@ -36,7 +40,7 @@ export function RecentTasks() {
               </div>
               <span
                 className={cn(
-                  "shrink-0 text-[10px] px-2 py-0.5 rounded-full font-medium",
+                  "shrink-0 text-[10px] px-2.5 py-1 rounded-full font-medium",
                   badge.class
                 )}
               >
@@ -46,8 +50,10 @@ export function RecentTasks() {
           );
         })}
         {tasks.length === 0 && (
-          <div className="text-xs text-text-muted py-8 text-center">
-            작업이 없습니다
+          <div className="text-center py-10">
+            <div className="text-3xl mb-2">📭</div>
+            <p className="text-xs text-text-muted">아직 작업이 없습니다</p>
+            <p className="text-[10px] text-text-muted mt-1">에이전트에게 지시를 내려보세요</p>
           </div>
         )}
       </div>

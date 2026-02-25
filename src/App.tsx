@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import { MainLayout } from "./components/layout/MainLayout";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -10,24 +10,26 @@ import "./index.css";
 function AppRoutes() {
   const { activePage, setActivePage } = useUiStore();
   const initStreamListener = useChatStore((s) => s.initStreamListener);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     initStreamListener();
   }, [initStreamListener]);
 
   useEffect(() => {
-    const path = window.location.pathname.replace("/", "") || "dashboard";
+    const path = location.pathname.replace("/", "") || "dashboard";
     if (path === "dashboard" || path === "chat") {
       setActivePage(path);
     }
-  }, [setActivePage]);
+  }, [location.pathname, setActivePage]);
 
   useEffect(() => {
-    const current = window.location.pathname.replace("/", "");
+    const current = location.pathname.replace("/", "");
     if (current !== activePage) {
-      window.history.pushState(null, "", `/${activePage}`);
+      navigate(`/${activePage}`, { replace: true });
     }
-  }, [activePage]);
+  }, [activePage, location.pathname, navigate]);
 
   return (
     <MainLayout>

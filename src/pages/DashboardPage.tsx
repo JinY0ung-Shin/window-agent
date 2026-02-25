@@ -14,12 +14,23 @@ export function DashboardPage() {
   }, [fetchAgents, fetchTasks]);
 
   return (
-    <div className="h-full p-5 overflow-auto">
-      <div className="mb-5">
+    <div className="h-full p-6 overflow-auto">
+      {/* Page Header */}
+      <div className="mb-6">
+        <h1 className="text-lg font-bold text-text-primary flex items-center gap-2">
+          📊 대시보드
+        </h1>
+        <p className="text-xs text-text-muted mt-1">에이전트 현황과 작업 상태를 한눈에 확인하세요</p>
+      </div>
+
+      {/* Quick Command */}
+      <div className="mb-6">
         <QuickCommand />
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="space-y-5">
+
+      {/* Main Grid: 2/3 + 1/3 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className="lg:col-span-2 space-y-5">
           <AgentStatusList />
           <TaskSummary />
         </div>

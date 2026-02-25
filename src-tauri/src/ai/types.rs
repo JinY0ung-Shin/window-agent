@@ -25,6 +25,7 @@ impl ChatMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiConfig {
     pub api_key: String,
+    pub api_url: String,
     pub model: String,
     pub max_tokens: u32,
     pub system_prompt: Option<String>,
@@ -34,6 +35,7 @@ impl Default for ApiConfig {
     fn default() -> Self {
         Self {
             api_key: String::new(),
+            api_url: "https://api.anthropic.com/v1/messages".to_string(),
             model: "claude-sonnet-4-20250514".to_string(),
             max_tokens: 4096,
             system_prompt: None,

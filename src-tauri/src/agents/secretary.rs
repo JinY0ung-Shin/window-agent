@@ -31,10 +31,11 @@ pub struct SecretaryAgent {
 }
 
 impl SecretaryAgent {
-    pub fn new(api_key: String) -> Self {
+    pub fn new(api_key: String, api_url: String, model: String) -> Self {
         let config = ApiConfig {
             api_key,
-            model: "claude-sonnet-4-20250514".to_string(),
+            api_url,
+            model,
             max_tokens: 4096,
             system_prompt: Some(SECRETARY_SYSTEM_PROMPT.to_string()),
         };
