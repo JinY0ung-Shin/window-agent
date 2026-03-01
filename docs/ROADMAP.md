@@ -722,17 +722,17 @@ ToolExecution (도구 실행 기록)
 - [x] 기본 도구 구현 (file_read, file_write, shell_execute)
 - [x] 비서 에이전트 "김비서" 기본 대화 + 스트리밍 응답
 
-### Phase 2: 핵심 기능 🔧 진행중
+### Phase 2: 핵심 기능 ✅ 완료
 - [x] 에이전트 8명 구현 (김비서/박개발/이분석/최기획/정조사/한디자/강관리/윤자동 DB 시드 + 프롬프트)
 - [x] 인사관리 시스템 (채용/해고/관리) — HR 페이지, 테이블, 모달 5개, Tauri 커맨드
 - [x] 업무 보드 (칸반) — dnd-kit 드래그앤드롭, 3열 칸반, Task CRUD
 - [x] 에이전트 간 협업 시스템 — agent_messages 테이블, 메시지 송수신 커맨드 (기본)
 - [x] 권한/보안 시스템 — permissions/folder_whitelist/program_whitelist 테이블 + 설정 UI
 - [x] 다중 AI 백엔드 지원 — AiBackend trait + Claude/OpenAI/Ollama 구현 + factory 패턴
-- [x] 브라우저 자동화 엔진 — 스텁 구조만 (chromiumoxide 미연동)
-- [ ] 브라우저 자동화 실제 연동 (Chrome CDP 제어, 로그인/세션 관리)
-- [ ] SaaS 연동 (Confluence, Notion, Jira 등 접근)
-- [ ] 에이전트 페르소나 강화 (OpenClaw 방식 Soul/Identity 파일 시스템 — TODO-persona-system.md 참고)
+- [x] 브라우저 자동화 — headless_chrome CDP 연동, navigate/screenshot/click/type 구현, 싱글톤 BrowserManager
+- [x] Web Tools — reqwest + scraper 기반 web_fetch/web_search (DuckDuckGo HTML 파싱)
+- [x] SaaS 연동 — Notion API v1, Jira REST API v3, Confluence REST API v2 커넥터 (9개 도구)
+- [x] 에이전트 페르소나 강화 — Soul/Identity/Instructions 파일 시스템 (8명 × 3파일), 프롬프트 15-20줄 확장, AgentRunner 페르소나 조합
 
 ### Phase 3: 고도화
 - [ ] 보고서 시스템

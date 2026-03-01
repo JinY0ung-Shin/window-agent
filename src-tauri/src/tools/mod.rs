@@ -1,9 +1,10 @@
-pub mod file_tools;
-pub mod process_tools;
 pub mod browser_manager;
 pub mod browser_tools;
-pub mod web_tools;
+pub mod file_tools;
 pub mod permissions;
+pub mod process_tools;
+pub mod saas;
+pub mod web_tools;
 
 use serde_json::Value;
 
@@ -46,26 +47,45 @@ pub async fn execute_tool(tool_name: &str, params: Value) -> Value {
             let url = params.get("url").and_then(|v| v.as_str()).unwrap_or("");
             browser_tools::browser_navigate(url).await
         }
-        "browser_screenshot" => {
-            browser_tools::browser_screenshot().await
-        }
+        "browser_screenshot" => browser_tools::browser_screenshot().await,
         "browser_click" => {
-            let selector = params.get("selector").and_then(|v| v.as_str()).unwrap_or("");
+            let selector = params
+                .get("selector")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             browser_tools::browser_click(selector).await
         }
         "browser_type" => {
-            let selector = params.get("selector").and_then(|v| v.as_str()).unwrap_or("");
+            let selector = params
+                .get("selector")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             let text = params.get("text").and_then(|v| v.as_str()).unwrap_or("");
             browser_tools::browser_type(selector, text).await
         }
         "web_search" => {
-            let query = params.get("query").and_then(|v| v.as_str()).unwrap_or("");
+            let query = params
+                .get("query")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             web_tools::web_search(query).await
         }
         "web_fetch" => {
             let url = params.get("url").and_then(|v| v.as_str()).unwrap_or("");
             web_tools::web_fetch(url).await
         }
+
+        // SaaS tools
+        "notion_search" | "notion_get_page" | "notion_create_page" | "notion_list_pages"
+        | "jira_search" | "jira_get_issue" | "jira_create_issue" | "confluence_search"
+        | "confluence_get_page" => match saas::execute_saas_tool(tool_name, &params).await {
+            Some(result) => result,
+            None => serde_json::json!({
+                "success": false,
+                "error": format!("Unknown SaaS tool: {}", tool_name)
+            }),
+        },
+
         _ => serde_json::json!({
             "success": false,
             "error": format!("Unknown tool: {}", tool_name)
