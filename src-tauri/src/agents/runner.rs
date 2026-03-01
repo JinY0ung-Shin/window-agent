@@ -18,7 +18,7 @@ impl AgentRunner {
         let backend_type: AiBackendType = agent
             .ai_backend
             .parse()
-            .unwrap_or(AiBackendType::Claude);
+            .unwrap_or(AiBackendType::OpenAI);
 
         // Determine API key: agent-specific or env fallback
         let api_key = if agent.api_key.is_empty() {
@@ -56,13 +56,11 @@ impl AgentRunner {
         };
 
         // Environment variable takes priority over DB model
-        let model = std::env::var("ANTHROPIC_MODEL").unwrap_or_else(|_| {
-            if agent.model.is_empty() {
-                "claude-sonnet-4-20250514".to_string()
-            } else {
-                agent.model.clone()
-            }
-        });
+        let model = if agent.model.is_empty() {
+            "gpt-5.3-codex".to_string()
+        } else {
+            agent.model.clone()
+        };
 
         let config = ApiConfig {
             api_key,
