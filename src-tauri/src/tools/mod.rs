@@ -9,7 +9,7 @@ pub mod web_tools;
 use serde_json::Value;
 
 use file_tools::{file_read, file_write, FileReadParams, FileWriteParams};
-use process_tools::{shell_execute, ShellExecuteParams};
+use process_tools::{shell_execute, ShellExecuteParams, program_execute, ProgramExecuteParams};
 
 pub async fn execute_tool(tool_name: &str, params: Value) -> Value {
     match tool_name {
@@ -73,6 +73,17 @@ pub async fn execute_tool(tool_name: &str, params: Value) -> Value {
         "web_fetch" => {
             let url = params.get("url").and_then(|v| v.as_str()).unwrap_or("");
             web_tools::web_fetch(url).await
+        }
+
+        "program_execute" => {
+            let parsed: Result<ProgramExecuteParams, _> = serde_json::from_value(params);
+            match parsed {
+                Ok(p) => serde_json::to_value(program_execute(&p)).unwrap_or(Value::Null),
+                Err(e) => serde_json::json!({
+                    "success": false,
+                    "error": format!("Invalid params for program_execute: {}", e)
+                }),
+            }
         }
 
         // SaaS tools

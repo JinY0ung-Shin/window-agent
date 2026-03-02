@@ -4,6 +4,7 @@ import { AgentStatusList } from "../components/dashboard/AgentStatusList";
 import { TaskSummary } from "../components/dashboard/TaskSummary";
 import { RecentTasks } from "../components/dashboard/RecentTasks";
 import { QuickCommand } from "../components/dashboard/QuickCommand";
+import { CostOverview } from "../components/dashboard/CostOverview";
 
 export function DashboardPage() {
   const { fetchAgents, fetchTasks } = useAgentStore();
@@ -34,8 +35,9 @@ export function DashboardPage() {
           <AgentStatusList />
           <TaskSummary />
         </div>
-        <div>
+        <div className="space-y-5">
           <RecentTasks />
+          <CostOverview />
         </div>
       </div>
     </div>

@@ -6,6 +6,9 @@ import {
   hireAgent as hireAgentCmd,
   fireAgent as fireAgentCmd,
   updateAgent as updateAgentCmd,
+  putAgentOnLeave as putOnLeaveCmd,
+  restoreAgentFromLeave as restoreFromLeaveCmd,
+  rehireFromBackup as rehireFromBackupCmd,
 } from "../services/tauriCommands";
 
 interface HrState {
@@ -16,6 +19,8 @@ interface HrState {
   showEditModal: boolean;
   showFireModal: boolean;
   showProfileCard: boolean;
+  showLeaveModal: boolean;
+  showBackupListModal: boolean;
   loading: boolean;
   fetchAgents: () => Promise<void>;
   fetchDepartments: () => Promise<void>;
@@ -28,9 +33,16 @@ interface HrState {
   closeFireModal: () => void;
   openProfileCard: (agent?: Agent) => void;
   closeProfileCard: () => void;
+  openLeaveModal: (agent?: Agent) => void;
+  closeLeaveModal: () => void;
+  openBackupListModal: (agent?: Agent) => void;
+  closeBackupListModal: () => void;
   hireAgent: (request: CreateAgentRequest) => Promise<void>;
   fireAgent: (agentId: string) => Promise<void>;
   updateAgent: (agentId: string, request: UpdateAgentRequest) => Promise<void>;
+  putOnLeave: (agentId: string, reason: string) => Promise<void>;
+  restoreFromLeave: (agentId: string) => Promise<void>;
+  rehireFromBackup: (backupId: string) => Promise<void>;
 }
 
 export const useHrStore = create<HrState>((set, get) => ({
@@ -41,6 +53,8 @@ export const useHrStore = create<HrState>((set, get) => ({
   showEditModal: false,
   showFireModal: false,
   showProfileCard: false,
+  showLeaveModal: false,
+  showBackupListModal: false,
   loading: false,
 
   fetchAgents: async () => {
@@ -86,6 +100,24 @@ export const useHrStore = create<HrState>((set, get) => ({
   },
   closeProfileCard: () => set({ showProfileCard: false, selectedAgent: null }),
 
+  openLeaveModal: (agent?) => {
+    if (agent) {
+      set({ selectedAgent: agent, showLeaveModal: true });
+    } else {
+      set({ showLeaveModal: true });
+    }
+  },
+  closeLeaveModal: () => set({ showLeaveModal: false, selectedAgent: null }),
+
+  openBackupListModal: (agent?) => {
+    if (agent) {
+      set({ selectedAgent: agent, showBackupListModal: true });
+    } else {
+      set({ showBackupListModal: true });
+    }
+  },
+  closeBackupListModal: () => set({ showBackupListModal: false, selectedAgent: null }),
+
   hireAgent: async (request) => {
     await hireAgentCmd(request);
     await get().fetchAgents();
@@ -102,5 +134,22 @@ export const useHrStore = create<HrState>((set, get) => ({
     await updateAgentCmd(agentId, request);
     await get().fetchAgents();
     set({ showEditModal: false, selectedAgent: null });
+  },
+
+  putOnLeave: async (agentId, reason) => {
+    await putOnLeaveCmd(agentId, reason);
+    await get().fetchAgents();
+    set({ showLeaveModal: false, selectedAgent: null });
+  },
+
+  restoreFromLeave: async (agentId) => {
+    await restoreFromLeaveCmd(agentId);
+    await get().fetchAgents();
+  },
+
+  rehireFromBackup: async (backupId) => {
+    await rehireFromBackupCmd(backupId);
+    await get().fetchAgents();
+    set({ showBackupListModal: false, selectedAgent: null });
   },
 }));

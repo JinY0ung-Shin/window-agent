@@ -48,8 +48,17 @@ pub fn run() {
             }
 
             // Register managed state
+            let db_arc = Arc::new(database);
+
+            // Start background scheduler
+            let db_for_scheduler = Arc::clone(&db_arc);
+            tauri::async_runtime::spawn(async move {
+                let scheduler = agents::scheduler::TaskScheduler::new(db_for_scheduler);
+                scheduler.start().await;
+            });
+
             app.manage(AppState {
-                db: Arc::new(database),
+                db: db_arc,
             });
 
             Ok(())
@@ -90,6 +99,37 @@ pub fn run() {
             // Collaboration
             commands::collaboration_commands::send_agent_message,
             commands::collaboration_commands::get_agent_messages,
+            // Reports (Phase 3)
+            commands::report_commands::generate_report,
+            commands::report_commands::get_reports,
+            commands::report_commands::get_report_by_id,
+            commands::report_commands::delete_report,
+            // Evaluations (Phase 3)
+            commands::evaluation_commands::evaluate_agent,
+            commands::evaluation_commands::get_evaluations,
+            commands::evaluation_commands::get_agent_performance_summary,
+            // OrgChart (Phase 3)
+            commands::orgchart_commands::get_org_chart,
+            commands::orgchart_commands::move_agent_department,
+            commands::orgchart_commands::update_department,
+            commands::orgchart_commands::delete_department,
+            // Leave/Backup (Phase 3)
+            commands::leave_commands::put_agent_on_leave,
+            commands::leave_commands::restore_agent_from_leave,
+            commands::leave_commands::backup_agent_config,
+            commands::leave_commands::get_agent_backups,
+            commands::leave_commands::rehire_from_backup,
+            // Scheduling (Phase 3)
+            commands::schedule_commands::create_scheduled_task,
+            commands::schedule_commands::get_scheduled_tasks,
+            commands::schedule_commands::update_scheduled_task,
+            commands::schedule_commands::delete_scheduled_task,
+            commands::schedule_commands::trigger_scheduled_task,
+            // Cost (Phase 3)
+            commands::cost_commands::record_cost,
+            commands::cost_commands::get_cost_summary,
+            commands::cost_commands::get_agent_cost_history,
+            commands::cost_commands::get_cost_trend,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

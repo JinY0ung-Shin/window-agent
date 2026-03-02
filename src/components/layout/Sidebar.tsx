@@ -6,6 +6,8 @@ const navItems: { id: Page; label: string; emoji: string }[] = [
   { id: "chat", label: "채팅", emoji: "💬" },
   { id: "hr", label: "인사관리", emoji: "👤" },
   { id: "tasks", label: "업무보드", emoji: "📋" },
+  { id: "reports", label: "보고서", emoji: "📄" },
+  { id: "orgchart", label: "조직도", emoji: "🏛️" },
   { id: "settings", label: "설정", emoji: "⚙️" },
 ];
 
