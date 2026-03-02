@@ -28,7 +28,7 @@ export function SettingsPage() {
         description="권한 정책, 허용 목록, 비용 운영 설정을 관리합니다."
       />
 
-      <div className="mb-4 flex max-w-full gap-1 overflow-x-auto rounded-xl border border-white/[0.08] bg-surface-800/78 p-1">
+      <div className="mb-4 flex max-w-full gap-1 overflow-x-auto rounded-xl border border-white/[0.06] bg-surface-700/30 p-1 backdrop-blur-sm">
         {tabs.map((tab) => {
           const active = activeTab === tab.id;
           return (
@@ -36,10 +36,10 @@ export function SettingsPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors",
+                "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-all duration-200",
                 active
-                  ? "bg-surface-700 text-text-primary"
-                  : "text-text-secondary hover:text-text-primary"
+                  ? "bg-gradient-to-r from-accent-500/18 to-cyan-500/8 text-text-primary shadow-[0_0_10px_rgba(124,58,237,0.08)]"
+                  : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]"
               )}
             >
               <AppIcon name={tab.icon} size={14} />

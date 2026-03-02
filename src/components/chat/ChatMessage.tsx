@@ -16,12 +16,12 @@ export function ChatMessage({
   const isUser = message.role === "user";
 
   return (
-    <div className={cn("flex gap-3.5 px-5 py-3", isUser && "flex-row-reverse")}>
+    <div className={cn("flex gap-4 px-6 py-3.5 animate-slideUp", isUser && "flex-row-reverse")}>
       {isUser ? (
         <AvatarBadge
           name="대표"
           size="lg"
-          className="mt-0.5 border-accent-500/25 from-accent-500/35 to-accent-400/10"
+          className="mt-0.5"
         />
       ) : (
         <AvatarBadge name={agentName} avatar={agentAvatar} size="lg" className="mt-0.5" />
@@ -30,10 +30,10 @@ export function ChatMessage({
       <div className={cn("min-w-0 max-w-[78%]", isUser && "text-right")}>
         <div
           className={cn(
-            "inline-block max-w-full rounded-2xl px-6 py-3.5 text-sm leading-relaxed shadow-sm",
+            "inline-block max-w-full rounded-xl px-5 py-4 text-sm leading-relaxed",
             isUser
-              ? "rounded-tr-sm bg-accent-500 text-white"
-              : "rounded-tl-sm border border-white/[0.08] bg-surface-700 text-text-primary"
+              ? "rounded-tr-sm bg-gradient-to-r from-accent-500 to-accent-600 text-white shadow-[0_4px_16px_rgba(124,58,237,0.25)]"
+              : "rounded-tl-sm border border-white/[0.06] bg-surface-700/50 text-text-primary backdrop-blur-sm"
           )}
         >
           <span className="block whitespace-pre-wrap break-words [overflow-wrap:anywhere]">

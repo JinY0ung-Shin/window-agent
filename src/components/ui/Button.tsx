@@ -14,13 +14,13 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-accent-500 text-white hover:bg-accent-600 focus-visible:ring-accent-500/70",
+    "bg-gradient-to-r from-accent-500 to-accent-600 text-white hover:shadow-[0_0_20px_rgba(124,58,237,0.35)] hover:brightness-110 active:scale-[0.97]",
   secondary:
-    "border border-surface-500 bg-surface-700/75 text-text-primary hover:bg-surface-600 focus-visible:ring-accent-500/60",
+    "border border-white/[0.08] bg-surface-700/50 text-text-primary backdrop-blur-sm hover:bg-surface-600/60 hover:border-accent-500/20 active:scale-[0.97]",
   ghost:
-    "bg-transparent text-text-secondary hover:bg-surface-700/70 hover:text-text-primary focus-visible:ring-accent-500/60",
+    "bg-transparent text-text-secondary hover:bg-white/[0.05] hover:text-text-primary active:scale-[0.97]",
   danger:
-    "border border-danger/35 bg-danger/15 text-danger hover:bg-danger/25 focus-visible:ring-danger/45",
+    "border border-danger/25 bg-danger/10 text-danger hover:bg-danger/20 hover:border-danger/40 hover:shadow-[0_0_16px_rgba(248,113,113,0.15)] active:scale-[0.97]",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -43,7 +43,7 @@ export function Button({
     <button
       type={type}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-45",
+        "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400/50 disabled:pointer-events-none disabled:opacity-40",
         variantClasses[variant],
         sizeClasses[size],
         block && "w-full",

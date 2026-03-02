@@ -2,9 +2,9 @@ import type { Report, ReportType } from "../../services/types";
 import { useReportStore } from "../../stores/reportStore";
 
 const typeBadge: Record<ReportType, { label: string; className: string }> = {
-  daily: { label: "Daily", className: "bg-blue-500/20 text-blue-400" },
-  weekly: { label: "Weekly", className: "bg-yellow-500/20 text-yellow-400" },
-  monthly: { label: "Monthly", className: "bg-green-500/20 text-green-400" },
+  daily: { label: "Daily", className: "bg-blue-500/15 text-blue-400" },
+  weekly: { label: "Weekly", className: "bg-yellow-500/15 text-yellow-400" },
+  monthly: { label: "Monthly", className: "bg-green-500/15 text-green-400" },
 };
 
 interface ReportCardProps {
@@ -30,10 +30,10 @@ export function ReportCard({ report }: ReportCardProps) {
   return (
     <div
       onClick={() => openDetailModal(report)}
-      className="bg-surface-800 border border-white/[0.06] rounded-2xl p-4 cursor-pointer hover:bg-surface-700/60 transition-all flex flex-col min-h-[100px]"
+      className="group cursor-pointer rounded-2xl border border-white/[0.06] bg-surface-700/30 p-4 backdrop-blur-sm transition-all duration-300 hover:border-accent-500/15 hover:bg-surface-700/50 hover:shadow-[0_0_20px_rgba(124,58,237,0.06)] flex flex-col min-h-[100px]"
     >
       <div className="flex items-start justify-between gap-2 mb-3">
-        <h3 className="text-sm font-semibold text-text-primary leading-tight line-clamp-2">
+        <h3 className="text-sm font-semibold text-text-primary leading-tight line-clamp-2 group-hover:text-accent-400 transition-colors duration-200">
           {report.title}
         </h3>
         <span

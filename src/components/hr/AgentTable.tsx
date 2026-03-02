@@ -8,7 +8,7 @@ import { AppIcon } from "../ui/AppIcon";
 const statusConfig: Record<AgentStatus, { label: string; className: string }> = {
   online: { label: "온라인", className: "bg-success/10 text-success" },
   busy: { label: "작업중", className: "bg-warning/10 text-warning" },
-  offline: { label: "오프라인", className: "bg-surface-600 text-text-muted" },
+  offline: { label: "오프라인", className: "bg-surface-600/50 text-text-muted" },
   error: { label: "오류", className: "bg-danger/10 text-danger" },
 };
 
@@ -35,7 +35,7 @@ export function AgentTable() {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-white/[0.08] bg-surface-800/86 p-5 shadow-[0_18px_34px_rgba(0,0,0,0.25)]">
+      <div className="surface-card p-5 animate-fadeIn">
         <div className="flex items-center justify-center py-12 text-sm text-text-muted">로딩 중...</div>
       </div>
     );
@@ -74,12 +74,12 @@ export function AgentTable() {
   };
 
   return (
-    <section className="rounded-2xl border border-white/[0.08] bg-surface-800/86 p-4 shadow-[0_18px_34px_rgba(0,0,0,0.25)]">
-      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-surface-700/35">
+    <section className="surface-card p-4 animate-slideUp">
+      <div className="overflow-hidden rounded-xl border border-white/[0.06] bg-surface-700/25 backdrop-blur-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-white/[0.08]">
+              <tr className="border-b border-white/[0.06]">
                 <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">
                   에이전트
                 </th>
@@ -109,12 +109,11 @@ export function AgentTable() {
                   <tr
                     key={agent.id}
                     onClick={() => handleRowClick(agent)}
-                    className={`cursor-pointer border-b border-white/[0.08] transition-colors hover:bg-white/[0.05] ${
-                      inactive ? "opacity-55" : ""
-                    }`}
+                    className={`cursor-pointer border-b border-white/[0.04] transition-all duration-200 hover:bg-white/[0.03] ${inactive ? "opacity-50" : ""
+                      }`}
                   >
                     <td className="px-4 py-3 text-sm text-text-primary">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <AvatarBadge name={agent.name} avatar={agent.avatar} size="sm" />
                         <span className={inactive ? "line-through" : ""}>{agent.name}</span>
                       </div>
@@ -123,7 +122,7 @@ export function AgentTable() {
                     <td className="px-4 py-3 text-sm text-text-primary">{agent.department}</td>
                     <td className="px-4 py-3 text-sm">
                       {!agent.isActive ? (
-                        <span className="inline-flex items-center rounded-full bg-surface-600 px-2 py-0.5 text-[11px] font-medium text-text-muted">
+                        <span className="inline-flex items-center rounded-full bg-surface-600/50 px-2 py-0.5 text-[11px] font-medium text-text-muted">
                           해고됨
                         </span>
                       ) : agent.onLeave ? (
@@ -149,7 +148,7 @@ export function AgentTable() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="text-yellow-300 hover:bg-yellow-500/15"
+                              className="text-yellow-300 hover:bg-yellow-500/12"
                               onClick={(e) => handleLeave(e, agent)}
                             >
                               휴직
@@ -157,7 +156,7 @@ export function AgentTable() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="text-red-300 hover:bg-red-500/15"
+                              className="text-red-300 hover:bg-red-500/12"
                               onClick={(e) => handleFire(e, agent)}
                             >
                               해고
@@ -168,7 +167,7 @@ export function AgentTable() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="text-emerald-300 hover:bg-emerald-500/15"
+                            className="text-emerald-300 hover:bg-emerald-500/12"
                             onClick={(e) => handleRestore(e, agent)}
                           >
                             복직
@@ -194,9 +193,9 @@ export function AgentTable() {
         </div>
 
         {agents.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-9 text-center text-sm text-text-muted">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.1] bg-surface-800/75 text-text-secondary">
-              <AppIcon name="users" size={17} />
+          <div className="flex flex-col items-center gap-3 py-9 text-center text-sm text-text-muted animate-fadeIn">
+            <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-500/15 to-surface-700/70 text-text-secondary shadow-[0_0_16px_rgba(124,58,237,0.08)]">
+              <AppIcon name="users" size={20} />
             </span>
             <span>등록된 에이전트가 없습니다.</span>
             <Button

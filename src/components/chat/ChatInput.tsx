@@ -25,7 +25,7 @@ export function ChatInput() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="border-t border-white/[0.08] bg-surface-800/82 p-4 backdrop-blur-sm"
+      className="border-t border-white/[0.06] bg-surface-800/50 p-5 backdrop-blur-xl"
     >
       <div className="flex items-end gap-2.5">
         <textarea
@@ -35,7 +35,7 @@ export function ChatInput() {
           onKeyDown={handleKeyDown}
           disabled={!activeChannelId || streaming}
           placeholder={activeChannelId ? "메시지를 입력하세요..." : "채널을 선택하세요"}
-          className="min-h-[50px] max-h-[150px] flex-1 resize-none overflow-y-auto rounded-xl border border-white/[0.08] bg-surface-900 px-4 py-3 text-sm leading-relaxed text-text-primary placeholder:text-text-muted transition-colors focus:border-accent-500/55 focus:outline-none disabled:opacity-50"
+          className="min-h-[50px] max-h-[150px] flex-1 resize-none overflow-y-auto rounded-xl border border-white/[0.06] bg-surface-900/50 px-4 py-3 text-sm leading-relaxed text-text-primary placeholder:text-text-muted backdrop-blur-sm transition-all duration-200 focus:border-accent-500/40 focus:shadow-[0_0_16px_rgba(124,58,237,0.1)] focus:outline-none disabled:opacity-40"
         />
         <Button
           type="submit"

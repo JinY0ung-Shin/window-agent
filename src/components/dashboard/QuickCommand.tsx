@@ -24,7 +24,7 @@ export function QuickCommand() {
   return (
     <SurfaceCard>
       <h2 className="section-title">
-        <AppIcon name="command" size={15} className="text-accent-400" />
+        <AppIcon name="command" size={15} className="text-accent-400 drop-shadow-[0_0_4px_rgba(167,139,250,0.3)]" />
         <span>빠른 지시</span>
       </h2>
       <form onSubmit={handleSubmit} className="flex gap-2">
@@ -35,7 +35,7 @@ export function QuickCommand() {
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="김비서에게 지시하기..."
-            className="h-10 w-full rounded-xl border border-white/[0.08] bg-surface-900/85 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted transition-colors focus:border-accent-500/55 focus:outline-none"
+            className="h-10 w-full rounded-xl border border-white/[0.06] bg-surface-900/60 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted backdrop-blur-sm transition-all duration-200 focus:border-accent-500/40 focus:shadow-[0_0_16px_rgba(124,58,237,0.12)] focus:outline-none"
           />
         </div>
         <Button

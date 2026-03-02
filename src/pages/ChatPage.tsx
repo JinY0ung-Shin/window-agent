@@ -13,7 +13,7 @@ export function ChatPage() {
 
   return (
     <PageShell className="h-full pt-3 pb-3">
-      <div className="flex h-full overflow-hidden rounded-3xl border border-white/[0.08] bg-surface-800/56 shadow-[0_22px_40px_rgba(0,0,0,0.26)]">
+      <div className="flex h-full overflow-hidden rounded-2xl border border-white/[0.06] bg-surface-800/40 backdrop-blur-xl shadow-[0_22px_40px_rgba(0,0,0,0.3),0_0_30px_rgba(124,58,237,0.04)]">
         <ChannelList />
         <ChatWindow />
       </div>

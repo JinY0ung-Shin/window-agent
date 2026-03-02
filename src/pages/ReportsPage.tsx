@@ -81,10 +81,10 @@ export function ReportsPage() {
                     key={opt.key}
                     onClick={() => handleFilterChange(opt.key)}
                     className={cn(
-                      "rounded-lg px-3 py-1.5 text-xs transition-colors",
+                      "rounded-lg px-3 py-1.5 text-xs transition-all duration-200",
                       active
-                        ? "bg-accent-500/18 text-accent-400"
-                        : "text-text-secondary hover:bg-surface-700/70 hover:text-text-primary"
+                        ? "bg-gradient-to-r from-accent-500/18 to-cyan-500/8 text-accent-400 shadow-[0_0_8px_rgba(124,58,237,0.08)]"
+                        : "text-text-secondary hover:bg-white/[0.04] hover:text-text-primary"
                     )}
                   >
                     {opt.label}

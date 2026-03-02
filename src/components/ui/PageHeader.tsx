@@ -18,12 +18,12 @@ export function PageHeader({
   className,
 }: PageHeaderProps) {
   return (
-    <div className={cn("page-header", className)}>
-      <div className="space-y-1">
+    <div className={cn("page-header animate-fadeIn", className)}>
+      <div className="space-y-1.5">
         <h1 className="flex items-center gap-2.5 text-lg font-semibold text-text-primary sm:text-xl">
           {icon && (
-            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-surface-700/70 text-accent-400">
-              <AppIcon name={icon} size={16} />
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500/20 to-cyan-500/10 text-accent-400 shadow-[0_0_14px_rgba(124,58,237,0.12)]">
+              <AppIcon name={icon} size={17} />
             </span>
           )}
           {title}

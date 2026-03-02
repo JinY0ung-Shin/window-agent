@@ -51,20 +51,20 @@ export function ModalShell({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fadeIn">
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/60 backdrop-blur-md"
         onClick={onClose}
       />
       <div
         className={cn(
-          "relative w-full overflow-hidden rounded-2xl border border-white/10 bg-surface-800 shadow-[0_32px_64px_rgba(0,0,0,0.45)]",
+          "relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-gradient-to-b from-surface-700/90 to-surface-800/95 shadow-[0_32px_64px_rgba(0,0,0,0.5),0_0_30px_rgba(124,58,237,0.08)] backdrop-blur-xl animate-scaleIn",
           sizeClasses[size],
           className
         )}
       >
         {(title || description || showClose) && (
-          <div className="flex items-start justify-between gap-4 border-b border-white/[0.08] px-5 py-4">
+          <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] px-5 py-4">
             <div className="space-y-1">
               {title && <h2 className="text-base font-semibold text-text-primary">{title}</h2>}
               {description && <p className="text-sm text-text-secondary">{description}</p>}
@@ -73,7 +73,7 @@ export function ModalShell({
               <button
                 type="button"
                 onClick={onClose}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-surface-700 hover:text-text-primary"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-text-muted transition-all duration-200 hover:bg-white/[0.06] hover:text-text-primary hover:rotate-90"
                 aria-label="닫기"
               >
                 <AppIcon name="close" size={16} />
@@ -84,7 +84,7 @@ export function ModalShell({
 
         <div className={cn("max-h-[75vh] overflow-auto px-5 py-4", bodyClassName)}>{children}</div>
 
-        {footer && <div className="border-t border-white/[0.08] px-5 py-4">{footer}</div>}
+        {footer && <div className="border-t border-white/[0.06] px-5 py-4">{footer}</div>}
       </div>
     </div>
   );

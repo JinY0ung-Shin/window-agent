@@ -9,8 +9,8 @@ interface SurfaceCardProps {
 
 const paddingClasses = {
   none: "",
-  sm: "p-4",
-  md: "p-5",
+  sm: "p-5 sm:p-6",
+  md: "p-6 sm:p-8",
 } as const;
 
 export function SurfaceCard({
@@ -21,7 +21,7 @@ export function SurfaceCard({
   return (
     <section
       className={cn(
-        "surface-card",
+        "surface-card animate-slideUp",
         paddingClasses[padding],
         className
       )}

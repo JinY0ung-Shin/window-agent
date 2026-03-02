@@ -52,7 +52,7 @@ export function PermissionSettings() {
   const activeAgents = agents.filter((a) => a.isActive);
 
   return (
-    <div className="bg-surface-800 border border-white/[0.06] rounded-2xl shadow-lg p-5">
+    <div className="surface-card p-5 animate-slideUp">
       <h2 className="text-lg font-semibold text-text-primary mb-4">
         권한 설정
       </h2>
@@ -64,7 +64,7 @@ export function PermissionSettings() {
         <select
           value={selectedAgentId || ""}
           onChange={(e) => setSelectedAgentId(e.target.value || null)}
-          className="w-full bg-surface-700/40 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-500/50 transition-colors"
+          className="w-full bg-surface-700/30 border border-white/[0.06] rounded-xl px-3 py-2.5 text-sm text-text-primary placeholder-text-muted backdrop-blur-sm focus:outline-none focus:border-accent-500/40 focus:shadow-[0_0_12px_rgba(124,58,237,0.08)] transition-all duration-200"
         >
           <option value="">에이전트를 선택하세요</option>
           {activeAgents.map((agent) => (
@@ -76,7 +76,7 @@ export function PermissionSettings() {
       </div>
 
       {selectedAgentId && (
-        <div className="bg-surface-700/40 rounded-xl overflow-hidden">
+        <div className="rounded-xl border border-white/[0.06] bg-surface-700/25 backdrop-blur-sm overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center py-8 text-text-muted text-sm">
               로딩 중...
@@ -104,7 +104,7 @@ export function PermissionSettings() {
                   return (
                     <tr
                       key={perm.id}
-                      className="border-b border-white/[0.04]"
+                      className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]"
                     >
                       <td className="px-4 py-3 text-sm text-text-primary">
                         {perm.label}
@@ -118,15 +118,14 @@ export function PermissionSettings() {
                             onClick={() =>
                               handleLevelChange(perm.id, level.value)
                             }
-                            className={`w-8 h-8 rounded-lg text-xs font-medium transition-colors ${
-                              currentLevel === level.value
+                            className={`w-8 h-8 rounded-xl text-xs font-medium transition-all duration-200 ${currentLevel === level.value
                                 ? level.value === "none"
-                                  ? "bg-red-500/20 text-red-400"
+                                  ? "bg-red-500/15 text-red-400 shadow-[0_0_8px_rgba(248,113,113,0.15)]"
                                   : level.value === "ask"
-                                    ? "bg-yellow-500/20 text-yellow-400"
-                                    : "bg-green-500/20 text-green-400"
-                                : "bg-surface-700 text-text-muted hover:bg-surface-600"
-                            }`}
+                                    ? "bg-yellow-500/15 text-yellow-400 shadow-[0_0_8px_rgba(251,191,36,0.15)]"
+                                    : "bg-green-500/15 text-green-400 shadow-[0_0_8px_rgba(52,211,153,0.15)]"
+                                : "bg-surface-700/50 text-text-muted hover:bg-surface-600/50"
+                              }`}
                           >
                             {currentLevel === level.value ? "●" : "○"}
                           </button>
@@ -142,9 +141,9 @@ export function PermissionSettings() {
       )}
 
       {!selectedAgentId && (
-        <div className="text-center py-12 flex flex-col items-center gap-2">
-          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-surface-700/70 text-text-muted">
-            <AppIcon name="shield" size={16} />
+        <div className="text-center py-12 flex flex-col items-center gap-2 animate-fadeIn">
+          <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-500/15 to-surface-700/70 text-text-muted shadow-[0_0_16px_rgba(124,58,237,0.08)]">
+            <AppIcon name="shield" size={18} />
           </span>
           <p className="text-sm text-text-muted">에이전트를 선택하여 권한을 관리하세요.</p>
         </div>

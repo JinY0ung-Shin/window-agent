@@ -21,7 +21,7 @@ export function CostOverview() {
   return (
     <SurfaceCard>
       <h2 className="section-title">
-        <AppIcon name="money" size={15} className="text-accent-400" />
+        <AppIcon name="money" size={15} className="text-accent-400 drop-shadow-[0_0_4px_rgba(167,139,250,0.3)]" />
         <span>이번 달 비용</span>
       </h2>
 
@@ -32,15 +32,21 @@ export function CostOverview() {
       ) : (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-white/[0.08] bg-surface-700/55 p-3">
-              <p className="mb-0.5 text-xs text-text-muted">총 비용</p>
-              <p className="text-xl font-semibold text-text-primary">
-                ${(summary?.totalCost ?? 0).toFixed(4)}
-              </p>
+            <div className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-surface-700/30 p-6 backdrop-blur-sm transition-all duration-300 hover:border-accent-500/15">
+              <div className="absolute inset-0 bg-gradient-to-br from-accent-500/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="relative">
+                <p className="mb-0.5 text-xs text-text-muted">총 비용</p>
+                <p className="text-xl font-semibold text-text-primary">
+                  ${(summary?.totalCost ?? 0).toFixed(4)}
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl border border-white/[0.08] bg-surface-700/55 p-3">
-              <p className="mb-0.5 text-xs text-text-muted">API 호출</p>
-              <p className="text-xl font-semibold text-text-primary">{totalCalls.toLocaleString()}회</p>
+            <div className="group relative overflow-hidden rounded-xl border border-white/[0.06] bg-surface-700/30 p-6 backdrop-blur-sm transition-all duration-300 hover:border-cyan-500/15">
+              <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="relative">
+                <p className="mb-0.5 text-xs text-text-muted">API 호출</p>
+                <p className="text-xl font-semibold text-text-primary">{totalCalls.toLocaleString()}회</p>
+              </div>
             </div>
           </div>
 
@@ -57,9 +63,9 @@ export function CostOverview() {
                     >
                       {agent.agentName}
                     </span>
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-700">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-800/70">
                       <div
-                        className="h-full rounded-full bg-accent-500/75"
+                        className="shimmer-bar h-full rounded-full transition-all duration-500"
                         style={{ width: `${Math.max(widthPct, 2)}%` }}
                       />
                     </div>

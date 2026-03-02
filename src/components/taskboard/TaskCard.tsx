@@ -7,10 +7,10 @@ import { formatDate } from "../../lib/utils";
 import { AvatarBadge } from "../ui/AvatarBadge";
 
 const priorityConfig: Record<TaskPriority, { label: string; className: string }> = {
-  urgent: { label: "긴급", className: "bg-red-500/20 text-red-400" },
-  high: { label: "높음", className: "bg-orange-500/20 text-orange-400" },
-  medium: { label: "보통", className: "bg-sky-500/20 text-sky-400" },
-  low: { label: "낮음", className: "bg-blue-500/20 text-blue-400" },
+  urgent: { label: "긴급", className: "bg-red-500/15 text-red-400" },
+  high: { label: "높음", className: "bg-orange-500/15 text-orange-400" },
+  medium: { label: "보통", className: "bg-sky-500/15 text-sky-400" },
+  low: { label: "낮음", className: "bg-blue-500/15 text-blue-400" },
 };
 
 interface TaskCardProps {
@@ -45,7 +45,7 @@ export function TaskCard({ task }: TaskCardProps) {
       {...attributes}
       {...listeners}
       onClick={handleClick}
-      className="cursor-grab rounded-xl border border-white/[0.08] bg-surface-700/65 p-3 shadow-md transition-all hover:border-white/[0.18] hover:bg-surface-700/82 active:cursor-grabbing"
+      className="cursor-grab rounded-xl border border-white/[0.06] bg-surface-700/40 p-3 backdrop-blur-sm transition-all duration-200 hover:border-accent-500/15 hover:bg-surface-700/60 hover:shadow-[0_0_16px_rgba(124,58,237,0.06)] active:cursor-grabbing"
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <h4 className="text-sm font-medium leading-tight text-text-primary">{task.title}</h4>

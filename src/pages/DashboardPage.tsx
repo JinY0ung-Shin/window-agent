@@ -24,16 +24,16 @@ export function DashboardPage() {
         description="에이전트 상태, 작업 흐름, 비용 지표를 한 화면에서 확인합니다."
       />
 
-      <div className="mb-4">
+      <div className="mb-6">
         <QuickCommand />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <div className="space-y-4 xl:col-span-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div className="space-y-6 xl:col-span-2">
           <AgentStatusList />
           <TaskSummary />
         </div>
-        <div className="space-y-4">
+        <div className="space-y-6">
           <RecentTasks />
           <CostOverview />
         </div>

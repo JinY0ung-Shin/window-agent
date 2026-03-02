@@ -23,7 +23,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={cn(
-        "inline-flex rounded-xl border border-white/[0.08] bg-surface-700/70 p-1",
+        "inline-flex rounded-xl border border-white/[0.06] bg-surface-700/40 p-1 backdrop-blur-sm",
         className
       )}
       role="tablist"
@@ -39,10 +39,10 @@ export function SegmentedControl<T extends string>({
             aria-selected={active}
             onClick={() => onChange(item.value)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/70",
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/70",
               active
-                ? "bg-surface-600 text-text-primary"
-                : "text-text-secondary hover:text-text-primary"
+                ? "bg-gradient-to-r from-accent-500/20 to-cyan-500/10 text-text-primary shadow-[0_0_10px_rgba(124,58,237,0.1)]"
+                : "text-text-secondary hover:text-text-primary hover:bg-white/[0.04]"
             )}
           >
             {item.icon && <AppIcon name={item.icon} size={14} />}
