@@ -60,20 +60,20 @@ export function CostDashboard() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-surface-800 border border-white/5 rounded-2xl p-4">
-          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">총 비용</p>
+        <div className="bg-surface-800 border border-white/[0.06] rounded-2xl p-4">
+          <p className="text-xs text-text-muted tracking-wide mb-1">총 비용</p>
           <p className="text-lg font-bold text-text-primary">
             ${loading ? "..." : (summary?.totalCost ?? 0).toFixed(4)}
           </p>
         </div>
-        <div className="bg-surface-800 border border-white/5 rounded-2xl p-4">
-          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">총 토큰</p>
+        <div className="bg-surface-800 border border-white/[0.06] rounded-2xl p-4">
+          <p className="text-xs text-text-muted tracking-wide mb-1">총 토큰</p>
           <p className="text-lg font-bold text-text-primary">
             {loading ? "..." : (summary?.totalTokens ?? 0).toLocaleString()}
           </p>
         </div>
-        <div className="bg-surface-800 border border-white/5 rounded-2xl p-4">
-          <p className="text-[10px] text-text-muted uppercase tracking-wider mb-1">API 호출</p>
+        <div className="bg-surface-800 border border-white/[0.06] rounded-2xl p-4">
+          <p className="text-xs text-text-muted tracking-wide mb-1">API 호출</p>
           <p className="text-lg font-bold text-text-primary">
             {loading
               ? "..."
@@ -86,7 +86,7 @@ export function CostDashboard() {
       <CostTrendChart data={trend} />
 
       {/* Agent Cost Table */}
-      <div className="bg-surface-800 border border-white/5 rounded-2xl p-5">
+      <div className="bg-surface-800 border border-white/[0.06] rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-text-primary mb-4">
           에이전트별 비용
         </h3>
@@ -97,7 +97,7 @@ export function CostDashboard() {
         ) : (
           <table className="w-full text-xs">
             <thead>
-              <tr className="text-text-muted border-b border-white/5">
+              <tr className="text-text-muted border-b border-white/[0.06]">
                 <th className="text-left py-2 pr-3 font-medium">에이전트</th>
                 <th className="text-right py-2 pr-3 font-medium">호출 수</th>
                 <th className="text-right py-2 pr-3 font-medium">토큰</th>
@@ -108,7 +108,7 @@ export function CostDashboard() {
               {summary.byAgent.map((agent) => (
                 <tr
                   key={agent.agentId}
-                  className="border-b border-white/5 hover:bg-surface-700/50 cursor-pointer"
+                  className="border-b border-white/[0.06] hover:bg-surface-700/50 cursor-pointer"
                   onClick={() => setSelectedAgentId(agent.agentId)}
                 >
                   <td className="py-2 pr-3 text-text-primary font-medium">{agent.agentName}</td>
@@ -127,7 +127,7 @@ export function CostDashboard() {
       </div>
 
       {/* Model Cost Summary */}
-      <div className="bg-surface-800 border border-white/5 rounded-2xl p-5">
+      <div className="bg-surface-800 border border-white/[0.06] rounded-2xl p-5">
         <h3 className="text-sm font-semibold text-text-primary mb-4">
           모델별 비용 요약
         </h3>

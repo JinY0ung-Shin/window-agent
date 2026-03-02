@@ -25,9 +25,9 @@ export function ChatInput() {
       onSubmit={handleSubmit}
       className="p-3 border-t border-surface-700 bg-surface-800/80 backdrop-blur-sm"
     >
-      <div className="flex gap-2 items-center">
-        <input
-          type="text"
+      <div className="flex gap-2 items-end">
+        <textarea
+          rows={1}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -35,7 +35,7 @@ export function ChatInput() {
           placeholder={
             activeChannelId ? "메시지를 입력하세요..." : "채널을 선택하세요"
           }
-          className="flex-1 bg-surface-900 border border-surface-600 rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500/30 transition-all disabled:opacity-50"
+          className="flex-1 bg-surface-900 border border-surface-600 rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500/30 transition-all disabled:opacity-50 resize-none min-h-[42px] max-h-[120px] overflow-y-auto leading-relaxed"
         />
         <button
           type="submit"

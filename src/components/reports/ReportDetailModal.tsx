@@ -62,11 +62,10 @@ export function ReportDetailModal() {
               </span>
             </div>
           </div>
-          <button
-            onClick={closeDetailModal}
-            className="text-text-muted hover:text-text-primary transition-colors text-lg shrink-0"
-          >
-            &times;
+          <button onClick={closeDetailModal} className="p-1.5 rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-700 transition-colors shrink-0">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 

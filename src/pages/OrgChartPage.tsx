@@ -6,11 +6,11 @@ export function OrgChartPage() {
   const { openDeptModal } = useOrgChartStore();
 
   return (
-    <div className="h-full p-6 overflow-auto">
+    <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-lg font-bold text-text-primary">조직도</h1>
-          <p className="text-xs text-text-muted mt-1">
+          <h1 className="text-xl font-bold text-text-primary">조직도</h1>
+          <p className="text-xs text-text-muted mt-0.5">
             에이전트를 드래그하여 부서를 이동할 수 있습니다
           </p>
         </div>

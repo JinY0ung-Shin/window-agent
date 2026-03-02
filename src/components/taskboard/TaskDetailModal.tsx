@@ -19,7 +19,7 @@ const agentEmoji: Record<string, string> = {
 const priorityConfig: Record<TaskPriority, { label: string; className: string }> = {
   urgent: { label: "긴급", className: "bg-red-500/20 text-red-400" },
   high: { label: "높음", className: "bg-orange-500/20 text-orange-400" },
-  medium: { label: "보통", className: "bg-yellow-500/20 text-yellow-400" },
+  medium: { label: "보통", className: "bg-sky-500/20 text-sky-400" },
   low: { label: "낮음", className: "bg-blue-500/20 text-blue-400" },
 };
 
@@ -45,7 +45,7 @@ const statusOptions: { value: TaskStatus; label: string }[] = [
 ];
 
 const inputClass =
-  "w-full bg-surface-900 border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-500/50 transition-colors";
+  "w-full bg-surface-900 border border-white/[0.12] rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-500/60 focus:ring-1 focus:ring-accent-500/20 transition-colors";
 const labelClass = "block text-xs font-medium text-text-secondary mb-1.5";
 
 export function TaskDetailModal() {

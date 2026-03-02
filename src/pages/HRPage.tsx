@@ -27,7 +27,7 @@ export function HRPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-lg font-bold text-text-primary flex items-center gap-2">
+          <h1 className="text-xl font-bold text-text-primary flex items-center gap-2">
             👤 인사관리
           </h1>
           <p className="text-xs text-text-muted mt-1">AI 에이전트를 채용하고 관리하세요</p>

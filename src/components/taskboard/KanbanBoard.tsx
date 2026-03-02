@@ -15,7 +15,6 @@ export function KanbanBoard() {
     fetchTasks,
     getTasksByStatus,
     moveTask,
-    openCreateModal,
     loading,
   } = useTaskStore();
 
@@ -45,16 +44,6 @@ export function KanbanBoard() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-text-primary">작업 보드</h2>
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          + 새 작업
-        </button>
-      </div>
-
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-3 gap-4">
           {columns.map((col) => (

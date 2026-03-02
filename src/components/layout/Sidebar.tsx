@@ -45,14 +45,14 @@ export function Sidebar() {
             key={item.id}
             onClick={() => setActivePage(item.id)}
             className={cn(
-              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all relative",
+              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/70",
               activePage === item.id
                 ? "bg-accent-500/15 text-accent-400 font-medium"
                 : "text-text-secondary hover:bg-surface-700 hover:text-text-primary"
             )}
           >
             {activePage === item.id && (
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent-500 rounded-r-full" />
+              <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent-500 rounded-r-full" />
             )}
             <span className="text-base">{item.emoji}</span>
             {!sidebarCollapsed && <span>{item.label}</span>}

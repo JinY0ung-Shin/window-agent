@@ -18,7 +18,7 @@ export function ChatMessage({ message, agentAvatar }: ChatMessageProps) {
         className={cn(
           "w-8 h-8 rounded-full flex items-center justify-center text-sm shrink-0 mt-0.5",
           isUser
-            ? "bg-surface-600"
+            ? "bg-accent-500/20"
             : "bg-accent-500/15"
         )}
       >

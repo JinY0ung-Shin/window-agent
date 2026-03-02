@@ -34,7 +34,8 @@ export function QuickCommand() {
         />
         <button
           type="submit"
-          className="bg-accent-500 hover:bg-accent-600 hover:shadow-lg hover:shadow-accent-500/20 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all"
+          disabled={!value.trim()}
+          className="bg-accent-500 hover:bg-accent-600 hover:shadow-lg hover:shadow-accent-500/20 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-accent-500 disabled:hover:shadow-none"
         >
           전송
         </button>

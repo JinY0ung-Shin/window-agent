@@ -22,11 +22,11 @@ export function TaskBoardPage() {
   }, [fetchTasks]);
 
   return (
-    <div className="h-full p-6 overflow-auto">
+    <div className="p-6">
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-lg font-bold text-text-primary flex items-center gap-2">
+          <h1 className="text-xl font-bold text-text-primary flex items-center gap-2">
             {activeTab === "kanban" ? "\u{1F4CB}" : "\u{23F0}"} 업무보드
           </h1>
           <p className="text-xs text-text-muted mt-1">
@@ -37,23 +37,23 @@ export function TaskBoardPage() {
         </div>
         <div className="flex items-center gap-3">
           {/* Tab Toggle */}
-          <div className="flex bg-bg-tertiary rounded-lg p-0.5 border border-border">
+          <div className="flex bg-surface-700 rounded-lg p-0.5 border border-white/[0.06]">
             <button
               onClick={() => setActiveTab("kanban")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
                 activeTab === "kanban"
                   ? "bg-accent-500 text-white"
-                  : "text-text-muted hover:text-text-primary"
+                  : "text-text-muted hover:text-text-primary hover:bg-white/[0.05]"
               }`}
             >
               칸반
             </button>
             <button
               onClick={() => setActiveTab("schedule")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
                 activeTab === "schedule"
                   ? "bg-accent-500 text-white"
-                  : "text-text-muted hover:text-text-primary"
+                  : "text-text-muted hover:text-text-primary hover:bg-white/[0.05]"
               }`}
             >
               스케줄

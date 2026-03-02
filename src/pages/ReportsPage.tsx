@@ -50,11 +50,11 @@ export function ReportsPage() {
   ];
 
   return (
-    <div className="h-full p-6 overflow-auto">
+    <div className="p-6">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-lg font-bold text-text-primary">보고서</h1>
+          <h1 className="text-xl font-bold text-text-primary">보고서</h1>
           <p className="text-xs text-text-muted mt-0.5">
             보고서 생성 및 에이전트 성과 평가
           </p>
@@ -62,14 +62,14 @@ export function ReportsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-surface-800 rounded-xl p-1 w-fit">
+      <div className="flex gap-1 mb-3 bg-surface-800 rounded-xl p-1 w-fit">
         {tabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${
               activeTab === tab.key
-                ? "bg-accent-500 text-white font-medium"
+                ? "bg-accent-500/15 text-accent-400 font-medium"
                 : "text-text-muted hover:text-text-primary"
             }`}
           >
@@ -118,8 +118,12 @@ export function ReportsPage() {
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-text-muted text-sm">
-              보고서가 없습니다. 새 보고서를 생성해보세요.
+            <div className="text-center py-16 flex flex-col items-center gap-3">
+              <div className="text-4xl opacity-40">📄</div>
+              <p className="text-sm text-text-muted">보고서가 없습니다.</p>
+              <button onClick={openGenerateModal} className="px-4 py-1.5 bg-accent-500/15 text-accent-400 hover:bg-accent-500/25 text-xs font-medium rounded-lg transition-colors">
+                + 보고서 생성
+              </button>
             </div>
           )}
         </div>

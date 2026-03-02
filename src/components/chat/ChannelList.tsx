@@ -17,12 +17,14 @@ export function ChannelList() {
 
   return (
     <div className="w-64 border-r border-surface-700 bg-surface-800 flex flex-col">
-      <div className="p-4 border-b border-surface-700">
-        <h2 className="text-sm font-bold text-text-primary flex items-center gap-2">
-          <span>💬</span>
-          채널
-        </h2>
-        <p className="text-[10px] text-text-muted mt-0.5">에이전트와 대화하세요</p>
+      <div className="h-12 px-4 flex items-center border-b border-surface-700 shrink-0">
+        <div>
+          <h2 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <span>💬</span>
+            채널
+          </h2>
+          <p className="text-[10px] text-text-muted mt-0.5">에이전트와 대화하세요</p>
+        </div>
       </div>
       <div className="flex-1 overflow-auto py-2 px-2">
         {channels.map((ch) => {
@@ -57,16 +59,16 @@ export function ChannelList() {
                       </span>
                     )}
                   </div>
-                  {ch.lastMessage && (
-                    <p className="text-[11px] text-text-muted truncate mt-0.5">
-                      {ch.lastMessage}
+                  <div className="flex items-center justify-between mt-0.5">
+                    <p className="text-[11px] text-text-muted truncate flex-1">
+                      {ch.lastMessage || "대화를 시작하세요"}
                     </p>
-                  )}
-                  {ch.lastMessageAt && (
-                    <p className="text-[10px] text-text-muted mt-0.5">
-                      {formatDate(ch.lastMessageAt)}
-                    </p>
-                  )}
+                    {ch.lastMessageAt && (
+                      <span className="text-[10px] text-text-muted ml-2 shrink-0">
+                        {formatDate(ch.lastMessageAt)}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </button>

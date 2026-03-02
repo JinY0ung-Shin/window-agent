@@ -19,7 +19,7 @@ const agentEmoji: Record<string, string> = {
 const priorityConfig: Record<TaskPriority, { label: string; className: string }> = {
   urgent: { label: "긴급", className: "bg-red-500/20 text-red-400" },
   high: { label: "높음", className: "bg-orange-500/20 text-orange-400" },
-  medium: { label: "보통", className: "bg-yellow-500/20 text-yellow-400" },
+  medium: { label: "보통", className: "bg-sky-500/20 text-sky-400" },
   low: { label: "낮음", className: "bg-blue-500/20 text-blue-400" },
 };
 
@@ -43,7 +43,7 @@ export function TaskCard({ task }: TaskCardProps) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.3 : 1,
   };
 
   const assignee = task.assigneeId
@@ -64,7 +64,7 @@ export function TaskCard({ task }: TaskCardProps) {
       {...attributes}
       {...listeners}
       onClick={handleClick}
-      className="bg-surface-700/40 rounded-xl p-3 cursor-grab active:cursor-grabbing hover:bg-surface-700/60 transition-all"
+      className="bg-surface-600 border border-white/[0.07] rounded-xl p-3 shadow-md cursor-grab active:cursor-grabbing hover:border-white/[0.15] hover:shadow-lg transition-all"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <h4 className="text-sm font-medium text-text-primary leading-tight">

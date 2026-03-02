@@ -100,10 +100,10 @@ export function SchedulePanel() {
           <p className="text-xs mt-1">새 스케줄을 추가하여 자동으로 업무를 생성하세요</p>
         </div>
       ) : (
-        <div className="bg-bg-secondary rounded-lg border border-border overflow-hidden">
+        <div className="bg-surface-800 rounded-lg border border-white/[0.08] overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-text-muted text-xs uppercase">
+              <tr className="border-b border-white/[0.08] text-text-muted text-xs uppercase">
                 <th className="text-left px-4 py-3">제목</th>
                 <th className="text-left px-4 py-3">스케줄</th>
                 <th className="text-left px-4 py-3">담당자</th>
@@ -118,7 +118,7 @@ export function SchedulePanel() {
               {scheduledTasks.map((task) => (
                 <tr
                   key={task.id}
-                  className="border-b border-border/50 hover:bg-bg-tertiary/50 transition-colors"
+                  className="border-b border-white/[0.05] hover:bg-surface-700/50 transition-colors"
                 >
                   <td className="px-4 py-3">
                     <button

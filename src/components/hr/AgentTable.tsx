@@ -85,19 +85,8 @@ export function AgentTable() {
 
   return (
     <div className="bg-surface-800 border border-white/[0.06] rounded-2xl shadow-lg p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-text-primary">
-          에이전트 목록
-        </h2>
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          + 새 에이전트 채용
-        </button>
-      </div>
-
       <div className="bg-surface-700/40 rounded-xl overflow-hidden">
+        <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/[0.06]">
@@ -131,7 +120,7 @@ export function AgentTable() {
                 <tr
                   key={agent.id}
                   onClick={() => handleRowClick(agent)}
-                  className={`border-b border-white/[0.04] hover:bg-surface-700/30 cursor-pointer transition-colors ${
+                  className={`border-b border-white/[0.08] hover:bg-white/[0.05] cursor-pointer transition-colors ${
                     inactive ? "opacity-50" : ""
                   }`}
                 >
@@ -150,7 +139,11 @@ export function AgentTable() {
                     {agent.department}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    {agent.onLeave ? (
+                    {!agent.isActive ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-surface-600 text-text-muted">
+                        해고됨
+                      </span>
+                    ) : agent.onLeave ? (
                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-yellow-500/10 text-yellow-400">
                         휴직중
                       </span>
@@ -169,7 +162,7 @@ export function AgentTable() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={(e) => handleEdit(e, agent)}
-                        className="px-3 py-1 bg-surface-700 hover:bg-surface-600 text-text-primary text-xs rounded-lg transition-colors"
+                        className="px-3 py-1 bg-white/[0.06] hover:bg-white/[0.10] text-text-primary text-xs rounded-lg transition-colors"
                       >
                         수정
                       </button>
@@ -212,10 +205,17 @@ export function AgentTable() {
             })}
           </tbody>
         </table>
+        </div>
 
         {agents.length === 0 && (
-          <div className="text-center py-8 text-text-muted text-sm">
-            등록된 에이전트가 없습니다.
+          <div className="text-center py-8 text-text-muted text-sm flex flex-col items-center gap-3">
+            <span>등록된 에이전트가 없습니다.</span>
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              + 첫 에이전트 채용하기
+            </button>
           </div>
         )}
       </div>

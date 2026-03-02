@@ -59,7 +59,7 @@ export function FolderWhitelist() {
         <select
           value={selectedAgentId || ""}
           onChange={(e) => setSelectedAgentId(e.target.value || null)}
-          className="w-full bg-surface-900 border border-white/[0.06] rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-500/50 transition-colors"
+          className="w-full bg-surface-700/40 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:border-accent-500/50 transition-colors"
         >
           <option value="">에이전트를 선택하세요</option>
           {activeAgents.map((agent) => (

@@ -24,7 +24,7 @@ export function RecentTasks() {
           {tasks.length}건
         </span>
       </h2>
-      <div className="space-y-2">
+      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
         {sorted.map((task) => {
           const badge = statusBadge[task.status];
           return (
@@ -34,13 +34,13 @@ export function RecentTasks() {
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm text-text-primary truncate">{task.title}</p>
-                <p className="text-[10px] text-text-muted mt-0.5">
+                <p className="text-xs text-text-muted mt-0.5">
                   {formatDate(task.updatedAt)}
                 </p>
               </div>
               <span
                 className={cn(
-                  "shrink-0 text-[10px] px-2.5 py-1 rounded-full font-medium",
+                  "shrink-0 text-[11px] px-2.5 py-1 rounded-full font-medium",
                   badge.class
                 )}
               >
@@ -52,8 +52,8 @@ export function RecentTasks() {
         {tasks.length === 0 && (
           <div className="text-center py-10">
             <div className="text-3xl mb-2">📭</div>
-            <p className="text-xs text-text-muted">아직 작업이 없습니다</p>
-            <p className="text-[10px] text-text-muted mt-1">에이전트에게 지시를 내려보세요</p>
+            <p className="text-sm text-text-secondary">아직 작업이 없습니다</p>
+            <p className="text-xs text-text-muted mt-1">에이전트에게 지시를 내려보세요</p>
           </div>
         )}
       </div>

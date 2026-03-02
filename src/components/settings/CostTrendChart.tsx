@@ -51,7 +51,7 @@ export function CostTrendChart({ data }: CostTrendChartProps) {
                 className="w-full rounded-t transition-all duration-200 min-h-[2px]"
                 style={{
                   height: `${Math.max(heightPct, 1)}%`,
-                  backgroundColor: hoveredIndex === idx ? "rgb(96, 165, 250)" : "rgb(59, 130, 246)",
+                  backgroundColor: hoveredIndex === idx ? "var(--color-accent-400)" : "var(--color-accent-500)",
                   opacity: hoveredIndex === idx ? 1 : 0.7,
                 }}
               />

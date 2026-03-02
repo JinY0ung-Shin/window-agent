@@ -171,8 +171,9 @@ export function PerformancePanel() {
       )}
 
       {activeAgents.length === 0 && (
-        <div className="text-center py-12 text-text-muted text-sm">
-          활성화된 에이전트가 없습니다.
+        <div className="text-center py-16 flex flex-col items-center gap-3">
+          <div className="text-4xl opacity-40">🤖</div>
+          <p className="text-sm text-text-muted">활성화된 에이전트가 없습니다.</p>
         </div>
       )}
     </div>

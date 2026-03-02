@@ -31,14 +31,14 @@ export function CostOverview() {
           {/* Summary stats */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-surface-700/50 rounded-xl p-3">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">총 비용</p>
-              <p className="text-base font-bold text-text-primary">
+              <p className="text-xs text-text-muted tracking-wider mb-0.5">총 비용</p>
+              <p className="text-xl font-bold text-text-primary">
                 ${(summary?.totalCost ?? 0).toFixed(4)}
               </p>
             </div>
             <div className="bg-surface-700/50 rounded-xl p-3">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">API 호출</p>
-              <p className="text-base font-bold text-text-primary">
+              <p className="text-xs text-text-muted tracking-wider mb-0.5">API 호출</p>
+              <p className="text-xl font-bold text-text-primary">
                 {totalCalls.toLocaleString()}회
               </p>
             </div>
@@ -47,12 +47,12 @@ export function CostOverview() {
           {/* Top 3 agents mini bar */}
           {topAgents.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-[10px] text-text-muted uppercase tracking-wider">상위 에이전트</p>
+              <p className="text-xs text-text-muted tracking-wider">상위 에이전트</p>
               {topAgents.map((agent) => {
                 const widthPct = (agent.costUsd / maxAgentCost) * 100;
                 return (
                   <div key={agent.agentId} className="flex items-center gap-2">
-                    <span className="text-xs text-text-secondary w-16 truncate">{agent.agentName}</span>
+                    <span className="text-xs text-text-secondary w-20 truncate" title={agent.agentName}>{agent.agentName}</span>
                     <div className="flex-1 h-2 bg-surface-700 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-accent-500/70 rounded-full"
@@ -67,7 +67,8 @@ export function CostOverview() {
               })}
             </div>
           ) : (
-            <div className="text-center py-3">
+            <div className="text-center py-6">
+              <div className="text-2xl mb-2">💰</div>
               <p className="text-xs text-text-muted">비용 데이터 없음</p>
             </div>
           )}

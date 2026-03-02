@@ -33,13 +33,13 @@ export function AgentChip({ agent }: AgentChipProps) {
       {...listeners}
       className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-grab active:cursor-grabbing transition-all ${
         agent.onLeave
-          ? "bg-surface-700/20 opacity-60"
+          ? "bg-yellow-500/10 border border-yellow-500/20"
           : "bg-surface-700/40 hover:bg-surface-700/60"
       }`}
     >
       <span className="text-sm">{agent.avatar || "🤖"}</span>
       <span className="text-xs text-text-primary">{agent.name}</span>
-      <span className={`w-1.5 h-1.5 rounded-full ${statusColor}`} />
+      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColor}`} />
       {agent.onLeave && (
         <span className="text-[10px] text-yellow-400 ml-0.5">휴직</span>
       )}

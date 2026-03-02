@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { useHrStore } from "../../stores/hrStore";
 
+const agentEmoji: Record<string, string> = {
+  "김비서": "👩‍💼",
+  "박개발": "💻",
+  "이분석": "📊",
+  "최기획": "📝",
+  "정조사": "🔍",
+  "한디자": "🎨",
+  "강관리": "📁",
+  "윤자동": "🔧",
+};
+
 export function AgentLeaveModal() {
   const { showLeaveModal, selectedAgent, closeLeaveModal, putOnLeave } =
     useHrStore();
@@ -29,6 +40,8 @@ export function AgentLeaveModal() {
 
   if (!showLeaveModal || !selectedAgent) return null;
 
+  const emoji = agentEmoji[selectedAgent.name] || selectedAgent.avatar || "🤖";
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div
@@ -42,7 +55,7 @@ export function AgentLeaveModal() {
 
         <div className="bg-surface-700/40 rounded-xl p-4 mb-4">
           <div className="flex items-center gap-3">
-            <span className="text-3xl">{selectedAgent.avatar || "🤖"}</span>
+            <span className="text-3xl">{emoji}</span>
             <div>
               <p className="text-sm font-medium text-text-primary">
                 {selectedAgent.name}

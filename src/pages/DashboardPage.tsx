@@ -15,17 +15,17 @@ export function DashboardPage() {
   }, [fetchAgents, fetchTasks]);
 
   return (
-    <div className="h-full p-6 overflow-auto">
+    <div className="p-6">
       {/* Page Header */}
       <div className="mb-6">
-        <h1 className="text-lg font-bold text-text-primary flex items-center gap-2">
+        <h1 className="text-xl font-bold text-text-primary flex items-center gap-2">
           📊 대시보드
         </h1>
-        <p className="text-xs text-text-muted mt-1">에이전트 현황과 작업 상태를 한눈에 확인하세요</p>
+        <p className="text-xs text-text-secondary mt-1">에이전트 현황과 작업 상태를 한눈에 확인하세요</p>
       </div>
 
       {/* Quick Command */}
-      <div className="mb-6">
+      <div className="mb-5">
         <QuickCommand />
       </div>
 

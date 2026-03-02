@@ -37,15 +37,16 @@ export function OrgChartView() {
 
   return (
     <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {nodes.map((node) => (
-          <DepartmentNode key={node.department.id} node={node} />
-        ))}
-      </div>
-
-      {nodes.length === 0 && (
-        <div className="text-center py-12 text-text-muted text-sm">
-          등록된 부서가 없습니다. 부서를 추가해 주세요.
+      {nodes.length === 0 ? (
+        <div className="text-center py-16 flex flex-col items-center gap-3">
+          <div className="text-4xl opacity-40">🏢</div>
+          <p className="text-sm text-text-muted">등록된 부서가 없습니다. 부서를 추가해 주세요.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {nodes.map((node) => (
+            <DepartmentNode key={node.department.id} node={node} />
+          ))}
         </div>
       )}
     </DndContext>

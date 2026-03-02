@@ -46,7 +46,7 @@ body {
 /* Utility: Card */
 .card {
   background-color: var(--color-surface-800);
-  border: 1px solid var(--color-surface-700);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 1rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   padding: 1.25rem;
@@ -60,7 +60,7 @@ body {
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-text-primary);
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 
 /* Custom scrollbar */

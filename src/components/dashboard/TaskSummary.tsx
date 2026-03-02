@@ -31,7 +31,7 @@ export function TaskSummary() {
           >
             <div className="flex items-center gap-2 mb-1.5">
               <span className="text-sm">{item.emoji}</span>
-              <p className="text-[11px] text-text-muted">{item.label}</p>
+              <p className="text-xs text-text-secondary">{item.label}</p>
             </div>
             <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
           </div>
