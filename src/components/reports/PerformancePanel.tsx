@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import { useHrStore } from "../../stores/hrStore";
 import { useReportStore } from "../../stores/reportStore";
 import { EvaluationCard } from "./EvaluationCard";
+import { AvatarBadge } from "../ui/AvatarBadge";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 
 export function PerformancePanel() {
   const { agents, fetchAgents } = useHrStore();
@@ -27,11 +30,7 @@ export function PerformancePanel() {
   const activeAgents = agents.filter((a) => a.isActive);
 
   const scoreColor = (score: number) =>
-    score >= 80
-      ? "text-green-400"
-      : score >= 50
-        ? "text-yellow-400"
-        : "text-red-400";
+    score >= 80 ? "text-green-400" : score >= 50 ? "text-yellow-400" : "text-red-400";
 
   const trendIcon = (trend: string) => {
     switch (trend) {
@@ -69,101 +68,75 @@ export function PerformancePanel() {
 
   return (
     <div className="space-y-6">
-      {/* Agent Performance Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         {activeAgents.map((agent) => {
           const summary = performanceSummaries.get(agent.id);
           return (
             <div
               key={agent.id}
-              className="bg-surface-800 border border-white/[0.06] rounded-2xl p-4"
+              className="rounded-2xl border border-white/[0.08] bg-surface-800/84 p-4"
             >
-              <div className="flex items-center gap-3 mb-3">
-                <span className="text-2xl">{agent.avatar || "🤖"}</span>
+              <div className="mb-3 flex items-center gap-3">
+                <AvatarBadge name={agent.name} avatar={agent.avatar} size="lg" />
                 <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-text-primary truncate">
-                    {agent.name}
-                  </h3>
-                  <span className="text-[11px] text-text-muted">
-                    {agent.role}
-                  </span>
+                  <h3 className="truncate text-sm font-semibold text-text-primary">{agent.name}</h3>
+                  <span className="text-[11px] text-text-muted">{agent.role}</span>
                 </div>
                 {summary && (
                   <div className="ml-auto flex items-center gap-1">
-                    <span
-                      className={`text-xl font-bold ${scoreColor(summary.score)}`}
-                    >
+                    <span className={`text-xl font-semibold ${scoreColor(summary.score)}`}>
                       {Math.round(summary.score)}
                     </span>
-                    <span
-                      className={`text-sm ${trendColor(summary.trend)}`}
-                    >
-                      {trendIcon(summary.trend)}
-                    </span>
+                    <span className={`text-sm ${trendColor(summary.trend)}`}>{trendIcon(summary.trend)}</span>
                   </div>
                 )}
               </div>
 
               {summary ? (
-                <div className="space-y-2 mb-3">
+                <div className="mb-3 space-y-2">
                   <div className="flex justify-between text-xs">
                     <span className="text-text-muted">Success Rate</span>
-                    <span className="text-text-secondary">
-                      {summary.taskSuccessRate.toFixed(1)}%
-                    </span>
+                    <span className="text-text-secondary">{summary.taskSuccessRate.toFixed(1)}%</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-text-muted">Avg Time</span>
-                    <span className="text-text-secondary">
-                      {formatTime(summary.avgTimeSecs)}
-                    </span>
+                    <span className="text-text-secondary">{formatTime(summary.avgTimeSecs)}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-text-muted">Total Tasks</span>
-                    <span className="text-text-secondary">
-                      {summary.totalTasks}
-                    </span>
+                    <span className="text-text-secondary">{summary.totalTasks}</span>
                   </div>
                   <div className="flex justify-between text-xs">
                     <span className="text-text-muted">Total Cost</span>
-                    <span className="text-text-secondary">
-                      ${summary.totalCost.toFixed(4)}
-                    </span>
+                    <span className="text-text-secondary">${summary.totalCost.toFixed(4)}</span>
                   </div>
                 </div>
               ) : (
-                <div className="text-xs text-text-muted mb-3">
-                  데이터 로딩 중...
-                </div>
+                <div className="mb-3 text-xs text-text-muted">데이터 로딩 중...</div>
               )}
 
-              <button
+              <Button
+                size="sm"
+                block
+                variant="secondary"
                 onClick={() => handleEvaluate(agent.id)}
                 disabled={loading}
-                className="w-full px-3 py-1.5 bg-accent-500/20 text-accent-400 hover:bg-accent-500/30 text-xs font-medium rounded-lg transition-colors disabled:opacity-50"
               >
                 {loading ? "평가 중..." : "평가하기"}
-              </button>
+              </Button>
             </div>
           );
         })}
       </div>
 
-      {/* Recent Evaluations */}
       {evaluations.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-text-primary mb-3">
-            최근 평가 기록
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <h3 className="mb-3 text-sm font-semibold text-text-primary">최근 평가 기록</h3>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {evaluations.slice(0, 6).map((evaluation) => {
               const agent = agents.find((a) => a.id === evaluation.agentId);
               return (
-                <EvaluationCard
-                  key={evaluation.id}
-                  evaluation={evaluation}
-                  agentName={agent?.name}
-                />
+                <EvaluationCard key={evaluation.id} evaluation={evaluation} agentName={agent?.name} />
               );
             })}
           </div>
@@ -171,10 +144,11 @@ export function PerformancePanel() {
       )}
 
       {activeAgents.length === 0 && (
-        <div className="text-center py-16 flex flex-col items-center gap-3">
-          <div className="text-4xl opacity-40">🤖</div>
-          <p className="text-sm text-text-muted">활성화된 에이전트가 없습니다.</p>
-        </div>
+        <EmptyState
+          icon="bot"
+          title="활성화된 에이전트가 없습니다"
+          description="인사관리에서 활성 에이전트를 추가해 주세요."
+        />
       )}
     </div>
   );

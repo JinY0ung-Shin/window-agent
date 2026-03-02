@@ -2,6 +2,9 @@ import { useEffect } from "react";
 import { useScheduleStore } from "../../stores/scheduleStore";
 import { ScheduleCreateModal } from "./ScheduleCreateModal";
 import { ScheduleEditModal } from "./ScheduleEditModal";
+import { Button } from "../ui/Button";
+import { AppIcon } from "../ui/AppIcon";
+import { EmptyState } from "../ui/EmptyState";
 
 const cronToReadable: Record<string, string> = {
   "0 9 * * *": "매일 오전 9시",
@@ -72,99 +75,81 @@ export function SchedulePanel() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64 text-text-muted">
-        로딩 중...
-      </div>
-    );
+    return <div className="flex h-64 items-center justify-center text-text-muted">로딩 중...</div>;
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-text-muted">
-          등록된 스케줄: {scheduledTasks.length}개
-        </p>
-        <button
-          onClick={openCreateModal}
-          className="bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          + 새 스케줄
-        </button>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm text-text-secondary">등록된 스케줄: {scheduledTasks.length}개</p>
+        <Button size="sm" onClick={openCreateModal} leadingIcon={<AppIcon name="plus" size={14} />}>
+          새 스케줄
+        </Button>
       </div>
 
       {scheduledTasks.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-48 text-text-muted">
-          <span className="text-3xl mb-2">&#x23F0;</span>
-          <p className="text-sm">등록된 스케줄이 없습니다</p>
-          <p className="text-xs mt-1">새 스케줄을 추가하여 자동으로 업무를 생성하세요</p>
-        </div>
+        <EmptyState
+          icon="clock"
+          title="등록된 스케줄이 없습니다"
+          description="새 스케줄을 추가해 반복 업무를 자동 생성하세요."
+          className="rounded-xl border border-white/[0.08] bg-surface-800/80"
+        />
       ) : (
-        <div className="bg-surface-800 rounded-lg border border-white/[0.08] overflow-hidden">
+        <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-surface-800/85">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-white/[0.08] text-text-muted text-xs uppercase">
-                <th className="text-left px-4 py-3">제목</th>
-                <th className="text-left px-4 py-3">스케줄</th>
-                <th className="text-left px-4 py-3">담당자</th>
-                <th className="text-left px-4 py-3">우선순위</th>
-                <th className="text-center px-4 py-3">활성</th>
-                <th className="text-left px-4 py-3">마지막 실행</th>
-                <th className="text-left px-4 py-3">다음 실행</th>
-                <th className="text-center px-4 py-3">작업</th>
+              <tr className="border-b border-white/[0.08] text-xs uppercase text-text-muted">
+                <th className="px-4 py-3 text-left">제목</th>
+                <th className="px-4 py-3 text-left">스케줄</th>
+                <th className="px-4 py-3 text-left">담당자</th>
+                <th className="px-4 py-3 text-left">우선순위</th>
+                <th className="px-4 py-3 text-center">활성</th>
+                <th className="px-4 py-3 text-left">마지막 실행</th>
+                <th className="px-4 py-3 text-left">다음 실행</th>
+                <th className="px-4 py-3 text-center">작업</th>
               </tr>
             </thead>
             <tbody>
               {scheduledTasks.map((task) => (
                 <tr
                   key={task.id}
-                  className="border-b border-white/[0.05] hover:bg-surface-700/50 transition-colors"
+                  className="border-b border-white/[0.05] transition-colors hover:bg-surface-700/45"
                 >
                   <td className="px-4 py-3">
                     <button
                       onClick={() => openEditModal(task)}
-                      className="text-text-primary hover:text-accent-400 transition-colors text-left"
+                      className="text-left text-text-primary transition-colors hover:text-accent-400"
                     >
                       {task.title}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-text-muted font-mono text-xs">
-                    {formatCron(task.cronExpression)}
-                  </td>
-                  <td className="px-4 py-3 text-text-secondary">
-                    {task.assignee || "-"}
-                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-text-muted">{formatCron(task.cronExpression)}</td>
+                  <td className="px-4 py-3 text-text-secondary">{task.assignee || "-"}</td>
                   <td className={`px-4 py-3 ${priorityColors[task.priority] || "text-text-muted"}`}>
                     {priorityLabels[task.priority] || task.priority}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
                       onClick={() => handleToggleActive(task.id, task.isActive)}
-                      className={`w-10 h-5 rounded-full relative transition-colors ${
-                        task.isActive ? "bg-green-500" : "bg-gray-600"
+                      className={`relative h-5 w-10 rounded-full transition-colors ${
+                        task.isActive ? "bg-success" : "bg-surface-500"
                       }`}
                     >
                       <span
-                        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-transform ${
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
                           task.isActive ? "left-5" : "left-0.5"
                         }`}
                       />
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-text-muted text-xs">
-                    {formatDate(task.lastRunAt)}
-                  </td>
-                  <td className="px-4 py-3 text-text-muted text-xs">
+                  <td className="px-4 py-3 text-xs text-text-muted">{formatDate(task.lastRunAt)}</td>
+                  <td className="px-4 py-3 text-xs text-text-muted">
                     {task.isActive ? formatDate(task.nextRunAt) : "-"}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => handleTrigger(task.id)}
-                      className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition-colors"
-                      title="즉시 실행"
-                    >
+                    <Button size="sm" onClick={() => handleTrigger(task.id)} variant="secondary">
                       실행
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}

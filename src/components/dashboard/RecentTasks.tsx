@@ -1,6 +1,9 @@
 import { useAgentStore } from "../../stores/agentStore";
 import type { TaskStatus } from "../../services/types";
 import { cn, formatDate } from "../../lib/utils";
+import { AppIcon } from "../ui/AppIcon";
+import { EmptyState } from "../ui/EmptyState";
+import { SurfaceCard } from "../ui/SurfaceCard";
 
 const statusBadge: Record<TaskStatus, { label: string; class: string }> = {
   pending: { label: "대기", class: "bg-surface-600 text-text-muted" },
@@ -16,31 +19,29 @@ export function RecentTasks() {
   );
 
   return (
-    <div className="card">
+    <SurfaceCard>
       <h2 className="section-title">
-        <span>📝</span>
+        <AppIcon name="tasks" size={15} className="text-accent-400" />
         <span>최근 작업</span>
-        <span className="ml-auto text-xs font-normal text-text-muted bg-surface-700/60 px-2 py-0.5 rounded-full">
+        <span className="ml-auto rounded-full bg-surface-700/70 px-2 py-0.5 text-xs font-medium text-text-secondary">
           {tasks.length}건
         </span>
       </h2>
-      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+      <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
         {sorted.map((task) => {
           const badge = statusBadge[task.status];
           return (
             <div
               key={task.id}
-              className="bg-surface-700/40 rounded-xl p-3 flex items-center justify-between gap-3 hover:bg-surface-700/60 transition-colors"
+              className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-surface-700/45 p-3 transition-colors hover:bg-surface-700/62"
             >
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-text-primary truncate">{task.title}</p>
-                <p className="text-xs text-text-muted mt-0.5">
-                  {formatDate(task.updatedAt)}
-                </p>
+                <p className="truncate text-sm text-text-primary">{task.title}</p>
+                <p className="mt-0.5 text-xs text-text-muted">{formatDate(task.updatedAt)}</p>
               </div>
               <span
                 className={cn(
-                  "shrink-0 text-[11px] px-2.5 py-1 rounded-full font-medium",
+                  "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-medium",
                   badge.class
                 )}
               >
@@ -50,13 +51,14 @@ export function RecentTasks() {
           );
         })}
         {tasks.length === 0 && (
-          <div className="text-center py-10">
-            <div className="text-3xl mb-2">📭</div>
-            <p className="text-sm text-text-secondary">아직 작업이 없습니다</p>
-            <p className="text-xs text-text-muted mt-1">에이전트에게 지시를 내려보세요</p>
-          </div>
+          <EmptyState
+            icon="empty"
+            title="아직 작업이 없습니다"
+            description="대화를 통해 에이전트에게 첫 작업을 지시해 보세요."
+            className="py-10"
+          />
         )}
       </div>
-    </div>
+    </SurfaceCard>
   );
 }

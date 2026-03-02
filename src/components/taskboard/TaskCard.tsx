@@ -4,17 +4,7 @@ import { useTaskStore } from "../../stores/taskStore";
 import { useHrStore } from "../../stores/hrStore";
 import type { Task, TaskPriority } from "../../services/types";
 import { formatDate } from "../../lib/utils";
-
-const agentEmoji: Record<string, string> = {
-  "김비서": "👩‍💼",
-  "박개발": "💻",
-  "이분석": "📊",
-  "최기획": "📝",
-  "정조사": "🔍",
-  "한디자": "🎨",
-  "강관리": "📁",
-  "윤자동": "🔧",
-};
+import { AvatarBadge } from "../ui/AvatarBadge";
 
 const priorityConfig: Record<TaskPriority, { label: string; className: string }> = {
   urgent: { label: "긴급", className: "bg-red-500/20 text-red-400" },
@@ -31,14 +21,8 @@ export function TaskCard({ task }: TaskCardProps) {
   const { setSelectedTask, openDetailModal } = useTaskStore();
   const { agents } = useHrStore();
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: task.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -46,10 +30,7 @@ export function TaskCard({ task }: TaskCardProps) {
     opacity: isDragging ? 0.3 : 1,
   };
 
-  const assignee = task.assigneeId
-    ? agents.find((a) => a.id === task.assigneeId)
-    : null;
-
+  const assignee = task.assigneeId ? agents.find((a) => a.id === task.assigneeId) : null;
   const priority = priorityConfig[task.priority];
 
   const handleClick = () => {
@@ -58,20 +39,18 @@ export function TaskCard({ task }: TaskCardProps) {
   };
 
   return (
-    <div
+    <article
       ref={setNodeRef}
       style={style}
       {...attributes}
       {...listeners}
       onClick={handleClick}
-      className="bg-surface-600 border border-white/[0.07] rounded-xl p-3 shadow-md cursor-grab active:cursor-grabbing hover:border-white/[0.15] hover:shadow-lg transition-all"
+      className="cursor-grab rounded-xl border border-white/[0.08] bg-surface-700/65 p-3 shadow-md transition-all hover:border-white/[0.18] hover:bg-surface-700/82 active:cursor-grabbing"
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className="text-sm font-medium text-text-primary leading-tight">
-          {task.title}
-        </h4>
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <h4 className="text-sm font-medium leading-tight text-text-primary">{task.title}</h4>
         <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${priority.className}`}
+          className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${priority.className}`}
         >
           {priority.label}
         </span>
@@ -80,20 +59,14 @@ export function TaskCard({ task }: TaskCardProps) {
       <div className="flex items-center justify-between">
         {assignee ? (
           <div className="flex items-center gap-1.5">
-            <span className="text-sm">
-              {agentEmoji[assignee.name] || assignee.avatar || "🤖"}
-            </span>
-            <span className="text-xs text-text-secondary">
-              {assignee.name}
-            </span>
+            <AvatarBadge name={assignee.name} avatar={assignee.avatar} size="sm" />
+            <span className="text-xs text-text-secondary">{assignee.name}</span>
           </div>
         ) : (
           <span className="text-xs text-text-muted">미배정</span>
         )}
-        <span className="text-[11px] text-text-muted">
-          {formatDate(task.createdAt)}
-        </span>
+        <span className="text-[11px] text-text-muted">{formatDate(task.createdAt)}</span>
       </div>
-    </div>
+    </article>
   );
 }

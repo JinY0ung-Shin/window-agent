@@ -1,5 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import type { Agent } from "../../services/types";
+import { AvatarBadge } from "../ui/AvatarBadge";
 
 interface AgentChipProps {
   agent: Agent;
@@ -31,18 +32,16 @@ export function AgentChip({ agent }: AgentChipProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-grab active:cursor-grabbing transition-all ${
+      className={`inline-flex cursor-grab items-center gap-2 rounded-lg px-2.5 py-1.5 transition-all active:cursor-grabbing ${
         agent.onLeave
-          ? "bg-yellow-500/10 border border-yellow-500/20"
-          : "bg-surface-700/40 hover:bg-surface-700/60"
+          ? "border border-yellow-500/20 bg-yellow-500/10"
+          : "bg-surface-700/45 hover:bg-surface-700/65"
       }`}
     >
-      <span className="text-sm">{agent.avatar || "🤖"}</span>
+      <AvatarBadge name={agent.name} avatar={agent.avatar} size="sm" />
       <span className="text-xs text-text-primary">{agent.name}</span>
-      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${statusColor}`} />
-      {agent.onLeave && (
-        <span className="text-[10px] text-yellow-400 ml-0.5">휴직</span>
-      )}
+      <span className={`h-2 w-2 flex-shrink-0 rounded-full ${statusColor}`} />
+      {agent.onLeave && <span className="ml-0.5 text-[10px] text-yellow-400">휴직</span>}
     </div>
   );
 }

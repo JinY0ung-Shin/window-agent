@@ -1,4 +1,6 @@
 import { useAgentStore } from "../../stores/agentStore";
+import { AppIcon, type AppIconName } from "../ui/AppIcon";
+import { SurfaceCard } from "../ui/SurfaceCard";
 
 export function TaskSummary() {
   const tasks = useAgentStore((s) => s.tasks);
@@ -10,33 +12,38 @@ export function TaskSummary() {
     pending: tasks.filter((t) => t.status === "pending").length,
   };
 
-  const items = [
-    { label: "전체", value: counts.total, color: "text-text-primary", emoji: "📋" },
-    { label: "진행 중", value: counts.inProgress, color: "text-warning", emoji: "🔄" },
-    { label: "완료", value: counts.completed, color: "text-success", emoji: "✅" },
-    { label: "대기", value: counts.pending, color: "text-text-muted", emoji: "⏳" },
+  const items: {
+    label: string;
+    value: number;
+    color: string;
+    icon: AppIconName;
+  }[] = [
+    { label: "전체", value: counts.total, color: "text-text-primary", icon: "tasks" },
+    { label: "진행 중", value: counts.inProgress, color: "text-warning", icon: "clock" },
+    { label: "완료", value: counts.completed, color: "text-success", icon: "trendUp" },
+    { label: "대기", value: counts.pending, color: "text-text-muted", icon: "calendar" },
   ];
 
   return (
-    <div className="card">
+    <SurfaceCard>
       <h2 className="section-title">
-        <span>📈</span>
+        <AppIcon name="trendUp" size={15} className="text-accent-400" />
         <span>작업 요약</span>
       </h2>
       <div className="grid grid-cols-2 gap-3">
         {items.map((item) => (
           <div
             key={item.label}
-            className="bg-surface-700/40 rounded-xl p-3.5 hover:bg-surface-700/60 transition-colors"
+            className="rounded-xl border border-white/[0.08] bg-surface-700/45 p-3 transition-colors hover:bg-surface-700/65"
           >
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-sm">{item.emoji}</span>
+            <div className="mb-1.5 flex items-center gap-2">
+              <AppIcon name={item.icon} size={13} className="text-text-secondary" />
               <p className="text-xs text-text-secondary">{item.label}</p>
             </div>
-            <p className={`text-2xl font-bold ${item.color}`}>{item.value}</p>
+            <p className={`text-2xl font-semibold ${item.color}`}>{item.value}</p>
           </div>
         ))}
       </div>
-    </div>
+    </SurfaceCard>
   );
 }

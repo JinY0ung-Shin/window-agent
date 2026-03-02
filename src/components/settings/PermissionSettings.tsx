@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useHrStore } from "../../stores/hrStore";
 import type { PermissionLevel } from "../../services/types";
+import { AppIcon } from "../ui/AppIcon";
 
 const permissionTypes = [
   { id: "file_read", label: "파일 읽기" },
@@ -142,7 +143,9 @@ export function PermissionSettings() {
 
       {!selectedAgentId && (
         <div className="text-center py-12 flex flex-col items-center gap-2">
-          <div className="text-3xl opacity-30">🔐</div>
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/[0.08] bg-surface-700/70 text-text-muted">
+            <AppIcon name="shield" size={16} />
+          </span>
           <p className="text-sm text-text-muted">에이전트를 선택하여 권한을 관리하세요.</p>
         </div>
       )}

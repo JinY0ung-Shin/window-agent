@@ -5,6 +5,13 @@ import { ReportDetailModal } from "../components/reports/ReportDetailModal";
 import { ReportGenerateModal } from "../components/reports/ReportGenerateModal";
 import { PerformancePanel } from "../components/reports/PerformancePanel";
 import type { ReportType } from "../services/types";
+import { PageShell } from "../components/ui/PageShell";
+import { PageHeader } from "../components/ui/PageHeader";
+import { SegmentedControl } from "../components/ui/SegmentedControl";
+import { Button } from "../components/ui/Button";
+import { AppIcon } from "../components/ui/AppIcon";
+import { EmptyState } from "../components/ui/EmptyState";
+import { cn } from "../lib/utils";
 
 type Tab = "reports" | "performance";
 
@@ -27,20 +34,15 @@ export function ReportsPage() {
     setReportTypeFilter(filter);
     if (filter === "all") {
       fetchReports();
-    } else {
-      fetchReports(filter);
+      return;
     }
+    fetchReports(filter);
   };
 
   const filteredReports =
     reportTypeFilter === "all"
       ? reports
       : reports.filter((r) => r.reportType === reportTypeFilter);
-
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "reports", label: "보고서" },
-    { key: "performance", label: "성과 평가" },
-  ];
 
   const filterOptions: { key: ReportType | "all"; label: string }[] = [
     { key: "all", label: "전체" },
@@ -50,91 +52,86 @@ export function ReportsPage() {
   ];
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-text-primary">보고서</h1>
-          <p className="text-xs text-text-muted mt-0.5">
-            보고서 생성 및 에이전트 성과 평가
-          </p>
-        </div>
+    <PageShell>
+      <PageHeader
+        icon="reports"
+        title="보고서"
+        description="주기별 리포트와 에이전트 성과 평가 결과를 확인합니다."
+      />
+
+      <div className="mb-4">
+        <SegmentedControl<Tab>
+          items={[
+            { value: "reports", label: "보고서" },
+            { value: "performance", label: "성과 평가", icon: "trendUp" },
+          ]}
+          value={activeTab}
+          onChange={setActiveTab}
+        />
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-3 bg-surface-800 rounded-xl p-1 w-fit">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-1.5 text-sm rounded-lg transition-colors ${
-              activeTab === tab.key
-                ? "bg-accent-500/15 text-accent-400 font-medium"
-                : "text-text-muted hover:text-text-primary"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Reports Tab */}
       {activeTab === "reports" && (
-        <div>
-          {/* Filters + Generate Button */}
-          <div className="flex items-center justify-between mb-4">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex gap-1">
-              {filterOptions.map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => handleFilterChange(opt.key)}
-                  className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-                    reportTypeFilter === opt.key
-                      ? "bg-accent-500/20 text-accent-400 font-medium"
-                      : "text-text-muted hover:text-text-primary hover:bg-surface-700"
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+              {filterOptions.map((opt) => {
+                const active = reportTypeFilter === opt.key;
+                return (
+                  <button
+                    key={opt.key}
+                    onClick={() => handleFilterChange(opt.key)}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs transition-colors",
+                      active
+                        ? "bg-accent-500/18 text-accent-400"
+                        : "text-text-secondary hover:bg-surface-700/70 hover:text-text-primary"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
-            <button
+            <Button
+              size="sm"
               onClick={openGenerateModal}
-              className="px-4 py-1.5 bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium rounded-lg transition-colors"
+              leadingIcon={<AppIcon name="plus" size={14} />}
             >
-              + 보고서 생성
-            </button>
+              보고서 생성
+            </Button>
           </div>
 
-          {/* Report Cards Grid */}
           {loading ? (
-            <div className="text-center py-12 text-text-muted text-sm">
-              로딩 중...
-            </div>
+            <div className="flex items-center justify-center py-12 text-sm text-text-muted">로딩 중...</div>
           ) : filteredReports.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredReports.map((report) => (
                 <ReportCard key={report.id} report={report} />
               ))}
             </div>
           ) : (
-            <div className="text-center py-16 flex flex-col items-center gap-3">
-              <div className="text-4xl opacity-40">📄</div>
-              <p className="text-sm text-text-muted">보고서가 없습니다.</p>
-              <button onClick={openGenerateModal} className="px-4 py-1.5 bg-accent-500/15 text-accent-400 hover:bg-accent-500/25 text-xs font-medium rounded-lg transition-colors">
-                + 보고서 생성
-              </button>
-            </div>
+            <EmptyState
+              icon="reports"
+              title="보고서가 없습니다"
+              description="첫 보고서를 생성해 최근 운영 현황을 기록하세요."
+              action={
+                <Button
+                  size="sm"
+                  onClick={openGenerateModal}
+                  leadingIcon={<AppIcon name="plus" size={14} />}
+                >
+                  보고서 생성
+                </Button>
+              }
+            />
           )}
         </div>
       )}
 
-      {/* Performance Tab */}
       {activeTab === "performance" && <PerformancePanel />}
 
-      {/* Modals */}
       <ReportDetailModal />
       <ReportGenerateModal />
-    </div>
+    </PageShell>
   );
 }

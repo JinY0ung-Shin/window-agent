@@ -1,20 +1,31 @@
 @import "tailwindcss";
 
 @theme {
-  --color-surface-900: #0f1117;
-  --color-surface-800: #181a20;
-  --color-surface-700: #1e2028;
-  --color-surface-600: #262830;
-  --color-surface-500: #2e3038;
-  --color-accent-500: #6366f1;
-  --color-accent-400: #818cf8;
-  --color-accent-600: #4f46e5;
-  --color-text-primary: #e5e7eb;
-  --color-text-secondary: #9ca3af;
-  --color-text-muted: #6b7280;
+  --color-surface-900: #0b111a;
+  --color-surface-800: #121a26;
+  --color-surface-700: #1a2433;
+  --color-surface-600: #233044;
+  --color-surface-500: #33445d;
+
+  --color-accent-600: #1d4ed8;
+  --color-accent-500: #2563eb;
+  --color-accent-400: #60a5fa;
+
+  --color-text-primary: #e6edf7;
+  --color-text-secondary: #a7b5ca;
+  --color-text-muted: #7c8ba4;
+
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-danger: #ef4444;
+}
+
+:root {
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1rem;
+  --shadow-1: 0 4px 16px rgba(3, 8, 20, 0.28);
+  --shadow-2: 0 20px 40px rgba(2, 6, 15, 0.34);
 }
 
 * {
@@ -26,54 +37,97 @@
 html,
 body,
 #root {
-  height: 100%;
   width: 100%;
+  height: 100%;
   overflow: hidden;
 }
 
 body {
   font-family:
+    "Pretendard Variable",
     "Pretendard",
+    "Apple SD Gothic Neo",
+    "Noto Sans KR",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
-    Roboto,
     sans-serif;
-  background: linear-gradient(135deg, #0f1117 0%, #141620 50%, #0f1117 100%);
   color: var(--color-text-primary);
+  background:
+    radial-gradient(circle at 20% -10%, rgba(59, 130, 246, 0.16), transparent 46%),
+    radial-gradient(circle at 95% 15%, rgba(30, 64, 175, 0.22), transparent 42%),
+    linear-gradient(170deg, #0a1019 0%, #0b121c 48%, #090f17 100%);
+  letter-spacing: -0.01em;
 }
 
-/* Utility: Card */
+.app-page {
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.2rem 1.2rem 1.4rem;
+}
+
+@media (min-width: 1024px) {
+  .app-page {
+    padding: 1.25rem 1.4rem 1.6rem;
+  }
+}
+
+.page-header {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.surface-card,
 .card {
-  background-color: var(--color-surface-800);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 1rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(22, 30, 44, 0.96), rgba(14, 22, 33, 0.98));
+  box-shadow: var(--shadow-1);
 }
 
-/* Utility: Section title */
+.card {
+  padding: 1rem;
+}
+
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  color: var(--color-text-primary);
   font-size: 0.875rem;
   font-weight: 600;
-  color: var(--color-text-primary);
-  margin-bottom: 1rem;
 }
 
-/* Custom scrollbar */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  text-align: center;
+  padding: 2.2rem 1rem;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--color-surface-500);
-  border-radius: 3px;
+  border-radius: 9999px;
+  background: rgba(167, 181, 202, 0.36);
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: rgba(167, 181, 202, 0.52);
 }

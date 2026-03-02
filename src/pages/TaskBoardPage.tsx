@@ -4,17 +4,16 @@ import { KanbanBoard } from "../components/taskboard/KanbanBoard";
 import { TaskCreateModal } from "../components/taskboard/TaskCreateModal";
 import { TaskDetailModal } from "../components/taskboard/TaskDetailModal";
 import { SchedulePanel } from "../components/taskboard/SchedulePanel";
+import { Button } from "../components/ui/Button";
+import { PageHeader } from "../components/ui/PageHeader";
+import { PageShell } from "../components/ui/PageShell";
+import { SegmentedControl } from "../components/ui/SegmentedControl";
+import { AppIcon } from "../components/ui/AppIcon";
 
 type TabType = "kanban" | "schedule";
 
 export function TaskBoardPage() {
-  const {
-    fetchTasks,
-    showCreateModal,
-    showDetailModal,
-    openCreateModal,
-  } = useTaskStore();
-
+  const { fetchTasks, showCreateModal, showDetailModal, openCreateModal } = useTaskStore();
   const [activeTab, setActiveTab] = useState<TabType>("kanban");
 
   useEffect(() => {
@@ -22,55 +21,37 @@ export function TaskBoardPage() {
   }, [fetchTasks]);
 
   return (
-    <div className="p-6">
-      {/* Page Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-xl font-bold text-text-primary flex items-center gap-2">
-            {activeTab === "kanban" ? "\u{1F4CB}" : "\u{23F0}"} 업무보드
-          </h1>
-          <p className="text-xs text-text-muted mt-1">
-            {activeTab === "kanban"
-              ? "에이전트 업무를 칸반 보드로 관리하세요"
-              : "자동 스케줄링으로 반복 업무를 관리하세요"}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Tab Toggle */}
-          <div className="flex bg-surface-700 rounded-lg p-0.5 border border-white/[0.06]">
-            <button
-              onClick={() => setActiveTab("kanban")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
-                activeTab === "kanban"
-                  ? "bg-accent-500 text-white"
-                  : "text-text-muted hover:text-text-primary hover:bg-white/[0.05]"
-              }`}
-            >
-              칸반
-            </button>
-            <button
-              onClick={() => setActiveTab("schedule")}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
-                activeTab === "schedule"
-                  ? "bg-accent-500 text-white"
-                  : "text-text-muted hover:text-text-primary hover:bg-white/[0.05]"
-              }`}
-            >
-              스케줄
-            </button>
+    <PageShell>
+      <PageHeader
+        icon="tasks"
+        title="업무보드"
+        description={
+          activeTab === "kanban"
+            ? "칸반 보드로 에이전트 업무를 관리합니다."
+            : "반복 업무 자동화를 위한 스케줄을 관리합니다."
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <SegmentedControl<TabType>
+              items={[
+                { value: "kanban", label: "칸반" },
+                { value: "schedule", label: "스케줄", icon: "clock" },
+              ]}
+              value={activeTab}
+              onChange={setActiveTab}
+            />
+            {activeTab === "kanban" && (
+              <Button
+                onClick={openCreateModal}
+                leadingIcon={<AppIcon name="plus" size={15} />}
+              >
+                업무 추가
+              </Button>
+            )}
           </div>
-          {activeTab === "kanban" && (
-            <button
-              onClick={openCreateModal}
-              className="bg-accent-500 hover:bg-accent-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
-              + 업무 추가
-            </button>
-          )}
-        </div>
-      </div>
+        }
+      />
 
-      {/* Content */}
       {activeTab === "kanban" ? (
         <>
           <KanbanBoard />
@@ -80,6 +61,6 @@ export function TaskBoardPage() {
       ) : (
         <SchedulePanel />
       )}
-    </div>
+    </PageShell>
   );
 }

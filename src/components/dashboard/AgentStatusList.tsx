@@ -1,15 +1,18 @@
 import { useAgentStore } from "../../stores/agentStore";
 import { AgentStatusCard } from "./AgentStatusCard";
+import { AppIcon } from "../ui/AppIcon";
+import { EmptyState } from "../ui/EmptyState";
+import { SurfaceCard } from "../ui/SurfaceCard";
 
 export function AgentStatusList() {
   const agents = useAgentStore((s) => s.agents);
 
   return (
-    <div className="card">
+    <SurfaceCard>
       <h2 className="section-title">
-        <span>🤖</span>
+        <AppIcon name="bot" size={15} className="text-accent-400" />
         <span>에이전트 현황</span>
-        <span className="ml-auto text-xs font-normal text-text-muted bg-surface-700/60 px-2 py-0.5 rounded-full">
+        <span className="ml-auto rounded-full bg-surface-700/70 px-2 py-0.5 text-xs font-medium text-text-secondary">
           {agents.length}명
         </span>
       </h2>
@@ -18,12 +21,13 @@ export function AgentStatusList() {
           <AgentStatusCard key={agent.id} agent={agent} />
         ))}
         {agents.length === 0 && (
-          <div className="text-center py-10">
-            <div className="text-3xl mb-2">🤖</div>
-            <p className="text-xs text-text-muted">등록된 에이전트가 없습니다</p>
-          </div>
+          <EmptyState
+            icon="bot"
+            title="등록된 에이전트가 없습니다"
+            description="인사관리에서 첫 에이전트를 채용해 보세요."
+          />
         )}
       </div>
-    </div>
+    </SurfaceCard>
   );
 }

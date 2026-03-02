@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useHrStore } from "../../stores/hrStore";
+import { AppIcon } from "../ui/AppIcon";
 
 export function FolderWhitelist() {
   const {
@@ -103,7 +104,9 @@ export function FolderWhitelist() {
                     className="flex items-center justify-between px-4 py-3"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-text-muted text-sm">📁</span>
+                      <span className="text-text-muted">
+                        <AppIcon name="folder" size={14} />
+                      </span>
                       <span className="text-sm text-text-primary font-mono">
                         {entry.path}
                       </span>

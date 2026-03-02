@@ -1,14 +1,16 @@
 import { useUiStore, type Page } from "../../stores/uiStore";
 import { cn } from "../../lib/utils";
+import { AppIcon, type AppIconName } from "../ui/AppIcon";
+import { AvatarBadge } from "../ui/AvatarBadge";
 
-const navItems: { id: Page; label: string; emoji: string }[] = [
-  { id: "dashboard", label: "대시보드", emoji: "📊" },
-  { id: "chat", label: "채팅", emoji: "💬" },
-  { id: "hr", label: "인사관리", emoji: "👤" },
-  { id: "tasks", label: "업무보드", emoji: "📋" },
-  { id: "reports", label: "보고서", emoji: "📄" },
-  { id: "orgchart", label: "조직도", emoji: "🏛️" },
-  { id: "settings", label: "설정", emoji: "⚙️" },
+const navItems: { id: Page; label: string; icon: AppIconName }[] = [
+  { id: "dashboard", label: "대시보드", icon: "dashboard" },
+  { id: "chat", label: "채팅", icon: "chat" },
+  { id: "hr", label: "인사관리", icon: "users" },
+  { id: "tasks", label: "업무보드", icon: "tasks" },
+  { id: "reports", label: "보고서", icon: "reports" },
+  { id: "orgchart", label: "조직도", icon: "orgchart" },
+  { id: "settings", label: "설정", icon: "settings" },
 ];
 
 export function Sidebar() {
@@ -17,67 +19,62 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        "flex flex-col border-r border-surface-700 bg-surface-800 transition-all duration-200",
-        sidebarCollapsed ? "w-16" : "w-56"
+        "flex flex-col border-r border-white/[0.08] bg-surface-800/92 transition-all duration-200",
+        sidebarCollapsed ? "w-[78px]" : "w-[272px]"
       )}
     >
-      {/* Branding */}
       {!sidebarCollapsed && (
-        <div className="px-4 pt-4 pb-2">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-base">🏢</span>
-            <span className="text-xs font-bold text-text-primary">Window Agent Inc.</span>
+        <div className="px-5 pb-4 pt-5">
+          <div className="mb-1.5 flex items-center gap-2.5">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/[0.08] bg-surface-700/80 text-accent-400">
+              <AppIcon name="building" size={15} />
+            </span>
+            <span className="text-sm font-semibold text-text-primary">Window Agent Inc.</span>
           </div>
-          <p className="text-[10px] text-text-muted pl-6">AI 비서 관리 시스템</p>
+          <p className="pl-10 text-xs text-text-muted">운영 콘솔</p>
         </div>
       )}
 
-      {/* Menu Label */}
       {!sidebarCollapsed && (
-        <div className="px-4 pt-3 pb-1">
-          <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">메뉴</span>
+        <div className="px-5 pb-3 pt-1">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">Menu</span>
         </div>
       )}
 
-      <nav className="flex-1 py-2 px-2 space-y-1">
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setActivePage(item.id)}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/70",
-              activePage === item.id
-                ? "bg-accent-500/15 text-accent-400 font-medium"
-                : "text-text-secondary hover:bg-surface-700 hover:text-text-primary"
-            )}
-          >
-            {activePage === item.id && (
-              <div className="absolute -left-3 top-1/2 -translate-y-1/2 w-1 h-5 bg-accent-500 rounded-r-full" />
-            )}
-            <span className="text-base">{item.emoji}</span>
-            {!sidebarCollapsed && <span>{item.label}</span>}
-          </button>
-        ))}
+      <nav className="flex-1 space-y-2 px-3 pb-4">
+        {navItems.map((item) => {
+          const active = activePage === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setActivePage(item.id)}
+              className={cn(
+                "relative flex w-full items-center gap-3 rounded-xl px-3.5 py-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-500/70",
+                active
+                  ? "bg-accent-500/16 text-text-primary"
+                  : "text-text-secondary hover:bg-surface-700/75 hover:text-text-primary",
+                sidebarCollapsed && "justify-center px-0"
+              )}
+            >
+              {active && <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-accent-400" />}
+              <AppIcon
+                name={item.icon}
+                size={16}
+                className={active ? "text-accent-400" : "text-current"}
+              />
+              {!sidebarCollapsed && <span>{item.label}</span>}
+            </button>
+          );
+        })}
       </nav>
 
-      {/* Profile Card */}
-      <div className="p-3 border-t border-surface-700">
-        <div
-          className={cn(
-            "flex items-center gap-2.5 rounded-xl p-2 bg-surface-700/40",
-            sidebarCollapsed && "justify-center p-2"
-          )}
-        >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent-500/30 to-accent-400/10 flex items-center justify-center text-sm shrink-0">
-            👩‍💼
-          </div>
+      <div className="border-t border-white/[0.08] p-4">
+        <div className={cn("flex items-center gap-3 rounded-xl border border-white/[0.08] bg-surface-700/45 p-3", sidebarCollapsed && "justify-center")}>
+          <AvatarBadge name="김비서" size="sm" />
           {!sidebarCollapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium text-text-primary truncate">김비서</p>
-              <div className="flex items-center gap-1">
-                <div className="w-1.5 h-1.5 rounded-full bg-success" />
-                <p className="text-[10px] text-success">온라인</p>
-              </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-text-primary">김비서</p>
+              <p className="text-xs text-success">온라인</p>
             </div>
           )}
         </div>

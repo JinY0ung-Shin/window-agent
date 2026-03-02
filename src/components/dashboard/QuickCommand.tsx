@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useChatStore } from "../../stores/chatStore";
 import { useUiStore } from "../../stores/uiStore";
+import { AppIcon } from "../ui/AppIcon";
+import { Button } from "../ui/Button";
+import { SurfaceCard } from "../ui/SurfaceCard";
 
 export function QuickCommand() {
   const [value, setValue] = useState("");
@@ -19,27 +22,30 @@ export function QuickCommand() {
   };
 
   return (
-    <div className="card">
+    <SurfaceCard>
       <h2 className="section-title">
-        <span>⚡</span>
+        <AppIcon name="command" size={15} className="text-accent-400" />
         <span>빠른 지시</span>
       </h2>
       <form onSubmit={handleSubmit} className="flex gap-2">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="김비서에게 지시하기..."
-          className="flex-1 bg-surface-900 border border-surface-600 rounded-xl px-4 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent-500 focus:ring-1 focus:ring-accent-500/30 transition-all"
-        />
-        <button
+        <div className="relative flex-1">
+          <AppIcon name="search" size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="김비서에게 지시하기..."
+            className="h-10 w-full rounded-xl border border-white/[0.08] bg-surface-900/85 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted transition-colors focus:border-accent-500/55 focus:outline-none"
+          />
+        </div>
+        <Button
           type="submit"
           disabled={!value.trim()}
-          className="bg-accent-500 hover:bg-accent-600 hover:shadow-lg hover:shadow-accent-500/20 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-accent-500 disabled:hover:shadow-none"
+          leadingIcon={<AppIcon name="send" size={14} />}
         >
           전송
-        </button>
+        </Button>
       </form>
-    </div>
+    </SurfaceCard>
   );
 }

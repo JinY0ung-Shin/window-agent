@@ -5,6 +5,8 @@ import { TaskSummary } from "../components/dashboard/TaskSummary";
 import { RecentTasks } from "../components/dashboard/RecentTasks";
 import { QuickCommand } from "../components/dashboard/QuickCommand";
 import { CostOverview } from "../components/dashboard/CostOverview";
+import { PageHeader } from "../components/ui/PageHeader";
+import { PageShell } from "../components/ui/PageShell";
 
 export function DashboardPage() {
   const { fetchAgents, fetchTasks } = useAgentStore();
@@ -15,31 +17,27 @@ export function DashboardPage() {
   }, [fetchAgents, fetchTasks]);
 
   return (
-    <div className="p-6">
-      {/* Page Header */}
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-text-primary flex items-center gap-2">
-          📊 대시보드
-        </h1>
-        <p className="text-xs text-text-secondary mt-1">에이전트 현황과 작업 상태를 한눈에 확인하세요</p>
-      </div>
+    <PageShell>
+      <PageHeader
+        icon="dashboard"
+        title="대시보드"
+        description="에이전트 상태, 작업 흐름, 비용 지표를 한 화면에서 확인합니다."
+      />
 
-      {/* Quick Command */}
-      <div className="mb-5">
+      <div className="mb-4">
         <QuickCommand />
       </div>
 
-      {/* Main Grid: 2/3 + 1/3 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2 space-y-5">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div className="space-y-4 xl:col-span-2">
           <AgentStatusList />
           <TaskSummary />
         </div>
-        <div className="space-y-5">
+        <div className="space-y-4">
           <RecentTasks />
           <CostOverview />
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

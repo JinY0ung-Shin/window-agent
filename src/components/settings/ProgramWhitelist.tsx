@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useHrStore } from "../../stores/hrStore";
+import { AppIcon } from "../ui/AppIcon";
 
 export function ProgramWhitelist() {
   const {
@@ -103,7 +104,9 @@ export function ProgramWhitelist() {
                     className="flex items-center justify-between px-4 py-3"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-text-muted text-sm">⚙️</span>
+                      <span className="text-text-muted">
+                        <AppIcon name="settings" size={14} />
+                      </span>
                       <span className="text-sm text-text-primary font-mono">
                         {entry.program}
                       </span>

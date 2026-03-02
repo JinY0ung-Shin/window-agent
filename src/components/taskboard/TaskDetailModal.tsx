@@ -4,17 +4,7 @@ import { useHrStore } from "../../stores/hrStore";
 import type { TaskPriority, TaskStatus } from "../../services/types";
 import { formatDate } from "../../lib/utils";
 import { ConfirmationModal } from "../common/ConfirmationModal";
-
-const agentEmoji: Record<string, string> = {
-  "김비서": "👩‍💼",
-  "박개발": "💻",
-  "이분석": "📊",
-  "최기획": "📝",
-  "정조사": "🔍",
-  "한디자": "🎨",
-  "강관리": "📁",
-  "윤자동": "🔧",
-};
+import { AvatarBadge } from "../ui/AvatarBadge";
 
 const priorityConfig: Record<TaskPriority, { label: string; className: string }> = {
   urgent: { label: "긴급", className: "bg-red-500/20 text-red-400" },
@@ -291,11 +281,7 @@ export function TaskDetailModal() {
                     <span className="text-text-secondary">담당자</span>
                     {assignee ? (
                       <span className="text-text-primary flex items-center gap-1.5">
-                        <span>
-                          {agentEmoji[assignee.name] ||
-                            assignee.avatar ||
-                            "🤖"}
-                        </span>
+                        <AvatarBadge name={assignee.name} avatar={assignee.avatar} size="sm" />
                         {assignee.name}
                       </span>
                     ) : (

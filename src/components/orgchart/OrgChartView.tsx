@@ -2,10 +2,10 @@ import { useEffect } from "react";
 import { DndContext, DragEndEvent, closestCenter } from "@dnd-kit/core";
 import { useOrgChartStore } from "../../stores/orgChartStore";
 import { DepartmentNode } from "./DepartmentNode";
+import { EmptyState } from "../ui/EmptyState";
 
 export function OrgChartView() {
-  const { nodes, loading, fetchOrgChart, moveAgentDepartment } =
-    useOrgChartStore();
+  const { nodes, loading, fetchOrgChart, moveAgentDepartment } = useOrgChartStore();
 
   useEffect(() => {
     fetchOrgChart();
@@ -18,32 +18,27 @@ export function OrgChartView() {
     const agentId = active.id as string;
     const targetDeptName = over.id as string;
 
-    // Find current department of agent
-    const currentNode = nodes.find((n) =>
-      n.agents.some((a) => a.id === agentId)
-    );
+    const currentNode = nodes.find((n) => n.agents.some((a) => a.id === agentId));
     if (!currentNode || currentNode.department.name === targetDeptName) return;
 
     moveAgentDepartment(agentId, targetDeptName);
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12 text-text-muted text-sm">
-        로딩 중...
-      </div>
-    );
+    return <div className="flex items-center justify-center py-12 text-sm text-text-muted">로딩 중...</div>;
   }
 
   return (
     <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       {nodes.length === 0 ? (
-        <div className="text-center py-16 flex flex-col items-center gap-3">
-          <div className="text-4xl opacity-40">🏢</div>
-          <p className="text-sm text-text-muted">등록된 부서가 없습니다. 부서를 추가해 주세요.</p>
-        </div>
+        <EmptyState
+          icon="building"
+          title="등록된 부서가 없습니다"
+          description="부서를 추가한 뒤 에이전트를 배치해 보세요."
+          className="rounded-xl border border-white/[0.08] bg-surface-800/80"
+        />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {nodes.map((node) => (
             <DepartmentNode key={node.department.id} node={node} />
           ))}
