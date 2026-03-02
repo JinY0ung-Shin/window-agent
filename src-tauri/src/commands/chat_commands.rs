@@ -13,7 +13,7 @@ pub struct SendMessageRequest {
     pub metadata: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn send_message(
     state: State<AppState>,
     request: SendMessageRequest,
@@ -31,7 +31,7 @@ pub fn send_message(
     Ok(msg)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_messages(
     state: State<AppState>,
     channel: String,

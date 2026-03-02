@@ -3,7 +3,7 @@ use crate::db::models::AgentMessage;
 use crate::AppState;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn send_agent_message(
     state: State<AppState>,
     from_agent: String,
@@ -15,7 +15,7 @@ pub fn send_agent_message(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_agent_messages(
     state: State<AppState>,
     agent_id: String,

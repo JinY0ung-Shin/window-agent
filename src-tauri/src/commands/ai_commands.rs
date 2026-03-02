@@ -14,7 +14,7 @@ pub struct ChatResponse {
 
 /// Streaming chat command. Sends user message to the specified agent,
 /// streams the response via "chat-stream" events, and saves messages to DB.
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn chat_with_agent(
     app: tauri::AppHandle,
     state: State<'_, AppState>,

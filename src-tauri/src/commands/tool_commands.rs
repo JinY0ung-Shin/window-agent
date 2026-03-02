@@ -77,7 +77,7 @@ fn is_program_whitelisted(
     Ok(false)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub async fn execute_tool(
     state: State<'_, AppState>,
     request: ExecuteToolRequest,

@@ -4,7 +4,7 @@ use chrono::Utc;
 use rusqlite;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn evaluate_agent(
     state: State<AppState>,
     agent_id: String,
@@ -94,7 +94,7 @@ pub fn evaluate_agent(
     Ok(evaluation)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_evaluations(
     state: State<AppState>,
     agent_id: Option<String>,
@@ -105,7 +105,7 @@ pub fn get_evaluations(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_agent_performance_summary(
     state: State<AppState>,
     agent_id: String,

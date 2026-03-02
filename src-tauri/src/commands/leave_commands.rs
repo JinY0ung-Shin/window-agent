@@ -3,7 +3,7 @@ use crate::AppState;
 use chrono::Utc;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn put_agent_on_leave(
     state: State<AppState>,
     agent_id: String,
@@ -37,7 +37,7 @@ pub fn put_agent_on_leave(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn restore_agent_from_leave(
     state: State<AppState>,
     agent_id: String,
@@ -50,7 +50,7 @@ pub fn restore_agent_from_leave(
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn backup_agent_config(
     state: State<AppState>,
     agent_id: String,
@@ -74,7 +74,7 @@ pub fn backup_agent_config(
     Ok(backup)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_agent_backups(
     state: State<AppState>,
     agent_id: Option<String>,
@@ -83,7 +83,7 @@ pub fn get_agent_backups(
     models::get_agent_backups(&conn, agent_id.as_deref()).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn rehire_from_backup(
     state: State<AppState>,
     backup_id: String,

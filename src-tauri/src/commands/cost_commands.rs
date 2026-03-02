@@ -2,7 +2,7 @@ use crate::db::models;
 use crate::AppState;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn record_cost(
     state: State<AppState>,
     agent_id: String,
@@ -28,7 +28,7 @@ pub fn record_cost(
     Ok(record)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_cost_summary(
     state: State<AppState>,
     period_start: Option<String>,
@@ -43,7 +43,7 @@ pub fn get_cost_summary(
     .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_agent_cost_history(
     state: State<AppState>,
     agent_id: String,
@@ -54,7 +54,7 @@ pub fn get_agent_cost_history(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_cost_trend(
     state: State<AppState>,
     days: Option<i64>,

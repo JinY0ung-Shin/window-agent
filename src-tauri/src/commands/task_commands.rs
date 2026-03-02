@@ -30,7 +30,7 @@ pub struct UpdateTaskRequest {
     pub parent_task_id: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn create_task(
     state: State<AppState>,
     request: CreateTaskRequest,
@@ -54,7 +54,7 @@ pub fn create_task(
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_task(
     state: State<AppState>,
     task_id: String,
@@ -81,7 +81,7 @@ pub fn update_task(
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_task(
     state: State<AppState>,
     task_id: String,
@@ -90,13 +90,13 @@ pub fn delete_task(
     models::delete_task(&conn, &task_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_all_tasks(state: State<AppState>) -> Result<Vec<Task>, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     models::get_all_tasks(&conn).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_tasks_by_status(
     state: State<AppState>,
     status: String,
@@ -105,7 +105,7 @@ pub fn get_tasks_by_status(
     models::get_tasks_by_status(&conn, &status).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_task_status_cmd(
     state: State<AppState>,
     task_id: String,

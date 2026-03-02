@@ -130,12 +130,23 @@ impl AgentRunner {
             agent.api_url.clone()
         };
 
-        // Environment variable takes priority over DB model
-        let model = if agent.model.is_empty() {
-            "gpt-5.3-codex".to_string()
-        } else {
-            agent.model.clone()
+        // Environment variable overrides DB model per backend
+        let env_model = match backend_type {
+            AiBackendType::Claude => std::env::var("ANTHROPIC_MODEL").ok(),
+            AiBackendType::OpenAI | AiBackendType::Custom => std::env::var("OPENAI_MODEL").ok(),
+            AiBackendType::Ollama => std::env::var("OLLAMA_MODEL").ok(),
         };
+        let model = env_model.unwrap_or_else(|| {
+            if agent.model.is_empty() {
+                match backend_type {
+                    AiBackendType::Claude => "claude-sonnet-4-20250514".to_string(),
+                    AiBackendType::OpenAI | AiBackendType::Custom => "gpt-4o".to_string(),
+                    AiBackendType::Ollama => "llama3".to_string(),
+                }
+            } else {
+                agent.model.clone()
+            }
+        });
 
         // Compose system prompt from persona files + DB prompt
         let system_prompt = compose_system_prompt(&agent.id, &agent.system_prompt);

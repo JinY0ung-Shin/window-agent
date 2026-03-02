@@ -4,7 +4,7 @@ use chrono::Utc;
 use rusqlite;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn generate_report(
     state: State<AppState>,
     report_type: String,
@@ -196,7 +196,7 @@ pub fn generate_report(
     Ok(report)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_reports(
     state: State<AppState>,
     report_type: Option<String>,
@@ -207,7 +207,7 @@ pub fn get_reports(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_report_by_id(
     state: State<AppState>,
     report_id: String,
@@ -218,7 +218,7 @@ pub fn get_report_by_id(
         .ok_or_else(|| format!("Report not found: {}", report_id))
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_report(
     state: State<AppState>,
     report_id: String,

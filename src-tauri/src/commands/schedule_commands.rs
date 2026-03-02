@@ -36,7 +36,7 @@ fn compute_next_run(cron_expr: &str) -> Option<String> {
     schedule.upcoming(Utc).next().map(|dt| dt.to_rfc3339())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn create_scheduled_task(
     state: State<AppState>,
     request: CreateScheduledTaskRequest,
@@ -66,7 +66,7 @@ pub fn create_scheduled_task(
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_scheduled_tasks(
     state: State<AppState>,
     active_only: Option<bool>,
@@ -75,7 +75,7 @@ pub fn get_scheduled_tasks(
     models::get_scheduled_tasks(&conn, active_only.unwrap_or(false)).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_scheduled_task(
     state: State<AppState>,
     task_id: String,
@@ -116,7 +116,7 @@ pub fn update_scheduled_task(
     Ok(task)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_scheduled_task(
     state: State<AppState>,
     task_id: String,
@@ -125,7 +125,7 @@ pub fn delete_scheduled_task(
     models::delete_scheduled_task(&conn, &task_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn trigger_scheduled_task(
     state: State<AppState>,
     task_id: String,

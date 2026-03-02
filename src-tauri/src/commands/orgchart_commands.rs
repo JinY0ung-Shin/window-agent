@@ -2,7 +2,7 @@ use crate::db::models::{self, OrgChartNode, Department};
 use crate::AppState;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_org_chart(state: State<AppState>) -> Result<Vec<OrgChartNode>, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     let departments = models::get_all_departments(&conn).map_err(|e| e.to_string())?;
@@ -26,7 +26,7 @@ pub fn get_org_chart(state: State<AppState>) -> Result<Vec<OrgChartNode>, String
     Ok(nodes)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn move_agent_department(
     state: State<AppState>,
     agent_id: String,
@@ -37,7 +37,7 @@ pub fn move_agent_department(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_department(
     state: State<AppState>,
     dept_id: String,
@@ -49,7 +49,7 @@ pub fn update_department(
         .map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn delete_department(
     state: State<AppState>,
     dept_id: String,

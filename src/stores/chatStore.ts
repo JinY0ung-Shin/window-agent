@@ -107,10 +107,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
           }));
         }
       } catch (err) {
-        set({
+        const errorMsg: Message = {
+          id: `msg-${Date.now()}`,
+          channelId: activeChannelId,
+          role: "assistant",
+          content: `오류가 발생했습니다: ${err instanceof Error ? err.message : String(err)}`,
+          timestamp: new Date().toISOString(),
+        };
+        set((state) => ({
+          messages: [...state.messages, errorMsg],
           streaming: false,
           streamingContent: "",
-        });
+        }));
         console.error("Chat error:", err);
       }
     } else {

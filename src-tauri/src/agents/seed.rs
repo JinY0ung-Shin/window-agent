@@ -20,7 +20,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "👩‍💼".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -39,7 +39,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "💻".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -58,7 +58,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "📊".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -77,7 +77,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "📝".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -96,7 +96,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "🔍".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -115,7 +115,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "🎨".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -134,7 +134,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "📁".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -153,7 +153,7 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
             model: "gpt-5.3-codex".to_string(),
             avatar: "🔧".to_string(),
             created_at: now.clone(),
-            ai_backend: "openai".to_string(),
+            ai_backend: "claude".to_string(),
             api_key: String::new(),
             api_url: String::new(),
             is_active: true,
@@ -165,6 +165,12 @@ pub fn seed_all_agents(conn: &Connection) -> Result<(), rusqlite::Error> {
     for agent in &agents {
         models::insert_agent(conn, agent)?;
     }
+
+    // Migrate existing agents with empty api_key from openai to claude
+    conn.execute(
+        "UPDATE agents SET ai_backend = 'claude' WHERE ai_backend = 'openai' AND (api_key IS NULL OR api_key = '')",
+        [],
+    )?;
 
     Ok(())
 }

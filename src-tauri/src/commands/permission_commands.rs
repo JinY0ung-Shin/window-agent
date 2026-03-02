@@ -3,7 +3,7 @@ use crate::AppState;
 use chrono::Utc;
 use tauri::State;
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_permissions(
     state: State<AppState>,
     agent_id: String,
@@ -12,7 +12,7 @@ pub fn get_permissions(
     models::get_permissions(&conn, &agent_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_permission(
     state: State<AppState>,
     agent_id: String,
@@ -30,7 +30,7 @@ pub fn update_permission(
     Ok(perm)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_folder_whitelist(
     state: State<AppState>,
     agent_id: String,
@@ -39,7 +39,7 @@ pub fn get_folder_whitelist(
     models::get_folder_whitelist(&conn, &agent_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn add_folder_to_whitelist(
     state: State<AppState>,
     agent_id: String,
@@ -56,7 +56,7 @@ pub fn add_folder_to_whitelist(
     Ok(entry)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn remove_folder_from_whitelist(
     state: State<AppState>,
     id: String,
@@ -65,7 +65,7 @@ pub fn remove_folder_from_whitelist(
     models::remove_folder_whitelist(&conn, &id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_program_whitelist(
     state: State<AppState>,
     agent_id: String,
@@ -74,7 +74,7 @@ pub fn get_program_whitelist(
     models::get_program_whitelist(&conn, &agent_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn add_program_to_whitelist(
     state: State<AppState>,
     agent_id: String,
@@ -91,7 +91,7 @@ pub fn add_program_to_whitelist(
     Ok(entry)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn remove_program_from_whitelist(
     state: State<AppState>,
     id: String,

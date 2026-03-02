@@ -42,7 +42,7 @@ pub struct UpdateAgentRequest {
     pub api_url: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn hire_agent(
     state: State<AppState>,
     request: CreateAgentRequest,
@@ -73,7 +73,7 @@ pub fn hire_agent(
     Ok(agent.to_public())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn fire_agent(
     state: State<AppState>,
     agent_id: String,
@@ -82,7 +82,7 @@ pub fn fire_agent(
     models::fire_agent(&conn, &agent_id).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn update_agent(
     state: State<AppState>,
     agent_id: String,
@@ -110,13 +110,13 @@ pub fn update_agent(
     Ok(agent.to_public())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn get_departments(state: State<AppState>) -> Result<Vec<Department>, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     models::get_all_departments(&conn).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "snake_case")]
 pub fn create_department(
     state: State<AppState>,
     name: String,
