@@ -39,8 +39,14 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   fetchTasks: async () => {
     set({ loading: true });
-    const tasks = await getAllTasks();
-    set({ tasks, loading: false });
+    try {
+      const tasks = await getAllTasks();
+      set({ tasks });
+    } catch (e) {
+      console.error("fetchTasks failed:", e);
+    } finally {
+      set({ loading: false });
+    }
   },
 
   setSelectedTask: (task) => set({ selectedTask: task }),

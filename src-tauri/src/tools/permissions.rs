@@ -2,7 +2,9 @@ use rusqlite::Connection;
 
 /// Check if an agent has permission for a specific action.
 /// Returns the permission level: "none", "ask", or "auto".
-/// If no permission is configured, defaults to "ask".
+/// If no permission is configured, defaults to "auto" so that
+/// tools work out-of-the-box on fresh installs. Users can
+/// explicitly restrict permissions via the UI.
 pub fn check_permission(
     conn: &Connection,
     agent_id: &str,
@@ -17,5 +19,5 @@ pub fn check_permission(
         })
         .ok();
 
-    Ok(result.unwrap_or_else(|| "ask".to_string()))
+    Ok(result.unwrap_or_else(|| "auto".to_string()))
 }

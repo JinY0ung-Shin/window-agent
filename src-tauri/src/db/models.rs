@@ -40,6 +40,52 @@ fn default_is_active() -> bool {
     true
 }
 
+/// Public-facing Agent struct that excludes sensitive fields (api_key).
+/// Used when returning agent data to the frontend.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentPublic {
+    pub id: String,
+    pub name: String,
+    pub role: String,
+    pub department: String,
+    pub personality: String,
+    pub system_prompt: String,
+    pub tools: String,
+    pub status: String,
+    pub model: String,
+    pub avatar: String,
+    pub created_at: String,
+    pub ai_backend: String,
+    pub api_url: String,
+    pub is_active: bool,
+    pub hired_at: Option<String>,
+    pub fired_at: Option<String>,
+}
+
+impl Agent {
+    /// Convert to a public DTO that excludes the api_key field.
+    pub fn to_public(&self) -> AgentPublic {
+        AgentPublic {
+            id: self.id.clone(),
+            name: self.name.clone(),
+            role: self.role.clone(),
+            department: self.department.clone(),
+            personality: self.personality.clone(),
+            system_prompt: self.system_prompt.clone(),
+            tools: self.tools.clone(),
+            status: self.status.clone(),
+            model: self.model.clone(),
+            avatar: self.avatar.clone(),
+            created_at: self.created_at.clone(),
+            ai_backend: self.ai_backend.clone(),
+            api_url: self.api_url.clone(),
+            is_active: self.is_active,
+            hired_at: self.hired_at.clone(),
+            fired_at: self.fired_at.clone(),
+        }
+    }
+}
+
 pub fn insert_agent(conn: &Connection, agent: &Agent) -> Result<(), rusqlite::Error> {
     conn.execute(
         "INSERT OR IGNORE INTO agents (id, name, role, department, personality, system_prompt, tools, status, model, avatar, created_at, ai_backend, api_key, api_url, is_active, hired_at, fired_at)

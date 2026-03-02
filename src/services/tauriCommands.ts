@@ -113,6 +113,20 @@ function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+// ─── Simple UUID generator ───
+
+function generateId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback for environments without crypto.randomUUID
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 // ─── Mock data for browser dev ───
 
 const mockAgents: Agent[] = [
@@ -380,8 +394,9 @@ export async function getAgents(): Promise<Agent[]> {
   try {
     const agents: BackendAgent[] = await invoke("get_agents");
     return agents.map(toAgent);
-  } catch {
-    return mockAgents;
+  } catch (e) {
+    console.error("get_agents failed:", e);
+    throw e;
   }
 }
 
@@ -389,8 +404,9 @@ export async function getTasks(): Promise<Task[]> {
   if (!isTauri()) return mockTasks;
   try {
     return await invoke("get_all_tasks");
-  } catch {
-    return mockTasks;
+  } catch (e) {
+    console.error("get_all_tasks failed:", e);
+    throw e;
   }
 }
 
@@ -405,8 +421,9 @@ export async function getChannels(): Promise<Channel[]> {
       avatar: a.avatar || undefined,
       unreadCount: 0,
     }));
-  } catch {
-    return mockChannels;
+  } catch (e) {
+    console.error("get_agents (channels) failed:", e);
+    throw e;
   }
 }
 
@@ -418,8 +435,9 @@ export async function getMessages(channelId: string): Promise<Message[]> {
       limit: 100,
     });
     return messages.map((m) => toMessage(m, channelId));
-  } catch {
-    return [];
+  } catch (e) {
+    console.error("get_messages failed:", e);
+    throw e;
   }
 }
 
@@ -448,14 +466,9 @@ export async function sendMessage(
       },
     });
     return toMessage(result, channelId);
-  } catch {
-    return {
-      id: `msg-${Date.now()}`,
-      channelId,
-      role: "user",
-      content,
-      timestamp: new Date().toISOString(),
-    };
+  } catch (e) {
+    console.error("send_message failed:", e);
+    throw e;
   }
 }
 
@@ -471,7 +484,7 @@ export async function chatWithAgent(
   }
 
   return invoke("chat_with_agent", {
-    agentId,
+    agent_id: agentId,
     message,
   });
 }
@@ -528,21 +541,26 @@ export async function hireAgent(request: CreateAgentRequest): Promise<Agent> {
     return newAgent;
   }
   try {
-    const b: BackendAgent = await invoke("hire_agent", { request });
+    const b: BackendAgent = await invoke("hire_agent", {
+      request: {
+        id: request.id || generateId(),
+        name: request.name,
+        role: request.role,
+        department: request.department,
+        personality: request.personality,
+        system_prompt: request.systemPrompt,
+        tools: request.tools,
+        model: request.model,
+        avatar: request.avatar,
+        ai_backend: request.aiBackend,
+        api_url: request.apiUrl || "",
+        api_key: request.apiKey || "",
+      },
+    });
     return toAgent(b);
-  } catch {
-    const newAgent: Agent = {
-      id: `agent-${Date.now()}`,
-      ...request,
-      apiUrl: request.apiUrl || "",
-      apiKey: request.apiKey || "",
-      status: "online",
-      isActive: true,
-      hiredAt: new Date().toISOString(),
-      completedTasks: 0,
-      totalTasks: 0,
-    };
-    return newAgent;
+  } catch (e) {
+    console.error("hire_agent failed:", e);
+    throw e;
   }
 }
 
@@ -557,9 +575,10 @@ export async function fireAgent(agentId: string): Promise<boolean> {
     return true;
   }
   try {
-    return await invoke("fire_agent", { agentId });
-  } catch {
-    return false;
+    return await invoke("fire_agent", { agent_id: agentId });
+  } catch (e) {
+    console.error("fire_agent failed:", e);
+    throw e;
   }
 }
 
@@ -574,9 +593,25 @@ export async function updateAgent(agentId: string, request: UpdateAgentRequest):
     throw new Error("Agent not found");
   }
   try {
-    const b: BackendAgent = await invoke("update_agent", { agentId, request });
+    const b: BackendAgent = await invoke("update_agent", {
+      agent_id: agentId,
+      request: {
+        name: request.name,
+        role: request.role,
+        department: request.department,
+        personality: request.personality,
+        system_prompt: request.systemPrompt,
+        tools: request.tools,
+        model: request.model,
+        avatar: request.avatar,
+        ai_backend: request.aiBackend,
+        api_key: request.apiKey,
+        api_url: request.apiUrl,
+      },
+    });
     return toAgent(b);
   } catch (e) {
+    console.error("update_agent failed:", e);
     throw e;
   }
 }
@@ -585,8 +620,9 @@ export async function getDepartments(): Promise<Department[]> {
   if (!isTauri()) return mockDepartments;
   try {
     return await invoke("get_departments");
-  } catch {
-    return mockDepartments;
+  } catch (e) {
+    console.error("get_departments failed:", e);
+    throw e;
   }
 }
 
@@ -603,8 +639,9 @@ export async function createDepartment(name: string, description: string): Promi
   }
   try {
     return await invoke("create_department", { name, description });
-  } catch {
-    return { id: `dept-${Date.now()}`, name, description, createdAt: new Date().toISOString() };
+  } catch (e) {
+    console.error("create_department failed:", e);
+    throw e;
   }
 }
 
@@ -623,16 +660,19 @@ export async function createTask(request: CreateTaskRequest): Promise<Task> {
     return task;
   }
   try {
-    return await invoke("create_task", { request });
-  } catch {
-    const task: Task = {
-      id: `task-${Date.now()}`,
-      ...request,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    return task;
+    return await invoke("create_task", {
+      request: {
+        title: request.title,
+        description: request.description,
+        assignee: request.assigneeId,
+        priority: request.priority,
+        parent_task_id: request.parentTaskId,
+        creator: request.creator,
+      },
+    });
+  } catch (e) {
+    console.error("create_task failed:", e);
+    throw e;
   }
 }
 
@@ -646,8 +686,19 @@ export async function updateTask(taskId: string, request: UpdateTaskRequest): Pr
     throw new Error("Task not found");
   }
   try {
-    return await invoke("update_task", { taskId, request });
+    return await invoke("update_task", {
+      task_id: taskId,
+      request: {
+        title: request.title,
+        description: request.description,
+        assignee: request.assigneeId,
+        status: request.status,
+        priority: request.priority,
+        parent_task_id: request.parentTaskId,
+      },
+    });
   } catch (e) {
+    console.error("update_task failed:", e);
     throw e;
   }
 }
@@ -661,9 +712,10 @@ export async function deleteTask(taskId: string): Promise<boolean> {
     return true;
   }
   try {
-    return await invoke("delete_task", { taskId });
-  } catch {
-    return false;
+    return await invoke("delete_task", { task_id: taskId });
+  } catch (e) {
+    console.error("delete_task failed:", e);
+    throw e;
   }
 }
 
@@ -671,8 +723,9 @@ export async function getAllTasks(): Promise<Task[]> {
   if (!isTauri()) return mockTasks;
   try {
     return await invoke("get_all_tasks");
-  } catch {
-    return mockTasks;
+  } catch (e) {
+    console.error("get_all_tasks failed:", e);
+    throw e;
   }
 }
 
@@ -680,8 +733,9 @@ export async function getTasksByStatus(status: string): Promise<Task[]> {
   if (!isTauri()) return mockTasks.filter((t) => t.status === status);
   try {
     return await invoke("get_tasks_by_status", { status });
-  } catch {
-    return mockTasks.filter((t) => t.status === status);
+  } catch (e) {
+    console.error("get_tasks_by_status failed:", e);
+    throw e;
   }
 }
 
@@ -699,8 +753,9 @@ export async function updateTaskStatus(taskId: string, status: string): Promise<
     throw new Error("Task not found");
   }
   try {
-    return await invoke("update_task_status", { taskId, status });
+    return await invoke("update_task_status_cmd", { task_id: taskId, status });
   } catch (e) {
+    console.error("update_task_status_cmd failed:", e);
     throw e;
   }
 }
@@ -718,9 +773,10 @@ export async function getPermissions(agentId: string): Promise<Permission[]> {
     ];
   }
   try {
-    return await invoke("get_permissions", { agentId });
-  } catch {
-    return [];
+    return await invoke("get_permissions", { agent_id: agentId });
+  } catch (e) {
+    console.error("get_permissions failed:", e);
+    throw e;
   }
 }
 
@@ -729,9 +785,10 @@ export async function updatePermission(agentId: string, permissionType: string, 
     return { id: `perm-${Date.now()}`, agentId, permissionType, level: level as Permission["level"] };
   }
   try {
-    return await invoke("update_permission", { agentId, permissionType, level });
-  } catch {
-    return { id: `perm-${Date.now()}`, agentId, permissionType, level: level as Permission["level"] };
+    return await invoke("update_permission", { agent_id: agentId, permission_type: permissionType, level });
+  } catch (e) {
+    console.error("update_permission failed:", e);
+    throw e;
   }
 }
 
@@ -743,9 +800,10 @@ export async function getFolderWhitelist(agentId: string): Promise<FolderEntry[]
     ];
   }
   try {
-    return await invoke("get_folder_whitelist", { agentId });
-  } catch {
-    return [];
+    return await invoke("get_folder_whitelist", { agent_id: agentId });
+  } catch (e) {
+    console.error("get_folder_whitelist failed:", e);
+    throw e;
   }
 }
 
@@ -754,18 +812,20 @@ export async function addFolder(agentId: string, path: string): Promise<FolderEn
     return { id: `folder-${Date.now()}`, agentId, path, createdAt: new Date().toISOString() };
   }
   try {
-    return await invoke("add_folder", { agentId, path });
-  } catch {
-    return { id: `folder-${Date.now()}`, agentId, path, createdAt: new Date().toISOString() };
+    return await invoke("add_folder_to_whitelist", { agent_id: agentId, path });
+  } catch (e) {
+    console.error("add_folder_to_whitelist failed:", e);
+    throw e;
   }
 }
 
 export async function removeFolder(id: string): Promise<boolean> {
   if (!isTauri()) return true;
   try {
-    return await invoke("remove_folder", { id });
-  } catch {
-    return false;
+    return await invoke("remove_folder_from_whitelist", { id });
+  } catch (e) {
+    console.error("remove_folder_from_whitelist failed:", e);
+    throw e;
   }
 }
 
@@ -777,9 +837,10 @@ export async function getProgramWhitelist(agentId: string): Promise<ProgramEntry
     ];
   }
   try {
-    return await invoke("get_program_whitelist", { agentId });
-  } catch {
-    return [];
+    return await invoke("get_program_whitelist", { agent_id: agentId });
+  } catch (e) {
+    console.error("get_program_whitelist failed:", e);
+    throw e;
   }
 }
 
@@ -788,18 +849,20 @@ export async function addProgram(agentId: string, program: string): Promise<Prog
     return { id: `prog-${Date.now()}`, agentId, program, createdAt: new Date().toISOString() };
   }
   try {
-    return await invoke("add_program", { agentId, program });
-  } catch {
-    return { id: `prog-${Date.now()}`, agentId, program, createdAt: new Date().toISOString() };
+    return await invoke("add_program_to_whitelist", { agent_id: agentId, program });
+  } catch (e) {
+    console.error("add_program_to_whitelist failed:", e);
+    throw e;
   }
 }
 
 export async function removeProgram(id: string): Promise<boolean> {
   if (!isTauri()) return true;
   try {
-    return await invoke("remove_program", { id });
-  } catch {
-    return false;
+    return await invoke("remove_program_from_whitelist", { id });
+  } catch (e) {
+    console.error("remove_program_from_whitelist failed:", e);
+    throw e;
   }
 }
 
@@ -817,25 +880,20 @@ export async function sendAgentMessage(fromAgent: string, toAgent: string, conte
     };
   }
   try {
-    return await invoke("send_agent_message", { fromAgent, toAgent, content });
-  } catch {
-    return {
-      id: `amsg-${Date.now()}`,
-      fromAgent,
-      toAgent,
-      content,
-      timestamp: new Date().toISOString(),
-      read: false,
-    };
+    return await invoke("send_agent_message", { from_agent: fromAgent, to_agent: toAgent, content });
+  } catch (e) {
+    console.error("send_agent_message failed:", e);
+    throw e;
   }
 }
 
 export async function getAgentMessages(agentId: string): Promise<AgentMessage[]> {
   if (!isTauri()) return [];
   try {
-    return await invoke("get_agent_messages", { agentId });
-  } catch {
-    return [];
+    return await invoke("get_agent_messages", { agent_id: agentId });
+  } catch (e) {
+    console.error("get_agent_messages failed:", e);
+    throw e;
   }
 }
 
@@ -855,8 +913,9 @@ export async function getOrgChart(): Promise<OrgChartNode[]> {
   }
   try {
     return await invoke("get_org_chart");
-  } catch {
-    return [];
+  } catch (e) {
+    console.error("get_org_chart failed:", e);
+    throw e;
   }
 }
 
@@ -867,9 +926,10 @@ export async function moveAgentDepartment(agentId: string, newDepartment: string
     return;
   }
   try {
-    await invoke("move_agent_department", { agentId, newDepartment });
-  } catch {
-    // ignore
+    await invoke("move_agent_department", { agent_id: agentId, new_department: newDepartment });
+  } catch (e) {
+    console.error("move_agent_department failed:", e);
+    throw e;
   }
 }
 
@@ -884,8 +944,9 @@ export async function updateDepartmentCmd(deptId: string, name?: string, descrip
     throw new Error("Department not found");
   }
   try {
-    return await invoke("update_department", { deptId, name, description });
+    return await invoke("update_department", { dept_id: deptId, name, description });
   } catch (e) {
+    console.error("update_department failed:", e);
     throw e;
   }
 }
@@ -897,9 +958,10 @@ export async function deleteDepartment(deptId: string): Promise<boolean> {
     return true;
   }
   try {
-    return await invoke("delete_department", { deptId });
-  } catch {
-    return false;
+    return await invoke("delete_department", { dept_id: deptId });
+  } catch (e) {
+    console.error("delete_department failed:", e);
+    throw e;
   }
 }
 
@@ -916,9 +978,10 @@ export async function putAgentOnLeave(agentId: string, reason: string): Promise<
     return;
   }
   try {
-    await invoke("put_agent_on_leave", { agentId, reason });
-  } catch {
-    // ignore
+    await invoke("put_agent_on_leave", { agent_id: agentId, reason });
+  } catch (e) {
+    console.error("put_agent_on_leave failed:", e);
+    throw e;
   }
 }
 
@@ -933,9 +996,10 @@ export async function restoreAgentFromLeave(agentId: string): Promise<void> {
     return;
   }
   try {
-    await invoke("restore_agent_from_leave", { agentId });
-  } catch {
-    // ignore
+    await invoke("restore_agent_from_leave", { agent_id: agentId });
+  } catch (e) {
+    console.error("restore_agent_from_leave failed:", e);
+    throw e;
   }
 }
 
@@ -950,33 +1014,30 @@ export async function backupAgentConfig(agentId: string, reason: string): Promis
     };
   }
   try {
-    return await invoke("backup_agent_config", { agentId, reason });
-  } catch {
-    return {
-      id: `backup-${Date.now()}`,
-      agentId,
-      configJson: "{}",
-      reason,
-      backedUpAt: new Date().toISOString(),
-    };
+    return await invoke("backup_agent_config", { agent_id: agentId, reason });
+  } catch (e) {
+    console.error("backup_agent_config failed:", e);
+    throw e;
   }
 }
 
 export async function getAgentBackups(agentId?: string): Promise<AgentBackup[]> {
   if (!isTauri()) return [];
   try {
-    return await invoke("get_agent_backups", { agentId: agentId || null });
-  } catch {
-    return [];
+    return await invoke("get_agent_backups", { agent_id: agentId || null });
+  } catch (e) {
+    console.error("get_agent_backups failed:", e);
+    throw e;
   }
 }
 
 export async function rehireFromBackup(backupId: string): Promise<void> {
   if (!isTauri()) return;
   try {
-    await invoke("rehire_from_backup", { backupId });
-  } catch {
-    // ignore
+    await invoke("rehire_from_backup", { backup_id: backupId });
+  } catch (e) {
+    console.error("rehire_from_backup failed:", e);
+    throw e;
   }
 }
 
@@ -1000,28 +1061,28 @@ export async function createScheduledTask(req: CreateScheduledTaskRequest): Prom
     return task;
   }
   try {
-    return await invoke("create_scheduled_task", { request: req });
-  } catch {
-    const task: ScheduledTask = {
-      id: `sched-${Date.now()}`,
-      title: req.title,
-      description: req.description,
-      cronExpression: req.cronExpression,
-      assignee: req.assignee,
-      priority: req.priority as ScheduledTask["priority"],
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-    return task;
+    return await invoke("create_scheduled_task", {
+      request: {
+        title: req.title,
+        description: req.description,
+        cron_expression: req.cronExpression,
+        assignee: req.assignee,
+        priority: req.priority,
+      },
+    });
+  } catch (e) {
+    console.error("create_scheduled_task failed:", e);
+    throw e;
   }
 }
 
 export async function getScheduledTasks(activeOnly?: boolean): Promise<ScheduledTask[]> {
   if (!isTauri()) return mockScheduledTasks;
   try {
-    return await invoke("get_scheduled_tasks", { activeOnly: activeOnly ?? null });
-  } catch {
-    return mockScheduledTasks;
+    return await invoke("get_scheduled_tasks", { active_only: activeOnly ?? null });
+  } catch (e) {
+    console.error("get_scheduled_tasks failed:", e);
+    throw e;
   }
 }
 
@@ -1035,8 +1096,19 @@ export async function updateScheduledTask(taskId: string, req: UpdateScheduledTa
     throw new Error("Scheduled task not found");
   }
   try {
-    return await invoke("update_scheduled_task", { taskId, request: req });
+    return await invoke("update_scheduled_task", {
+      task_id: taskId,
+      request: {
+        title: req.title,
+        description: req.description,
+        cron_expression: req.cronExpression,
+        assignee: req.assignee,
+        priority: req.priority,
+        is_active: req.isActive,
+      },
+    });
   } catch (e) {
+    console.error("update_scheduled_task failed:", e);
     throw e;
   }
 }
@@ -1048,9 +1120,10 @@ export async function deleteScheduledTask(taskId: string): Promise<boolean> {
     return true;
   }
   try {
-    return await invoke("delete_scheduled_task", { taskId });
-  } catch {
-    return false;
+    return await invoke("delete_scheduled_task", { task_id: taskId });
+  } catch (e) {
+    console.error("delete_scheduled_task failed:", e);
+    throw e;
   }
 }
 
@@ -1067,8 +1140,9 @@ export async function triggerScheduledTask(taskId: string): Promise<Task> {
     };
   }
   try {
-    return await invoke("trigger_scheduled_task", { taskId });
+    return await invoke("trigger_scheduled_task", { task_id: taskId });
   } catch (e) {
+    console.error("trigger_scheduled_task failed:", e);
     throw e;
   }
 }
@@ -1086,12 +1160,15 @@ export async function executeProgram(
   }
   try {
     return await invoke("execute_tool", {
-      agentId,
-      toolName: "program_execute",
-      params: { program, args, cwd },
+      request: {
+        agent_id: agentId,
+        tool_name: "program_execute",
+        params: { program, args, cwd },
+      },
     });
-  } catch {
-    return { success: false, error: "Failed to execute program" };
+  } catch (e) {
+    console.error("execute_tool failed:", e);
+    throw e;
   }
 }
 
@@ -1119,24 +1196,16 @@ export async function recordCost(
   }
   try {
     return await invoke("record_cost", {
-      agentId,
+      agent_id: agentId,
       model,
-      tokensInput,
-      tokensOutput,
-      costUsd,
-      toolExecutionId: toolExecutionId || null,
+      tokens_input: tokensInput,
+      tokens_output: tokensOutput,
+      cost_usd: costUsd,
+      tool_execution_id: toolExecutionId || null,
     });
-  } catch {
-    return {
-      id: `cost-${Date.now()}`,
-      agentId,
-      toolExecutionId,
-      model,
-      tokensInput,
-      tokensOutput,
-      costUsd,
-      timestamp: new Date().toISOString(),
-    };
+  } catch (e) {
+    console.error("record_cost failed:", e);
+    throw e;
   }
 }
 
@@ -1149,11 +1218,12 @@ export async function getCostSummary(
   }
   try {
     return await invoke("get_cost_summary", {
-      periodStart: periodStart || null,
-      periodEnd: periodEnd || null,
+      period_start: periodStart || null,
+      period_end: periodEnd || null,
     });
-  } catch {
-    return { totalCost: 0, totalTokens: 0, byAgent: [], byModel: [] };
+  } catch (e) {
+    console.error("get_cost_summary failed:", e);
+    throw e;
   }
 }
 
@@ -1164,11 +1234,12 @@ export async function getAgentCostHistory(
   if (!isTauri()) return [];
   try {
     return await invoke("get_agent_cost_history", {
-      agentId,
+      agent_id: agentId,
       limit: limit || null,
     });
-  } catch {
-    return [];
+  } catch (e) {
+    console.error("get_agent_cost_history failed:", e);
+    throw e;
   }
 }
 
@@ -1176,8 +1247,9 @@ export async function getCostTrend(days?: number): Promise<DailyCost[]> {
   if (!isTauri()) return [];
   try {
     return await invoke("get_cost_trend", { days: days || null });
-  } catch {
-    return [];
+  } catch (e) {
+    console.error("get_cost_trend failed:", e);
+    throw e;
   }
 }
 
@@ -1205,19 +1277,10 @@ export async function generateReport(
     return report;
   }
   try {
-    return await invoke("generate_report", { reportType, periodStart, periodEnd });
-  } catch {
-    const report: Report = {
-      id: `report-${Date.now()}`,
-      reportType: reportType as Report["reportType"],
-      title: `${reportType} Report (${periodStart} ~ ${periodEnd})`,
-      content: "Failed to generate report.",
-      generatedAt: new Date().toISOString(),
-      periodStart,
-      periodEnd,
-      metadata: "{}",
-    };
-    return report;
+    return await invoke("generate_report", { report_type: reportType, period_start: periodStart, period_end: periodEnd });
+  } catch (e) {
+    console.error("generate_report failed:", e);
+    throw e;
   }
 }
 
@@ -1228,11 +1291,12 @@ export async function getReports(
   if (!isTauri()) return mockReports;
   try {
     return await invoke("get_reports", {
-      reportType: reportType || null,
+      report_type: reportType || null,
       limit: limit || null,
     });
-  } catch {
-    return mockReports;
+  } catch (e) {
+    console.error("get_reports failed:", e);
+    throw e;
   }
 }
 
@@ -1243,8 +1307,9 @@ export async function getReportById(reportId: string): Promise<Report> {
     throw new Error("Report not found");
   }
   try {
-    return await invoke("get_report_by_id", { reportId });
+    return await invoke("get_report_by_id", { report_id: reportId });
   } catch (e) {
+    console.error("get_report_by_id failed:", e);
     throw e;
   }
 }
@@ -1256,9 +1321,10 @@ export async function deleteReport(reportId: string): Promise<boolean> {
     return true;
   }
   try {
-    return await invoke("delete_report", { reportId });
-  } catch {
-    return false;
+    return await invoke("delete_report", { report_id: reportId });
+  } catch (e) {
+    console.error("delete_report failed:", e);
+    throw e;
   }
 }
 
@@ -1289,23 +1355,10 @@ export async function evaluateAgent(
     return evaluation;
   }
   try {
-    return await invoke("evaluate_agent", { agentId, period });
-  } catch {
-    const evaluation: Evaluation = {
-      id: `eval-${Date.now()}`,
-      agentId,
-      period,
-      taskSuccessRate: 0,
-      avgCompletionTimeSecs: 0,
-      totalTasks: 0,
-      completedTasks: 0,
-      failedTasks: 0,
-      totalCostUsd: 0,
-      score: 0,
-      evaluationNotes: "Failed to evaluate.",
-      createdAt: new Date().toISOString(),
-    };
-    return evaluation;
+    return await invoke("evaluate_agent", { agent_id: agentId, period });
+  } catch (e) {
+    console.error("evaluate_agent failed:", e);
+    throw e;
   }
 }
 
@@ -1316,11 +1369,12 @@ export async function getEvaluations(
   if (!isTauri()) return mockEvaluations;
   try {
     return await invoke("get_evaluations", {
-      agentId: agentId || null,
+      agent_id: agentId || null,
       limit: limit || null,
     });
-  } catch {
-    return mockEvaluations;
+  } catch (e) {
+    console.error("get_evaluations failed:", e);
+    throw e;
   }
 }
 
@@ -1339,16 +1393,9 @@ export async function getAgentPerformanceSummary(
     };
   }
   try {
-    return await invoke("get_agent_performance_summary", { agentId });
-  } catch {
-    return {
-      agentId,
-      taskSuccessRate: 0,
-      avgTimeSecs: 0,
-      totalTasks: 0,
-      totalCost: 0,
-      score: 0,
-      trend: "stable",
-    };
+    return await invoke("get_agent_performance_summary", { agent_id: agentId });
+  } catch (e) {
+    console.error("get_agent_performance_summary failed:", e);
+    throw e;
   }
 }

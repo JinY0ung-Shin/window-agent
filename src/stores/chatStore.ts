@@ -19,11 +19,15 @@ interface ChatState {
   setActiveChannel: (channelId: string) => Promise<void>;
   send: (content: string) => Promise<void>;
   initStreamListener: () => Promise<void>;
+  cleanupStreamListener: () => void;
 }
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
+
+// Module-level variable to track the stream listener unlisten function
+let streamUnlistenFn: (() => void) | null = null;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   channels: [],
@@ -47,13 +51,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { activeChannelId } = get();
     if (!activeChannelId) return;
 
-    // Save user message
-    const userMsg = await sendMessage(activeChannelId, content);
-    set((state) => ({ messages: [...state.messages, userMsg] }));
-
     if (isTauri()) {
-      // Use real streaming via Tauri
-      set({ streaming: true, streamingContent: "" });
+      // In Tauri mode, add user message to local state optimistically.
+      // Do NOT call sendMessage() here because chatWithAgent() already
+      // saves the user message to DB, which would cause a duplicate insert.
+      const userMsg: Message = {
+        id: `msg-${Date.now()}`,
+        channelId: activeChannelId,
+        role: "user",
+        content,
+        timestamp: new Date().toISOString(),
+      };
+      set((state) => ({
+        messages: [...state.messages, userMsg],
+        streaming: true,
+        streamingContent: "",
+      }));
 
       // Find the agent for this channel
       const channel = get().channels.find((c) => c.id === activeChannelId);
@@ -101,8 +114,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
         console.error("Chat error:", err);
       }
     } else {
-      // Fallback to mock responses
-      set({ streaming: true });
+      // Fallback to mock responses (non-Tauri): use sendMessage to add to mock store
+      const userMsg = await sendMessage(activeChannelId, content);
+      set((state) => ({ messages: [...state.messages, userMsg], streaming: true }));
       const response = await getAgentResponse(activeChannelId, content);
       set((state) => ({
         messages: [...state.messages, response],
@@ -112,7 +126,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   initStreamListener: async () => {
-    await listenChatStream((payload) => {
+    if (streamUnlistenFn) return; // Already registered, prevent duplicate
+    streamUnlistenFn = await listenChatStream((payload) => {
       if (payload.done) {
         return; // The send() function handles the final message
       }
@@ -120,5 +135,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         streamingContent: state.streamingContent + payload.chunk,
       }));
     });
+  },
+
+  cleanupStreamListener: () => {
+    if (streamUnlistenFn) {
+      streamUnlistenFn();
+      streamUnlistenFn = null;
+    }
   },
 }));

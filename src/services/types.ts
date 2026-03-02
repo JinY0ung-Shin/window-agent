@@ -101,6 +101,7 @@ export interface AgentMessage {
 }
 
 export interface CreateAgentRequest {
+  id?: string;
   name: string;
   role: string;
   department: string;

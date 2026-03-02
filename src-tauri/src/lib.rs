@@ -39,12 +39,6 @@ pub fn run() {
                 let conn = database.conn.lock().unwrap();
                 agents::seed::seed_all_agents(&conn).ok();
                 agents::seed::seed_default_departments(&conn).ok();
-
-                // Migrate existing agents from claude to openai backend
-                conn.execute(
-                    "UPDATE agents SET ai_backend = 'openai', model = 'gpt-5.3-codex' WHERE ai_backend = 'claude'",
-                    [],
-                ).ok();
             }
 
             // Register managed state

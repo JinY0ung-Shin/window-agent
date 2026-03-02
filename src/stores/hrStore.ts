@@ -59,8 +59,14 @@ export const useHrStore = create<HrState>((set, get) => ({
 
   fetchAgents: async () => {
     set({ loading: true });
-    const agents = await getAgents();
-    set({ agents, loading: false });
+    try {
+      const agents = await getAgents();
+      set({ agents });
+    } catch (e) {
+      console.error("fetchAgents failed:", e);
+    } finally {
+      set({ loading: false });
+    }
   },
 
   fetchDepartments: async () => {

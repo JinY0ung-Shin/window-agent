@@ -39,8 +39,14 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
 
   fetchPermissions: async (agentId) => {
     set({ loading: true });
-    const permissions = await getPermissions(agentId);
-    set({ permissions, loading: false });
+    try {
+      const permissions = await getPermissions(agentId);
+      set({ permissions });
+    } catch (e) {
+      console.error("fetchPermissions failed:", e);
+    } finally {
+      set({ loading: false });
+    }
   },
 
   updatePermission: async (agentId, type, level) => {

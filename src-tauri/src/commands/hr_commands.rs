@@ -1,4 +1,4 @@
-use crate::db::models::{self, Agent, Department};
+use crate::db::models::{self, Agent, AgentPublic, Department};
 use crate::AppState;
 use chrono::Utc;
 use serde::Deserialize;
@@ -46,7 +46,7 @@ pub struct UpdateAgentRequest {
 pub fn hire_agent(
     state: State<AppState>,
     request: CreateAgentRequest,
-) -> Result<Agent, String> {
+) -> Result<AgentPublic, String> {
     let now = Utc::now().to_rfc3339();
     let agent = Agent {
         id: request.id,
@@ -70,7 +70,7 @@ pub fn hire_agent(
 
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
     models::insert_agent(&conn, &agent).map_err(|e| e.to_string())?;
-    Ok(agent)
+    Ok(agent.to_public())
 }
 
 #[tauri::command]
@@ -87,7 +87,7 @@ pub fn update_agent(
     state: State<AppState>,
     agent_id: String,
     request: UpdateAgentRequest,
-) -> Result<Agent, String> {
+) -> Result<AgentPublic, String> {
     let conn = state.db.conn.lock().map_err(|e| e.to_string())?;
 
     let mut agent = models::get_agent_by_id(&conn, &agent_id)
@@ -107,7 +107,7 @@ pub fn update_agent(
     if let Some(api_url) = request.api_url { agent.api_url = api_url; }
 
     models::update_agent(&conn, &agent).map_err(|e| e.to_string())?;
-    Ok(agent)
+    Ok(agent.to_public())
 }
 
 #[tauri::command]

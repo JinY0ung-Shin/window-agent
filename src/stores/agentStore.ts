@@ -16,8 +16,14 @@ export const useAgentStore = create<AgentState>((set) => ({
   loading: false,
   fetchAgents: async () => {
     set({ loading: true });
-    const agents = await getAgents();
-    set({ agents, loading: false });
+    try {
+      const agents = await getAgents();
+      set({ agents });
+    } catch (e) {
+      console.error("fetchAgents failed:", e);
+    } finally {
+      set({ loading: false });
+    }
   },
   fetchTasks: async () => {
     const tasks = await getTasks();

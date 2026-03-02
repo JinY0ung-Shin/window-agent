@@ -17,12 +17,14 @@ const validPages: Page[] = ["dashboard", "chat", "hr", "tasks", "settings", "rep
 function AppRoutes() {
   const { activePage, setActivePage } = useUiStore();
   const initStreamListener = useChatStore((s) => s.initStreamListener);
+  const cleanupStreamListener = useChatStore((s) => s.cleanupStreamListener);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     initStreamListener();
-  }, [initStreamListener]);
+    return () => cleanupStreamListener();
+  }, [initStreamListener, cleanupStreamListener]);
 
   useEffect(() => {
     const path = location.pathname.replace("/", "") || "dashboard";
