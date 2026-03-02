@@ -25,6 +25,9 @@ export interface Agent {
   currentTask?: string;
   completedTasks: number;
   totalTasks: number;
+  onLeave?: boolean;
+  leaveStartedAt?: string;
+  leaveReason?: string;
 }
 
 export interface Task {
@@ -141,4 +144,126 @@ export interface UpdateTaskRequest {
   priority?: TaskPriority;
   status?: TaskStatus;
   parentTaskId?: string;
+}
+
+// ─── Phase 3 Types ───
+
+export type ReportType = "daily" | "weekly" | "monthly";
+
+export interface Report {
+  id: string;
+  reportType: ReportType;
+  title: string;
+  content: string;
+  generatedAt: string;
+  periodStart: string;
+  periodEnd: string;
+  metadata: string;
+}
+
+export interface Evaluation {
+  id: string;
+  agentId: string;
+  period: string;
+  taskSuccessRate: number;
+  avgCompletionTimeSecs: number;
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  totalCostUsd: number;
+  score: number;
+  evaluationNotes: string;
+  createdAt: string;
+}
+
+export interface PerformanceSummary {
+  agentId: string;
+  taskSuccessRate: number;
+  avgTimeSecs: number;
+  totalTasks: number;
+  totalCost: number;
+  score: number;
+  trend: "up" | "down" | "stable";
+}
+
+export interface OrgChartNode {
+  department: Department;
+  agents: Agent[];
+}
+
+export interface AgentBackup {
+  id: string;
+  agentId: string;
+  configJson: string;
+  reason: string;
+  backedUpAt: string;
+  restoredAt?: string;
+}
+
+export interface ScheduledTask {
+  id: string;
+  title: string;
+  description: string;
+  cronExpression: string;
+  assignee?: string;
+  priority: TaskPriority;
+  isActive: boolean;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  createdAt: string;
+}
+
+export interface CreateScheduledTaskRequest {
+  title: string;
+  description: string;
+  cronExpression: string;
+  assignee?: string;
+  priority: string;
+}
+
+export interface UpdateScheduledTaskRequest {
+  title?: string;
+  description?: string;
+  cronExpression?: string;
+  assignee?: string;
+  priority?: string;
+  isActive?: boolean;
+}
+
+export interface CostRecord {
+  id: string;
+  agentId: string;
+  toolExecutionId?: string;
+  model: string;
+  tokensInput: number;
+  tokensOutput: number;
+  costUsd: number;
+  timestamp: string;
+}
+
+export interface CostSummary {
+  totalCost: number;
+  totalTokens: number;
+  byAgent: AgentCostBreakdown[];
+  byModel: ModelCostBreakdown[];
+}
+
+export interface AgentCostBreakdown {
+  agentId: string;
+  agentName: string;
+  costUsd: number;
+  tokens: number;
+  callCount: number;
+}
+
+export interface ModelCostBreakdown {
+  model: string;
+  costUsd: number;
+  tokens: number;
+}
+
+export interface DailyCost {
+  date: string;
+  costUsd: number;
+  tokens: number;
 }

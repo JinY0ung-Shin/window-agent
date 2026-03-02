@@ -14,6 +14,17 @@ import type {
   UpdateAgentRequest,
   CreateTaskRequest,
   UpdateTaskRequest,
+  OrgChartNode,
+  AgentBackup,
+  ScheduledTask,
+  CreateScheduledTaskRequest,
+  UpdateScheduledTaskRequest,
+  CostRecord,
+  CostSummary,
+  DailyCost,
+  Report,
+  Evaluation,
+  PerformanceSummary,
 } from "./types";
 
 // ─── Backend-aligned types ───
@@ -36,6 +47,9 @@ interface BackendAgent {
   hired_at?: string;
   fired_at?: string;
   created_at: string;
+  on_leave?: number;
+  leave_started_at?: string;
+  leave_reason?: string;
 }
 
 interface BackendMessage {
@@ -76,6 +90,9 @@ function toAgent(b: BackendAgent): Agent {
     currentTask: b.status === "working" ? "작업 중..." : undefined,
     completedTasks: 0,
     totalTasks: 0,
+    onLeave: !!b.on_leave,
+    leaveStartedAt: b.leave_started_at,
+    leaveReason: b.leave_reason || "",
   };
 }
 
@@ -819,5 +836,519 @@ export async function getAgentMessages(agentId: string): Promise<AgentMessage[]>
     return await invoke("get_agent_messages", { agentId });
   } catch {
     return [];
+  }
+}
+
+// ─── OrgChart Commands ───
+
+export async function getOrgChart(): Promise<OrgChartNode[]> {
+  if (!isTauri()) {
+    const grouped: Record<string, Agent[]> = {};
+    for (const a of mockAgents.filter((a) => a.isActive)) {
+      if (!grouped[a.department]) grouped[a.department] = [];
+      grouped[a.department].push(a);
+    }
+    return mockDepartments.map((dept) => ({
+      department: dept,
+      agents: grouped[dept.name] || [],
+    }));
+  }
+  try {
+    return await invoke("get_org_chart");
+  } catch {
+    return [];
+  }
+}
+
+export async function moveAgentDepartment(agentId: string, newDepartment: string): Promise<void> {
+  if (!isTauri()) {
+    const idx = mockAgents.findIndex((a) => a.id === agentId);
+    if (idx !== -1) mockAgents[idx].department = newDepartment;
+    return;
+  }
+  try {
+    await invoke("move_agent_department", { agentId, newDepartment });
+  } catch {
+    // ignore
+  }
+}
+
+export async function updateDepartmentCmd(deptId: string, name?: string, description?: string): Promise<Department> {
+  if (!isTauri()) {
+    const idx = mockDepartments.findIndex((d) => d.id === deptId);
+    if (idx !== -1) {
+      if (name) mockDepartments[idx].name = name;
+      if (description) mockDepartments[idx].description = description;
+      return mockDepartments[idx];
+    }
+    throw new Error("Department not found");
+  }
+  try {
+    return await invoke("update_department", { deptId, name, description });
+  } catch (e) {
+    throw e;
+  }
+}
+
+export async function deleteDepartment(deptId: string): Promise<boolean> {
+  if (!isTauri()) {
+    const idx = mockDepartments.findIndex((d) => d.id === deptId);
+    if (idx !== -1) mockDepartments.splice(idx, 1);
+    return true;
+  }
+  try {
+    return await invoke("delete_department", { deptId });
+  } catch {
+    return false;
+  }
+}
+
+// ─── Leave Commands ───
+
+export async function putAgentOnLeave(agentId: string, reason: string): Promise<void> {
+  if (!isTauri()) {
+    const idx = mockAgents.findIndex((a) => a.id === agentId);
+    if (idx !== -1) {
+      mockAgents[idx].onLeave = true;
+      mockAgents[idx].leaveStartedAt = new Date().toISOString();
+      mockAgents[idx].leaveReason = reason;
+    }
+    return;
+  }
+  try {
+    await invoke("put_agent_on_leave", { agentId, reason });
+  } catch {
+    // ignore
+  }
+}
+
+export async function restoreAgentFromLeave(agentId: string): Promise<void> {
+  if (!isTauri()) {
+    const idx = mockAgents.findIndex((a) => a.id === agentId);
+    if (idx !== -1) {
+      mockAgents[idx].onLeave = false;
+      mockAgents[idx].leaveStartedAt = undefined;
+      mockAgents[idx].leaveReason = undefined;
+    }
+    return;
+  }
+  try {
+    await invoke("restore_agent_from_leave", { agentId });
+  } catch {
+    // ignore
+  }
+}
+
+export async function backupAgentConfig(agentId: string, reason: string): Promise<AgentBackup> {
+  if (!isTauri()) {
+    return {
+      id: `backup-${Date.now()}`,
+      agentId,
+      configJson: "{}",
+      reason,
+      backedUpAt: new Date().toISOString(),
+    };
+  }
+  try {
+    return await invoke("backup_agent_config", { agentId, reason });
+  } catch {
+    return {
+      id: `backup-${Date.now()}`,
+      agentId,
+      configJson: "{}",
+      reason,
+      backedUpAt: new Date().toISOString(),
+    };
+  }
+}
+
+export async function getAgentBackups(agentId?: string): Promise<AgentBackup[]> {
+  if (!isTauri()) return [];
+  try {
+    return await invoke("get_agent_backups", { agentId: agentId || null });
+  } catch {
+    return [];
+  }
+}
+
+export async function rehireFromBackup(backupId: string): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    await invoke("rehire_from_backup", { backupId });
+  } catch {
+    // ignore
+  }
+}
+
+// ─── Schedule Commands ───
+
+const mockScheduledTasks: ScheduledTask[] = [];
+
+export async function createScheduledTask(req: CreateScheduledTaskRequest): Promise<ScheduledTask> {
+  if (!isTauri()) {
+    const task: ScheduledTask = {
+      id: `sched-${Date.now()}`,
+      title: req.title,
+      description: req.description,
+      cronExpression: req.cronExpression,
+      assignee: req.assignee,
+      priority: req.priority as ScheduledTask["priority"],
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+    mockScheduledTasks.push(task);
+    return task;
+  }
+  try {
+    return await invoke("create_scheduled_task", { request: req });
+  } catch {
+    const task: ScheduledTask = {
+      id: `sched-${Date.now()}`,
+      title: req.title,
+      description: req.description,
+      cronExpression: req.cronExpression,
+      assignee: req.assignee,
+      priority: req.priority as ScheduledTask["priority"],
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+    return task;
+  }
+}
+
+export async function getScheduledTasks(activeOnly?: boolean): Promise<ScheduledTask[]> {
+  if (!isTauri()) return mockScheduledTasks;
+  try {
+    return await invoke("get_scheduled_tasks", { activeOnly: activeOnly ?? null });
+  } catch {
+    return mockScheduledTasks;
+  }
+}
+
+export async function updateScheduledTask(taskId: string, req: UpdateScheduledTaskRequest): Promise<ScheduledTask> {
+  if (!isTauri()) {
+    const idx = mockScheduledTasks.findIndex((t) => t.id === taskId);
+    if (idx !== -1) {
+      mockScheduledTasks[idx] = { ...mockScheduledTasks[idx], ...req } as ScheduledTask;
+      return mockScheduledTasks[idx];
+    }
+    throw new Error("Scheduled task not found");
+  }
+  try {
+    return await invoke("update_scheduled_task", { taskId, request: req });
+  } catch (e) {
+    throw e;
+  }
+}
+
+export async function deleteScheduledTask(taskId: string): Promise<boolean> {
+  if (!isTauri()) {
+    const idx = mockScheduledTasks.findIndex((t) => t.id === taskId);
+    if (idx !== -1) mockScheduledTasks.splice(idx, 1);
+    return true;
+  }
+  try {
+    return await invoke("delete_scheduled_task", { taskId });
+  } catch {
+    return false;
+  }
+}
+
+export async function triggerScheduledTask(taskId: string): Promise<Task> {
+  if (!isTauri()) {
+    return {
+      id: `task-${Date.now()}`,
+      title: "Triggered Task",
+      description: "",
+      status: "pending",
+      priority: "medium",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  try {
+    return await invoke("trigger_scheduled_task", { taskId });
+  } catch (e) {
+    throw e;
+  }
+}
+
+// ─── Program Commands ───
+
+export async function executeProgram(
+  agentId: string,
+  program: string,
+  args: string[],
+  cwd?: string
+): Promise<Record<string, unknown>> {
+  if (!isTauri()) {
+    return { success: true, stdout: "mock output", stderr: "", exit_code: 0 };
+  }
+  try {
+    return await invoke("execute_tool", {
+      agentId,
+      toolName: "program_execute",
+      params: { program, args, cwd },
+    });
+  } catch {
+    return { success: false, error: "Failed to execute program" };
+  }
+}
+
+// ─── Cost Commands ───
+
+export async function recordCost(
+  agentId: string,
+  model: string,
+  tokensInput: number,
+  tokensOutput: number,
+  costUsd: number,
+  toolExecutionId?: string
+): Promise<CostRecord> {
+  if (!isTauri()) {
+    return {
+      id: `cost-${Date.now()}`,
+      agentId,
+      toolExecutionId,
+      model,
+      tokensInput,
+      tokensOutput,
+      costUsd,
+      timestamp: new Date().toISOString(),
+    };
+  }
+  try {
+    return await invoke("record_cost", {
+      agentId,
+      model,
+      tokensInput,
+      tokensOutput,
+      costUsd,
+      toolExecutionId: toolExecutionId || null,
+    });
+  } catch {
+    return {
+      id: `cost-${Date.now()}`,
+      agentId,
+      toolExecutionId,
+      model,
+      tokensInput,
+      tokensOutput,
+      costUsd,
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
+
+export async function getCostSummary(
+  periodStart?: string,
+  periodEnd?: string
+): Promise<CostSummary> {
+  if (!isTauri()) {
+    return { totalCost: 0, totalTokens: 0, byAgent: [], byModel: [] };
+  }
+  try {
+    return await invoke("get_cost_summary", {
+      periodStart: periodStart || null,
+      periodEnd: periodEnd || null,
+    });
+  } catch {
+    return { totalCost: 0, totalTokens: 0, byAgent: [], byModel: [] };
+  }
+}
+
+export async function getAgentCostHistory(
+  agentId: string,
+  limit?: number
+): Promise<CostRecord[]> {
+  if (!isTauri()) return [];
+  try {
+    return await invoke("get_agent_cost_history", {
+      agentId,
+      limit: limit || null,
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function getCostTrend(days?: number): Promise<DailyCost[]> {
+  if (!isTauri()) return [];
+  try {
+    return await invoke("get_cost_trend", { days: days || null });
+  } catch {
+    return [];
+  }
+}
+
+// ─── Report Commands ───
+
+const mockReports: Report[] = [];
+
+export async function generateReport(
+  reportType: string,
+  periodStart: string,
+  periodEnd: string
+): Promise<Report> {
+  if (!isTauri()) {
+    const report: Report = {
+      id: `report-${Date.now()}`,
+      reportType: reportType as Report["reportType"],
+      title: `${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Report (${periodStart} ~ ${periodEnd})`,
+      content: `# ${reportType} Report\n\n## Task Summary\n- Total: 5\n- Completed: 3\n- Failed: 1\n- In Progress: 1\n- Pending: 0\n\n## Agent Performance\n  - 김비서: 2 tasks (completed: 2, failed: 0, success rate: 100%)\n  - 박개발: 3 tasks (completed: 1, failed: 1, success rate: 33%)\n\n## Tool Executions\n- Total: 10\n- Success: 8 (80%)\n- Error: 2\n`,
+      generatedAt: new Date().toISOString(),
+      periodStart,
+      periodEnd,
+      metadata: "{}",
+    };
+    mockReports.unshift(report);
+    return report;
+  }
+  try {
+    return await invoke("generate_report", { reportType, periodStart, periodEnd });
+  } catch {
+    const report: Report = {
+      id: `report-${Date.now()}`,
+      reportType: reportType as Report["reportType"],
+      title: `${reportType} Report (${periodStart} ~ ${periodEnd})`,
+      content: "Failed to generate report.",
+      generatedAt: new Date().toISOString(),
+      periodStart,
+      periodEnd,
+      metadata: "{}",
+    };
+    return report;
+  }
+}
+
+export async function getReports(
+  reportType?: string,
+  limit?: number
+): Promise<Report[]> {
+  if (!isTauri()) return mockReports;
+  try {
+    return await invoke("get_reports", {
+      reportType: reportType || null,
+      limit: limit || null,
+    });
+  } catch {
+    return mockReports;
+  }
+}
+
+export async function getReportById(reportId: string): Promise<Report> {
+  if (!isTauri()) {
+    const found = mockReports.find((r) => r.id === reportId);
+    if (found) return found;
+    throw new Error("Report not found");
+  }
+  try {
+    return await invoke("get_report_by_id", { reportId });
+  } catch (e) {
+    throw e;
+  }
+}
+
+export async function deleteReport(reportId: string): Promise<boolean> {
+  if (!isTauri()) {
+    const idx = mockReports.findIndex((r) => r.id === reportId);
+    if (idx !== -1) mockReports.splice(idx, 1);
+    return true;
+  }
+  try {
+    return await invoke("delete_report", { reportId });
+  } catch {
+    return false;
+  }
+}
+
+// ─── Evaluation Commands ───
+
+const mockEvaluations: Evaluation[] = [];
+
+export async function evaluateAgent(
+  agentId: string,
+  period: string
+): Promise<Evaluation> {
+  if (!isTauri()) {
+    const evaluation: Evaluation = {
+      id: `eval-${Date.now()}`,
+      agentId,
+      period,
+      taskSuccessRate: 75.0,
+      avgCompletionTimeSecs: 1800,
+      totalTasks: 8,
+      completedTasks: 6,
+      failedTasks: 2,
+      totalCostUsd: 0.05,
+      score: 72.5,
+      evaluationNotes: `Mock evaluation for ${period}`,
+      createdAt: new Date().toISOString(),
+    };
+    mockEvaluations.unshift(evaluation);
+    return evaluation;
+  }
+  try {
+    return await invoke("evaluate_agent", { agentId, period });
+  } catch {
+    const evaluation: Evaluation = {
+      id: `eval-${Date.now()}`,
+      agentId,
+      period,
+      taskSuccessRate: 0,
+      avgCompletionTimeSecs: 0,
+      totalTasks: 0,
+      completedTasks: 0,
+      failedTasks: 0,
+      totalCostUsd: 0,
+      score: 0,
+      evaluationNotes: "Failed to evaluate.",
+      createdAt: new Date().toISOString(),
+    };
+    return evaluation;
+  }
+}
+
+export async function getEvaluations(
+  agentId?: string,
+  limit?: number
+): Promise<Evaluation[]> {
+  if (!isTauri()) return mockEvaluations;
+  try {
+    return await invoke("get_evaluations", {
+      agentId: agentId || null,
+      limit: limit || null,
+    });
+  } catch {
+    return mockEvaluations;
+  }
+}
+
+export async function getAgentPerformanceSummary(
+  agentId: string
+): Promise<PerformanceSummary> {
+  if (!isTauri()) {
+    return {
+      agentId,
+      taskSuccessRate: 75.0,
+      avgTimeSecs: 1800,
+      totalTasks: 8,
+      totalCost: 0.05,
+      score: 72.5,
+      trend: "stable",
+    };
+  }
+  try {
+    return await invoke("get_agent_performance_summary", { agentId });
+  } catch {
+    return {
+      agentId,
+      taskSuccessRate: 0,
+      avgTimeSecs: 0,
+      totalTasks: 0,
+      totalCost: 0,
+      score: 0,
+      trend: "stable",
+    };
   }
 }

@@ -29,4 +29,5 @@ async-trait = "0.1"
 scraper = "0.21"
 headless_chrome = "1"
 base64 = "0.22"
+cron = "0.13"
 

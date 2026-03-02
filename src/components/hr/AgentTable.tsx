@@ -31,6 +31,9 @@ export function AgentTable() {
     openEditModal,
     openFireModal,
     openProfileCard,
+    openLeaveModal,
+    restoreFromLeave,
+    openBackupListModal,
   } = useHrStore();
 
   useEffect(() => {
@@ -63,6 +66,21 @@ export function AgentTable() {
     e.stopPropagation();
     setSelectedAgent(agent);
     openFireModal();
+  };
+
+  const handleLeave = (e: React.MouseEvent, agent: Agent) => {
+    e.stopPropagation();
+    openLeaveModal(agent);
+  };
+
+  const handleRestore = async (e: React.MouseEvent, agent: Agent) => {
+    e.stopPropagation();
+    await restoreFromLeave(agent.id);
+  };
+
+  const handleBackupList = (e: React.MouseEvent, agent: Agent) => {
+    e.stopPropagation();
+    openBackupListModal(agent);
   };
 
   return (
@@ -132,29 +150,59 @@ export function AgentTable() {
                     {agent.department}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${status.className}`}
-                    >
-                      {status.label}
-                    </span>
+                    {agent.onLeave ? (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-yellow-500/10 text-yellow-400">
+                        휴직중
+                      </span>
+                    ) : (
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${status.className}`}
+                      >
+                        {status.label}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-text-primary">
                     {agent.aiBackend}
                   </td>
                   <td className="px-4 py-3 text-sm">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
                         onClick={(e) => handleEdit(e, agent)}
                         className="px-3 py-1 bg-surface-700 hover:bg-surface-600 text-text-primary text-xs rounded-lg transition-colors"
                       >
                         수정
                       </button>
-                      {agent.isActive && (
+                      {agent.isActive && !agent.onLeave && (
+                        <>
+                          <button
+                            onClick={(e) => handleLeave(e, agent)}
+                            className="px-3 py-1 bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 text-xs rounded-lg transition-colors"
+                          >
+                            휴직
+                          </button>
+                          <button
+                            onClick={(e) => handleFire(e, agent)}
+                            className="px-3 py-1 bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs rounded-lg transition-colors"
+                          >
+                            해고
+                          </button>
+                        </>
+                      )}
+                      {agent.isActive && agent.onLeave && (
                         <button
-                          onClick={(e) => handleFire(e, agent)}
-                          className="px-3 py-1 bg-red-500/20 text-red-400 hover:bg-red-500/30 text-xs rounded-lg transition-colors"
+                          onClick={(e) => handleRestore(e, agent)}
+                          className="px-3 py-1 bg-green-500/20 text-green-400 hover:bg-green-500/30 text-xs rounded-lg transition-colors"
                         >
-                          해고
+                          복직
+                        </button>
+                      )}
+                      {!agent.isActive && (
+                        <button
+                          onClick={(e) => handleBackupList(e, agent)}
+                          className="px-3 py-1 bg-accent-500/20 text-accent-400 hover:bg-accent-500/30 text-xs rounded-lg transition-colors"
+                        >
+                          재채용
                         </button>
                       )}
                     </div>

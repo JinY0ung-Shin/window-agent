@@ -2,14 +2,16 @@ import { useState } from "react";
 import { PermissionSettings } from "../components/settings/PermissionSettings";
 import { FolderWhitelist } from "../components/settings/FolderWhitelist";
 import { ProgramWhitelist } from "../components/settings/ProgramWhitelist";
+import { CostDashboard } from "../components/settings/CostDashboard";
 import { cn } from "../lib/utils";
 
-type SettingsTab = "permissions" | "folders" | "programs";
+type SettingsTab = "permissions" | "folders" | "programs" | "costs";
 
 const tabs: { id: SettingsTab; label: string; emoji: string }[] = [
   { id: "permissions", label: "권한 설정", emoji: "🔐" },
   { id: "folders", label: "폴더 관리", emoji: "📂" },
   { id: "programs", label: "프로그램 관리", emoji: "🖥️" },
+  { id: "costs", label: "비용 관리", emoji: "💰" },
 ];
 
 export function SettingsPage() {
@@ -47,6 +49,7 @@ export function SettingsPage() {
       {activeTab === "permissions" && <PermissionSettings />}
       {activeTab === "folders" && <FolderWhitelist />}
       {activeTab === "programs" && <ProgramWhitelist />}
+      {activeTab === "costs" && <CostDashboard />}
     </div>
   );
 }

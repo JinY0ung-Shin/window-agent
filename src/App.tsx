@@ -6,11 +6,13 @@ import { ChatPage } from "./pages/ChatPage";
 import { HRPage } from "./pages/HRPage";
 import { TaskBoardPage } from "./pages/TaskBoardPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { ReportsPage } from "./pages/ReportsPage";
+import { OrgChartPage } from "./pages/OrgChartPage";
 import { useUiStore, type Page } from "./stores/uiStore";
 import { useChatStore } from "./stores/chatStore";
 import "./index.css";
 
-const validPages: Page[] = ["dashboard", "chat", "hr", "tasks", "settings"];
+const validPages: Page[] = ["dashboard", "chat", "hr", "tasks", "settings", "reports", "orgchart"];
 
 function AppRoutes() {
   const { activePage, setActivePage } = useUiStore();
@@ -44,6 +46,8 @@ function AppRoutes() {
         <Route path="/hr" element={<HRPage />} />
         <Route path="/tasks" element={<TaskBoardPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/orgchart" element={<OrgChartPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </MainLayout>

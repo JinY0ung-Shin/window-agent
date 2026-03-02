@@ -131,5 +131,89 @@ pub fn create_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
         let _ = conn.execute(migration, []);
     }
 
+    // Phase 3 tables
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS reports (
+            id TEXT PRIMARY KEY,
+            report_type TEXT NOT NULL CHECK(report_type IN ('daily', 'weekly', 'monthly')),
+            title TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
+            generated_at TEXT NOT NULL,
+            period_start TEXT NOT NULL,
+            period_end TEXT NOT NULL,
+            metadata TEXT NOT NULL DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS evaluations (
+            id TEXT PRIMARY KEY,
+            agent_id TEXT NOT NULL,
+            period TEXT NOT NULL,
+            task_success_rate REAL NOT NULL DEFAULT 0.0,
+            avg_completion_time_secs REAL NOT NULL DEFAULT 0.0,
+            total_tasks INTEGER NOT NULL DEFAULT 0,
+            completed_tasks INTEGER NOT NULL DEFAULT 0,
+            failed_tasks INTEGER NOT NULL DEFAULT 0,
+            total_cost_usd REAL NOT NULL DEFAULT 0.0,
+            score REAL NOT NULL DEFAULT 0.0,
+            evaluation_notes TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (agent_id) REFERENCES agents(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS scheduled_tasks (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            cron_expression TEXT NOT NULL,
+            assignee TEXT,
+            priority TEXT NOT NULL DEFAULT 'medium',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            last_run_at TEXT,
+            next_run_at TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (assignee) REFERENCES agents(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_backups (
+            id TEXT PRIMARY KEY,
+            agent_id TEXT NOT NULL,
+            config_json TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            backed_up_at TEXT NOT NULL,
+            restored_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS cost_records (
+            id TEXT PRIMARY KEY,
+            agent_id TEXT NOT NULL,
+            tool_execution_id TEXT,
+            model TEXT NOT NULL DEFAULT '',
+            tokens_input INTEGER NOT NULL DEFAULT 0,
+            tokens_output INTEGER NOT NULL DEFAULT 0,
+            cost_usd REAL NOT NULL DEFAULT 0.0,
+            timestamp TEXT NOT NULL,
+            FOREIGN KEY (agent_id) REFERENCES agents(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reports_type ON reports(report_type);
+        CREATE INDEX IF NOT EXISTS idx_evaluations_agent ON evaluations(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_active ON scheduled_tasks(is_active);
+        CREATE INDEX IF NOT EXISTS idx_cost_records_agent ON cost_records(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_cost_records_timestamp ON cost_records(timestamp);
+        ",
+    )?;
+
+    // Phase 3 agent column migrations
+    let phase3_migrations = [
+        "ALTER TABLE agents ADD COLUMN on_leave INTEGER DEFAULT 0",
+        "ALTER TABLE agents ADD COLUMN leave_started_at TEXT",
+        "ALTER TABLE agents ADD COLUMN leave_reason TEXT DEFAULT ''",
+    ];
+
+    for migration in &phase3_migrations {
+        let _ = conn.execute(migration, []);
+    }
+
     Ok(())
 }

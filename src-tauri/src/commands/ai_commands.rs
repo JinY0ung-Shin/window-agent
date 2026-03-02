@@ -109,6 +109,33 @@ pub async fn chat_with_agent(
             )
             .map_err(|e| format!("Failed to save assistant message: {}", e))?;
 
+            // Record estimated cost
+            let tokens_input = (message.len() as i64) / 4;
+            let tokens_output = (full_response.len() as i64) / 4;
+            let cost_per_1k_input = match agent.model.as_str() {
+                m if m.contains("opus") => 0.015,
+                m if m.contains("sonnet") => 0.003,
+                m if m.contains("haiku") => 0.00025,
+                m if m.contains("gpt-4") => 0.01,
+                m if m.contains("gpt-3") => 0.0005,
+                _ => 0.003, // default to sonnet-level pricing
+            };
+            let cost_per_1k_output = cost_per_1k_input * 5.0;
+            let cost_usd = (tokens_input as f64 / 1000.0) * cost_per_1k_input
+                + (tokens_output as f64 / 1000.0) * cost_per_1k_output;
+
+            let cost_record = models::CostRecord {
+                id: uuid::Uuid::new_v4().to_string(),
+                agent_id: agent_id.clone(),
+                tool_execution_id: None,
+                model: agent.model.clone(),
+                tokens_input,
+                tokens_output,
+                cost_usd,
+                timestamp: now,
+            };
+            let _ = models::insert_cost_record(&conn, &cost_record);
+
             Ok(ChatResponse {
                 success: true,
                 message: Some(full_response),
