@@ -115,19 +115,45 @@ export const useChatStore = create<ChatState>((set, get) => ({
           content: m.content,
         }));
 
-      const response = await openai.chat.completions.create({
-        model: settings.modelName,
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner. Respond in the same language as the user's prompt (usually Korean).",
-          },
-          ...history,
-        ],
-      });
+      const chatMessages = [
+        {
+          role: "system" as const,
+          content:
+            "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner. Respond in the same language as the user's prompt (usually Korean).",
+        },
+        ...history,
+      ];
 
-      const replyContent = response.choices[0]?.message?.content || "응답을 받지 못했습니다.";
+      let response: any;
+      let thinkingUsed = false;
+
+      if (settings.thinkingEnabled) {
+        // Try thinking mode, fallback to normal mode
+        try {
+          response = await openai.chat.completions.create({
+            model: settings.modelName,
+            messages: chatMessages,
+            thinking: { type: "enabled", budget_tokens: settings.thinkingBudget },
+          } as any);
+          thinkingUsed = true;
+        } catch {
+          response = await openai.chat.completions.create({
+            model: settings.modelName,
+            messages: chatMessages,
+          });
+        }
+      } else {
+        response = await openai.chat.completions.create({
+          model: settings.modelName,
+          messages: chatMessages,
+        });
+      }
+
+      const choice = response.choices[0];
+      const replyContent = choice?.message?.content || "응답을 받지 못했습니다.";
+      const reasoningContent = thinkingUsed
+        ? (choice?.message?.reasoning_content ?? undefined)
+        : undefined;
 
       // Save assistant message to DB
       const savedAssistant = await cmds.saveMessage({
@@ -139,7 +165,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({
         messages: get().messages.map((msg) =>
           msg.id === loadingId
-            ? { ...msg, id: savedAssistant.id, content: replyContent, isLoading: false }
+            ? {
+                ...msg,
+                id: savedAssistant.id,
+                content: replyContent,
+                reasoningContent,
+                isLoading: false,
+              }
             : msg
         ),
       });

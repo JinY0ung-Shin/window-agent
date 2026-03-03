@@ -1,4 +1,5 @@
-import { Bot, User } from "lucide-react";
+import { useState } from "react";
+import { Bot, User, ChevronDown, ChevronRight } from "lucide-react";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 
 interface Props {
@@ -7,6 +8,7 @@ interface Props {
 
 export default function ChatMessage({ message }: Props) {
   const isLoading = message.isLoading;
+  const [showReasoning, setShowReasoning] = useState(false);
 
   return (
     <div className={`message ${message.type} ${isLoading ? "loading" : ""}`}>
@@ -25,7 +27,18 @@ export default function ChatMessage({ message }: Props) {
             <span></span>
           </span>
         ) : (
-          message.content
+          <>
+            {message.reasoningContent && (
+              <div className="reasoning-toggle" onClick={() => setShowReasoning(!showReasoning)}>
+                {showReasoning ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span>추론 과정</span>
+              </div>
+            )}
+            {showReasoning && message.reasoningContent && (
+              <div className="reasoning-content">{message.reasoningContent}</div>
+            )}
+            {message.content}
+          </>
         )}
       </div>
     </div>

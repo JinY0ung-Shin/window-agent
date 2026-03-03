@@ -239,6 +239,34 @@ body {
   border-top-left-radius: 4px;
 }
 
+.reasoning-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+.reasoning-toggle:hover {
+  color: var(--primary);
+}
+
+.reasoning-content {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  background-color: var(--bg-color);
+  border-left: 3px solid var(--primary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
 .message.user .bubble {
   background-color: var(--primary);
   color: white;
@@ -405,6 +433,88 @@ body {
     opacity: 1;
     transform: scale(1) translateY(0);
   }
+}
+
+/* Settings Tabs */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  background-color: var(--bg-color);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 20px;
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.settings-tab:hover {
+  color: var(--text-main);
+}
+
+.settings-tab.active {
+  background-color: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Toggle Switch */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background-color: #cbd5e1;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.toggle-switch.on {
+  background-color: var(--primary);
+}
+
+.toggle-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: white;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.toggle-switch.on .toggle-knob {
+  transform: translateX(20px);
+}
+
+/* Budget Slider */
+.budget-slider {
+  width: 100%;
+  margin-top: 8px;
+  accent-color: var(--primary);
 }
 
 .modal-header {

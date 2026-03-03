@@ -25,5 +25,6 @@ export interface ChatMessage {
   id: string;
   type: "user" | "agent";
   content: string;
+  reasoningContent?: string;
   isLoading?: boolean;
 }
