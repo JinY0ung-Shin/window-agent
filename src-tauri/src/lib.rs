@@ -1,14 +1,36 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+mod commands;
+mod db;
+
+use db::Database;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .setup(|app| {
+            let app_dir = app
+                .path()
+                .app_data_dir()
+                .expect("failed to resolve app data dir");
+            std::fs::create_dir_all(&app_dir).expect("failed to create app data dir");
+
+            let db_path = app_dir.join("chat.db");
+            let database = Database::new(
+                db_path.to_str().expect("invalid db path"),
+            )
+            .expect("failed to initialize database");
+
+            app.manage(database);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::create_conversation,
+            commands::get_conversations,
+            commands::get_messages,
+            commands::save_message,
+            commands::delete_conversation,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
