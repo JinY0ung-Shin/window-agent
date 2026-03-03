@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { Bot, User, ChevronDown, ChevronRight } from "lucide-react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 
 interface Props {
@@ -37,7 +40,11 @@ export default function ChatMessage({ message }: Props) {
             {showReasoning && message.reasoningContent && (
               <div className="reasoning-content">{message.reasoningContent}</div>
             )}
-            {message.content}
+            <div className="markdown-body">
+              <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                {message.content}
+              </Markdown>
+            </div>
           </>
         )}
       </div>
