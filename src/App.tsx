@@ -22,17 +22,30 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [tempApiKey, setTempApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("http://192.168.0.105:8317/v1");
+  const [tempBaseUrl, setTempBaseUrl] = useState("http://192.168.0.105:8317/v1");
+  const [modelName, setModelName] = useState("gpt-5.3-codex");
+  const [tempModelName, setTempModelName] = useState("gpt-5.3-codex");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load API key on mount
+  // Load API key and settings on mount
   useEffect(() => {
     const savedKey = localStorage.getItem("openai_api_key");
-    if (savedKey) {
-      setApiKey(savedKey);
-      setTempApiKey(savedKey);
-    } else {
-      setIsSettingsOpen(true); // Open settings automatically if no key found
+    const savedBaseUrl = localStorage.getItem("openai_base_url") || "http://192.168.0.105:8317/v1";
+    const savedModelName = localStorage.getItem("openai_model_name") || "gpt-5.3-codex";
+
+    const defaultKey = "sk-YlEqf0acfNgeKYJ7rLQ6rrE9jkI6ik0Bx3RqDxzBgDcSM";
+    const key = savedKey || defaultKey;
+    setApiKey(key);
+    setTempApiKey(key);
+    if (!savedKey) {
+      localStorage.setItem("openai_api_key", defaultKey);
     }
+
+    setBaseUrl(savedBaseUrl);
+    setTempBaseUrl(savedBaseUrl);
+    setModelName(savedModelName);
+    setTempModelName(savedModelName);
   }, []);
 
   const scrollToBottom = () => {
@@ -45,7 +58,13 @@ function App() {
 
   const handleSaveSettings = () => {
     setApiKey(tempApiKey);
+    setBaseUrl(tempBaseUrl);
+    setModelName(tempModelName || "gpt-5.3-codex");
+
     localStorage.setItem("openai_api_key", tempApiKey);
+    localStorage.setItem("openai_base_url", tempBaseUrl);
+    localStorage.setItem("openai_model_name", tempModelName || "gpt-5.3-codex");
+
     setIsSettingsOpen(false);
   };
 
@@ -78,13 +97,19 @@ function App() {
     setInputValue("");
 
     try {
-      const openai = new OpenAI({
+      const config: any = {
         apiKey: apiKey,
-        dangerouslyAllowBrowser: true // Required for client-side API calls
-      });
+        dangerouslyAllowBrowser: true, // Required for client-side API calls
+      };
+
+      if (baseUrl) {
+        config.baseURL = baseUrl;
+      }
+
+      const openai = new OpenAI(config);
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini", // or gpt-4 or whatever user prefers
+        model: modelName,
         messages: [
           { role: "system", content: "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner. Respond in the same language as the user's prompt (usually Korean)." },
           // Include history (last 5 messages for context)
@@ -226,7 +251,7 @@ function App() {
 
             <div className="modal-body">
               <div className="form-group">
-                <label htmlFor="apiKey">OpenAI API Key</label>
+                <label htmlFor="apiKey">API Key (OpenAI 또는 Custom)</label>
                 <input
                   id="apiKey"
                   type="password"
@@ -234,8 +259,30 @@ function App() {
                   value={tempApiKey}
                   onChange={(e) => setTempApiKey(e.target.value)}
                 />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="baseUrl">Base URL (선택사항, vLLM / Local AI 등)</label>
+                <input
+                  id="baseUrl"
+                  type="text"
+                  placeholder="https://api.openai.com/v1 (기본값)"
+                  value={tempBaseUrl}
+                  onChange={(e) => setTempBaseUrl(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="modelName">Model 이름</label>
+                <input
+                  id="modelName"
+                  type="text"
+                  placeholder="gpt-5.3-codex (기본값)"
+                  value={tempModelName}
+                  onChange={(e) => setTempModelName(e.target.value)}
+                />
                 <p className="form-text">
-                  API 키는 기기의 로컬 스토리지에만 안전하게 저장되며 외부로 전송되지 않습니다.
+                  설정은 기기의 로컬 스토리지에만 안전하게 저장됩니다.
                 </p>
               </div>
             </div>
