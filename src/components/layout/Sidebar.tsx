@@ -1,6 +1,7 @@
 import { Bot, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
 import { useChatStore } from "../../stores/chatStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { DEFAULT_CONVERSATION_TITLE } from "../../constants";
 
 export default function Sidebar() {
   const conversations = useChatStore((s) => s.conversations);
@@ -25,7 +26,7 @@ export default function Sidebar() {
           onClick={createNewConversation}
         >
           <Plus size={20} />
-          <span>새 대화</span>
+          <span>{DEFAULT_CONVERSATION_TITLE}</span>
         </div>
 
         <div className="conversation-list">

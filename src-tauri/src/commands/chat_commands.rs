@@ -8,12 +8,12 @@ pub fn create_conversation(
     db: State<'_, Database>,
     title: Option<String>,
 ) -> Result<Conversation, String> {
-    operations::create_conversation_impl(&db, title)
+    Ok(operations::create_conversation_impl(&db, title)?)
 }
 
 #[tauri::command]
 pub fn get_conversations(db: State<'_, Database>) -> Result<Vec<Conversation>, String> {
-    operations::get_conversations_impl(&db)
+    Ok(operations::get_conversations_impl(&db)?)
 }
 
 #[tauri::command]
@@ -21,7 +21,7 @@ pub fn get_messages(
     db: State<'_, Database>,
     conversation_id: String,
 ) -> Result<Vec<Message>, String> {
-    operations::get_messages_impl(&db, conversation_id)
+    Ok(operations::get_messages_impl(&db, conversation_id)?)
 }
 
 #[tauri::command]
@@ -29,7 +29,7 @@ pub fn save_message(
     db: State<'_, Database>,
     request: SaveMessageRequest,
 ) -> Result<Message, String> {
-    operations::save_message_impl(&db, request)
+    Ok(operations::save_message_impl(&db, request)?)
 }
 
 #[tauri::command]
@@ -37,5 +37,5 @@ pub fn delete_conversation(
     db: State<'_, Database>,
     conversation_id: String,
 ) -> Result<(), String> {
-    operations::delete_conversation_impl(&db, conversation_id)
+    Ok(operations::delete_conversation_impl(&db, conversation_id)?)
 }

@@ -1,4 +1,16 @@
 import { create } from "zustand";
+import {
+  DEFAULT_BASE_URL,
+  DEFAULT_MODEL,
+  DEFAULT_THINKING_BUDGET,
+} from "../constants";
+
+// ── localStorage key constants ──────────────────────
+const LS_API_KEY = "openai_api_key";
+const LS_BASE_URL = "openai_base_url";
+const LS_MODEL_NAME = "openai_model_name";
+const LS_THINKING_ENABLED = "thinking_enabled";
+const LS_THINKING_BUDGET = "thinking_budget";
 
 interface SettingsState {
   apiKey: string;
@@ -12,7 +24,7 @@ interface SettingsState {
   saveSettings: (s: SettingValues) => void;
 }
 
-interface SettingValues {
+export interface SettingValues {
   apiKey: string;
   baseUrl: string;
   modelName: string;
@@ -20,51 +32,39 @@ interface SettingValues {
   thinkingBudget: number;
 }
 
-const DEFAULT_API_KEY = "sk-YlEqf0acfNgeKYJ7rLQ6rrE9jkI6ik0Bx3RqDxzBgDcSM";
-const DEFAULT_BASE_URL = "http://192.168.0.105:8317/v1";
-const DEFAULT_MODEL = "gpt-5.3-codex";
-const DEFAULT_THINKING_BUDGET = 4096;
+function readSettings(): SettingValues {
+  const raw = (key: string, fallback: string) =>
+    localStorage.getItem(key) || fallback;
 
-const readLocal = (key: string, fallback: string) =>
-  localStorage.getItem(key) || fallback;
+  const thinkingRaw = localStorage.getItem(LS_THINKING_ENABLED);
+  const budgetRaw = localStorage.getItem(LS_THINKING_BUDGET);
+
+  return {
+    apiKey: raw(LS_API_KEY, ""),
+    baseUrl: raw(LS_BASE_URL, DEFAULT_BASE_URL),
+    modelName: raw(LS_MODEL_NAME, DEFAULT_MODEL),
+    thinkingEnabled: thinkingRaw !== null ? thinkingRaw === "true" : true,
+    thinkingBudget: budgetRaw ? parseInt(budgetRaw, 10) : DEFAULT_THINKING_BUDGET,
+  };
+}
+
+const initial = readSettings();
 
 export const useSettingsStore = create<SettingsState>((set) => ({
-  apiKey: readLocal("openai_api_key", DEFAULT_API_KEY),
-  baseUrl: readLocal("openai_base_url", DEFAULT_BASE_URL),
-  modelName: readLocal("openai_model_name", DEFAULT_MODEL),
-  thinkingEnabled: readLocal("thinking_enabled", "true") === "true",
-  thinkingBudget: parseInt(readLocal("thinking_budget", String(DEFAULT_THINKING_BUDGET)), 10),
+  ...initial,
   isSettingsOpen: false,
 
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
 
-  loadSettings: () => {
-    const savedKey = localStorage.getItem("openai_api_key") || DEFAULT_API_KEY;
-    const savedBaseUrl = localStorage.getItem("openai_base_url") || DEFAULT_BASE_URL;
-    const savedModelName = localStorage.getItem("openai_model_name") || DEFAULT_MODEL;
-    const savedThinking = localStorage.getItem("thinking_enabled");
-    const savedBudget = localStorage.getItem("thinking_budget");
-
-    if (!localStorage.getItem("openai_api_key")) {
-      localStorage.setItem("openai_api_key", DEFAULT_API_KEY);
-    }
-
-    set({
-      apiKey: savedKey,
-      baseUrl: savedBaseUrl,
-      modelName: savedModelName,
-      thinkingEnabled: savedThinking !== null ? savedThinking === "true" : true,
-      thinkingBudget: savedBudget ? parseInt(savedBudget, 10) : DEFAULT_THINKING_BUDGET,
-    });
-  },
+  loadSettings: () => set(readSettings()),
 
   saveSettings: (s) => {
     const model = s.modelName || DEFAULT_MODEL;
-    localStorage.setItem("openai_api_key", s.apiKey);
-    localStorage.setItem("openai_base_url", s.baseUrl);
-    localStorage.setItem("openai_model_name", model);
-    localStorage.setItem("thinking_enabled", String(s.thinkingEnabled));
-    localStorage.setItem("thinking_budget", String(s.thinkingBudget));
+    localStorage.setItem(LS_API_KEY, s.apiKey);
+    localStorage.setItem(LS_BASE_URL, s.baseUrl);
+    localStorage.setItem(LS_MODEL_NAME, model);
+    localStorage.setItem(LS_THINKING_ENABLED, String(s.thinkingEnabled));
+    localStorage.setItem(LS_THINKING_BUDGET, String(s.thinkingBudget));
     set({
       apiKey: s.apiKey,
       baseUrl: s.baseUrl,

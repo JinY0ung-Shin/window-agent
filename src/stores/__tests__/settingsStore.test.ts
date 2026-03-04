@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useSettingsStore } from "../settingsStore";
+import {
+  DEFAULT_BASE_URL,
+  DEFAULT_MODEL,
+  DEFAULT_THINKING_BUDGET,
+} from "../../constants";
 
 const initialState = useSettingsStore.getState();
 
@@ -11,10 +16,10 @@ beforeEach(() => {
 describe("settingsStore", () => {
   it("has correct default values", () => {
     const s = useSettingsStore.getState();
-    expect(s.baseUrl).toBe("http://192.168.0.105:8317/v1");
-    expect(s.modelName).toBe("gpt-5.3-codex");
+    expect(s.baseUrl).toBe(DEFAULT_BASE_URL);
+    expect(s.modelName).toBe(DEFAULT_MODEL);
     expect(s.thinkingEnabled).toBe(true);
-    expect(s.thinkingBudget).toBe(4096);
+    expect(s.thinkingBudget).toBe(DEFAULT_THINKING_BUDGET);
     expect(s.isSettingsOpen).toBe(false);
   });
 
@@ -38,8 +43,8 @@ describe("settingsStore", () => {
   it("loadSettings uses defaults when localStorage is empty", () => {
     useSettingsStore.getState().loadSettings();
     const s = useSettingsStore.getState();
-    expect(s.apiKey).toBe("sk-YlEqf0acfNgeKYJ7rLQ6rrE9jkI6ik0Bx3RqDxzBgDcSM");
-    expect(s.modelName).toBe("gpt-5.3-codex");
+    expect(s.apiKey).toBe("");
+    expect(s.modelName).toBe(DEFAULT_MODEL);
     expect(s.thinkingEnabled).toBe(true);
   });
 
@@ -68,10 +73,10 @@ describe("settingsStore", () => {
       baseUrl: "u",
       modelName: "",
       thinkingEnabled: true,
-      thinkingBudget: 4096,
+      thinkingBudget: DEFAULT_THINKING_BUDGET,
     });
 
-    expect(useSettingsStore.getState().modelName).toBe("gpt-5.3-codex");
+    expect(useSettingsStore.getState().modelName).toBe(DEFAULT_MODEL);
   });
 
   it("setIsSettingsOpen toggles modal state", () => {

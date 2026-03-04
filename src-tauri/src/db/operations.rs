@@ -1,3 +1,4 @@
+use super::error::DbError;
 use super::models::{Conversation, Message, SaveMessageRequest};
 use super::Database;
 use chrono::Utc;
@@ -6,8 +7,8 @@ use uuid::Uuid;
 pub fn create_conversation_impl(
     db: &Database,
     title: Option<String>,
-) -> Result<Conversation, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+) -> Result<Conversation, DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let now = Utc::now().to_rfc3339();
     let conv = Conversation {
         id: Uuid::new_v4().to_string(),
@@ -19,71 +20,55 @@ pub fn create_conversation_impl(
     conn.execute(
         "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
         rusqlite::params![conv.id, conv.title, conv.created_at, conv.updated_at],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     Ok(conv)
 }
 
-pub fn get_conversations_impl(db: &Database) -> Result<Vec<Conversation>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+pub fn get_conversations_impl(db: &Database) -> Result<Vec<Conversation>, DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let mut stmt = conn
-        .prepare("SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC")
-        .map_err(|e| e.to_string())?;
+        .prepare("SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
 
-    let rows = stmt
-        .query_map([], |row| {
-            Ok(Conversation {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                created_at: row.get(2)?,
-                updated_at: row.get(3)?,
-            })
+    let rows = stmt.query_map([], |row| {
+        Ok(Conversation {
+            id: row.get(0)?,
+            title: row.get(1)?,
+            created_at: row.get(2)?,
+            updated_at: row.get(3)?,
         })
-        .map_err(|e| e.to_string())?;
+    })?;
 
-    let mut conversations = Vec::new();
-    for row in rows {
-        conversations.push(row.map_err(|e| e.to_string())?);
-    }
-    Ok(conversations)
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 pub fn get_messages_impl(
     db: &Database,
     conversation_id: String,
-) -> Result<Vec<Message>, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, conversation_id, role, content, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
-        )
-        .map_err(|e| e.to_string())?;
+) -> Result<Vec<Message>, DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    let mut stmt = conn.prepare(
+        "SELECT id, conversation_id, role, content, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+    )?;
 
-    let rows = stmt
-        .query_map(rusqlite::params![conversation_id], |row| {
-            Ok(Message {
-                id: row.get(0)?,
-                conversation_id: row.get(1)?,
-                role: row.get(2)?,
-                content: row.get(3)?,
-                created_at: row.get(4)?,
-            })
+    let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
+        Ok(Message {
+            id: row.get(0)?,
+            conversation_id: row.get(1)?,
+            role: row.get(2)?,
+            content: row.get(3)?,
+            created_at: row.get(4)?,
         })
-        .map_err(|e| e.to_string())?;
+    })?;
 
-    let mut messages = Vec::new();
-    for row in rows {
-        messages.push(row.map_err(|e| e.to_string())?);
-    }
-    Ok(messages)
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
 pub fn save_message_impl(
     db: &Database,
     request: SaveMessageRequest,
-) -> Result<Message, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+) -> Result<Message, DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let now = Utc::now().to_rfc3339();
     let msg = Message {
         id: Uuid::new_v4().to_string(),
@@ -96,14 +81,12 @@ pub fn save_message_impl(
     conn.execute(
         "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
         rusqlite::params![msg.id, msg.conversation_id, msg.role, msg.content, msg.created_at],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     conn.execute(
         "UPDATE conversations SET updated_at = ?1 WHERE id = ?2",
         rusqlite::params![now, request.conversation_id],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     Ok(msg)
 }
@@ -111,13 +94,12 @@ pub fn save_message_impl(
 pub fn delete_conversation_impl(
     db: &Database,
     conversation_id: String,
-) -> Result<(), String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+) -> Result<(), DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     conn.execute(
         "DELETE FROM conversations WHERE id = ?1",
         rusqlite::params![conversation_id],
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
     Ok(())
 }
 

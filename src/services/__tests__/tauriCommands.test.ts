@@ -38,7 +38,7 @@ describe("tauriCommands", () => {
   });
 
   it("saveMessage passes request object", async () => {
-    const req = { conversation_id: "x", role: "user", content: "hi" };
+    const req = { conversation_id: "x", role: "user" as const, content: "hi" };
     vi.mocked(invoke).mockResolvedValue({ id: "m1", ...req, created_at: "" });
     await saveMessage(req);
     expect(invoke).toHaveBeenCalledWith("save_message", { request: req });

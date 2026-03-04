@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Settings, X } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
 
 type Tab = "general" | "thinking";
 
@@ -13,7 +14,7 @@ export default function SettingsModal() {
   const [tempBaseUrl, setTempBaseUrl] = useState("");
   const [tempModelName, setTempModelName] = useState("");
   const [tempThinkingEnabled, setTempThinkingEnabled] = useState(true);
-  const [tempThinkingBudget, setTempThinkingBudget] = useState(4096);
+  const [tempThinkingBudget, setTempThinkingBudget] = useState(DEFAULT_THINKING_BUDGET);
 
   useEffect(() => {
     if (isSettingsOpen) {
@@ -85,7 +86,7 @@ export default function SettingsModal() {
                 <input
                   id="baseUrl"
                   type="text"
-                  placeholder="https://api.openai.com/v1 (기본값)"
+                  placeholder={`${DEFAULT_BASE_URL} (기본값)`}
                   value={tempBaseUrl}
                   onChange={(e) => setTempBaseUrl(e.target.value)}
                 />
@@ -96,7 +97,7 @@ export default function SettingsModal() {
                 <input
                   id="modelName"
                   type="text"
-                  placeholder="gpt-5.3-codex (기본값)"
+                  placeholder={`${DEFAULT_MODEL} (기본값)`}
                   value={tempModelName}
                   onChange={(e) => setTempModelName(e.target.value)}
                 />

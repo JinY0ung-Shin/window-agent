@@ -3,6 +3,14 @@ import OpenAI from "openai";
 import type { Conversation, ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
+import { buildChatMessages } from "../services/chatHelpers";
+import {
+  CONVERSATION_TITLE_MAX_LENGTH,
+  DEFAULT_CONVERSATION_TITLE,
+  LOADING_MESSAGE,
+  ERROR_MESSAGE,
+  NO_RESPONSE_MESSAGE,
+} from "../constants";
 
 interface ChatState {
   conversations: Conversation[];
@@ -66,7 +74,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // Auto-create conversation if none selected
     let convId = currentConversationId;
     if (!convId) {
-      const title = inputValue.slice(0, 50) || "새 대화";
+      const title = inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) || DEFAULT_CONVERSATION_TITLE;
       const conv = await cmds.createConversation(title);
       convId = conv.id;
       set({ currentConversationId: convId });
@@ -89,7 +97,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const loadingMsg: ChatMessage = {
       id: loadingId,
       type: "agent",
-      content: "생각 중...",
+      content: LOADING_MESSAGE,
       isLoading: true,
     };
 
@@ -106,23 +114,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       const openai = new OpenAI(config as ConstructorParameters<typeof OpenAI>[0]);
 
-      const currentMessages = get().messages;
-      const history = currentMessages
-        .filter((m) => !m.isLoading)
-        .slice(-10)
-        .map((m) => ({
-          role: (m.type === "user" ? "user" : "assistant") as "user" | "assistant",
-          content: m.content,
-        }));
-
-      const chatMessages = [
-        {
-          role: "system" as const,
-          content:
-            "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner. Respond in the same language as the user's prompt (usually Korean).",
-        },
-        ...history,
-      ];
+      const chatMessages = buildChatMessages(get().messages);
 
       let response: any;
       let thinkingUsed = false;
@@ -150,7 +142,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       const choice = response.choices[0];
-      const replyContent = choice?.message?.content || "응답을 받지 못했습니다.";
+      const replyContent = choice?.message?.content || NO_RESPONSE_MESSAGE;
       const reasoningContent = thinkingUsed
         ? (choice?.message?.reasoning_content ?? undefined)
         : undefined;
@@ -182,7 +174,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           msg.id === loadingId
             ? {
                 ...msg,
-                content: "API 호출 중 오류가 발생했습니다. API 키가 정확한지 확인해 주세요.",
+                content: ERROR_MESSAGE,
                 isLoading: false,
               }
             : msg
