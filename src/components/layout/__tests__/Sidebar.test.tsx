@@ -28,8 +28,8 @@ describe("Sidebar", () => {
   it("renders conversation list", () => {
     useChatStore.setState({
       conversations: [
-        { id: "1", title: "대화 A", created_at: "", updated_at: "" },
-        { id: "2", title: "대화 B", created_at: "", updated_at: "" },
+        { id: "1", title: "대화 A", agent_id: "a1", created_at: "", updated_at: "" },
+        { id: "2", title: "대화 B", agent_id: "a1", created_at: "", updated_at: "" },
       ],
     });
     render(<Sidebar />);
@@ -48,7 +48,7 @@ describe("Sidebar", () => {
   it("clicking conversation calls selectConversation", () => {
     const spy = vi.fn();
     useChatStore.setState({
-      conversations: [{ id: "c1", title: "Test Conv", created_at: "", updated_at: "" }],
+      conversations: [{ id: "c1", title: "Test Conv", agent_id: "a1", created_at: "", updated_at: "" }],
       selectConversation: spy,
     });
     render(<Sidebar />);

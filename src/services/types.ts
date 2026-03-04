@@ -3,10 +3,10 @@ export type MessageRole = "user" | "assistant" | "system";
 export type SaveMessageRole = "user" | "assistant";
 
 // DB models (match Rust structs)
-// TODO: Phase 1 — Rust 쪽 role도 enum으로 변경
 export interface Conversation {
   id: string;
   title: string;
+  agent_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -23,6 +23,55 @@ export interface SaveMessageRequest {
   conversation_id: string;
   role: SaveMessageRole;
   content: string;
+}
+
+// Agent model (matches Rust Agent struct — serde serializes bool, not integer)
+export interface Agent {
+  id: string;
+  folder_name: string;
+  name: string;
+  avatar: string | null;
+  description: string;
+  model: string | null;
+  temperature: number | null;
+  thinking_enabled: boolean | null;
+  thinking_budget: number | null;
+  is_default: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateAgentRequest {
+  folder_name: string;
+  name: string;
+  description?: string;
+  avatar?: string | null;
+  model?: string | null;
+  temperature?: number | null;
+  thinking_enabled?: boolean | null;
+  thinking_budget?: number | null;
+  is_default?: boolean;
+  sort_order?: number;
+}
+
+export interface UpdateAgentRequest {
+  name?: string;
+  description?: string;
+  avatar?: string | null;
+  model?: string | null;
+  temperature?: number | null;
+  thinking_enabled?: boolean | null;
+  thinking_budget?: number | null;
+  sort_order?: number;
+}
+
+// Persona files for an agent
+export interface PersonaFiles {
+  identity: string;
+  soul: string;
+  user: string;
+  agents: string;
 }
 
 // UI model

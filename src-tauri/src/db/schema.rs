@@ -33,6 +33,7 @@ mod tests {
             .collect();
         assert!(tables.contains(&"conversations".to_string()));
         assert!(tables.contains(&"messages".to_string()));
+        assert!(tables.contains(&"agents".to_string()));
     }
 
     #[test]

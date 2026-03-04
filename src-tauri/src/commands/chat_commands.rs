@@ -7,8 +7,9 @@ use tauri::State;
 pub fn create_conversation(
     db: State<'_, Database>,
     title: Option<String>,
+    agent_id: String,
 ) -> Result<Conversation, String> {
-    Ok(operations::create_conversation_impl(&db, title)?)
+    Ok(operations::create_conversation_impl(&db, title, agent_id)?)
 }
 
 #[tauri::command]

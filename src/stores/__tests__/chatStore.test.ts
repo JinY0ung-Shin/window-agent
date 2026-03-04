@@ -1,9 +1,25 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useChatStore } from "../chatStore";
 import { useSettingsStore } from "../settingsStore";
+import { useAgentStore } from "../agentStore";
 import * as cmds from "../../services/tauriCommands";
 
 vi.mock("../../services/tauriCommands");
+vi.mock("../../services/personaService", () => ({
+  FILE_NAME_MAP: { identity: "IDENTITY.md", soul: "SOUL.md", user: "USER.md", agents: "AGENTS.md" },
+  readPersonaFiles: vi.fn().mockResolvedValue({ identity: "", soul: "", user: "", agents: "" }),
+  assembleSystemPrompt: vi.fn().mockReturnValue("mock prompt"),
+  assembleManagerPrompt: vi.fn().mockReturnValue("mock prompt"),
+  invalidatePersonaCache: vi.fn(),
+  getEffectiveSettings: vi.fn().mockReturnValue({
+    model: "test-model",
+    temperature: null,
+    thinkingEnabled: false,
+    thinkingBudget: 4096,
+    apiKey: "test-key",
+    baseUrl: "",
+  }),
+}));
 vi.mock("openai", () => {
   return {
     default: class MockOpenAI {
@@ -20,10 +36,12 @@ vi.mock("openai", () => {
 
 const initialChatState = useChatStore.getState();
 const initialSettingsState = useSettingsStore.getState();
+const initialAgentState = useAgentStore.getState();
 
 beforeEach(() => {
   useChatStore.setState(initialChatState, true);
   useSettingsStore.setState(initialSettingsState, true);
+  useAgentStore.setState(initialAgentState, true);
   vi.clearAllMocks();
 });
 
@@ -43,8 +61,8 @@ describe("chatStore", () => {
 
   it("loadConversations fetches and sets conversations", async () => {
     const mockConvs = [
-      { id: "1", title: "Conv 1", created_at: "", updated_at: "" },
-      { id: "2", title: "Conv 2", created_at: "", updated_at: "" },
+      { id: "1", title: "Conv 1", agent_id: "a1", created_at: "", updated_at: "" },
+      { id: "2", title: "Conv 2", agent_id: "a1", created_at: "", updated_at: "" },
     ];
     vi.mocked(cmds.getConversations).mockResolvedValue(mockConvs);
 
@@ -109,10 +127,14 @@ describe("chatStore", () => {
 
   it("sendMessage auto-creates conversation and saves messages", async () => {
     useSettingsStore.setState({ apiKey: "test-key", thinkingEnabled: false });
+    useAgentStore.setState({
+      selectedAgentId: "agent-1",
+      agents: [{ id: "agent-1", folder_name: "test", name: "Test", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" }],
+    });
     useChatStore.setState({ inputValue: "hello", currentConversationId: null });
 
     vi.mocked(cmds.createConversation).mockResolvedValue({
-      id: "new-conv", title: "hello", created_at: "", updated_at: "",
+      id: "new-conv", title: "hello", agent_id: "agent-1", created_at: "", updated_at: "",
     });
     vi.mocked(cmds.saveMessage).mockResolvedValueOnce({
       id: "user-msg", conversation_id: "new-conv", role: "user", content: "hello", created_at: "",
@@ -123,7 +145,7 @@ describe("chatStore", () => {
 
     await useChatStore.getState().sendMessage();
 
-    expect(cmds.createConversation).toHaveBeenCalledWith("hello");
+    expect(cmds.createConversation).toHaveBeenCalledWith("agent-1", "hello");
     expect(cmds.saveMessage).toHaveBeenCalledTimes(2);
     expect(useChatStore.getState().inputValue).toBe("");
   });

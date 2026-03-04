@@ -12,6 +12,9 @@ export const DEFAULT_THINKING_BUDGET = 4096;
 export const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner. Respond in the same language as the user's prompt (usually Korean).";
 
+// ── Agent Defaults ──────────────────────────────────
+export const DEFAULT_AGENT_NAME = "새 에이전트";
+
 // ── UI Messages ─────────────────────────────────────
 export const LOADING_MESSAGE = "생각 중...";
 export const ERROR_MESSAGE =

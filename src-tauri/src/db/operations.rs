@@ -7,19 +7,21 @@ use uuid::Uuid;
 pub fn create_conversation_impl(
     db: &Database,
     title: Option<String>,
+    agent_id: String,
 ) -> Result<Conversation, DbError> {
     let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let now = Utc::now().to_rfc3339();
     let conv = Conversation {
         id: Uuid::new_v4().to_string(),
         title: title.unwrap_or_else(|| "새 대화".to_string()),
+        agent_id: agent_id.clone(),
         created_at: now.clone(),
         updated_at: now,
     };
 
     conn.execute(
-        "INSERT INTO conversations (id, title, created_at, updated_at) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![conv.id, conv.title, conv.created_at, conv.updated_at],
+        "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![conv.id, conv.title, conv.agent_id, conv.created_at, conv.updated_at],
     )?;
 
     Ok(conv)
@@ -28,14 +30,15 @@ pub fn create_conversation_impl(
 pub fn get_conversations_impl(db: &Database) -> Result<Vec<Conversation>, DbError> {
     let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let mut stmt = conn
-        .prepare("SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
+        .prepare("SELECT id, title, agent_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
 
     let rows = stmt.query_map([], |row| {
         Ok(Conversation {
             id: row.get(0)?,
             title: row.get(1)?,
-            created_at: row.get(2)?,
-            updated_at: row.get(3)?,
+            agent_id: row.get(2)?,
+            created_at: row.get(3)?,
+            updated_at: row.get(4)?,
         })
     })?;
 
@@ -106,15 +109,38 @@ pub fn delete_conversation_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::agent_operations;
 
     fn setup_db() -> Database {
         Database::new_in_memory().expect("failed to create in-memory db")
     }
 
+    /// Helper: create a default agent for conversation tests
+    fn create_test_agent(db: &Database) -> crate::db::models::Agent {
+        use crate::db::models::CreateAgentRequest;
+        agent_operations::create_agent_impl(
+            db,
+            CreateAgentRequest {
+                folder_name: "test-agent".into(),
+                name: "Test Agent".into(),
+                avatar: None,
+                description: None,
+                model: None,
+                temperature: None,
+                thinking_enabled: None,
+                thinking_budget: None,
+                is_default: None,
+                sort_order: None,
+            },
+        )
+        .unwrap()
+    }
+
     #[test]
     fn test_create_conversation_default_title() {
         let db = setup_db();
-        let conv = create_conversation_impl(&db, None).unwrap();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
         assert_eq!(conv.title, "새 대화");
         assert!(!conv.id.is_empty());
         assert!(!conv.created_at.is_empty());
@@ -123,7 +149,8 @@ mod tests {
     #[test]
     fn test_create_conversation_custom_title() {
         let db = setup_db();
-        let conv = create_conversation_impl(&db, Some("테스트 대화".into())).unwrap();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, Some("테스트 대화".into()), agent.id).unwrap();
         assert_eq!(conv.title, "테스트 대화");
     }
 
@@ -137,8 +164,9 @@ mod tests {
     #[test]
     fn test_get_conversations_ordered() {
         let db = setup_db();
-        let c1 = create_conversation_impl(&db, Some("First".into())).unwrap();
-        let c2 = create_conversation_impl(&db, Some("Second".into())).unwrap();
+        let agent = create_test_agent(&db);
+        let c1 = create_conversation_impl(&db, Some("First".into()), agent.id.clone()).unwrap();
+        let c2 = create_conversation_impl(&db, Some("Second".into()), agent.id).unwrap();
 
         // Update c1's updated_at to be newer
         {
@@ -166,7 +194,8 @@ mod tests {
     #[test]
     fn test_get_messages_ordered() {
         let db = setup_db();
-        let conv = create_conversation_impl(&db, None).unwrap();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
 
         // Insert messages with explicit timestamps for ordering
         {
@@ -188,7 +217,8 @@ mod tests {
     #[test]
     fn test_save_message() {
         let db = setup_db();
-        let conv = create_conversation_impl(&db, None).unwrap();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
         let msg = save_message_impl(
             &db,
             SaveMessageRequest {
@@ -208,7 +238,8 @@ mod tests {
     #[test]
     fn test_save_message_updates_conversation() {
         let db = setup_db();
-        let conv = create_conversation_impl(&db, None).unwrap();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
         let old_updated = conv.updated_at.clone();
 
         // Force a different timestamp
@@ -231,7 +262,8 @@ mod tests {
     #[test]
     fn test_delete_conversation() {
         let db = setup_db();
-        let conv = create_conversation_impl(&db, None).unwrap();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
         delete_conversation_impl(&db, conv.id).unwrap();
         let convs = get_conversations_impl(&db).unwrap();
         assert!(convs.is_empty());
@@ -240,7 +272,8 @@ mod tests {
     #[test]
     fn test_delete_cascade() {
         let db = setup_db();
-        let conv = create_conversation_impl(&db, None).unwrap();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
         save_message_impl(
             &db,
             SaveMessageRequest {

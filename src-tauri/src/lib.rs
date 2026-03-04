@@ -30,6 +30,17 @@ pub fn run() {
             commands::get_messages,
             commands::save_message,
             commands::delete_conversation,
+            commands::create_agent,
+            commands::get_agent,
+            commands::list_agents,
+            commands::update_agent,
+            commands::delete_agent,
+            commands::write_agent_file,
+            commands::read_agent_file,
+            commands::sync_agents_from_fs,
+            commands::seed_manager_agent,
+            commands::resize_avatar,
+            commands::get_bootstrap_prompt,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

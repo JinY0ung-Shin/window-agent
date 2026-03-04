@@ -34,7 +34,46 @@ fn all_migrations() -> &'static [Migration] {
                 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at);
             ",
         },
-        // Phase 1: Add migration v2 here for agents table
+        Migration {
+            version: 2,
+            description: "Agents table + conversations.agent_id",
+            sql: "
+                CREATE TABLE IF NOT EXISTS agents (
+                    id               TEXT PRIMARY KEY,
+                    folder_name      TEXT NOT NULL UNIQUE,
+                    name             TEXT NOT NULL,
+                    avatar           TEXT,
+                    description      TEXT NOT NULL DEFAULT '',
+                    model            TEXT,
+                    temperature      REAL,
+                    thinking_enabled INTEGER,
+                    thinking_budget  INTEGER,
+                    is_default       INTEGER DEFAULT 0,
+                    sort_order       INTEGER DEFAULT 0,
+                    created_at       TEXT NOT NULL,
+                    updated_at       TEXT NOT NULL
+                );
+
+                -- Delete all existing conversations (pre-agent era)
+                DELETE FROM messages;
+                DELETE FROM conversations;
+
+                -- Recreate conversations with agent_id column
+                -- SQLite doesn't support ALTER TABLE ADD COLUMN with FK,
+                -- so we recreate the table.
+                CREATE TABLE conversations_new (
+                    id         TEXT PRIMARY KEY,
+                    title      TEXT NOT NULL,
+                    agent_id   TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                DROP TABLE conversations;
+                ALTER TABLE conversations_new RENAME TO conversations;
+
+                CREATE INDEX IF NOT EXISTS idx_conversations_agent_id ON conversations(agent_id);
+            ",
+        },
     ]
 }
 
@@ -103,6 +142,7 @@ mod tests {
 
         assert!(tables.contains(&"conversations".to_string()));
         assert!(tables.contains(&"messages".to_string()));
+        assert!(tables.contains(&"agents".to_string()));
         assert!(tables.contains(&"_migrations".to_string()));
     }
 
@@ -113,7 +153,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
     }
 
     #[test]
@@ -122,7 +162,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 1);
+        assert_eq!(version, 2);
 
         let desc: String = conn
             .query_row(
@@ -132,43 +172,69 @@ mod tests {
             )
             .unwrap();
         assert!(desc.contains("Initial schema"));
+
+        let desc2: String = conn
+            .query_row(
+                "SELECT description FROM _migrations WHERE version = 2",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(desc2.contains("Agents"));
     }
 
     #[test]
-    fn test_existing_data_preserved() {
+    fn test_conversations_has_agent_id() {
         let conn = setup_conn();
-
-        // Simulate existing DB by creating tables manually
-        conn.execute_batch(
-            "CREATE TABLE conversations (
-                id TEXT PRIMARY KEY, title TEXT NOT NULL,
-                created_at TEXT NOT NULL, updated_at TEXT NOT NULL
-            );
-            CREATE TABLE messages (
-                id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL,
-                role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL,
-                FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
-            );
-            INSERT INTO conversations VALUES ('c1', 'Test', '2024-01-01', '2024-01-01');
-            INSERT INTO messages VALUES ('m1', 'c1', 'user', 'hello', '2024-01-01');",
-        )
-        .unwrap();
-
-        // Running migrations should not destroy existing data
         run_migrations(&conn).unwrap();
 
-        let title: String = conn
-            .query_row("SELECT title FROM conversations WHERE id = 'c1'", [], |row| {
-                row.get(0)
-            })
-            .unwrap();
-        assert_eq!(title, "Test");
+        // Insert an agent first
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, description, created_at, updated_at) VALUES ('a1', 'test', 'Test', '', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
 
-        let content: String = conn
-            .query_row("SELECT content FROM messages WHERE id = 'm1'", [], |row| {
+        // Insert a conversation with agent_id
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES ('c1', 'Test', 'a1', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        let agent_id: String = conn
+            .query_row("SELECT agent_id FROM conversations WHERE id = 'c1'", [], |row| {
                 row.get(0)
             })
             .unwrap();
-        assert_eq!(content, "hello");
+        assert_eq!(agent_id, "a1");
+    }
+
+    #[test]
+    fn test_v2_migration_deletes_old_data() {
+        let conn = setup_conn();
+
+        // Run v1 only first
+        ensure_migrations_table(&conn).unwrap();
+        let v1 = &all_migrations()[0];
+        let tx = conn.unchecked_transaction().unwrap();
+        tx.execute_batch(v1.sql).unwrap();
+        tx.execute(
+            "INSERT INTO _migrations (version, description) VALUES (?1, ?2)",
+            rusqlite::params![v1.version, v1.description],
+        ).unwrap();
+        tx.commit().unwrap();
+
+        // Insert old data
+        conn.execute(
+            "INSERT INTO conversations (id, title, created_at, updated_at) VALUES ('old1', 'Old', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        // Now run all migrations (v2 should clear old conversations)
+        run_migrations(&conn).unwrap();
+
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
     }
 }

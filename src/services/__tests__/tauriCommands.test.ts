@@ -14,15 +14,15 @@ beforeEach(() => {
 
 describe("tauriCommands", () => {
   it("createConversation calls invoke with correct args", async () => {
-    vi.mocked(invoke).mockResolvedValue({ id: "1", title: "Test", created_at: "", updated_at: "" });
-    await createConversation("Test");
-    expect(invoke).toHaveBeenCalledWith("create_conversation", { title: "Test" });
+    vi.mocked(invoke).mockResolvedValue({ id: "1", title: "Test", agent_id: "a1", created_at: "", updated_at: "" });
+    await createConversation("a1", "Test");
+    expect(invoke).toHaveBeenCalledWith("create_conversation", { title: "Test", agentId: "a1" });
   });
 
   it("createConversation passes null when no title", async () => {
-    vi.mocked(invoke).mockResolvedValue({ id: "1", title: "새 대화", created_at: "", updated_at: "" });
-    await createConversation();
-    expect(invoke).toHaveBeenCalledWith("create_conversation", { title: null });
+    vi.mocked(invoke).mockResolvedValue({ id: "1", title: "새 대화", agent_id: "a1", created_at: "", updated_at: "" });
+    await createConversation("a1");
+    expect(invoke).toHaveBeenCalledWith("create_conversation", { title: null, agentId: "a1" });
   });
 
   it("getConversations calls invoke with no extra args", async () => {
