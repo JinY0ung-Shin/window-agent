@@ -86,4 +86,44 @@ describe("settingsStore", () => {
     useSettingsStore.getState().setIsSettingsOpen(false);
     expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
   });
+
+  it("loadSettings handles corrupt localStorage value (uses defaults)", () => {
+    // thinking_budget is not valid JSON/number — parseInt will return NaN,
+    // but the store uses `budgetRaw ? parseInt(budgetRaw, 10) : DEFAULT_THINKING_BUDGET`
+    // so a non-numeric string will give NaN. We verify the store still loads without crashing.
+    localStorage.setItem("thinking_budget", "not-a-number");
+    localStorage.setItem("thinking_enabled", "garbage");
+
+    useSettingsStore.getState().loadSettings();
+    const s = useSettingsStore.getState();
+
+    // "garbage" !== "true" so thinkingEnabled should be false
+    expect(s.thinkingEnabled).toBe(false);
+    // corrupt value falls back to DEFAULT_THINKING_BUDGET
+    expect(s.thinkingBudget).toBe(4096);
+  });
+
+  it("saveSettings persists all fields correctly", () => {
+    useSettingsStore.getState().saveSettings({
+      apiKey: "my-api-key",
+      baseUrl: "http://example.com/v1",
+      modelName: "claude-3",
+      thinkingEnabled: true,
+      thinkingBudget: 16384,
+    });
+
+    expect(localStorage.getItem("openai_api_key")).toBe("my-api-key");
+    expect(localStorage.getItem("openai_base_url")).toBe("http://example.com/v1");
+    expect(localStorage.getItem("openai_model_name")).toBe("claude-3");
+    expect(localStorage.getItem("thinking_enabled")).toBe("true");
+    expect(localStorage.getItem("thinking_budget")).toBe("16384");
+
+    const s = useSettingsStore.getState();
+    expect(s.apiKey).toBe("my-api-key");
+    expect(s.baseUrl).toBe("http://example.com/v1");
+    expect(s.modelName).toBe("claude-3");
+    expect(s.thinkingEnabled).toBe(true);
+    expect(s.thinkingBudget).toBe(16384);
+    expect(s.isSettingsOpen).toBe(false);
+  });
 });

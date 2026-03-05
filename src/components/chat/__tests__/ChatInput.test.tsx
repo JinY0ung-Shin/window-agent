@@ -48,4 +48,19 @@ describe("ChatInput", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     expect(sendSpy).toHaveBeenCalled();
   });
+
+  it("Shift+Enter does not send message", () => {
+    const sendSpy = vi.fn();
+    useChatStore.setState({ inputValue: "test", sendMessage: sendSpy });
+    render(<ChatInput />);
+    const input = screen.getByPlaceholderText("메시지를 입력하세요...");
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("send button enabled when input has content and not loading", () => {
+    useChatStore.setState({ inputValue: "hello", messages: [] });
+    render(<ChatInput />);
+    expect(screen.getByRole("button")).not.toBeDisabled();
+  });
 });

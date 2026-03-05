@@ -44,7 +44,7 @@ function readSettings(): SettingValues {
     baseUrl: raw(LS_BASE_URL, DEFAULT_BASE_URL),
     modelName: raw(LS_MODEL_NAME, DEFAULT_MODEL),
     thinkingEnabled: thinkingRaw !== null ? thinkingRaw === "true" : true,
-    thinkingBudget: budgetRaw ? parseInt(budgetRaw, 10) : DEFAULT_THINKING_BUDGET,
+    thinkingBudget: budgetRaw ? (parseInt(budgetRaw, 10) || DEFAULT_THINKING_BUDGET) : DEFAULT_THINKING_BUDGET,
   };
 }
 

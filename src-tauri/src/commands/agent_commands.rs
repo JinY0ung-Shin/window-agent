@@ -38,20 +38,25 @@ pub fn delete_agent(db: State<'_, Database>, id: String) -> Result<(), String> {
 /// Allowed persona file names (whitelist).
 const ALLOWED_FILE_NAMES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"];
 
+/// Validate agent file inputs (file name whitelist + folder name path traversal check).
+/// Extracted as a pure function for testability.
+fn validate_agent_file_inputs(folder_name: &str, file_name: &str) -> Result<(), String> {
+    if !ALLOWED_FILE_NAMES.contains(&file_name) {
+        return Err(format!("Invalid file name: {file_name}"));
+    }
+    if folder_name.contains('/') || folder_name.contains('\\') || folder_name.contains("..") {
+        return Err(format!("Invalid folder name: {folder_name}"));
+    }
+    Ok(())
+}
+
 /// Validate and resolve an agent file path, preventing path traversal.
 fn resolve_agent_file_path(
     app: &AppHandle,
     folder_name: &str,
     file_name: &str,
 ) -> Result<std::path::PathBuf, String> {
-    // Whitelist file names
-    if !ALLOWED_FILE_NAMES.contains(&file_name) {
-        return Err(format!("Invalid file name: {file_name}"));
-    }
-    // Reject path separators in folder_name
-    if folder_name.contains('/') || folder_name.contains('\\') || folder_name.contains("..") {
-        return Err(format!("Invalid folder name: {folder_name}"));
-    }
+    validate_agent_file_inputs(folder_name, file_name)?;
 
     let agents_dir = get_agents_dir(app)?;
     let resolved = agents_dir.join(folder_name).join(file_name);
@@ -284,4 +289,64 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
 fn base64_encode(input: &[u8]) -> String {
     use base64::Engine;
     base64::engine::general_purpose::STANDARD.encode(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn validate_accepts_identity_md() {
+        assert!(validate_agent_file_inputs("my-agent", "IDENTITY.md").is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_all_allowed_file_names() {
+        for name in &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"] {
+            assert!(
+                validate_agent_file_inputs("my-agent", name).is_ok(),
+                "expected Ok for {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_rejects_invalid_file_name() {
+        let result = validate_agent_file_inputs("my-agent", "hack.md");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid file name"));
+    }
+
+    #[test]
+    fn validate_rejects_empty_file_name() {
+        let result = validate_agent_file_inputs("my-agent", "");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid file name"));
+    }
+
+    #[test]
+    fn validate_rejects_folder_with_forward_slash() {
+        let result = validate_agent_file_inputs("../../etc", "IDENTITY.md");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid folder name"));
+    }
+
+    #[test]
+    fn validate_rejects_folder_with_backslash() {
+        let result = validate_agent_file_inputs("..\\etc", "IDENTITY.md");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid folder name"));
+    }
+
+    #[test]
+    fn validate_rejects_folder_with_double_dots() {
+        let result = validate_agent_file_inputs("..", "IDENTITY.md");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid folder name"));
+    }
+
+    #[test]
+    fn validate_accepts_valid_folder_name() {
+        assert!(validate_agent_file_inputs("my-agent", "IDENTITY.md").is_ok());
+    }
 }

@@ -20,6 +20,15 @@ vi.mock("../../services/personaService", () => ({
     baseUrl: "",
   }),
 }));
+vi.mock("../../services/bootstrapService", () => ({
+  executeBootstrapTurn: vi.fn().mockResolvedValue({
+    apiMessages: [{ role: "system", content: "prompt" }, { role: "user", content: "hi" }, { role: "assistant", content: "response" }],
+    responseText: "bootstrap response",
+    filesWritten: [],
+  }),
+  parseAgentName: vi.fn().mockReturnValue("New Agent"),
+  isBootstrapComplete: vi.fn().mockReturnValue(false),
+}));
 vi.mock("openai", () => {
   return {
     default: class MockOpenAI {
@@ -147,6 +156,74 @@ describe("chatStore", () => {
 
     expect(cmds.createConversation).toHaveBeenCalledWith("agent-1", "hello");
     expect(cmds.saveMessage).toHaveBeenCalledTimes(2);
+    expect(useChatStore.getState().inputValue).toBe("");
+  });
+
+  it("prepareForAgent sets agent and resets conversation", () => {
+    useChatStore.setState({
+      currentConversationId: "existing-conv",
+      messages: [{ id: "1", type: "user", content: "old" }],
+      isBootstrapping: true,
+    });
+
+    useChatStore.getState().prepareForAgent("agent-42");
+
+    const s = useChatStore.getState();
+    expect(s.currentConversationId).toBeNull();
+    expect(s.messages).toEqual([]);
+    expect(s.isBootstrapping).toBe(false);
+    expect(useAgentStore.getState().selectedAgentId).toBe("agent-42");
+  });
+
+  it("startBootstrap sets bootstrap state", async () => {
+    vi.mocked(cmds.getBootstrapPrompt).mockResolvedValue("bootstrap system prompt");
+
+    await useChatStore.getState().startBootstrap();
+
+    const s = useChatStore.getState();
+    expect(s.isBootstrapping).toBe(true);
+    expect(s.bootstrapFolderName).toMatch(/^agent-\d+$/);
+    expect(s.bootstrapApiHistory).toHaveLength(1);
+    expect(s.bootstrapApiHistory[0].role).toBe("system");
+    expect(s.messages).toEqual([]);
+  });
+
+  it("cancelBootstrap resets bootstrap state", () => {
+    useChatStore.setState({
+      isBootstrapping: true,
+      bootstrapFolderName: "agent-123",
+      bootstrapApiHistory: [{ role: "system", content: "prompt" }],
+      bootstrapFilesWritten: ["IDENTITY.md"],
+      messages: [{ id: "1", type: "user", content: "hello" }],
+    });
+
+    useChatStore.getState().cancelBootstrap();
+
+    const s = useChatStore.getState();
+    expect(s.isBootstrapping).toBe(false);
+    expect(s.bootstrapFolderName).toBeNull();
+    expect(s.bootstrapApiHistory).toEqual([]);
+    expect(s.bootstrapFilesWritten).toEqual([]);
+    expect(s.messages).toEqual([]);
+  });
+
+  it("sendMessage routes to bootstrap when isBootstrapping", async () => {
+    useSettingsStore.setState({ apiKey: "test-key" });
+    useChatStore.setState({
+      inputValue: "bootstrap input",
+      isBootstrapping: true,
+      bootstrapFolderName: "agent-999",
+      bootstrapApiHistory: [{ role: "system", content: "prompt" }],
+    });
+
+    // sendMessage will call sendBootstrapMessage which uses executeBootstrapTurn
+    // Since bootstrapFolderName is set and isBootstrapping=true, it should route there.
+    // The bootstrap path will attempt to call executeBootstrapTurn via the openai mock
+    // We just verify it did NOT call createConversation (normal path)
+    await useChatStore.getState().sendMessage();
+
+    expect(cmds.createConversation).not.toHaveBeenCalled();
+    // Input should be cleared by the bootstrap path
     expect(useChatStore.getState().inputValue).toBe("");
   });
 });

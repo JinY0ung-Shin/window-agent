@@ -311,4 +311,106 @@ mod tests {
         );
         assert!(result.is_err());
     }
+
+    #[test]
+    fn test_create_conversation_nonexistent_agent_fails() {
+        let db = setup_db();
+        let result = create_conversation_impl(&db, Some("Test".into()), "nonexistent-agent".into());
+        assert!(result.is_err(), "FK constraint should reject nonexistent agent_id");
+    }
+
+    #[test]
+    fn test_delete_agent_cascades_to_messages() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, Some("Chat".into()), agent.id.clone()).unwrap();
+        save_message_impl(
+            &db,
+            SaveMessageRequest {
+                conversation_id: conv.id.clone(),
+                role: "user".into(),
+                content: "hello".into(),
+            },
+        )
+        .unwrap();
+        save_message_impl(
+            &db,
+            SaveMessageRequest {
+                conversation_id: conv.id.clone(),
+                role: "assistant".into(),
+                content: "hi there".into(),
+            },
+        )
+        .unwrap();
+
+        // Delete the agent — should cascade to conversations and messages
+        agent_operations::delete_agent_impl(&db, agent.id).unwrap();
+
+        let conn = db.conn.lock().unwrap();
+        let msg_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM messages WHERE conversation_id = ?1",
+                rusqlite::params![conv.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(msg_count, 0, "messages should be cascade-deleted");
+    }
+
+    #[test]
+    fn test_messages_ordered_asc_by_created_at() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        // Insert messages out of chronological order
+        {
+            let conn = db.conn.lock().unwrap();
+            conn.execute(
+                "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params!["msg-c", conv.id, "user", "third", "2024-01-03"],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params!["msg-a", conv.id, "user", "first", "2024-01-01"],
+            ).unwrap();
+            conn.execute(
+                "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                rusqlite::params!["msg-b", conv.id, "user", "second", "2024-01-02"],
+            ).unwrap();
+        }
+
+        let msgs = get_messages_impl(&db, conv.id).unwrap();
+        assert_eq!(msgs.len(), 3);
+        assert_eq!(msgs[0].content, "first");
+        assert_eq!(msgs[1].content, "second");
+        assert_eq!(msgs[2].content, "third");
+    }
+
+    #[test]
+    fn test_conversations_empty_after_agent_deleted() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        create_conversation_impl(&db, Some("Chat 1".into()), agent.id.clone()).unwrap();
+        create_conversation_impl(&db, Some("Chat 2".into()), agent.id.clone()).unwrap();
+
+        agent_operations::delete_agent_impl(&db, agent.id).unwrap();
+
+        let convs = get_conversations_impl(&db).unwrap();
+        assert!(convs.is_empty(), "all conversations should be cascade-deleted with agent");
+    }
+
+    #[test]
+    fn test_save_message_nonexistent_conversation_fails() {
+        let db = setup_db();
+        let result = save_message_impl(
+            &db,
+            SaveMessageRequest {
+                conversation_id: "does-not-exist".into(),
+                role: "user".into(),
+                content: "should fail".into(),
+            },
+        );
+        assert!(result.is_err(), "FK constraint should reject nonexistent conversation_id");
+    }
 }
