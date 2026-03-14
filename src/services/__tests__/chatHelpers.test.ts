@@ -10,18 +10,18 @@ describe("buildChatMessages", () => {
 
   it("maps user/agent types to user/assistant roles", () => {
     const messages: ChatMessage[] = [
-      { id: "1", type: "user", content: "hi" },
-      { id: "2", type: "agent", content: "hello" },
+      { id: "1", type: "user", content: "hi", status: "complete" },
+      { id: "2", type: "agent", content: "hello", status: "complete" },
     ];
     const result = buildChatMessages(messages);
     expect(result[0]).toEqual({ role: "user", content: "hi" });
     expect(result[1]).toEqual({ role: "assistant", content: "hello" });
   });
 
-  it("filters out loading messages", () => {
+  it("filters out pending messages", () => {
     const messages: ChatMessage[] = [
-      { id: "1", type: "user", content: "hi" },
-      { id: "2", type: "agent", content: "loading...", isLoading: true },
+      { id: "1", type: "user", content: "hi", status: "complete" },
+      { id: "2", type: "agent", content: "loading...", status: "pending" },
     ];
     const result = buildChatMessages(messages);
     expect(result).toHaveLength(1); // 1 user only
@@ -32,6 +32,7 @@ describe("buildChatMessages", () => {
       id: String(i),
       type: "user" as const,
       content: `msg-${i}`,
+      status: "complete" as const,
     }));
     const result = buildChatMessages(messages);
     expect(result).toHaveLength(10);

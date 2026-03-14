@@ -16,9 +16,18 @@ export default function ChatWindow() {
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  const isNearBottom = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return true;
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+  };
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isNearBottom()) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    }
   }, [messages]);
 
   const selectedAgent = selectedAgentId
@@ -55,7 +64,7 @@ export default function ChatWindow() {
         )}
       </header>
 
-      <div className="chat-container">
+      <div className="chat-container" ref={messagesContainerRef}>
         {showSelector ? (
           <AgentSelector />
         ) : (

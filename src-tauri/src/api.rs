@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::sync::Mutex;
 use tauri_plugin_store::StoreExt;
+use tokio::sync::Mutex as TokioMutex;
 
 /// App-level API configuration state.
 /// The API key never leaves the backend process.
@@ -118,6 +121,52 @@ impl ApiState {
     }
 }
 
+// ── Run Registry for abort support ──
+
+pub struct RunEntry {
+    pub abort_handle: tokio::task::AbortHandle,
+    pub started_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Clone)]
+pub struct RunRegistry {
+    entries: Arc<TokioMutex<HashMap<String, RunEntry>>>,
+}
+
+impl RunRegistry {
+    pub fn new() -> Self {
+        Self {
+            entries: Arc::new(TokioMutex::new(HashMap::new())),
+        }
+    }
+
+    pub async fn register(&self, request_id: String, abort_handle: tokio::task::AbortHandle) {
+        let mut entries = self.entries.lock().await;
+        entries.insert(
+            request_id,
+            RunEntry {
+                abort_handle,
+                started_at: chrono::Utc::now(),
+            },
+        );
+    }
+
+    pub async fn abort(&self, request_id: &str) -> bool {
+        let mut entries = self.entries.lock().await;
+        if let Some(entry) = entries.remove(request_id) {
+            entry.abort_handle.abort();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub async fn remove(&self, request_id: &str) {
+        let mut entries = self.entries.lock().await;
+        entries.remove(request_id);
+    }
+}
+
 // ── Request/Response types for Tauri commands ──
 
 #[derive(Deserialize)]
@@ -158,4 +207,19 @@ pub struct BootstrapCompletionRequest {
 #[derive(Serialize)]
 pub struct BootstrapCompletionResponse {
     pub message: serde_json::Value,
+}
+
+#[derive(Serialize, Clone)]
+pub struct StreamChunkPayload {
+    pub request_id: String,
+    pub delta: String,
+    pub reasoning_delta: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct StreamDonePayload {
+    pub request_id: String,
+    pub full_content: String,
+    pub reasoning_content: Option<String>,
+    pub error: Option<String>,
 }

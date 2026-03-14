@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import { listen } from "@tauri-apps/api/event";
 import { useChatStore } from "../chatStore";
 import { useSettingsStore } from "../settingsStore";
 import { useAgentStore } from "../agentStore";
@@ -135,11 +136,68 @@ describe("chatStore", () => {
     }).mockResolvedValueOnce({
       id: "ai-msg", conversation_id: "new-conv", role: "assistant", content: "AI 응답", created_at: "",
     });
-    vi.mocked(cmds.chatCompletion).mockResolvedValue({
-      content: "AI 응답",
-      reasoning_content: null,
-    });
+    vi.mocked(cmds.chatCompletionStream).mockResolvedValue(undefined);
     vi.mocked(cmds.getConversations).mockResolvedValue([]);
+
+    // Mock listen: capture callbacks, invoke done immediately
+    vi.mocked(listen).mockImplementation(async (event: string, handler: any) => {
+      if (event === "chat-stream-done") {
+        // Fire done event on next tick so stream command runs first
+        setTimeout(() => {
+          handler({
+            payload: {
+              request_id: expect.any(String),
+              full_content: "AI 응답",
+              reasoning_content: null,
+              error: null,
+            },
+          });
+        }, 0);
+        // Also match any request_id by capturing and replaying
+        const origHandler = handler;
+        vi.mocked(listen).mockImplementation(async (evt: string, h: any) => {
+          if (evt === "chat-stream-done") {
+            setTimeout(() => {
+              // Use the actual request_id from state
+              const activeRun = useChatStore.getState().activeRun;
+              origHandler({
+                payload: {
+                  request_id: activeRun?.requestId ?? "",
+                  full_content: "AI 응답",
+                  reasoning_content: null,
+                  error: null,
+                },
+              });
+            }, 0);
+          }
+          return vi.fn();
+        });
+      }
+      return vi.fn();
+    });
+
+    // Re-mock listen more simply: track handlers and fire done after stream starts
+    let chunkHandler: any = null;
+    let doneHandler: any = null;
+    vi.mocked(listen).mockImplementation(async (event: string, handler: any) => {
+      if (event === "chat-stream-chunk") chunkHandler = handler;
+      if (event === "chat-stream-done") doneHandler = handler;
+      return vi.fn();
+    });
+
+    vi.mocked(cmds.chatCompletionStream).mockImplementation(async (req) => {
+      // Simulate done event after stream command is called
+      if (doneHandler) {
+        doneHandler({
+          payload: {
+            request_id: req.request_id,
+            full_content: "AI 응답",
+            reasoning_content: null,
+            error: null,
+          },
+        });
+      }
+    });
 
     await useChatStore.getState().sendMessage();
 

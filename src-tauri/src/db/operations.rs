@@ -94,6 +94,22 @@ pub fn save_message_impl(
     Ok(msg)
 }
 
+pub fn delete_messages_from_impl(
+    db: &Database,
+    conversation_id: String,
+    message_id: String,
+) -> Result<(), DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    conn.execute(
+        "DELETE FROM messages WHERE conversation_id = ?1 AND (
+            created_at > (SELECT created_at FROM messages WHERE id = ?2)
+            OR (created_at = (SELECT created_at FROM messages WHERE id = ?2) AND id >= ?2)
+        )",
+        rusqlite::params![conversation_id, message_id],
+    )?;
+    Ok(())
+}
+
 pub fn delete_conversation_impl(
     db: &Database,
     conversation_id: String,
@@ -398,6 +414,31 @@ mod tests {
 
         let convs = get_conversations_impl(&db).unwrap();
         assert!(convs.is_empty(), "all conversations should be cascade-deleted with agent");
+    }
+
+    #[test]
+    fn test_delete_messages_from() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        // Insert messages with explicit timestamps
+        {
+            let conn = db.conn.lock().unwrap();
+            for (i, ts) in ["2024-01-01", "2024-01-02", "2024-01-03"].iter().enumerate() {
+                conn.execute(
+                    "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![format!("msg-{}", i), conv.id, "user", format!("message {}", i), ts],
+                ).unwrap();
+            }
+        }
+
+        // Delete from msg-1 (inclusive) onwards
+        delete_messages_from_impl(&db, conv.id.clone(), "msg-1".into()).unwrap();
+
+        let msgs = get_messages_impl(&db, conv.id).unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].id, "msg-0");
     }
 
     #[test]

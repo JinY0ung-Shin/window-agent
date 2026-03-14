@@ -33,6 +33,10 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   return invoke("delete_conversation", { conversationId });
 }
 
+export async function deleteMessagesFrom(conversationId: string, messageId: string): Promise<void> {
+  return invoke("delete_messages_from", { conversationId, messageId });
+}
+
 // ── Agent commands ──
 
 export async function listAgents(): Promise<Agent[]> {
@@ -157,4 +161,34 @@ export async function bootstrapCompletion(
 
 export async function listModels(): Promise<string[]> {
   return invoke("list_models");
+}
+
+// ── Abort ──
+
+export async function abortStream(requestId: string): Promise<boolean> {
+  return invoke("abort_stream", { requestId });
+}
+
+// ── Streaming API ──
+
+export async function chatCompletionStream(request: {
+  messages: { role: string; content: string }[];
+  system_prompt: string;
+  model: string;
+  temperature: number | null;
+  thinking_enabled: boolean;
+  thinking_budget: number | null;
+  request_id: string;
+}): Promise<void> {
+  return invoke("chat_completion_stream", {
+    request: {
+      messages: request.messages,
+      system_prompt: request.system_prompt,
+      model: request.model,
+      temperature: request.temperature,
+      thinking_enabled: request.thinking_enabled,
+      thinking_budget: request.thinking_budget,
+    },
+    requestId: request.request_id,
+  });
 }

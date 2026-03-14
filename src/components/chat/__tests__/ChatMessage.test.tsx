@@ -10,32 +10,32 @@ vi.mock("rehype-highlight", () => ({ default: () => {} }));
 
 describe("ChatMessage", () => {
   it("renders user message content", () => {
-    render(<ChatMessage message={{ id: "1", type: "user", content: "안녕하세요" }} />);
+    render(<ChatMessage message={{ id: "1", type: "user", content: "안녕하세요", status: "complete" }} />);
     expect(screen.getByText("안녕하세요")).toBeInTheDocument();
   });
 
   it("renders agent message content", () => {
-    render(<ChatMessage message={{ id: "2", type: "agent", content: "도와드릴게요" }} />);
+    render(<ChatMessage message={{ id: "2", type: "agent", content: "도와드릴게요", status: "complete" }} />);
     expect(screen.getByText("도와드릴게요")).toBeInTheDocument();
   });
 
-  it("shows loading dots when isLoading", () => {
+  it("shows loading dots when status is pending", () => {
     const { container } = render(
-      <ChatMessage message={{ id: "3", type: "agent", content: "...", isLoading: true }} />
+      <ChatMessage message={{ id: "3", type: "agent", content: "...", status: "pending" }} />
     );
     expect(container.querySelector(".loading-dots")).toBeInTheDocument();
     expect(screen.queryByTestId("markdown")).not.toBeInTheDocument();
   });
 
   it("does not show reasoning toggle when no reasoningContent", () => {
-    render(<ChatMessage message={{ id: "4", type: "agent", content: "test" }} />);
+    render(<ChatMessage message={{ id: "4", type: "agent", content: "test", status: "complete" }} />);
     expect(screen.queryByText("추론 과정")).not.toBeInTheDocument();
   });
 
   it("shows reasoning toggle when reasoningContent present", () => {
     render(
       <ChatMessage
-        message={{ id: "5", type: "agent", content: "result", reasoningContent: "thinking..." }}
+        message={{ id: "5", type: "agent", content: "result", reasoningContent: "thinking...", status: "complete" }}
       />
     );
     expect(screen.getByText("추론 과정")).toBeInTheDocument();
@@ -44,7 +44,7 @@ describe("ChatMessage", () => {
   it("clicking reasoning toggle shows and hides reasoning content", () => {
     render(
       <ChatMessage
-        message={{ id: "6", type: "agent", content: "result", reasoningContent: "내부 추론" }}
+        message={{ id: "6", type: "agent", content: "result", reasoningContent: "내부 추론", status: "complete" }}
       />
     );
     const toggle = screen.getByText("추론 과정");

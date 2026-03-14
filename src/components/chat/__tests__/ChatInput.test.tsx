@@ -24,13 +24,15 @@ describe("ChatInput", () => {
     expect(screen.getByRole("button")).toBeDisabled();
   });
 
-  it("send button is disabled while sending", () => {
+  it("shows cancel button while sending", () => {
     useChatStore.setState({
       inputValue: "test",
-      messages: [{ id: "1", type: "agent", content: "...", isLoading: true }],
+      messages: [{ id: "1", type: "agent", content: "...", status: "pending" as const }],
     });
     render(<ChatInput />);
-    expect(screen.getByRole("button")).toBeDisabled();
+    const btn = screen.getByRole("button");
+    expect(btn).toHaveClass("cancel");
+    expect(btn).not.toBeDisabled();
   });
 
   it("typing updates store inputValue", () => {

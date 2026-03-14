@@ -2,7 +2,7 @@ mod api;
 mod commands;
 mod db;
 
-use api::ApiState;
+use api::{ApiState, RunRegistry};
 use db::Database;
 use tauri::Manager;
 
@@ -31,6 +31,7 @@ pub fn run() {
 
             app.manage(database);
             app.manage(ApiState::load(app.handle()));
+            app.manage(RunRegistry::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -39,6 +40,7 @@ pub fn run() {
             commands::get_messages,
             commands::save_message,
             commands::delete_conversation,
+            commands::delete_messages_from,
             commands::create_agent,
             commands::get_agent,
             commands::list_agents,
@@ -54,6 +56,8 @@ pub fn run() {
             commands::has_api_key,
             commands::set_api_config,
             commands::chat_completion,
+            commands::chat_completion_stream,
+            commands::abort_stream,
             commands::bootstrap_completion,
             commands::list_models,
         ])

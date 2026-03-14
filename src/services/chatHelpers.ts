@@ -13,7 +13,7 @@ export type OpenAIMessage = {
  */
 export function buildChatMessages(messages: ChatMessage[]): OpenAIMessage[] {
   return messages
-    .filter((m) => !m.isLoading)
+    .filter((m) => m.status === "complete")
     .slice(-MAX_HISTORY_MESSAGES)
     .map((m) => ({
       role: (m.type === "user" ? "user" : "assistant") as "user" | "assistant",

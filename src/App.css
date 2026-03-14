@@ -435,6 +435,38 @@ body {
   }
 }
 
+/* Message Actions */
+.message-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.action-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
 /* Input Area */
 .input-area {
   position: absolute;
@@ -472,8 +504,10 @@ body {
   font-size: 1rem;
   font-family: inherit;
   resize: none;
-  height: 48px;
-  line-height: 24px;
+  min-height: 24px;
+  max-height: 144px;
+  overflow-y: auto;
+  line-height: 1.5;
 }
 
 .chat-input::placeholder {
@@ -503,6 +537,14 @@ body {
   background-color: #cbd5e1;
   cursor: not-allowed;
   transform: none;
+}
+
+.send-button.cancel {
+  background-color: #ef4444;
+}
+
+.send-button.cancel:hover {
+  background-color: #dc2626;
 }
 
 /* Settings Modal */

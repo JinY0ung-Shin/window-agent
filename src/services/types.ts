@@ -75,10 +75,22 @@ export interface PersonaFiles {
 }
 
 // UI model
+export type MessageStatus = "pending" | "streaming" | "complete" | "failed" | "aborted";
+
 export interface ChatMessage {
   id: string;
   type: "user" | "agent";
   content: string;
   reasoningContent?: string;
-  isLoading?: boolean;
+  status: MessageStatus;
+  requestId?: string;
+  dbMessageId?: string;
+  error?: string;
+}
+
+export interface ActiveRun {
+  requestId: string;
+  conversationId: string;
+  targetMessageId: string;
+  status: MessageStatus;
 }
