@@ -66,6 +66,10 @@ describe("chatStore", () => {
   });
 
   it("selectConversation fetches messages and maps roles", async () => {
+    vi.mocked(cmds.getConversationDetail).mockResolvedValue({
+      id: "c1", title: "Test", agent_id: "a1", created_at: "", updated_at: "",
+      summary: "test summary", summary_up_to_message_id: "m1",
+    });
     vi.mocked(cmds.getMessages).mockResolvedValue([
       { id: "m1", conversation_id: "c1", role: "user", content: "hi", created_at: "" },
       { id: "m2", conversation_id: "c1", role: "assistant", content: "hello", created_at: "" },
@@ -77,6 +81,8 @@ describe("chatStore", () => {
     expect(s.messages).toHaveLength(2);
     expect(s.messages[0].type).toBe("user");
     expect(s.messages[1].type).toBe("agent");
+    expect(s.currentSummary).toBe("test summary");
+    expect(s.summaryUpToMessageId).toBe("m1");
   });
 
   it("createNewConversation resets state", () => {

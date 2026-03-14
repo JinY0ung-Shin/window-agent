@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   Conversation,
+  ConversationDetail,
   DbMessage,
   SaveMessageRequest,
   Agent,
@@ -35,6 +36,30 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 
 export async function deleteMessagesFrom(conversationId: string, messageId: string): Promise<void> {
   return invoke("delete_messages_from", { conversationId, messageId });
+}
+
+export async function getConversationDetail(id: string): Promise<ConversationDetail> {
+  return invoke("get_conversation_detail", { id });
+}
+
+export async function updateConversationTitle(id: string, title: string, expectedCurrent?: string | null): Promise<number> {
+  return invoke("update_conversation_title", { id, title, expectedCurrent: expectedCurrent ?? null });
+}
+
+export async function updateConversationSummary(
+  id: string,
+  summary: string,
+  upToMessageId: string,
+  expectedPrevious: string | null,
+): Promise<number> {
+  return invoke("update_conversation_summary", { id, summary, upToMessageId, expectedPrevious });
+}
+
+export async function deleteMessagesAndMaybeResetSummary(
+  conversationId: string,
+  messageId: string,
+): Promise<{ summary_was_reset: boolean }> {
+  return invoke("delete_messages_and_maybe_reset_summary", { conversationId, messageId });
 }
 
 // ── Agent commands ──

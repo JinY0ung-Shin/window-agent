@@ -74,6 +74,14 @@ fn all_migrations() -> &'static [Migration] {
                 CREATE INDEX IF NOT EXISTS idx_conversations_agent_id ON conversations(agent_id);
             ",
         },
+        Migration {
+            version: 3,
+            description: "Add summary columns to conversations",
+            sql: "
+                ALTER TABLE conversations ADD COLUMN summary TEXT;
+                ALTER TABLE conversations ADD COLUMN summary_up_to_message_id TEXT REFERENCES messages(id) ON DELETE SET NULL;
+            ",
+        },
     ]
 }
 
@@ -153,7 +161,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
     }
 
     #[test]
@@ -162,7 +170,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 2);
+        assert_eq!(version, 3);
 
         let desc: String = conn
             .query_row(
@@ -236,5 +244,95 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM conversations", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_v3_migration_upgrade_preserves_data() {
+        let conn = setup_conn();
+
+        // Run v1 + v2 first
+        ensure_migrations_table(&conn).unwrap();
+        for m in &all_migrations()[..2] {
+            let tx = conn.unchecked_transaction().unwrap();
+            tx.execute_batch(m.sql).unwrap();
+            tx.execute(
+                "INSERT INTO _migrations (version, description) VALUES (?1, ?2)",
+                rusqlite::params![m.version, m.description],
+            ).unwrap();
+            tx.commit().unwrap();
+        }
+
+        // Insert test data at v2 level
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, description, created_at, updated_at) VALUES ('a1', 'test', 'Test', '', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES ('c1', 'My Chat', 'a1', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES ('m1', 'c1', 'user', 'hello', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        // Run v3 migration
+        run_migrations(&conn).unwrap();
+        assert_eq!(current_version(&conn).unwrap(), 3);
+
+        // Verify existing data is preserved
+        let title: String = conn
+            .query_row("SELECT title FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(title, "My Chat");
+
+        let content: String = conn
+            .query_row("SELECT content FROM messages WHERE id = 'm1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(content, "hello");
+
+        // Verify new columns exist and are NULL by default
+        let summary: Option<String> = conn
+            .query_row("SELECT summary FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert!(summary.is_none());
+
+        let summary_msg_id: Option<String> = conn
+            .query_row("SELECT summary_up_to_message_id FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert!(summary_msg_id.is_none());
+    }
+
+    #[test]
+    fn test_v3_summary_up_to_message_id_fk() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, description, created_at, updated_at) VALUES ('a1', 'test', 'Test', '', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES ('c1', 'Chat', 'a1', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES ('m1', 'c1', 'user', 'hello', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        // Can set summary_up_to_message_id to a valid message id
+        conn.execute(
+            "UPDATE conversations SET summary = 'test summary', summary_up_to_message_id = 'm1' WHERE id = 'c1'",
+            [],
+        ).unwrap();
+
+        // Delete the message — summary_up_to_message_id should become NULL (ON DELETE SET NULL)
+        conn.execute("DELETE FROM messages WHERE id = 'm1'", []).unwrap();
+
+        let summary_msg_id: Option<String> = conn
+            .query_row("SELECT summary_up_to_message_id FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert!(summary_msg_id.is_none(), "ON DELETE SET NULL should clear summary_up_to_message_id");
     }
 }

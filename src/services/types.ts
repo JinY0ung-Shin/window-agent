@@ -3,13 +3,21 @@ export type MessageRole = "user" | "assistant" | "system";
 export type SaveMessageRole = "user" | "assistant";
 
 // DB models (match Rust structs)
-export interface Conversation {
+export interface ConversationListItem {
   id: string;
   title: string;
   agent_id: string;
   created_at: string;
   updated_at: string;
 }
+
+export interface ConversationDetail extends ConversationListItem {
+  summary?: string;
+  summary_up_to_message_id?: string;
+}
+
+// Backward-compatible alias
+export type Conversation = ConversationListItem;
 
 export interface DbMessage {
   id: string;

@@ -1,17 +1,28 @@
 use super::error::DbError;
-use super::models::{Conversation, Message, SaveMessageRequest};
+use super::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, Message, SaveMessageRequest};
 use super::Database;
 use chrono::Utc;
 use uuid::Uuid;
+
+pub fn with_transaction<F, T>(db: &Database, f: F) -> Result<T, DbError>
+where
+    F: FnOnce(&rusqlite::Transaction) -> Result<T, rusqlite::Error>,
+{
+    let mut conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    let tx = conn.transaction()?;
+    let result = f(&tx)?;
+    tx.commit()?;
+    Ok(result)
+}
 
 pub fn create_conversation_impl(
     db: &Database,
     title: Option<String>,
     agent_id: String,
-) -> Result<Conversation, DbError> {
+) -> Result<ConversationListItem, DbError> {
     let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let now = Utc::now().to_rfc3339();
-    let conv = Conversation {
+    let conv = ConversationListItem {
         id: Uuid::new_v4().to_string(),
         title: title.unwrap_or_else(|| "새 대화".to_string()),
         agent_id: agent_id.clone(),
@@ -27,13 +38,13 @@ pub fn create_conversation_impl(
     Ok(conv)
 }
 
-pub fn get_conversations_impl(db: &Database) -> Result<Vec<Conversation>, DbError> {
+pub fn get_conversations_impl(db: &Database) -> Result<Vec<ConversationListItem>, DbError> {
     let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let mut stmt = conn
         .prepare("SELECT id, title, agent_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
 
     let rows = stmt.query_map([], |row| {
-        Ok(Conversation {
+        Ok(ConversationListItem {
             id: row.get(0)?,
             title: row.get(1)?,
             agent_id: row.get(2)?,
@@ -45,13 +56,36 @@ pub fn get_conversations_impl(db: &Database) -> Result<Vec<Conversation>, DbErro
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
+pub fn get_conversation_detail_impl(
+    db: &Database,
+    id: String,
+) -> Result<ConversationDetail, DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    let detail = conn.query_row(
+        "SELECT id, title, agent_id, summary, summary_up_to_message_id, created_at, updated_at FROM conversations WHERE id = ?1",
+        rusqlite::params![id],
+        |row| {
+            Ok(ConversationDetail {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                agent_id: row.get(2)?,
+                summary: row.get(3)?,
+                summary_up_to_message_id: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
+            })
+        },
+    )?;
+    Ok(detail)
+}
+
 pub fn get_messages_impl(
     db: &Database,
     conversation_id: String,
 ) -> Result<Vec<Message>, DbError> {
     let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let mut stmt = conn.prepare(
-        "SELECT id, conversation_id, role, content, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC",
+        "SELECT id, conversation_id, role, content, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
     )?;
 
     let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
@@ -120,6 +154,100 @@ pub fn delete_conversation_impl(
         rusqlite::params![conversation_id],
     )?;
     Ok(())
+}
+
+pub fn update_conversation_title_impl(
+    db: &Database,
+    id: String,
+    title: String,
+    expected_current: Option<String>,
+) -> Result<i32, DbError> {
+    let trimmed = title.trim();
+    let clamped: String = trimmed.chars().take(50).collect();
+    let final_title = if clamped.is_empty() { "새 대화".to_string() } else { clamped };
+
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    let affected = if let Some(expected) = expected_current {
+        // Only update if title still matches expected (guard against overwrite)
+        conn.execute(
+            "UPDATE conversations SET title = ?1 WHERE id = ?2 AND title = ?3",
+            rusqlite::params![final_title, id, expected],
+        )?
+    } else {
+        conn.execute(
+            "UPDATE conversations SET title = ?1 WHERE id = ?2",
+            rusqlite::params![final_title, id],
+        )?
+    };
+    Ok(affected as i32)
+}
+
+pub fn update_conversation_summary_impl(
+    db: &Database,
+    id: String,
+    summary: Option<String>,
+    up_to_message_id: Option<String>,
+    expected_previous: Option<String>,
+) -> Result<i32, DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    let affected = conn.execute(
+        "UPDATE conversations SET summary = ?1, summary_up_to_message_id = ?2 WHERE id = ?3 AND ((?4 IS NULL AND summary_up_to_message_id IS NULL) OR summary_up_to_message_id = ?4)",
+        rusqlite::params![summary, up_to_message_id, id, expected_previous],
+    )?;
+    Ok(affected as i32)
+}
+
+pub fn delete_messages_and_maybe_reset_summary_impl(
+    db: &Database,
+    conversation_id: String,
+    message_id: String,
+) -> Result<DeleteMessagesResult, DbError> {
+    with_transaction(db, |tx| {
+        // Check if summary_up_to_message_id falls in the deletion range
+        let summary_was_reset: bool = {
+            let maybe_summary_msg: Option<String> = tx.query_row(
+                "SELECT summary_up_to_message_id FROM conversations WHERE id = ?1",
+                rusqlite::params![conversation_id],
+                |row| row.get(0),
+            )?;
+
+            if let Some(ref summary_msg_id) = maybe_summary_msg {
+                // Check if this message id is in the deletion range
+                let in_range: bool = tx.query_row(
+                    "SELECT EXISTS(
+                        SELECT 1 FROM messages WHERE id = ?1 AND conversation_id = ?2 AND (
+                            created_at > (SELECT created_at FROM messages WHERE id = ?3)
+                            OR (created_at = (SELECT created_at FROM messages WHERE id = ?3) AND id >= ?3)
+                        )
+                    )",
+                    rusqlite::params![summary_msg_id, conversation_id, message_id],
+                    |row| row.get(0),
+                )?;
+                in_range
+            } else {
+                false
+            }
+        };
+
+        // Delete messages (same logic as delete_messages_from_impl)
+        tx.execute(
+            "DELETE FROM messages WHERE conversation_id = ?1 AND (
+                created_at > (SELECT created_at FROM messages WHERE id = ?2)
+                OR (created_at = (SELECT created_at FROM messages WHERE id = ?2) AND id >= ?2)
+            )",
+            rusqlite::params![conversation_id, message_id],
+        )?;
+
+        // Reset summary if needed
+        if summary_was_reset {
+            tx.execute(
+                "UPDATE conversations SET summary = NULL, summary_up_to_message_id = NULL WHERE id = ?1",
+                rusqlite::params![conversation_id],
+            )?;
+        }
+
+        Ok(DeleteMessagesResult { summary_was_reset })
+    })
 }
 
 #[cfg(test)]
@@ -453,5 +581,222 @@ mod tests {
             },
         );
         assert!(result.is_err(), "FK constraint should reject nonexistent conversation_id");
+    }
+
+    #[test]
+    fn test_get_conversation_detail() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, Some("Detail Test".into()), agent.id).unwrap();
+
+        let detail = get_conversation_detail_impl(&db, conv.id.clone()).unwrap();
+        assert_eq!(detail.id, conv.id);
+        assert_eq!(detail.title, "Detail Test");
+        assert!(detail.summary.is_none());
+        assert!(detail.summary_up_to_message_id.is_none());
+    }
+
+    #[test]
+    fn test_get_conversation_detail_with_summary() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, Some("Sum Test".into()), agent.id).unwrap();
+
+        // Insert a message and set summary
+        let msg = save_message_impl(&db, SaveMessageRequest {
+            conversation_id: conv.id.clone(),
+            role: "user".into(),
+            content: "hello".into(),
+        }).unwrap();
+
+        let affected = update_conversation_summary_impl(
+            &db, conv.id.clone(),
+            Some("summary text".into()),
+            Some(msg.id.clone()),
+            None, // expected_previous is NULL
+        ).unwrap();
+        assert_eq!(affected, 1);
+
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert_eq!(detail.summary.as_deref(), Some("summary text"));
+        assert_eq!(detail.summary_up_to_message_id.as_deref(), Some(msg.id.as_str()));
+    }
+
+    #[test]
+    fn test_update_conversation_title_basic() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        update_conversation_title_impl(&db, conv.id.clone(), "New Title".into(), None).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert_eq!(detail.title, "New Title");
+    }
+
+    #[test]
+    fn test_update_conversation_title_trim_and_clamp() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        // Whitespace trim
+        update_conversation_title_impl(&db, conv.id.clone(), "  trimmed  ".into(), None).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id.clone()).unwrap();
+        assert_eq!(detail.title, "trimmed");
+
+        // 50 char clamp
+        let long_title = "a".repeat(60);
+        update_conversation_title_impl(&db, conv.id.clone(), long_title, None).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id.clone()).unwrap();
+        assert_eq!(detail.title.len(), 50);
+
+        // Empty fallback
+        update_conversation_title_impl(&db, conv.id.clone(), "   ".into(), None).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert_eq!(detail.title, "새 대화");
+    }
+
+    #[test]
+    fn test_update_conversation_title_does_not_change_updated_at() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+        let original_updated_at = conv.updated_at.clone();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        update_conversation_title_impl(&db, conv.id.clone(), "Changed".into(), None).unwrap();
+
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert_eq!(detail.updated_at, original_updated_at);
+    }
+
+    #[test]
+    fn test_update_conversation_summary_optimistic_concurrency() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+        let msg = save_message_impl(&db, SaveMessageRequest {
+            conversation_id: conv.id.clone(),
+            role: "user".into(),
+            content: "hello".into(),
+        }).unwrap();
+
+        // First update: expected_previous is None (NULL)
+        let affected = update_conversation_summary_impl(
+            &db, conv.id.clone(),
+            Some("summary v1".into()),
+            Some(msg.id.clone()),
+            None,
+        ).unwrap();
+        assert_eq!(affected, 1);
+
+        // Second update with wrong expected_previous — should fail (0 rows)
+        let affected = update_conversation_summary_impl(
+            &db, conv.id.clone(),
+            Some("summary v2".into()),
+            Some(msg.id.clone()),
+            Some("wrong-msg-id".into()),
+        ).unwrap();
+        assert_eq!(affected, 0);
+
+        // Correct expected_previous
+        let affected = update_conversation_summary_impl(
+            &db, conv.id.clone(),
+            Some("summary v2".into()),
+            Some(msg.id.clone()),
+            Some(msg.id.clone()),
+        ).unwrap();
+        assert_eq!(affected, 1);
+    }
+
+    #[test]
+    fn test_delete_messages_and_maybe_reset_summary_no_reset() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        // Insert 3 messages
+        {
+            let conn = db.conn.lock().unwrap();
+            for (i, ts) in ["2024-01-01", "2024-01-02", "2024-01-03"].iter().enumerate() {
+                conn.execute(
+                    "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![format!("msg-{}", i), conv.id, "user", format!("message {}", i), ts],
+                ).unwrap();
+            }
+            // Set summary to msg-0 (before deletion range)
+            conn.execute(
+                "UPDATE conversations SET summary = 'old summary', summary_up_to_message_id = 'msg-0' WHERE id = ?1",
+                rusqlite::params![conv.id],
+            ).unwrap();
+        }
+
+        // Delete from msg-2 onwards — msg-0 is not in range
+        let result = delete_messages_and_maybe_reset_summary_impl(&db, conv.id.clone(), "msg-2".into()).unwrap();
+        assert!(!result.summary_was_reset);
+
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert_eq!(detail.summary.as_deref(), Some("old summary"));
+    }
+
+    #[test]
+    fn test_delete_messages_and_maybe_reset_summary_with_reset() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        // Insert 3 messages
+        {
+            let conn = db.conn.lock().unwrap();
+            for (i, ts) in ["2024-01-01", "2024-01-02", "2024-01-03"].iter().enumerate() {
+                conn.execute(
+                    "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![format!("msg-{}", i), conv.id, "user", format!("message {}", i), ts],
+                ).unwrap();
+            }
+            // Set summary to msg-2 (within deletion range)
+            conn.execute(
+                "UPDATE conversations SET summary = 'old summary', summary_up_to_message_id = 'msg-2' WHERE id = ?1",
+                rusqlite::params![conv.id],
+            ).unwrap();
+        }
+
+        // Delete from msg-1 onwards — msg-2 is in range
+        let result = delete_messages_and_maybe_reset_summary_impl(&db, conv.id.clone(), "msg-1".into()).unwrap();
+        assert!(result.summary_was_reset);
+
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert!(detail.summary.is_none());
+        assert!(detail.summary_up_to_message_id.is_none());
+
+        // Verify only msg-0 remains
+        let msgs = get_messages_impl(&db, detail.id).unwrap();
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0].id, "msg-0");
+    }
+
+    #[test]
+    fn test_messages_stable_order_same_timestamp() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        // Insert messages with same timestamp but different ids
+        {
+            let conn = db.conn.lock().unwrap();
+            for id in ["msg-c", "msg-a", "msg-b"] {
+                conn.execute(
+                    "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![id, conv.id, "user", format!("content-{}", id), "2024-01-01"],
+                ).unwrap();
+            }
+        }
+
+        let msgs = get_messages_impl(&db, conv.id).unwrap();
+        assert_eq!(msgs.len(), 3);
+        // Should be sorted by id ASC as tiebreaker
+        assert_eq!(msgs[0].id, "msg-a");
+        assert_eq!(msgs[1].id, "msg-b");
+        assert_eq!(msgs[2].id, "msg-c");
     }
 }

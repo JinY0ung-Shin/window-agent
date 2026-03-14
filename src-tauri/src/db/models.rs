@@ -53,12 +53,28 @@ pub struct UpdateAgentRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Conversation {
+pub struct ConversationListItem {
     pub id: String,
     pub title: String,
     pub agent_id: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConversationDetail {
+    pub id: String,
+    pub title: String,
+    pub agent_id: String,
+    pub summary: Option<String>,
+    pub summary_up_to_message_id: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeleteMessagesResult {
+    pub summary_was_reset: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

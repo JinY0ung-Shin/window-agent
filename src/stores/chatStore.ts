@@ -4,7 +4,8 @@ import type { Conversation, ChatMessage, ActiveRun } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
-import { buildChatMessages } from "../services/chatHelpers";
+import { buildChatMessages, buildConversationContext } from "../services/chatHelpers";
+import { estimateTokens, estimateMessageTokens } from "../services/tokenEstimator";
 import {
   readPersonaFiles,
   assembleSystemPrompt,
@@ -24,6 +25,9 @@ import {
   DEFAULT_AGENT_NAME,
   LOADING_MESSAGE,
   NO_RESPONSE_MESSAGE,
+  MAX_CONTEXT_TOKENS,
+  TITLE_GENERATION_PROMPT,
+  SUMMARY_GENERATION_PROMPT,
   parseErrorMessage,
 } from "../constants";
 
@@ -73,6 +77,11 @@ interface ChatState {
   inputValue: string;
   activeRun: ActiveRun | null;
 
+  // Summary
+  currentSummary: string | null;
+  summaryUpToMessageId: string | null;
+  summaryJobId: string | null;
+
   // Bootstrap mode
   isBootstrapping: boolean;
   bootstrapFolderName: string | null;
@@ -99,6 +108,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   inputValue: "",
   activeRun: null,
+  currentSummary: null,
+  summaryUpToMessageId: null,
+  summaryJobId: null,
   ...BOOTSTRAP_RESET,
 
   setInputValue: (v) => set({ inputValue: v }),
@@ -120,7 +132,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Delete from DB first — if this fails, UI stays intact (fix: UI/DB consistency)
     if (targetMsg.dbMessageId) {
-      await cmds.deleteMessagesFrom(currentConversationId, targetMsg.dbMessageId);
+      const result = await cmds.deleteMessagesAndMaybeResetSummary(currentConversationId, targetMsg.dbMessageId);
+      if (result.summary_was_reset) {
+        set({ currentSummary: null, summaryUpToMessageId: null });
+      }
     }
 
     // DB succeeded — now update UI
@@ -145,7 +160,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   selectConversation: async (id) => {
-    const dbMessages = await cmds.getMessages(id);
+    set({ currentConversationId: id, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...BOOTSTRAP_RESET });
+    const [detail, dbMessages] = await Promise.all([
+      cmds.getConversationDetail(id),
+      cmds.getMessages(id),
+    ]);
+    if (get().currentConversationId !== id) return; // stale guard
     const messages: ChatMessage[] = dbMessages.map((m) => ({
       id: m.id,
       dbMessageId: m.id,
@@ -153,16 +173,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       content: m.content,
       status: "complete" as const,
     }));
-    set({ currentConversationId: id, messages, activeRun: null, ...BOOTSTRAP_RESET });
+    set({ messages, currentSummary: detail.summary ?? null, summaryUpToMessageId: detail.summary_up_to_message_id ?? null });
   },
 
   createNewConversation: () => {
-    set({ currentConversationId: null, messages: [], activeRun: null, ...BOOTSTRAP_RESET });
+    set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...BOOTSTRAP_RESET });
     useAgentStore.getState().selectAgent(null);
   },
 
   prepareForAgent: (agentId: string) => {
-    set({ currentConversationId: null, messages: [], activeRun: null, ...BOOTSTRAP_RESET });
+    set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...BOOTSTRAP_RESET });
     useAgentStore.getState().selectAgent(agentId);
   },
 
@@ -170,7 +190,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await cmds.deleteConversation(id);
     const { currentConversationId } = get();
     if (currentConversationId === id) {
-      set({ currentConversationId: null, messages: [] });
+      set({ currentConversationId: null, messages: [], currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
       useAgentStore.getState().selectAgent(null);
     }
     await get().loadConversations();
@@ -197,11 +217,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       currentConversationId: null,
       messages: [],
       inputValue: "",
+      currentSummary: null,
+      summaryUpToMessageId: null,
+      summaryJobId: null,
     });
   },
 
   cancelBootstrap: () => {
-    set({ ...BOOTSTRAP_RESET, messages: [] });
+    set({ ...BOOTSTRAP_RESET, messages: [], currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
     useAgentStore.getState().selectAgent(null);
   },
 
@@ -256,15 +279,16 @@ async function sendNormalMessage(
 
   // Auto-create conversation
   let convId = currentConversationId;
+  let initialTitle: string | null = null; // Track for title-write guard
   if (!convId) {
     if (!agentId) {
       console.error("No agent selected for new conversation");
       return;
     }
-    const title =
+    initialTitle =
       inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) ||
       DEFAULT_CONVERSATION_TITLE;
-    const conv = await cmds.createConversation(agentId, title);
+    const conv = await cmds.createConversation(agentId, initialTitle);
     convId = conv.id;
     set({ currentConversationId: convId });
   }
@@ -299,12 +323,12 @@ async function sendNormalMessage(
   });
 
   try {
-    // Build system prompt
-    let systemPrompt = DEFAULT_SYSTEM_PROMPT;
+    // Build base system prompt
+    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
     if (agent) {
       try {
         const files = await readPersonaFiles(agent.folder_name);
-        systemPrompt = agent.is_default
+        baseSystemPrompt = agent.is_default
           ? assembleManagerPrompt(files, agentStore.agents)
           : assembleSystemPrompt(files);
       } catch {
@@ -321,8 +345,12 @@ async function sendNormalMessage(
           thinkingBudget: settings.thinkingBudget,
         };
 
-    // Build messages for API (excluding pending message, system prompt handled by backend)
-    const chatMessages = buildChatMessages(get().messages);
+    // Build conversation context (shared path)
+    const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
+      messages: get().messages,
+      summary: get().currentSummary,
+      baseSystemPrompt,
+    });
 
     // rAF-based chunk coalescing
     let pendingDelta = "";
@@ -425,6 +453,17 @@ async function sendNormalMessage(
           }),
           activeRun: null,
         });
+
+        // Auto-generate title on first assistant message
+        const completedAgentMsgs = get().messages.filter((m) => m.type === "agent" && m.status === "complete");
+        if (completedAgentMsgs.length === 1) {
+          // Use captured initialTitle for new convs, or look up existing title
+          const expectedTitle = initialTitle ?? get().conversations.find((c) => c.id === convId)?.title ?? null;
+          generateTitle(convId, inputValue, replyContent, expectedTitle, get, set);
+        }
+
+        // Background summary generation (pass actual system prompt for accurate budget)
+        maybeGenerateSummary(convId, baseSystemPrompt, get, set);
       }
     } finally {
       unlistenChunk();
@@ -480,12 +519,12 @@ async function regenerateStream(
   });
 
   try {
-    // Build system prompt
-    let systemPrompt = DEFAULT_SYSTEM_PROMPT;
+    // Build base system prompt
+    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
     if (agent) {
       try {
         const files = await readPersonaFiles(agent.folder_name);
-        systemPrompt = agent.is_default
+        baseSystemPrompt = agent.is_default
           ? assembleManagerPrompt(files, agentStore.agents)
           : assembleSystemPrompt(files);
       } catch {
@@ -502,7 +541,12 @@ async function regenerateStream(
           thinkingBudget: settings.thinkingBudget,
         };
 
-    const chatMessages = buildChatMessages(get().messages);
+    // Build conversation context (shared path)
+    const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
+      messages: get().messages,
+      summary: get().currentSummary,
+      baseSystemPrompt,
+    });
 
     // rAF-based chunk coalescing
     let pendingDelta = "";
@@ -601,6 +645,16 @@ async function regenerateStream(
           }),
           activeRun: null,
         });
+
+        // Auto-generate title on first assistant message
+        const completedAgentMsgs = get().messages.filter((m) => m.type === "agent" && m.status === "complete");
+        if (completedAgentMsgs.length === 1) {
+          const currentTitle = get().conversations.find((c) => c.id === convId)?.title;
+          generateTitle(convId, lastUserContent, replyContent, currentTitle ?? null, get, set);
+        }
+
+        // Background summary generation (pass actual system prompt for accurate budget)
+        maybeGenerateSummary(convId, baseSystemPrompt, get, set);
       }
     } finally {
       unlistenChunk();
@@ -714,7 +768,7 @@ async function completeBootstrap(
       name: agentName,
     });
 
-    set({ ...BOOTSTRAP_RESET, messages: [] });
+    set({ ...BOOTSTRAP_RESET, messages: [], currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
 
     const agentStore = useAgentStore.getState();
     await agentStore.loadAgents();
@@ -728,5 +782,119 @@ async function completeBootstrap(
       status: "failed",
     };
     set({ messages: [...get().messages, errorMsg] });
+  }
+}
+
+// ── Title generation (fire-and-forget) ──────────────
+
+async function generateTitle(
+  convId: string,
+  userMsg: string,
+  assistantMsg: string,
+  expectedCurrentTitle: string | null,
+  get: () => ChatState,
+  set: (partial: Partial<ChatState>) => void,
+) {
+  try {
+    const settings = useSettingsStore.getState();
+    const resp = await cmds.chatCompletion({
+      messages: [
+        { role: "system", content: TITLE_GENERATION_PROMPT },
+        { role: "user", content: `User: ${userMsg}\nAssistant: ${assistantMsg}` },
+      ],
+      system_prompt: "",
+      model: settings.modelName,
+      thinking_enabled: false,
+      thinking_budget: null,
+    });
+    const title = resp.content.trim().replace(/^["']|["']$/g, "").slice(0, 50) || DEFAULT_CONVERSATION_TITLE;
+    // Title-write guard: only overwrite if title is still the original truncated value
+    await cmds.updateConversationTitle(convId, title, expectedCurrentTitle);
+    await get().loadConversations();
+  } catch {
+    // Silently ignore — title is non-critical
+  }
+}
+
+// ── Summary generation (fire-and-forget) ──────────────
+
+async function maybeGenerateSummary(
+  convId: string,
+  baseSystemPrompt: string,
+  get: () => ChatState,
+  set: (partial: Partial<ChatState>) => void,
+) {
+  const allMessages = get().messages.filter((m) => m.status === "complete");
+  const totalTokens = allMessages.reduce(
+    (sum, m) => sum + estimateMessageTokens({ role: m.type === "user" ? "user" : "assistant", content: m.content }), 0,
+  );
+
+  // Use actual assembled system prompt for budget calculation (fix: dynamic reserve)
+  const systemTokens = estimateTokens(get().currentSummary
+    ? `${baseSystemPrompt}\n\n[이전 대화 요약]\n${get().currentSummary}\n\n[최근 대화는 아래에 이어집니다]`
+    : baseSystemPrompt);
+  const budget = MAX_CONTEXT_TOKENS - systemTokens;
+  if (totalTokens < budget * 0.8) return;
+
+  // Determine which messages would be dropped by token-based selection
+  const selected = buildChatMessages(allMessages, systemTokens, 0);
+  const selectedCount = selected.length;
+  const excluded = allMessages.slice(0, allMessages.length - selectedCount);
+  if (excluded.length === 0) return;
+
+  // Delta-only: skip messages already covered by existing summary (fix: avoid re-summarizing)
+  const currentUpToId = get().summaryUpToMessageId;
+  let deltaStart = 0;
+  if (currentUpToId) {
+    const checkpointIdx = excluded.findIndex((m) => m.dbMessageId === currentUpToId);
+    if (checkpointIdx >= 0) {
+      deltaStart = checkpointIdx + 1; // start after the checkpoint
+    }
+  }
+  const newExcluded = excluded.slice(deltaStart);
+  if (newExcluded.length === 0) return; // no new messages to summarize
+
+  // Version guard
+  const jobId = `summary-${Date.now()}`;
+  const expectedPrevious = get().summaryUpToMessageId;
+  set({ summaryJobId: jobId });
+
+  const existingSummary = get().currentSummary || "";
+  const toSummarize = newExcluded
+    .map((m) => `${m.type === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n");
+
+  try {
+    const settings = useSettingsStore.getState();
+    const resp = await cmds.chatCompletion({
+      messages: [
+        { role: "system", content: SUMMARY_GENERATION_PROMPT },
+        { role: "user", content: `이전 요약:\n${existingSummary}\n\n새 메시지:\n${toSummarize}` },
+      ],
+      system_prompt: "",
+      model: settings.modelName,
+      thinking_enabled: false,
+      thinking_budget: null,
+    });
+
+    // Stale guards
+    if (get().summaryJobId !== jobId) return;
+    if (get().currentConversationId !== convId) return;
+
+    const newSummary = resp.content.trim();
+    const lastExcludedMsg = excluded[excluded.length - 1];
+    const newUpToId = lastExcludedMsg.dbMessageId;
+    if (!newUpToId) return;
+
+    // Optimistic concurrency: backend saves only if expected matches
+    const affected = await cmds.updateConversationSummary(
+      convId, newSummary, newUpToId, expectedPrevious ?? null,
+    );
+
+    if (affected > 0) {
+      set({ currentSummary: newSummary, summaryUpToMessageId: newUpToId });
+    }
+  } catch {
+    // Silently ignore — retry on next turn
   }
 }
