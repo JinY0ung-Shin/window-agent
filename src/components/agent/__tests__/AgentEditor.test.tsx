@@ -41,7 +41,7 @@ describe("AgentEditor", () => {
   it("renders modal when isEditorOpen=true", () => {
     openNewEditor();
     render(<AgentEditor />);
-    expect(screen.getByText("새 에이전트")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("새 에이전트");
   });
 
   it("shows '새 에이전트' title for new agent (editingAgentId=null)", () => {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, Trash2, Plus, AlertTriangle, Pencil, Check } from "lucide-react";
+import { X, Trash2, Plus, AlertTriangle, Pencil, Check, Bot } from "lucide-react";
 import { useAgentStore, type PersonaTab } from "../../stores/agentStore";
 import { listModels, listSkills, createSkill, readSkill, updateSkill, deleteSkill } from "../../services/tauriCommands";
 import type { SkillMetadata } from "../../services/types";
@@ -31,6 +31,7 @@ export default function AgentEditor() {
   const updatePersonaFile = useAgentStore((s) => s.updatePersonaFile);
   const saveAgent = useAgentStore((s) => s.saveAgent);
   const deleteAgent = useAgentStore((s) => s.deleteAgent);
+  const openEditor = useAgentStore((s) => s.openEditor);
   const editorError = useAgentStore((s) => s.editorError);
 
   const editingAgent = editingAgentId
@@ -193,6 +194,31 @@ export default function AgentEditor() {
           <h2>{editingAgentId ? "에이전트 편집" : "새 에이전트"}</h2>
           <button className="close-button" onClick={closeEditor}>
             <X size={20} />
+          </button>
+        </div>
+
+        {/* Agent list strip */}
+        <div className="agent-list-strip">
+          {agents.map((agent) => (
+            <button
+              key={agent.id}
+              className={`agent-list-item ${agent.id === editingAgentId ? "active" : ""}`}
+              onClick={() => openEditor(agent.id)}
+            >
+              {agent.avatar ? (
+                <img src={agent.avatar} alt="" className="agent-list-avatar" />
+              ) : (
+                <span className="agent-list-icon"><Bot size={14} /></span>
+              )}
+              <span className="agent-list-name">{agent.name}</span>
+            </button>
+          ))}
+          <button
+            className={`agent-list-item ${!editingAgentId ? "active" : ""}`}
+            onClick={() => openEditor(null)}
+          >
+            <span className="agent-list-icon"><Plus size={14} /></span>
+            <span className="agent-list-name">새 에이전트</span>
           </button>
         </div>
 

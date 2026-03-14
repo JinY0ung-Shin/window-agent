@@ -179,6 +179,35 @@ body {
   flex: 1;
 }
 
+.header-agent-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-color);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.header-agent-btn:hover {
+  background-color: #eef2ff;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.header-agent-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .bootstrap-cancel-btn {
   background: none;
   border: none;
@@ -1873,7 +1902,7 @@ body {
 .agent-editor-modal {
   background-color: var(--surface);
   width: 100%;
-  max-width: 860px;
+  max-width: 900px;
   max-height: 85vh;
   border-radius: 24px;
   padding: 32px;
@@ -1882,6 +1911,74 @@ body {
   animation: scaleIn 0.2s ease-out;
   display: flex;
   flex-direction: column;
+}
+
+/* Agent list strip */
+.agent-list-strip {
+  display: flex;
+  gap: 4px;
+  padding: 0 0 16px 0;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.agent-list-strip::-webkit-scrollbar {
+  height: 3px;
+}
+
+.agent-list-strip::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+.agent-list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: none;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.agent-list-item:hover {
+  border-color: var(--primary);
+  color: var(--text-main);
+}
+
+.agent-list-item.active {
+  background-color: #eef2ff;
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.agent-list-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.agent-list-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.agent-list-name {
+  line-height: 1;
 }
 
 .agent-editor-body {

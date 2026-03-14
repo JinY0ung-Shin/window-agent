@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Bot, MessageSquare, Plus, Settings, Trash2 } from "lucide-react";
+import { Bot, MessageSquare, Plus, Settings, Trash2, Users } from "lucide-react";
 import { useChatStore } from "../../stores/chatStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -13,11 +13,20 @@ export default function Sidebar() {
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const setIsSettingsOpen = useSettingsStore((s) => s.setIsSettingsOpen);
   const agents = useAgentStore((s) => s.agents);
+  const openEditor = useAgentStore((s) => s.openEditor);
+  const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
 
   const agentMap = useMemo(
     () => new Map(agents.map((a) => [a.id, a])),
     [agents],
   );
+
+  const handleOpenAgentEditor = () => {
+    // Open current conversation's agent, or selected agent, or default agent
+    const conv = conversations.find((c) => c.id === currentConversationId);
+    const agentId = conv?.agent_id ?? selectedAgentId ?? agents.find((a) => a.is_default)?.id ?? null;
+    openEditor(agentId);
+  };
 
   return (
     <aside className="sidebar">
@@ -75,6 +84,13 @@ export default function Sidebar() {
           })}
         </div>
 
+        <div
+          className="menu-item"
+          onClick={handleOpenAgentEditor}
+        >
+          <Users size={20} />
+          <span>에이전트 관리</span>
+        </div>
         <div
           className="menu-item settings-btn"
           onClick={() => setIsSettingsOpen(true)}

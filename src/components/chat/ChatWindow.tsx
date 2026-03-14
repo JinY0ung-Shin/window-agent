@@ -17,6 +17,7 @@ export default function ChatWindow() {
   const cancelBootstrap = useChatStore((s) => s.cancelBootstrap);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
+  const openEditor = useAgentStore((s) => s.openEditor);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -51,10 +52,34 @@ export default function ChatWindow() {
     !selectedAgentId &&
     !isBootstrapping;
 
+  // Resolve the agent for the current context (conversation or selected)
+  const currentAgentId = (() => {
+    if (currentConversationId) {
+      const conv = conversations.find((c) => c.id === currentConversationId);
+      return conv?.agent_id ?? null;
+    }
+    return selectedAgentId;
+  })();
+  const currentAgent = currentAgentId
+    ? agents.find((a) => a.id === currentAgentId) ?? null
+    : null;
+
   return (
     <main className="main-area">
       <header className="chat-header">
         <div className="header-title">{currentTitle}</div>
+        {currentAgent && (
+          <button
+            className="header-agent-btn"
+            onClick={() => openEditor(currentAgent.id)}
+            title="에이전트 편집"
+          >
+            {currentAgent.avatar ? (
+              <img src={currentAgent.avatar} alt="" className="header-agent-avatar" />
+            ) : null}
+            <span>{currentAgent.name}</span>
+          </button>
+        )}
         {isBootstrapping && (
           <button
             className="bootstrap-cancel-btn"
