@@ -60,7 +60,7 @@ export default function ChatWindow() {
           <AgentSelector />
         ) : (
           <>
-            {messages.length === 0 && (
+            {messages.length === 0 && isBootstrapping && (
               <div className="message agent">
                 <div className="avatar">
                   <svg
@@ -82,9 +82,7 @@ export default function ChatWindow() {
                   </svg>
                 </div>
                 <div className="bubble">
-                  {isBootstrapping
-                    ? "어떤 에이전트를 만들고 싶나요? 이름, 성격, 역할 등을 자유롭게 말해주세요."
-                    : "안녕하세요! 원하시는 작업을 말씀해 주세요. 어떤 것을 도와드릴까요?"}
+                  어떤 에이전트를 만들고 싶나요? 이름, 성격, 역할 등을 자유롭게 말해주세요.
                 </div>
               </div>
             )}
