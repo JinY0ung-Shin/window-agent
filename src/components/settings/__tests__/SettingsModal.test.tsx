@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SettingsModal from "../SettingsModal";
 import { useSettingsStore } from "../../../stores/settingsStore";
@@ -44,10 +44,13 @@ describe("SettingsModal", () => {
     expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
   });
 
-  it("clicking save calls saveSettings and closes modal", () => {
-    useSettingsStore.setState({ isSettingsOpen: true, apiKey: "old-key" });
+  it("clicking save calls saveSettings and closes modal", async () => {
+    useSettingsStore.setState({ isSettingsOpen: true, hasApiKey: true });
     render(<SettingsModal />);
     fireEvent.click(screen.getByText("저장"));
-    expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
+    // saveSettings is async; wait for state to update
+    await vi.waitFor(() => {
+      expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
+    });
   });
 });

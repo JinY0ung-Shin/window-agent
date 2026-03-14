@@ -18,7 +18,7 @@ export default function SettingsModal() {
 
   useEffect(() => {
     if (isSettingsOpen) {
-      setTempApiKey(store.apiKey);
+      setTempApiKey("");
       setTempBaseUrl(store.baseUrl);
       setTempModelName(store.modelName);
       setTempThinkingEnabled(store.thinkingEnabled);
@@ -75,7 +75,7 @@ export default function SettingsModal() {
                 <input
                   id="apiKey"
                   type="password"
-                  placeholder="sk-..."
+                  placeholder={store.hasApiKey ? "••••••••(설정됨, 변경하려면 입력)" : "sk-..."}
                   value={tempApiKey}
                   onChange={(e) => setTempApiKey(e.target.value)}
                 />
@@ -102,7 +102,7 @@ export default function SettingsModal() {
                   onChange={(e) => setTempModelName(e.target.value)}
                 />
                 <p className="form-text">
-                  설정은 기기의 로컬 스토리지에만 안전하게 저장됩니다.
+                  API 키는 백엔드에서만 관리되며 브라우저에 저장되지 않습니다.
                 </p>
               </div>
             </>

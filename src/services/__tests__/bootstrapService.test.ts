@@ -8,21 +8,11 @@ import {
 import { DEFAULT_AGENT_NAME } from "../../constants";
 
 vi.mock("../tauriCommands");
-vi.mock("openai", () => {
-  return {
-    default: class MockOpenAI {
-      chat = {
-        completions: {
-          create: vi.fn(),
-        },
-      };
-    },
-  };
-});
 
 beforeEach(() => {
   vi.mocked(cmds.readAgentFile).mockReset();
   vi.mocked(cmds.writeAgentFile).mockReset();
+  vi.mocked(cmds.bootstrapCompletion).mockReset();
 });
 
 describe("parseAgentName", () => {
@@ -60,32 +50,18 @@ describe("isBootstrapComplete", () => {
 });
 
 describe("executeBootstrapTurn", () => {
-  let openai: InstanceType<typeof import("openai").default>;
-  let mockCreate: ReturnType<typeof vi.fn>;
-
-  beforeEach(async () => {
-    const OpenAI = (await import("openai")).default;
-    openai = new OpenAI({ apiKey: "test" });
-    mockCreate = vi.mocked(openai.chat.completions.create);
-  });
-
   it("returns text for no tool_calls", async () => {
-    mockCreate.mockResolvedValue({
-      choices: [
-        {
-          message: {
-            content: "Hello! Let me help you set up.",
-            tool_calls: undefined,
-          },
-        },
-      ],
-    } as any);
+    vi.mocked(cmds.bootstrapCompletion).mockResolvedValue({
+      message: {
+        content: "Hello! Let me help you set up.",
+        tool_calls: undefined,
+      },
+    });
 
     const result = await executeBootstrapTurn(
       [],
       "Hi",
       "test-folder",
-      openai,
       "test-model",
     );
 
@@ -97,45 +73,36 @@ describe("executeBootstrapTurn", () => {
   it("processes write_file tool calls", async () => {
     vi.mocked(cmds.writeAgentFile).mockResolvedValue(undefined);
 
-    mockCreate
+    vi.mocked(cmds.bootstrapCompletion)
       .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: null,
-              tool_calls: [
-                {
-                  id: "tc1",
-                  type: "function",
-                  function: {
-                    name: "write_file",
-                    arguments: JSON.stringify({
-                      path: "IDENTITY.md",
-                      content: "# TestBot",
-                    }),
-                  },
-                },
-              ],
+        message: {
+          content: null,
+          tool_calls: [
+            {
+              id: "tc1",
+              type: "function",
+              function: {
+                name: "write_file",
+                arguments: JSON.stringify({
+                  path: "IDENTITY.md",
+                  content: "# TestBot",
+                }),
+              },
             },
-          },
-        ],
-      } as any)
+          ],
+        },
+      })
       .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: "Done writing!",
-              tool_calls: undefined,
-            },
-          },
-        ],
-      } as any);
+        message: {
+          content: "Done writing!",
+          tool_calls: undefined,
+        },
+      });
 
     const result = await executeBootstrapTurn(
       [],
       "Create my agent",
       "test-folder",
-      openai,
       "test-model",
     );
 
@@ -151,48 +118,38 @@ describe("executeBootstrapTurn", () => {
   it("processes read_file tool calls", async () => {
     vi.mocked(cmds.readAgentFile).mockResolvedValue("# Existing Content");
 
-    mockCreate
+    vi.mocked(cmds.bootstrapCompletion)
       .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: null,
-              tool_calls: [
-                {
-                  id: "tc2",
-                  type: "function",
-                  function: {
-                    name: "read_file",
-                    arguments: JSON.stringify({ path: "IDENTITY.md" }),
-                  },
-                },
-              ],
+        message: {
+          content: null,
+          tool_calls: [
+            {
+              id: "tc2",
+              type: "function",
+              function: {
+                name: "read_file",
+                arguments: JSON.stringify({ path: "IDENTITY.md" }),
+              },
             },
-          },
-        ],
-      } as any)
+          ],
+        },
+      })
       .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content: "I read the file.",
-              tool_calls: undefined,
-            },
-          },
-        ],
-      } as any);
+        message: {
+          content: "I read the file.",
+          tool_calls: undefined,
+        },
+      });
 
     const result = await executeBootstrapTurn(
       [],
       "Read identity",
       "test-folder",
-      openai,
       "test-model",
     );
 
     expect(cmds.readAgentFile).toHaveBeenCalledWith("test-folder", "IDENTITY.md");
     expect(result.responseText).toBe("I read the file.");
-    // Check that tool response was added to messages
     const toolMsg = result.apiMessages.find(
       (m: any) => m.role === "tool" && m.tool_call_id === "tc2",
     );

@@ -96,11 +96,61 @@ export async function getBootstrapPrompt(): Promise<string> {
 // ── Config commands ──
 
 export interface EnvConfig {
-  api_key: string | null;
   base_url: string | null;
   model: string | null;
 }
 
 export async function getEnvConfig(): Promise<EnvConfig> {
   return invoke("get_env_config");
+}
+
+// ── API commands ──
+
+export async function hasApiKey(): Promise<boolean> {
+  return invoke("has_api_key");
+}
+
+export interface SetApiConfigRequest {
+  api_key?: string | null;
+  base_url?: string | null;
+}
+
+export async function setApiConfig(request: SetApiConfigRequest): Promise<void> {
+  return invoke("set_api_config", { request });
+}
+
+export interface ChatCompletionRequest {
+  messages: { role: string; content: string }[];
+  system_prompt: string;
+  model: string;
+  temperature?: number | null;
+  thinking_enabled: boolean;
+  thinking_budget?: number | null;
+}
+
+export interface ChatCompletionResponse {
+  content: string;
+  reasoning_content: string | null;
+}
+
+export async function chatCompletion(
+  request: ChatCompletionRequest,
+): Promise<ChatCompletionResponse> {
+  return invoke("chat_completion", { request });
+}
+
+export interface BootstrapCompletionRequest {
+  messages: any[];
+  model: string;
+  tools: any[];
+}
+
+export interface BootstrapCompletionResponse {
+  message: any;
+}
+
+export async function bootstrapCompletion(
+  request: BootstrapCompletionRequest,
+): Promise<BootstrapCompletionResponse> {
+  return invoke("bootstrap_completion", { request });
 }

@@ -16,8 +16,6 @@ vi.mock("../../services/personaService", () => ({
     temperature: null,
     thinkingEnabled: false,
     thinkingBudget: 4096,
-    apiKey: "test-key",
-    baseUrl: "",
   }),
 }));
 vi.mock("../../services/bootstrapService", () => ({
@@ -29,19 +27,6 @@ vi.mock("../../services/bootstrapService", () => ({
   parseAgentName: vi.fn().mockReturnValue("New Agent"),
   isBootstrapComplete: vi.fn().mockReturnValue(false),
 }));
-vi.mock("openai", () => {
-  return {
-    default: class MockOpenAI {
-      chat = {
-        completions: {
-          create: vi.fn().mockResolvedValue({
-            choices: [{ message: { content: "AI 응답" } }],
-          }),
-        },
-      };
-    },
-  };
-});
 
 const initialChatState = useChatStore.getState();
 const initialSettingsState = useSettingsStore.getState();
@@ -49,7 +34,7 @@ const initialAgentState = useAgentStore.getState();
 
 beforeEach(() => {
   useChatStore.setState(initialChatState, true);
-  useSettingsStore.setState({ ...initialSettingsState, envLoaded: true }, true);
+  useSettingsStore.setState({ ...initialSettingsState, envLoaded: true, hasApiKey: false }, true);
   useAgentStore.setState(initialAgentState, true);
   vi.clearAllMocks();
 });
@@ -128,14 +113,14 @@ describe("chatStore", () => {
   });
 
   it("sendMessage opens settings when no API key", async () => {
-    useSettingsStore.setState({ apiKey: "" });
+    useSettingsStore.setState({ hasApiKey: false });
     useChatStore.setState({ inputValue: "test" });
     await useChatStore.getState().sendMessage();
     expect(useSettingsStore.getState().isSettingsOpen).toBe(true);
   });
 
   it("sendMessage auto-creates conversation and saves messages", async () => {
-    useSettingsStore.setState({ apiKey: "test-key", thinkingEnabled: false });
+    useSettingsStore.setState({ hasApiKey: true, thinkingEnabled: false });
     useAgentStore.setState({
       selectedAgentId: "agent-1",
       agents: [{ id: "agent-1", folder_name: "test", name: "Test", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" }],
@@ -149,6 +134,10 @@ describe("chatStore", () => {
       id: "user-msg", conversation_id: "new-conv", role: "user", content: "hello", created_at: "",
     }).mockResolvedValueOnce({
       id: "ai-msg", conversation_id: "new-conv", role: "assistant", content: "AI 응답", created_at: "",
+    });
+    vi.mocked(cmds.chatCompletion).mockResolvedValue({
+      content: "AI 응답",
+      reasoning_content: null,
     });
     vi.mocked(cmds.getConversations).mockResolvedValue([]);
 
@@ -208,7 +197,7 @@ describe("chatStore", () => {
   });
 
   it("sendMessage routes to bootstrap when isBootstrapping", async () => {
-    useSettingsStore.setState({ apiKey: "test-key" });
+    useSettingsStore.setState({ hasApiKey: true });
     useChatStore.setState({
       inputValue: "bootstrap input",
       isBootstrapping: true,
@@ -216,14 +205,9 @@ describe("chatStore", () => {
       bootstrapApiHistory: [{ role: "system", content: "prompt" }],
     });
 
-    // sendMessage will call sendBootstrapMessage which uses executeBootstrapTurn
-    // Since bootstrapFolderName is set and isBootstrapping=true, it should route there.
-    // The bootstrap path will attempt to call executeBootstrapTurn via the openai mock
-    // We just verify it did NOT call createConversation (normal path)
     await useChatStore.getState().sendMessage();
 
     expect(cmds.createConversation).not.toHaveBeenCalled();
-    // Input should be cleared by the bootstrap path
     expect(useChatStore.getState().inputValue).toBe("");
   });
 });

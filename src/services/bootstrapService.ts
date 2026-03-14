@@ -1,4 +1,3 @@
-import OpenAI from "openai";
 import * as cmds from "./tauriCommands";
 import { FILE_NAME_MAP } from "./personaService";
 import { DEFAULT_AGENT_NAME } from "../constants";
@@ -7,7 +6,7 @@ import { DEFAULT_AGENT_NAME } from "../constants";
 const PERSONA_FILE_NAMES = Object.values(FILE_NAME_MAP);
 
 /** OpenAI function-calling tool definitions for bootstrap. */
-const BOOTSTRAP_TOOLS: OpenAI.ChatCompletionTool[] = [
+const BOOTSTRAP_TOOLS = [
   {
     type: "function",
     function: {
@@ -56,7 +55,7 @@ export interface BootstrapTurnResult {
 /**
  * Execute one bootstrap turn:
  *   1. Append user message to history
- *   2. Call API with tools
+ *   2. Call API with tools (via backend proxy)
  *   3. If the model returns tool_calls, execute them and loop
  *   4. Return when the model produces a text-only response
  */
@@ -64,7 +63,6 @@ export async function executeBootstrapTurn(
   apiMessages: any[],
   userMessage: string,
   folderName: string,
-  openai: OpenAI,
   model: string,
 ): Promise<BootstrapTurnResult> {
   const messages = [...apiMessages, { role: "user", content: userMessage }];
@@ -72,16 +70,14 @@ export async function executeBootstrapTurn(
 
   // Tool-call loop (max 5 iterations as safety net)
   for (let i = 0; i < 5; i++) {
-    const response = await openai.chat.completions.create({
+    const response = await cmds.bootstrapCompletion({
       model,
       messages,
       tools: BOOTSTRAP_TOOLS,
-    } as any);
+    });
 
-    const choice = response.choices[0];
-    const assistantMsg = choice.message;
-
-    messages.push(assistantMsg as any);
+    const assistantMsg = response.message;
+    messages.push(assistantMsg);
 
     if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
       for (const tc of assistantMsg.tool_calls) {

@@ -24,10 +24,10 @@ describe("settingsStore", () => {
     expect(s.thinkingEnabled).toBe(true);
     expect(s.thinkingBudget).toBe(DEFAULT_THINKING_BUDGET);
     expect(s.isSettingsOpen).toBe(false);
+    expect(s.hasApiKey).toBe(false);
   });
 
   it("loadSettings reads from localStorage", () => {
-    localStorage.setItem("openai_api_key", "test-key");
     localStorage.setItem("openai_base_url", "http://localhost:3000");
     localStorage.setItem("openai_model_name", "gpt-4");
     localStorage.setItem("thinking_enabled", "false");
@@ -36,7 +36,6 @@ describe("settingsStore", () => {
     useSettingsStore.getState().loadSettings();
     const s = useSettingsStore.getState();
 
-    expect(s.apiKey).toBe("test-key");
     expect(s.baseUrl).toBe("http://localhost:3000");
     expect(s.modelName).toBe("gpt-4");
     expect(s.thinkingEnabled).toBe(false);
@@ -46,13 +45,17 @@ describe("settingsStore", () => {
   it("loadSettings uses defaults when localStorage is empty", () => {
     useSettingsStore.getState().loadSettings();
     const s = useSettingsStore.getState();
-    expect(s.apiKey).toBe("");
     expect(s.modelName).toBe(DEFAULT_MODEL);
     expect(s.thinkingEnabled).toBe(true);
   });
 
-  it("saveSettings writes to localStorage and updates state", () => {
-    useSettingsStore.getState().saveSettings({
+  it("saveSettings writes non-secret settings to localStorage", async () => {
+    // Mock: set_api_config then has_api_key
+    mockedInvoke
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(true);
+
+    await useSettingsStore.getState().saveSettings({
       apiKey: "new-key",
       baseUrl: "http://new-url",
       modelName: "gpt-4o",
@@ -60,19 +63,28 @@ describe("settingsStore", () => {
       thinkingBudget: 8192,
     });
 
-    expect(localStorage.getItem("openai_api_key")).toBe("new-key");
+    // API key should NOT be in localStorage
+    expect(localStorage.getItem("openai_api_key")).toBeNull();
+
+    // Non-secret settings should be in localStorage
+    expect(localStorage.getItem("openai_base_url")).toBe("http://new-url");
     expect(localStorage.getItem("thinking_enabled")).toBe("false");
     expect(localStorage.getItem("thinking_budget")).toBe("8192");
 
     const s = useSettingsStore.getState();
-    expect(s.apiKey).toBe("new-key");
+    expect(s.baseUrl).toBe("http://new-url");
     expect(s.thinkingBudget).toBe(8192);
     expect(s.isSettingsOpen).toBe(false);
+    expect(s.hasApiKey).toBe(true);
   });
 
-  it("saveSettings uses default model when modelName is empty", () => {
-    useSettingsStore.getState().saveSettings({
-      apiKey: "k",
+  it("saveSettings uses default model when modelName is empty", async () => {
+    mockedInvoke
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(false);
+
+    await useSettingsStore.getState().saveSettings({
+      apiKey: "",
       baseUrl: "u",
       modelName: "",
       thinkingEnabled: true,
@@ -91,23 +103,22 @@ describe("settingsStore", () => {
   });
 
   it("loadSettings handles corrupt localStorage value (uses defaults)", () => {
-    // thinking_budget is not valid JSON/number — parseInt will return NaN,
-    // but the store uses `budgetRaw ? parseInt(budgetRaw, 10) : DEFAULT_THINKING_BUDGET`
-    // so a non-numeric string will give NaN. We verify the store still loads without crashing.
     localStorage.setItem("thinking_budget", "not-a-number");
     localStorage.setItem("thinking_enabled", "garbage");
 
     useSettingsStore.getState().loadSettings();
     const s = useSettingsStore.getState();
 
-    // "garbage" !== "true" so thinkingEnabled should be false
     expect(s.thinkingEnabled).toBe(false);
-    // corrupt value falls back to DEFAULT_THINKING_BUDGET
     expect(s.thinkingBudget).toBe(4096);
   });
 
-  it("saveSettings persists all fields correctly", () => {
-    useSettingsStore.getState().saveSettings({
+  it("saveSettings persists all non-secret fields correctly", async () => {
+    mockedInvoke
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(true);
+
+    await useSettingsStore.getState().saveSettings({
       apiKey: "my-api-key",
       baseUrl: "http://example.com/v1",
       modelName: "claude-3",
@@ -115,14 +126,12 @@ describe("settingsStore", () => {
       thinkingBudget: 16384,
     });
 
-    expect(localStorage.getItem("openai_api_key")).toBe("my-api-key");
     expect(localStorage.getItem("openai_base_url")).toBe("http://example.com/v1");
     expect(localStorage.getItem("openai_model_name")).toBe("claude-3");
     expect(localStorage.getItem("thinking_enabled")).toBe("true");
     expect(localStorage.getItem("thinking_budget")).toBe("16384");
 
     const s = useSettingsStore.getState();
-    expect(s.apiKey).toBe("my-api-key");
     expect(s.baseUrl).toBe("http://example.com/v1");
     expect(s.modelName).toBe("claude-3");
     expect(s.thinkingEnabled).toBe(true);
@@ -131,71 +140,47 @@ describe("settingsStore", () => {
   });
 
   describe("loadEnvDefaults", () => {
-    it("applies env values when localStorage is absent", async () => {
-      mockedInvoke.mockResolvedValue({
-        api_key: "env-key",
-        base_url: "http://env-url/v1",
-        model: "env-model",
-      });
+    it("applies env values when localStorage is absent and checks API key", async () => {
+      // First call: get_env_config, second call: has_api_key
+      mockedInvoke
+        .mockResolvedValueOnce({ base_url: "http://env-url/v1", model: "env-model" })
+        .mockResolvedValueOnce(true);
 
       await useSettingsStore.getState().loadEnvDefaults();
       const s = useSettingsStore.getState();
 
-      expect(s.apiKey).toBe("env-key");
       expect(s.baseUrl).toBe("http://env-url/v1");
       expect(s.modelName).toBe("env-model");
+      expect(s.hasApiKey).toBe(true);
       expect(s.envLoaded).toBe(true);
     });
 
     it("does NOT override when localStorage has values", async () => {
-      localStorage.setItem("openai_api_key", "local-key");
       localStorage.setItem("openai_base_url", "http://local-url");
       localStorage.setItem("openai_model_name", "local-model");
 
-      mockedInvoke.mockResolvedValue({
-        api_key: "env-key",
-        base_url: "http://env-url/v1",
-        model: "env-model",
-      });
+      mockedInvoke
+        .mockResolvedValueOnce({ base_url: "http://env-url/v1", model: "env-model" })
+        .mockResolvedValueOnce(false);
 
       useSettingsStore.getState().loadSettings();
       await useSettingsStore.getState().loadEnvDefaults();
       const s = useSettingsStore.getState();
 
-      expect(s.apiKey).toBe("local-key");
       expect(s.baseUrl).toBe("http://local-url");
       expect(s.modelName).toBe("local-model");
     });
 
-    it("preserves user's intentional empty value in localStorage", async () => {
-      // User explicitly saved an empty API key
-      localStorage.setItem("openai_api_key", "");
-
-      mockedInvoke.mockResolvedValue({
-        api_key: "env-key",
-        base_url: null,
-        model: null,
-      });
-
-      await useSettingsStore.getState().loadEnvDefaults();
-      const s = useSettingsStore.getState();
-
-      // Should NOT override — localStorage entry exists (even if empty)
-      expect(s.apiKey).toBe("");
-    });
-
     it("sets envLoaded even when env has no values", async () => {
-      mockedInvoke.mockResolvedValue({
-        api_key: null,
-        base_url: null,
-        model: null,
-      });
+      mockedInvoke
+        .mockResolvedValueOnce({ base_url: null, model: null })
+        .mockResolvedValueOnce(false);
 
       await useSettingsStore.getState().loadEnvDefaults();
       const s = useSettingsStore.getState();
 
       expect(s.envLoaded).toBe(true);
-      expect(s.apiKey).toBe("");
+      expect(s.hasApiKey).toBe(false);
     });
 
     it("sets envLoaded even when Tauri invoke fails", async () => {

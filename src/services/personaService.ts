@@ -124,7 +124,5 @@ export function getEffectiveSettings(agent: Agent) {
     thinkingEnabled:
       agent.thinking_enabled !== null ? agent.thinking_enabled : global.thinkingEnabled,
     thinkingBudget: agent.thinking_budget ?? global.thinkingBudget,
-    apiKey: global.apiKey,
-    baseUrl: global.baseUrl,
   };
 }

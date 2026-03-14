@@ -15,8 +15,7 @@ vi.mock("../tauriCommands");
 vi.mock("../../stores/settingsStore", () => {
   const { create } = require("zustand");
   const store = create(() => ({
-    apiKey: "test-key",
-    baseUrl: "http://localhost:8080/v1",
+    hasApiKey: true,
     modelName: "global-model",
     thinkingEnabled: true,
     thinkingBudget: 8192,

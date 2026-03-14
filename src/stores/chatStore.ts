@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import OpenAI from "openai";
 import type { Conversation, ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
@@ -35,17 +34,6 @@ const BOOTSTRAP_RESET = {
   bootstrapApiHistory: [] as any[],
   bootstrapFilesWritten: [] as string[],
 };
-
-function createOpenAIClient(apiKey: string, baseUrl: string): OpenAI {
-  const config: Record<string, unknown> = {
-    apiKey,
-    dangerouslyAllowBrowser: true,
-  };
-  if (baseUrl) {
-    config.baseURL = baseUrl;
-  }
-  return new OpenAI(config as ConstructorParameters<typeof OpenAI>[0]);
-}
 
 function createLoadingMessage(): { loadingId: string; loadingMsg: ChatMessage } {
   const loadingId = `loading-${Date.now()}`;
@@ -179,7 +167,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // Common API key guard
     const settings = useSettingsStore.getState();
-    if (!settings.apiKey) {
+    if (!settings.hasApiKey) {
       settings.setIsSettingsOpen(true);
       return;
     }
@@ -269,47 +257,23 @@ async function sendNormalMessage(
           temperature: null as number | null,
           thinkingEnabled: settings.thinkingEnabled,
           thinkingBudget: settings.thinkingBudget,
-          apiKey: settings.apiKey,
-          baseUrl: settings.baseUrl,
         };
 
-    const openai = createOpenAIClient(effective.apiKey, effective.baseUrl);
-    const chatMessages = buildChatMessages(get().messages, systemPrompt);
+    // Build messages for API (excluding loading message, system prompt handled by backend)
+    const chatMessages = buildChatMessages(get().messages);
 
-    const requestParams: Record<string, unknown> = {
-      model: effective.model,
+    // Call backend API proxy (base_url is owned by backend state, not per-request)
+    const response = await cmds.chatCompletion({
       messages: chatMessages,
-    };
+      system_prompt: systemPrompt,
+      model: effective.model,
+      temperature: effective.temperature,
+      thinking_enabled: effective.thinkingEnabled,
+      thinking_budget: effective.thinkingBudget,
+    });
 
-    if (effective.temperature !== null) {
-      requestParams.temperature = effective.temperature;
-    }
-
-    let response: any;
-    let thinkingUsed = false;
-
-    if (effective.thinkingEnabled) {
-      try {
-        response = await openai.chat.completions.create({
-          ...requestParams,
-          thinking: {
-            type: "enabled",
-            budget_tokens: effective.thinkingBudget,
-          },
-        } as any);
-        thinkingUsed = true;
-      } catch {
-        response = await openai.chat.completions.create(requestParams as any);
-      }
-    } else {
-      response = await openai.chat.completions.create(requestParams as any);
-    }
-
-    const choice = response.choices[0];
-    const replyContent = choice?.message?.content || NO_RESPONSE_MESSAGE;
-    const reasoningContent = thinkingUsed
-      ? (choice?.message?.reasoning_content ?? undefined)
-      : undefined;
+    const replyContent = response.content || NO_RESPONSE_MESSAGE;
+    const reasoningContent = response.reasoning_content ?? undefined;
 
     const savedAssistant = await cmds.saveMessage({
       conversation_id: convId,
@@ -326,7 +290,7 @@ async function sendNormalMessage(
       }),
     });
   } catch (error) {
-    console.error("OpenAI API Error:", error);
+    console.error("API Error:", error);
     set({
       messages: replaceLoadingMessage(get().messages, loadingId, {
         content: ERROR_MESSAGE,
@@ -365,13 +329,10 @@ async function sendBootstrapMessage(
   set({ messages: [...messages, userMsg, loadingMsg], inputValue: "" });
 
   try {
-    const openai = createOpenAIClient(settings.apiKey, settings.baseUrl);
-
     const result = await executeBootstrapTurn(
       bootstrapApiHistory,
       inputValue,
       bootstrapFolderName,
-      openai,
       settings.modelName,
     );
 
@@ -438,8 +399,6 @@ async function completeBootstrap(
     agentStore.selectAgent(agent.id);
   } catch (error) {
     console.error("Failed to complete bootstrap:", error);
-    // 에이전트 생성 실패 시 사용자에게 에러를 보여주고 부트스트랩 상태 유지
-    // (대화 내용 보존 — 사용자가 cancelBootstrap으로 직접 나갈 수 있음)
     const errorMsg: ChatMessage = {
       id: `error-${Date.now()}`,
       type: "agent",

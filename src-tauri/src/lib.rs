@@ -1,6 +1,8 @@
+mod api;
 mod commands;
 mod db;
 
+use api::ApiState;
 use db::Database;
 use tauri::Manager;
 
@@ -24,6 +26,7 @@ pub fn run() {
             .expect("failed to initialize database");
 
             app.manage(database);
+            app.manage(ApiState::from_env());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -44,6 +47,10 @@ pub fn run() {
             commands::resize_avatar,
             commands::get_bootstrap_prompt,
             commands::get_env_config,
+            commands::has_api_key,
+            commands::set_api_config,
+            commands::chat_completion,
+            commands::bootstrap_completion,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

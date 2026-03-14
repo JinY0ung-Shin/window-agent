@@ -1,18 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { buildChatMessages } from "../chatHelpers";
-import { DEFAULT_SYSTEM_PROMPT } from "../../constants";
 import type { ChatMessage } from "../types";
 
 describe("buildChatMessages", () => {
-  it("prepends system prompt with default", () => {
+  it("returns empty array for no messages", () => {
     const result = buildChatMessages([]);
-    expect(result).toEqual([{ role: "system", content: DEFAULT_SYSTEM_PROMPT }]);
-  });
-
-  it("uses custom system prompt when provided", () => {
-    const custom = "You are a pirate.";
-    const result = buildChatMessages([], custom);
-    expect(result[0]).toEqual({ role: "system", content: custom });
+    expect(result).toEqual([]);
   });
 
   it("maps user/agent types to user/assistant roles", () => {
@@ -21,8 +14,8 @@ describe("buildChatMessages", () => {
       { id: "2", type: "agent", content: "hello" },
     ];
     const result = buildChatMessages(messages);
-    expect(result[1]).toEqual({ role: "user", content: "hi" });
-    expect(result[2]).toEqual({ role: "assistant", content: "hello" });
+    expect(result[0]).toEqual({ role: "user", content: "hi" });
+    expect(result[1]).toEqual({ role: "assistant", content: "hello" });
   });
 
   it("filters out loading messages", () => {
@@ -31,7 +24,7 @@ describe("buildChatMessages", () => {
       { id: "2", type: "agent", content: "loading...", isLoading: true },
     ];
     const result = buildChatMessages(messages);
-    expect(result).toHaveLength(2); // system + 1 user
+    expect(result).toHaveLength(1); // 1 user only
   });
 
   it("limits to last 10 messages", () => {
@@ -41,9 +34,8 @@ describe("buildChatMessages", () => {
       content: `msg-${i}`,
     }));
     const result = buildChatMessages(messages);
-    // system + 10 history
-    expect(result).toHaveLength(11);
-    expect(result[1].content).toBe("msg-5");
-    expect(result[10].content).toBe("msg-14");
+    expect(result).toHaveLength(10);
+    expect(result[0].content).toBe("msg-5");
+    expect(result[9].content).toBe("msg-14");
   });
 });

@@ -4,17 +4,16 @@ import {
   DEFAULT_MODEL,
   DEFAULT_THINKING_BUDGET,
 } from "../constants";
-import { getEnvConfig } from "../services/tauriCommands";
+import { getEnvConfig, hasApiKey as checkApiKey, setApiConfig } from "../services/tauriCommands";
 
-// ── localStorage key constants ──────────────────────
-const LS_API_KEY = "openai_api_key";
+// ── localStorage key constants (non-secret settings only) ──
 const LS_BASE_URL = "openai_base_url";
 const LS_MODEL_NAME = "openai_model_name";
 const LS_THINKING_ENABLED = "thinking_enabled";
 const LS_THINKING_BUDGET = "thinking_budget";
 
 interface SettingsState {
-  apiKey: string;
+  hasApiKey: boolean;
   baseUrl: string;
   modelName: string;
   thinkingEnabled: boolean;
@@ -25,7 +24,7 @@ interface SettingsState {
   loadSettings: () => void;
   loadEnvDefaults: () => Promise<void>;
   waitForEnv: () => Promise<void>;
-  saveSettings: (s: SettingValues) => void;
+  saveSettings: (s: SettingValues) => Promise<void>;
 }
 
 export interface SettingValues {
@@ -36,7 +35,7 @@ export interface SettingValues {
   thinkingBudget: number;
 }
 
-function readSettings(): SettingValues {
+function readNonSecretSettings() {
   const raw = (key: string, fallback: string) =>
     localStorage.getItem(key) || fallback;
 
@@ -44,7 +43,6 @@ function readSettings(): SettingValues {
   const budgetRaw = localStorage.getItem(LS_THINKING_BUDGET);
 
   return {
-    apiKey: raw(LS_API_KEY, ""),
     baseUrl: raw(LS_BASE_URL, DEFAULT_BASE_URL),
     modelName: raw(LS_MODEL_NAME, DEFAULT_MODEL),
     thinkingEnabled: thinkingRaw !== null ? thinkingRaw === "true" : true,
@@ -52,7 +50,7 @@ function readSettings(): SettingValues {
   };
 }
 
-const initial = readSettings();
+const initial = readNonSecretSettings();
 
 // Promise that resolves once env defaults have been loaded (or failed).
 let envReadyResolve: () => void;
@@ -60,23 +58,21 @@ const envReadyPromise = new Promise<void>((r) => { envReadyResolve = r; });
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...initial,
+  hasApiKey: false,
   isSettingsOpen: false,
   envLoaded: false,
 
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
 
-  loadSettings: () => set(readSettings()),
+  loadSettings: () => set(readNonSecretSettings()),
 
   loadEnvDefaults: async () => {
     try {
+      // Load non-secret env defaults
       const env = await getEnvConfig();
-      const updates: Partial<SettingValues> = {};
 
-      // Only apply env fallback when localStorage truly has no entry (null).
-      // This preserves intentional user clears (empty string saved).
-      if (localStorage.getItem(LS_API_KEY) === null && env.api_key) {
-        updates.apiKey = env.api_key;
-      }
+      const updates: Partial<{ baseUrl: string; modelName: string }> = {};
+
       if (localStorage.getItem(LS_BASE_URL) === null && env.base_url) {
         updates.baseUrl = env.base_url;
       }
@@ -84,7 +80,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         updates.modelName = env.model;
       }
 
-      set({ ...updates, envLoaded: true });
+      // Check if backend has an API key (from .env or previous set_api_config)
+      const apiKeyExists = await checkApiKey();
+
+      set({ ...updates, hasApiKey: apiKeyExists, envLoaded: true });
     } catch {
       // Tauri not available (e.g. tests) — silently ignore
       set({ envLoaded: true });
@@ -98,15 +97,32 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await envReadyPromise;
   },
 
-  saveSettings: (s) => {
+  saveSettings: async (s) => {
     const model = s.modelName || DEFAULT_MODEL;
-    localStorage.setItem(LS_API_KEY, s.apiKey);
+
+    // Sync API config to backend first, then update frontend state.
+    // api_key is only sent when non-empty (user actively typed a new key).
+    // Empty field = "no change" to avoid accidental key clearing.
+    const apiUpdate: { api_key?: string; base_url: string } = {
+      base_url: s.baseUrl,
+    };
+    if (s.apiKey) {
+      apiUpdate.api_key = s.apiKey;
+    }
+    try {
+      await setApiConfig(apiUpdate);
+      const keyExists = await checkApiKey();
+      set({ hasApiKey: keyExists });
+    } catch (e) {
+      console.error("Failed to set API config:", e);
+    }
+
+    // Persist non-secret settings in localStorage
     localStorage.setItem(LS_BASE_URL, s.baseUrl);
     localStorage.setItem(LS_MODEL_NAME, model);
     localStorage.setItem(LS_THINKING_ENABLED, String(s.thinkingEnabled));
     localStorage.setItem(LS_THINKING_BUDGET, String(s.thinkingBudget));
     set({
-      apiKey: s.apiKey,
       baseUrl: s.baseUrl,
       modelName: model,
       thinkingEnabled: s.thinkingEnabled,
