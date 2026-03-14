@@ -4,21 +4,20 @@ import { useAgentStore, type PersonaTab } from "../../stores/agentStore";
 import { listModels, listSkills, createSkill, readSkill, updateSkill, deleteSkill } from "../../services/tauriCommands";
 import type { SkillMetadata } from "../../services/types";
 import AvatarUploader from "./AvatarUploader";
+import ToolManagementPanel from "./ToolManagementPanel";
 
 const PERSONA_TABS: { key: PersonaTab; label: string }[] = [
   { key: "identity", label: "IDENTITY" },
   { key: "soul", label: "SOUL" },
   { key: "user", label: "USER" },
   { key: "agents", label: "AGENTS" },
-  { key: "tools", label: "TOOLS" },
 ];
 
-const TAB_PLACEHOLDERS: Record<PersonaTab, string> = {
+const TAB_PLACEHOLDERS: Record<Exclude<PersonaTab, "tools">, string> = {
   identity: "이름, 역할, 스타일을 정의합니다 (명함)",
   soul: "핵심 성격, 가치관, 경계선을 정의합니다 (영혼)",
   user: "사용자 이름, 호칭, 선호도를 정의합니다 (사용자 프로필)",
   agents: "업무 방식, 응답 형식, 도구 규칙을 정의합니다 (업무 매뉴얼)",
-  tools: "사용 가능한 도구와 실행 권한(tier)을 정의합니다",
 };
 
 export default function AgentEditor() {
@@ -47,8 +46,8 @@ export default function AgentEditor() {
   const [thinkingBudget, setThinkingBudget] = useState("");
   const [models, setModels] = useState<string[]>([]);
 
-  // Skills state
-  const [showSkills, setShowSkills] = useState(false);
+  // Panel state: persona tabs, tools panel, or skills panel
+  const [activePanel, setActivePanel] = useState<"persona" | "tools" | "skills">("persona");
   const [agentSkills, setAgentSkills] = useState<SkillMetadata[]>([]);
   const [globalSkills, setGlobalSkills] = useState<SkillMetadata[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
@@ -80,12 +79,13 @@ export default function AgentEditor() {
   }, [isEditorOpen]);
 
   useEffect(() => {
-    if (isEditorOpen && showSkills && editingAgent) {
+    if (isEditorOpen && activePanel === "skills" && editingAgent) {
       loadAgentSkills();
     }
-  }, [isEditorOpen, showSkills, editingAgent, loadAgentSkills]);
+  }, [isEditorOpen, activePanel, editingAgent, loadAgentSkills]);
 
   useEffect(() => {
+    setActivePanel("persona");
     if (editingAgent) {
       setName(editingAgent.name);
       setDescription(editingAgent.description);
@@ -309,29 +309,41 @@ export default function AgentEditor() {
               {PERSONA_TABS.map((tab) => (
                 <button
                   key={tab.key}
-                  className={`persona-tab ${personaTab === tab.key && !showSkills ? "active" : ""}`}
-                  onClick={() => { setPersonaTab(tab.key); setShowSkills(false); }}
+                  className={`persona-tab ${activePanel === "persona" && personaTab === tab.key ? "active" : ""}`}
+                  onClick={() => { setPersonaTab(tab.key); setActivePanel("persona"); }}
                 >
                   {tab.label}
                 </button>
               ))}
-              {editingAgentId && !isDefault && (
-                <button
-                  className={`persona-tab ${showSkills ? "active" : ""}`}
-                  onClick={() => setShowSkills(true)}
-                >
-                  SKILLS
-                </button>
-              )}
+              <button
+                className={`persona-tab ${activePanel === "tools" ? "active" : ""}`}
+                onClick={() => setActivePanel("tools")}
+              >
+                TOOLS
+              </button>
+              <button
+                className={`persona-tab ${activePanel === "skills" ? "active" : ""}`}
+                disabled={!editingAgentId}
+                title={!editingAgentId ? "먼저 저장하세요" : undefined}
+                onClick={() => editingAgentId && setActivePanel("skills")}
+              >
+                SKILLS
+              </button>
             </div>
 
-            {showSkills ? (
+            {activePanel === "tools" ? (
+              <ToolManagementPanel
+                key={editingAgentId}
+                rawContent={personaFiles?.tools ?? ""}
+                onChange={(c) => updatePersonaFile("tools", c)}
+              />
+            ) : activePanel === "skills" ? (
               <div className="skills-panel">
                 {skillsLoading ? (
                   <div className="skills-loading">로딩...</div>
                 ) : (
                   <>
-                    {editingSkillName ? (
+                    {editingSkillName && !isDefault ? (
                       <div className="skill-edit-panel">
                         <div className="skill-edit-header">
                           <span className="skill-edit-title">{editingSkillName}</span>
@@ -357,15 +369,17 @@ export default function AgentEditor() {
                         <div className="skills-section">
                           <div className="skills-section-header">
                             <span>에이전트 특기</span>
-                            <button
-                              className="btn-secondary skill-add-btn"
-                              onClick={() => setShowNewSkill(true)}
-                            >
-                              <Plus size={14} /> 새 특기 추가
-                            </button>
+                            {!isDefault && (
+                              <button
+                                className="btn-secondary skill-add-btn"
+                                onClick={() => setShowNewSkill(true)}
+                              >
+                                <Plus size={14} /> 새 특기 추가
+                              </button>
+                            )}
                           </div>
 
-                          {showNewSkill && (
+                          {!isDefault && showNewSkill && (
                             <div className="skill-new-row">
                               <input
                                 type="text"
@@ -398,14 +412,16 @@ export default function AgentEditor() {
                                   <AlertTriangle size={14} />
                                 </span>
                               )}
-                              <div className="skill-row-actions">
-                                <button onClick={() => handleEditSkill(skill.name)} title="편집">
-                                  <Pencil size={14} />
-                                </button>
-                                <button onClick={() => handleDeleteSkill(skill.name)} title="삭제">
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
+                              {!isDefault && (
+                                <div className="skill-row-actions">
+                                  <button onClick={() => handleEditSkill(skill.name)} title="편집">
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button onClick={() => handleDeleteSkill(skill.name)} title="삭제">
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -442,7 +458,7 @@ export default function AgentEditor() {
                 className="persona-editor"
                 value={personaFiles?.[personaTab] ?? ""}
                 onChange={(e) => updatePersonaFile(personaTab, e.target.value)}
-                placeholder={TAB_PLACEHOLDERS[personaTab]}
+                placeholder={TAB_PLACEHOLDERS[personaTab as Exclude<PersonaTab, "tools">]}
                 spellCheck={false}
               />
             )}

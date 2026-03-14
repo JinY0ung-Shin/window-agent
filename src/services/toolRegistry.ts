@@ -21,7 +21,9 @@ export interface ToolDefinition {
  */
 export function parseToolsMd(content: string): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
-  const sections = content.split(/^## /m).filter((s) => s.trim());
+  // Split on ## headers; first element is preamble (before any ## ), skip it
+  const parts = content.split(/^## /m);
+  const sections = parts.slice(1).filter((s) => s.trim());
 
   for (const section of sections) {
     const lines = section.split("\n");
@@ -120,4 +122,77 @@ export function getToolTier(
 ): ToolPermissionTier {
   const def = definitions.find((d) => d.name === toolName);
   return def?.tier ?? "confirm";
+}
+
+/**
+ * Serialize ToolDefinition[] back to TOOLS.md markdown format.
+ * Inverse of parseToolsMd.
+ */
+export function serializeToolsMd(tools: ToolDefinition[]): string {
+  if (tools.length === 0) return "";
+
+  return tools
+    .map((tool) => {
+      const lines: string[] = [`## ${tool.name}`];
+      lines.push(`- description: ${tool.description}`);
+      lines.push(`- tier: ${tool.tier}`);
+
+      const props = tool.parameters?.properties;
+      const req: string[] = tool.parameters?.required ?? [];
+
+      if (props && Object.keys(props).length > 0) {
+        lines.push("- parameters:");
+        for (const [pName, pDef] of Object.entries(props) as [string, { type?: string; description?: string }][]) {
+          const pType = pDef.type ?? "string";
+          const pReq = req.includes(pName) ? "required" : "optional";
+          const pDesc = pDef.description ?? "";
+          lines.push(`  - ${pName} (${pType}, ${pReq}): ${pDesc}`);
+        }
+      }
+
+      return lines.join("\n");
+    })
+    .join("\n\n") + "\n";
+}
+
+/**
+ * Normalize TOOLS.md content for round-trip comparison.
+ * Strips whitespace, collapses blank lines, removes # Tools header.
+ */
+export function normalizeToolsMd(raw: string): string {
+  return raw
+    .split("\n")
+    .map((line) => line.replace(/\t/g, "  ").trimEnd())
+    .filter((line) => !/^#\s+Tools\s*$/i.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\n+/, "")
+    .trim();
+}
+
+const VALID_TOOL_NAME_RE = /^\w+$/;
+
+/**
+ * Check if structured editing would lose content.
+ * Returns true if the raw content can be safely round-tripped
+ * and all tool/param names are compatible with the structured editor.
+ */
+export function canRoundTrip(rawContent: string): boolean {
+  const trimmed = rawContent.trim();
+  if (!trimmed) return true;
+  const parsed = parseToolsMd(trimmed);
+
+  // Check all tool names and param names are editor-compatible
+  for (const tool of parsed) {
+    if (!VALID_TOOL_NAME_RE.test(tool.name)) return false;
+    const props = tool.parameters?.properties;
+    if (props) {
+      for (const pName of Object.keys(props)) {
+        if (!VALID_TOOL_NAME_RE.test(pName)) return false;
+      }
+    }
+  }
+
+  const serialized = serializeToolsMd(parsed);
+  return normalizeToolsMd(trimmed) === normalizeToolsMd(serialized);
 }
