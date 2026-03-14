@@ -88,6 +88,17 @@ pub fn delete_messages_and_maybe_reset_summary(
     Ok(operations::delete_messages_and_maybe_reset_summary_impl(&db, conversation_id, message_id)?)
 }
 
+// ── Conversation Skills ──
+
+#[tauri::command]
+pub fn update_conversation_skills(
+    db: State<'_, Database>,
+    id: String,
+    skills_json: Option<String>,
+) -> Result<(), String> {
+    Ok(operations::update_conversation_skills_impl(&db, id, skills_json)?)
+}
+
 // ── Memory Notes ──
 
 #[tauri::command]

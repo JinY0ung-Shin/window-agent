@@ -115,6 +115,39 @@ pub fn export_agent(
             }
         }
 
+        // skills directory
+        let skills_dir = agents_dir.join("skills");
+        if skills_dir.is_dir() {
+            fn walk_dir_recursive(
+                dir: &std::path::Path,
+                base: &std::path::Path,
+                zip: &mut zip::ZipWriter<&mut Cursor<Vec<u8>>>,
+                options: &FileOptions<()>,
+            ) -> Result<(), String> {
+                let entries = std::fs::read_dir(dir)
+                    .map_err(|e| format!("Failed to read skills dir: {e}"))?;
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let relative = path
+                        .strip_prefix(base)
+                        .map_err(|e| format!("Path strip error: {e}"))?;
+                    let zip_path = format!("skills/{}", relative.to_string_lossy().replace('\\', "/"));
+                    if path.is_dir() {
+                        walk_dir_recursive(&path, base, zip, options)?;
+                    } else if path.is_file() {
+                        let content = std::fs::read(&path)
+                            .map_err(|e| format!("Failed to read skill file: {e}"))?;
+                        zip.start_file(zip_path, options.clone())
+                            .map_err(|e| format!("ZIP error: {e}"))?;
+                        zip.write_all(&content)
+                            .map_err(|e| format!("ZIP write error: {e}"))?;
+                    }
+                }
+                Ok(())
+            }
+            walk_dir_recursive(&skills_dir, &skills_dir, &mut zip, &options)?;
+        }
+
         // memory notes
         let notes = list_memory_notes_impl(&db, agent_id.clone())
             .map_err(|e| format!("Failed to load memory notes: {e}"))?;
@@ -244,6 +277,23 @@ pub fn import_agent(
         Vec::new()
     };
 
+    // 4b. Collect skills file entries from ZIP
+    let mut skill_files: Vec<(String, Vec<u8>)> = Vec::new();
+    {
+        let skill_file_names: Vec<String> = (0..archive.len())
+            .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+            .filter(|name| name.starts_with("skills/") && !name.ends_with('/'))
+            .collect();
+        for name in &skill_file_names {
+            if let Ok(mut file) = archive.by_name(name) {
+                let mut buf = Vec::new();
+                if std::io::Read::read_to_end(&mut file, &mut buf).is_ok() {
+                    skill_files.push((name.clone(), buf));
+                }
+            }
+        }
+    }
+
     // 5. Read conversations
     let mut conversations: Vec<(ConversationDetail, Vec<Message>)> = Vec::new();
     let file_names: Vec<String> = (0..archive.len())
@@ -302,13 +352,17 @@ pub fn import_agent(
     for (conv_detail, msgs) in &conversations {
         let new_conv_id = Uuid::new_v4().to_string();
 
+        let active_skills_json: Option<String> = conv_detail.active_skills
+            .as_ref()
+            .map(|skills| serde_json::to_string(skills).unwrap_or_default());
         tx.execute(
-            "INSERT INTO conversations (id, title, agent_id, summary, summary_up_to_message_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6)",
+            "INSERT INTO conversations (id, title, agent_id, summary, summary_up_to_message_id, active_skills, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7)",
             rusqlite::params![
                 new_conv_id,
                 conv_detail.title,
                 new_agent_id,
                 conv_detail.summary,
+                active_skills_json,
                 conv_detail.created_at,
                 conv_detail.updated_at,
             ],
@@ -370,6 +424,49 @@ pub fn import_agent(
             let _ = std::fs::remove_dir_all(&agents_dir);
             tx.rollback().map_err(|re| format!("Rollback failed after fs error: {re}"))?;
             return Err(format!("Failed to write {fname}: {e}"));
+        }
+    }
+
+    // Write skills files to disk
+    for (zip_path, content) in &skill_files {
+        let relative = zip_path.strip_prefix("skills/").unwrap_or(zip_path);
+
+        // Security: reject path traversal attempts (absolute paths, ".." components)
+        if relative.contains("..") || relative.starts_with('/') || relative.starts_with('\\') {
+            let _ = std::fs::remove_dir_all(&agents_dir);
+            tx.rollback().map_err(|re| format!("Rollback failed: {re}"))?;
+            return Err(format!("Invalid skill path in ZIP: {}", zip_path));
+        }
+
+        let target_path = agents_dir.join("skills").join(relative);
+
+        // Security: verify resolved path is within the agent's skills directory
+        let skills_dir = agents_dir.join("skills");
+        if let Ok(canonical_target) = target_path.canonicalize().or_else(|_| {
+            // For new files, canonicalize parent
+            target_path.parent()
+                .ok_or(std::io::Error::new(std::io::ErrorKind::InvalidInput, "no parent"))
+                .and_then(|p| p.canonicalize())
+                .map(|p| p.join(target_path.file_name().unwrap_or_default()))
+        }) {
+            let canonical_skills = skills_dir.canonicalize().unwrap_or(skills_dir.clone());
+            if !canonical_target.starts_with(&canonical_skills) {
+                let _ = std::fs::remove_dir_all(&agents_dir);
+                tx.rollback().map_err(|re| format!("Rollback failed: {re}"))?;
+                return Err(format!("Skill path escapes agent directory: {}", zip_path));
+            }
+        }
+        if let Some(parent) = target_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                let _ = std::fs::remove_dir_all(&agents_dir);
+                tx.rollback().map_err(|re| format!("Rollback failed after fs error: {re}"))?;
+                return Err(format!("Failed to create skill dir: {e}"));
+            }
+        }
+        if let Err(e) = std::fs::write(&target_path, content) {
+            let _ = std::fs::remove_dir_all(&agents_dir);
+            tx.rollback().map_err(|re| format!("Rollback failed after fs error: {re}"))?;
+            return Err(format!("Failed to write skill file '{}': {e}", zip_path));
         }
     }
 

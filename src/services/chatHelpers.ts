@@ -116,9 +116,15 @@ export function buildConversationContext(params: {
   messages: ChatMessage[];
   summary: string | null;
   baseSystemPrompt: string;
+  skillsSection?: string;
   memoryNotes?: MemoryNote[];
 }): { systemPrompt: string; apiMessages: OpenAIMessage[] } {
   let systemPrompt = params.baseSystemPrompt;
+
+  // Skills go between persona and memory
+  if (params.skillsSection) {
+    systemPrompt += `\n\n${params.skillsSection}`;
+  }
 
   const memorySection = buildMemorySection(params.memoryNotes ?? []);
   if (memorySection) {

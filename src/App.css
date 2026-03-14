@@ -1193,6 +1193,291 @@ body {
   border-color: var(--text-muted);
 }
 
+/* ── Skill Bar ──────────────────────────────────────── */
+.skill-bar {
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.skill-bar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  width: 100%;
+}
+
+.skill-bar-toggle:hover {
+  color: var(--text);
+}
+
+.skill-bar-content {
+  padding-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.skill-chip:hover {
+  border-color: var(--primary);
+  color: var(--text);
+}
+
+.skill-chip.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.skill-chip.active:hover {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: #fff;
+}
+
+.skill-chip.loading {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.skill-chip-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.skill-chip-name {
+  white-space: nowrap;
+}
+
+.skill-chip-warn {
+  color: #f59e0b;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.skill-token-indicator {
+  font-size: 0.7rem;
+  padding: 2px 0;
+}
+
+.skill-token-normal {
+  color: var(--text-muted);
+}
+
+.skill-token-warn {
+  color: #f59e0b;
+}
+
+.skill-token-danger {
+  color: #ef4444;
+}
+
+/* ── Skills Panel (Agent Editor) ───────────────────── */
+.skills-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.skills-loading {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 16px;
+  text-align: center;
+}
+
+.skills-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skills-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0 4px;
+}
+
+.skill-add-btn {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.skill-new-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+}
+
+.skill-new-row input {
+  flex: 1;
+  font-size: 0.8rem;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-color);
+  color: var(--text-main);
+}
+
+.skill-new-row button {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+}
+
+.skills-empty {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 12px 4px;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.skill-row:hover {
+  background: var(--bg-color);
+}
+
+.skill-row-global {
+  opacity: 0.7;
+}
+
+.skill-row-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.skill-row-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.skill-row-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-row-warn {
+  color: #f59e0b;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.skill-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.skill-row-actions button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.skill-row-actions button:hover {
+  color: var(--text-main);
+  background: var(--hover);
+}
+
+.skill-edit-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 8px;
+}
+
+.skill-edit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-edit-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.skill-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.skill-edit-actions button {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.skill-error {
+  color: #ef4444;
+  font-size: 0.78rem;
+  padding: 4px 8px;
+}
+
 /* ── Avatar Uploader ────────────────────────────────── */
 .avatar-uploader {
   border-radius: 24px;

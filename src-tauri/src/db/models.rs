@@ -68,6 +68,8 @@ pub struct ConversationDetail {
     pub agent_id: String,
     pub summary: Option<String>,
     pub summary_up_to_message_id: Option<String>,
+    /// Serialized as a proper JSON array to the frontend, stored as JSON text in DB.
+    pub active_skills: Option<Vec<String>>,
     pub created_at: String,
     pub updated_at: String,
 }

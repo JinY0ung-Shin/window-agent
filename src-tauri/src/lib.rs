@@ -75,6 +75,13 @@ pub fn run() {
             commands::export_conversation,
             commands::export_agent,
             commands::import_agent,
+            commands::update_conversation_skills,
+            commands::list_skills,
+            commands::read_skill,
+            commands::read_skill_resource,
+            commands::create_skill,
+            commands::update_skill,
+            commands::delete_skill,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

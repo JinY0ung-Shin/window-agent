@@ -62,17 +62,21 @@ pub fn get_conversation_detail_impl(
 ) -> Result<ConversationDetail, DbError> {
     let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
     let detail = conn.query_row(
-        "SELECT id, title, agent_id, summary, summary_up_to_message_id, created_at, updated_at FROM conversations WHERE id = ?1",
+        "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, created_at, updated_at FROM conversations WHERE id = ?1",
         rusqlite::params![id],
         |row| {
+            let active_skills_raw: Option<String> = row.get(5)?;
+            let active_skills: Option<Vec<String>> = active_skills_raw
+                .and_then(|s| serde_json::from_str(&s).ok());
             Ok(ConversationDetail {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 agent_id: row.get(2)?,
                 summary: row.get(3)?,
                 summary_up_to_message_id: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
+                active_skills,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
             })
         },
     )?;
@@ -254,6 +258,21 @@ pub fn delete_messages_and_maybe_reset_summary_impl(
 
         Ok(DeleteMessagesResult { summary_was_reset })
     })
+}
+
+// ── Conversation Skills ──
+
+pub fn update_conversation_skills_impl(
+    db: &Database,
+    id: String,
+    skills_json: Option<String>,
+) -> Result<(), DbError> {
+    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    conn.execute(
+        "UPDATE conversations SET active_skills = ?1 WHERE id = ?2",
+        rusqlite::params![skills_json, id],
+    )?;
+    Ok(())
 }
 
 // ── Memory Notes CRUD ──

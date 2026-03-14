@@ -6,6 +6,7 @@ import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
 import { useDebugStore } from "./debugStore";
+import { useSkillStore } from "./skillStore";
 import { buildChatMessages, buildConversationContext } from "../services/chatHelpers";
 import { estimateTokens, estimateMessageTokens } from "../services/tokenEstimator";
 import {
@@ -230,9 +231,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     });
     set({ messages, currentSummary: detail.summary ?? null, summaryUpToMessageId: detail.summary_up_to_message_id ?? null });
     // Sync agent selection and load memory notes for this conversation's agent
+    useSkillStore.getState().clear();
     if (detail.agent_id) {
       useAgentStore.getState().selectAgent(detail.agent_id);
       useMemoryStore.getState().loadNotes(detail.agent_id);
+      // Load skills for this agent
+      const agent = useAgentStore.getState().agents.find((a) => a.id === detail.agent_id);
+      if (agent) {
+        await useSkillStore.getState().loadSkills(agent.folder_name);
+        if (detail.active_skills && Array.isArray(detail.active_skills) && detail.active_skills.length > 0) {
+          await useSkillStore.getState().restoreActiveSkills(agent.folder_name, detail.active_skills);
+        }
+      }
     }
     // Load debug logs for this conversation
     useDebugStore.getState().loadLogs(id);
@@ -242,11 +252,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...TOOL_RESET, ...BOOTSTRAP_RESET });
     useAgentStore.getState().selectAgent(null);
     useDebugStore.getState().clear();
+    useSkillStore.getState().clear();
   },
 
   prepareForAgent: (agentId: string) => {
     set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...TOOL_RESET, ...BOOTSTRAP_RESET });
     useAgentStore.getState().selectAgent(agentId);
+    useSkillStore.getState().clear();
+    // Load skills for the selected agent
+    const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
+    if (agent) {
+      useSkillStore.getState().loadSkills(agent.folder_name);
+    }
   },
 
   deleteConversation: async (id) => {
@@ -307,6 +324,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
+    // Slash command: /특기 or /skill
+    const trimmed = inputValue.trim();
+    if (trimmed.startsWith("/특기") || trimmed.startsWith("/skill")) {
+      await handleSkillCommand(trimmed, set, get);
+      return;
+    }
+
     if (isBootstrapping) {
       await sendBootstrapMessage(set, get);
     } else {
@@ -314,6 +338,73 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 }));
+
+// ── Skill slash command handler ──────────────────────
+
+async function handleSkillCommand(
+  command: string,
+  set: (partial: Partial<ChatState>) => void,
+  get: () => ChatState,
+) {
+  const skillStore = useSkillStore.getState();
+  const { currentConversationId, conversations } = get();
+
+  const parts = command.split(/\s+/);
+  const subCommand = parts[1];
+  const skillName = parts.slice(2).join(" ");
+
+  let resultMessage = "";
+
+  if (!subCommand) {
+    // /특기 — list all
+    const available = skillStore.availableSkills;
+    const active = skillStore.activeSkillNames;
+    resultMessage =
+      `**사용 가능한 특기:**\n${
+        available
+          .map(
+            (s) =>
+              `- ${active.includes(s.name) ? "\u2705" : "\u2B1C"} ${s.name}: ${s.description}`,
+          )
+          .join("\n") || "(없음)"
+      }\n\n활성: ${active.length}개 | 토큰: ~${skillStore.activeSkillTokens}/2000`;
+  } else if ((subCommand === "장착" || subCommand === "on") && skillName) {
+    const conv = conversations.find((c) => c.id === currentConversationId);
+    const agentId = conv?.agent_id ?? useAgentStore.getState().selectedAgentId;
+    const agent = agentId
+      ? useAgentStore.getState().agents.find((a) => a.id === agentId)
+      : null;
+    if (agent) {
+      const success = await skillStore.activateSkill(
+        agent.folder_name,
+        skillName,
+        currentConversationId ?? undefined,
+      );
+      resultMessage = success
+        ? `\u2705 특기 "${skillName}" 장착 완료 (~${skillStore.activeSkillTokens}/2000 토큰)`
+        : `\u274C 특기 "${skillName}" 장착 실패 (토큰 한도 초과 또는 존재하지 않음)`;
+    } else {
+      resultMessage = "\u274C 현재 에이전트를 찾을 수 없습니다";
+    }
+  } else if ((subCommand === "해제" || subCommand === "off") && skillName) {
+    await skillStore.deactivateSkill(
+      skillName,
+      currentConversationId ?? undefined,
+    );
+    resultMessage = `특기 "${skillName}" 해제 완료`;
+  } else {
+    resultMessage =
+      "사용법: /특기 [장착|해제] [이름]\n예: /특기 장착 code-review";
+  }
+
+  const sysMsg: ChatMessage = {
+    id: `skill-cmd-${Date.now()}`,
+    type: "agent",
+    content: resultMessage,
+    status: "complete",
+  };
+  set({ messages: [...get().messages, sysMsg], inputValue: "" });
+}
 
 // ── Tool approval mechanism ────────────────────────────
 let _toolApprovalResolve: ((approved: boolean) => void) | null = null;
@@ -343,15 +434,17 @@ async function streamOneTurn(
     requestId: string;
     msgId: string;
     tools?: object[];
+    skillsSection?: string;
   },
 ): Promise<StreamDoneEvent> {
-  const { baseSystemPrompt, effective, requestId, msgId, tools } = params;
+  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection } = params;
 
   // Build conversation context each iteration (messages may have grown with tool results)
   const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
     messages: get().messages,
     summary: get().currentSummary,
     baseSystemPrompt,
+    skillsSection,
     memoryNotes: useMemoryStore.getState().notes,
   });
 
@@ -488,6 +581,11 @@ async function sendNormalMessage(
     agent = agentStore.agents.find((a) => a.id === agentId) ?? null;
   }
 
+  // Ensure skills are loaded for the agent before building prompt
+  if (agent && useSkillStore.getState().availableSkills.length === 0) {
+    await useSkillStore.getState().loadSkills(agent.folder_name);
+  }
+
   // Auto-create conversation
   let convId = currentConversationId;
   let initialTitle: string | null = null; // Track for title-write guard
@@ -502,6 +600,12 @@ async function sendNormalMessage(
     const conv = await cmds.createConversation(agentId, initialTitle);
     convId = conv.id;
     set({ currentConversationId: convId });
+
+    // Persist any pre-activated skills to the new conversation (Issue 3)
+    const skillNames = useSkillStore.getState().activeSkillNames;
+    if (skillNames.length > 0) {
+      await cmds.updateConversationSkills(convId, skillNames);
+    }
   }
 
   // Save user message
@@ -566,6 +670,9 @@ async function sendNormalMessage(
     }
     const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
 
+    // Get active skills prompt section
+    const skillsSection = useSkillStore.getState().getSkillsPromptSection();
+
     // ── Tool iteration loop ──
     let iterationCount = 0;
 
@@ -576,6 +683,7 @@ async function sendNormalMessage(
         requestId: currentRequestId,
         msgId: currentMsgId,
         tools: openAITools,
+        skillsSection,
       });
 
       if (done.error) {
@@ -842,10 +950,12 @@ async function regenerateStream(
         };
 
     // Build conversation context (shared path)
+    const skillsSection = useSkillStore.getState().getSkillsPromptSection();
     const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
       messages: get().messages,
       summary: get().currentSummary,
       baseSystemPrompt,
+      skillsSection,
       memoryNotes: useMemoryStore.getState().notes,
     });
 

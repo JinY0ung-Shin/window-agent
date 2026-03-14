@@ -14,6 +14,7 @@ export interface ConversationListItem {
 export interface ConversationDetail extends ConversationListItem {
   summary?: string;
   summary_up_to_message_id?: string;
+  active_skills?: string[];
 }
 
 // Backward-compatible alias
@@ -147,4 +148,23 @@ export interface ActiveRun {
   conversationId: string;
   targetMessageId: string;
   status: MessageStatus;
+}
+
+// ── Skill types ──────────────────────────────────────
+export interface SkillMetadata {
+  name: string;
+  description: string;
+  source: "agent" | "global";
+  path: string;
+  compatibility?: string;
+  license?: string;
+  metadata_map?: Record<string, string>;
+  diagnostics: string[];
+}
+
+export interface SkillContent {
+  metadata: SkillMetadata;
+  body: string;
+  raw_content: string;
+  resource_files: string[];
 }

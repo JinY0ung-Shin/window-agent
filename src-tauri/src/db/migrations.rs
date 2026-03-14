@@ -87,6 +87,11 @@ fn all_migrations() -> &'static [Migration] {
             description: "Tool call support: message tool fields, memory_notes, tool_call_logs",
             sql: "",  // handled by custom migration function
         },
+        Migration {
+            version: 5,
+            description: "Add active_skills column to conversations",
+            sql: "",  // handled by custom migration function
+        },
     ]
 }
 
@@ -148,6 +153,27 @@ fn migrate_v3_to_v4(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Migration v5: add active_skills column to conversations.
+fn migrate_v4_to_v5(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let has_column = |table: &str, col: &str| -> bool {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({})", table))
+            .unwrap();
+        let cols: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        cols.contains(&col.to_string())
+    };
+
+    if !has_column("conversations", "active_skills") {
+        conn.execute_batch("ALTER TABLE conversations ADD COLUMN active_skills TEXT;")?;
+    }
+
+    Ok(())
+}
+
 /// Ensure the _migrations tracking table exists.
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
@@ -179,6 +205,8 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
             if migration.version == 4 {
                 // v4 uses custom migration with safe ALTER TABLE checks
                 migrate_v3_to_v4(&tx)?;
+            } else if migration.version == 5 {
+                migrate_v4_to_v5(&tx)?;
             } else {
                 tx.execute_batch(migration.sql)?;
             }
@@ -229,7 +257,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
     }
 
     #[test]
@@ -238,7 +266,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
 
         let desc: String = conn
             .query_row(
@@ -344,9 +372,9 @@ mod tests {
             [],
         ).unwrap();
 
-        // Run remaining migrations (v3 + v4)
+        // Run remaining migrations (v3 + v4 + v5)
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 4);
+        assert_eq!(current_version(&conn).unwrap(), 5);
 
         // Verify existing data is preserved
         let title: String = conn
@@ -408,7 +436,7 @@ mod tests {
     fn test_v4_migration_creates_tables_and_columns() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 4);
+        assert_eq!(current_version(&conn).unwrap(), 5);
 
         // Verify new tables exist
         let tables: Vec<String> = conn
@@ -475,9 +503,9 @@ mod tests {
             [],
         ).unwrap();
 
-        // Run v4
+        // Run v4 + v5
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 4);
+        assert_eq!(current_version(&conn).unwrap(), 5);
 
         // Verify existing data preserved, new columns are NULL
         let content: String = conn
@@ -489,5 +517,39 @@ mod tests {
             .query_row("SELECT tool_name FROM messages WHERE id = 'm1'", [], |row| row.get(0))
             .unwrap();
         assert!(tool_name.is_none());
+    }
+
+    #[test]
+    fn test_v5_migration_adds_active_skills_column() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+        assert_eq!(current_version(&conn).unwrap(), 5);
+
+        // Verify active_skills column exists
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, description, created_at, updated_at) VALUES ('a1', 'test', 'Test', '', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES ('c1', 'Chat', 'a1', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        // active_skills should be NULL by default
+        let skills: Option<String> = conn
+            .query_row("SELECT active_skills FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert!(skills.is_none());
+
+        // Can set active_skills
+        conn.execute(
+            "UPDATE conversations SET active_skills = '[\"web-search\",\"code-gen\"]' WHERE id = 'c1'",
+            [],
+        ).unwrap();
+
+        let skills: Option<String> = conn
+            .query_row("SELECT active_skills FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(skills.as_deref(), Some("[\"web-search\",\"code-gen\"]"));
     }
 }
