@@ -12,6 +12,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             let app_dir = app
                 .path()
@@ -26,7 +27,7 @@ pub fn run() {
             .expect("failed to initialize database");
 
             app.manage(database);
-            app.manage(ApiState::from_env());
+            app.manage(ApiState::load(app.handle()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

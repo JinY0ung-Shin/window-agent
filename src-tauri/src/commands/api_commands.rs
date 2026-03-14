@@ -8,10 +8,11 @@ pub fn has_api_key(api: State<'_, ApiState>) -> bool {
 
 #[tauri::command]
 pub fn set_api_config(
+    app: tauri::AppHandle,
     api: State<'_, ApiState>,
     request: SetApiConfigRequest,
 ) -> Result<(), String> {
-    api.set_config(request.api_key, request.base_url);
+    api.set_config(request.api_key, request.base_url, &app);
     Ok(())
 }
 
