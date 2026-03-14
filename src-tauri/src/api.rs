@@ -125,6 +125,7 @@ impl ApiState {
 
 pub struct RunEntry {
     pub abort_handle: tokio::task::AbortHandle,
+    #[allow(dead_code)]
     pub started_at: chrono::DateTime<chrono::Utc>,
 }
 
