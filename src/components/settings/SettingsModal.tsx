@@ -3,8 +3,9 @@ import { Settings, X, RefreshCw } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { listModels } from "../../services/tauriCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
+import ExportSection from "./ExportSection";
 
-type Tab = "general" | "thinking";
+type Tab = "general" | "thinking" | "backup";
 
 export default function SettingsModal() {
   const store = useSettingsStore();
@@ -84,6 +85,12 @@ export default function SettingsModal() {
             onClick={() => setTab("thinking")}
           >
             추론 (Thinking)
+          </button>
+          <button
+            className={`settings-tab ${tab === "backup" ? "active" : ""}`}
+            onClick={() => setTab("backup")}
+          >
+            백업/복원
           </button>
         </div>
 
@@ -200,6 +207,8 @@ export default function SettingsModal() {
               </div>
             </>
           )}
+
+          {tab === "backup" && <ExportSection />}
         </div>
 
         {settingsError && (

@@ -83,6 +83,9 @@ pub struct Message {
     pub conversation_id: String,
     pub role: String,
     pub content: String,
+    pub tool_call_id: Option<String>,
+    pub tool_name: Option<String>,
+    pub tool_input: Option<String>,
     pub created_at: String,
 }
 
@@ -91,4 +94,30 @@ pub struct SaveMessageRequest {
     pub conversation_id: String,
     pub role: String,
     pub content: String,
+    pub tool_call_id: Option<String>,
+    pub tool_name: Option<String>,
+    pub tool_input: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryNote {
+    pub id: String,
+    pub agent_id: String,
+    pub title: String,
+    pub content: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCallLog {
+    pub id: String,
+    pub conversation_id: String,
+    pub message_id: Option<String>,
+    pub tool_name: String,
+    pub tool_input: String,
+    pub tool_output: Option<String>,
+    pub status: String,
+    pub duration_ms: Option<i64>,
+    pub created_at: String,
 }

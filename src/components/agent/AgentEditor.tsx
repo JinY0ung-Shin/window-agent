@@ -9,6 +9,7 @@ const PERSONA_TABS: { key: PersonaTab; label: string }[] = [
   { key: "soul", label: "SOUL" },
   { key: "user", label: "USER" },
   { key: "agents", label: "AGENTS" },
+  { key: "tools", label: "TOOLS" },
 ];
 
 const TAB_PLACEHOLDERS: Record<PersonaTab, string> = {
@@ -16,6 +17,7 @@ const TAB_PLACEHOLDERS: Record<PersonaTab, string> = {
   soul: "핵심 성격, 가치관, 경계선을 정의합니다 (영혼)",
   user: "사용자 이름, 호칭, 선호도를 정의합니다 (사용자 프로필)",
   agents: "업무 방식, 응답 형식, 도구 규칙을 정의합니다 (업무 매뉴얼)",
+  tools: "사용 가능한 도구와 실행 권한(tier)을 정의합니다",
 };
 
 export default function AgentEditor() {

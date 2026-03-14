@@ -170,6 +170,7 @@ impl RunRegistry {
 // ── Request/Response types for Tauri commands ──
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
@@ -177,12 +178,13 @@ pub struct ChatMessage {
 
 #[derive(Deserialize)]
 pub struct ChatCompletionRequest {
-    pub messages: Vec<ChatMessage>,
+    pub messages: Vec<serde_json::Value>,
     pub system_prompt: String,
     pub model: String,
     pub temperature: Option<f64>,
     pub thinking_enabled: bool,
     pub thinking_budget: Option<u32>,
+    pub tools: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(Serialize)]
@@ -209,11 +211,41 @@ pub struct BootstrapCompletionResponse {
     pub message: serde_json::Value,
 }
 
+// ── Tool calling types ──
+
+#[derive(Serialize, Clone, Debug)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub function: ToolCallFunction,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct ToolCallFunction {
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ToolCallDelta {
+    pub index: usize,
+    pub id: Option<String>,
+    pub function: Option<ToolCallFunctionDelta>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ToolCallFunctionDelta {
+    pub name: Option<String>,
+    pub arguments: Option<String>,
+}
+
 #[derive(Serialize, Clone)]
 pub struct StreamChunkPayload {
     pub request_id: String,
     pub delta: String,
     pub reasoning_delta: Option<String>,
+    pub tool_calls_delta: Option<Vec<ToolCallDelta>>,
 }
 
 #[derive(Serialize, Clone)]
@@ -221,5 +253,6 @@ pub struct StreamDonePayload {
     pub request_id: String,
     pub full_content: String,
     pub reasoning_content: Option<String>,
+    pub tool_calls: Option<Vec<ToolCall>>,
     pub error: Option<String>,
 }

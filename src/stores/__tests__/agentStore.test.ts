@@ -96,7 +96,7 @@ describe("agentStore", () => {
     useAgentStore.setState({
       isEditorOpen: true,
       editingAgentId: "a1",
-      personaFiles: { identity: "x", soul: "y", user: "z", agents: "w" },
+      personaFiles: { identity: "x", soul: "y", user: "z", agents: "w", tools: "" },
       personaTab: "soul",
     });
 
@@ -116,7 +116,7 @@ describe("agentStore", () => {
 
   it("updatePersonaFile modifies specific file, preserves others", () => {
     useAgentStore.setState({
-      personaFiles: { identity: "old", soul: "keep", user: "keep", agents: "keep" },
+      personaFiles: { identity: "old", soul: "keep", user: "keep", agents: "keep", tools: "" },
     });
 
     useAgentStore.getState().updatePersonaFile("identity", "new");
@@ -141,7 +141,7 @@ describe("agentStore", () => {
 
     useAgentStore.setState({
       editingAgentId: null,
-      personaFiles: { identity: "id", soul: "so", user: "us", agents: "ag" },
+      personaFiles: { identity: "id", soul: "so", user: "us", agents: "ag", tools: "" },
     });
 
     await useAgentStore.getState().saveAgent({ name: "Helper" });
@@ -154,6 +154,7 @@ describe("agentStore", () => {
       soul: "so",
       user: "us",
       agents: "ag",
+      tools: "",
     });
   });
 
@@ -165,7 +166,7 @@ describe("agentStore", () => {
     useAgentStore.setState({
       agents: [agent],
       editingAgentId: "existing-1",
-      personaFiles: { identity: "updated", soul: "", user: "", agents: "" },
+      personaFiles: { identity: "updated", soul: "", user: "", agents: "", tools: "" },
     });
 
     await useAgentStore.getState().saveAgent({ name: "Updated" });
@@ -179,6 +180,7 @@ describe("agentStore", () => {
       soul: "",
       user: "",
       agents: "",
+      tools: "",
     });
   });
 

@@ -76,7 +76,7 @@ pub fn delete_agent(app: AppHandle, db: State<'_, Database>, id: String) -> Resu
 }
 
 /// Allowed persona file names (whitelist).
-const ALLOWED_FILE_NAMES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"];
+const ALLOWED_FILE_NAMES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md"];
 
 /// Validate agent file inputs (file name whitelist + folder name path traversal check).
 /// Extracted as a pure function for testability.
@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn validate_accepts_all_allowed_file_names() {
-        for name in &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"] {
+        for name in &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md"] {
             assert!(
                 validate_agent_file_inputs("my-agent", name).is_ok(),
                 "expected Ok for {name}"

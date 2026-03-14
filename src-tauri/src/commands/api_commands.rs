@@ -34,11 +34,8 @@ pub async fn chat_completion(
         "role": "system",
         "content": request.system_prompt,
     }));
-    for msg in &request.messages {
-        api_messages.push(serde_json::json!({
-            "role": msg.role,
-            "content": msg.content,
-        }));
+    for msg in request.messages {
+        api_messages.push(msg);
     }
 
     // Build request body
@@ -188,23 +185,21 @@ pub async fn chat_completion_stream(
                 request_id,
                 full_content: String::new(),
                 reasoning_content: None,
+                tool_calls: None,
                 error: Some("API key not configured".into()),
             },
         );
         return Err("API key not configured".into());
     }
 
-    // Build messages array
+    // Build messages array — messages are already JSON values from frontend
     let mut api_messages = Vec::new();
     api_messages.push(serde_json::json!({
         "role": "system",
         "content": request.system_prompt,
     }));
-    for msg in &request.messages {
-        api_messages.push(serde_json::json!({
-            "role": msg.role,
-            "content": msg.content,
-        }));
+    for msg in request.messages {
+        api_messages.push(msg);
     }
 
     let mut body = serde_json::json!({
@@ -215,6 +210,13 @@ pub async fn chat_completion_stream(
 
     if let Some(temp) = request.temperature {
         body["temperature"] = serde_json::json!(temp);
+    }
+
+    // Include tools in request if provided and non-empty
+    if let Some(ref tools) = request.tools {
+        if !tools.is_empty() {
+            body["tools"] = serde_json::json!(tools);
+        }
     }
 
     let thinking_enabled = request.thinking_enabled;
@@ -255,6 +257,7 @@ pub async fn chat_completion_stream(
                                     request_id: rid.clone(),
                                     full_content: String::new(),
                                     reasoning_content: None,
+                                    tool_calls: None,
                                     error: Some(e2),
                                 },
                             );
@@ -268,6 +271,7 @@ pub async fn chat_completion_stream(
                                 request_id: rid.clone(),
                                 full_content: String::new(),
                                 reasoning_content: None,
+                                tool_calls: None,
                                 error: Some(e),
                             },
                         );
@@ -286,6 +290,7 @@ pub async fn chat_completion_stream(
                     request_id: rid.clone(),
                     full_content: String::new(),
                     reasoning_content: None,
+                    tool_calls: None,
                     error: Some(e),
                 },
             );
@@ -311,6 +316,7 @@ pub async fn abort_stream(
                 request_id,
                 full_content: String::new(),
                 reasoning_content: None,
+                tool_calls: None,
                 error: Some("aborted".to_string()),
             },
         );
@@ -349,6 +355,8 @@ async fn do_stream(
     let mut buffer = String::new();
     let mut full_content = String::new();
     let mut full_reasoning = String::new();
+    // Accumulator for tool calls across streaming chunks
+    let mut tool_calls_acc: Vec<ToolCall> = Vec::new();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
@@ -364,6 +372,11 @@ async fn do_stream(
 
             if let Some(data) = line.strip_prefix("data: ") {
                 if data.trim() == "[DONE]" {
+                    let final_tool_calls = if tool_calls_acc.is_empty() {
+                        None
+                    } else {
+                        Some(tool_calls_acc)
+                    };
                     let _ = app.emit(
                         "chat-stream-done",
                         StreamDonePayload {
@@ -374,6 +387,7 @@ async fn do_stream(
                             } else {
                                 Some(full_reasoning)
                             },
+                            tool_calls: final_tool_calls,
                             error: None,
                         },
                     );
@@ -389,7 +403,49 @@ async fn do_stream(
                         .as_str()
                         .map(|s| s.to_string());
 
-                    if !delta_content.is_empty() || delta_reasoning.is_some() {
+                    // Parse tool_calls deltas from the SSE chunk
+                    let tool_calls_deltas: Option<Vec<ToolCallDelta>> =
+                        json["choices"][0]["delta"]["tool_calls"]
+                            .as_array()
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| serde_json::from_value::<ToolCallDelta>(v.clone()).ok())
+                                    .collect()
+                            });
+
+                    // Accumulate tool calls by index
+                    if let Some(ref deltas) = tool_calls_deltas {
+                        for delta in deltas {
+                            let idx = delta.index;
+                            // Grow the accumulator if needed
+                            while tool_calls_acc.len() <= idx {
+                                tool_calls_acc.push(ToolCall {
+                                    id: String::new(),
+                                    r#type: "function".to_string(),
+                                    function: ToolCallFunction {
+                                        name: String::new(),
+                                        arguments: String::new(),
+                                    },
+                                });
+                            }
+                            if let Some(ref id) = delta.id {
+                                tool_calls_acc[idx].id = id.clone();
+                            }
+                            if let Some(ref func) = delta.function {
+                                if let Some(ref name) = func.name {
+                                    tool_calls_acc[idx].function.name = name.clone();
+                                }
+                                if let Some(ref args) = func.arguments {
+                                    tool_calls_acc[idx].function.arguments.push_str(args);
+                                }
+                            }
+                        }
+                    }
+
+                    let has_content = !delta_content.is_empty() || delta_reasoning.is_some();
+                    let has_tool_calls = tool_calls_deltas.is_some();
+
+                    if has_content || has_tool_calls {
                         full_content.push_str(&delta_content);
                         if let Some(ref r) = delta_reasoning {
                             full_reasoning.push_str(r);
@@ -400,6 +456,7 @@ async fn do_stream(
                                 request_id: request_id.to_string(),
                                 delta: delta_content,
                                 reasoning_delta: delta_reasoning,
+                                tool_calls_delta: tool_calls_deltas,
                             },
                         );
                     }
@@ -409,6 +466,11 @@ async fn do_stream(
     }
 
     // Stream ended without [DONE] — emit done with what we have
+    let final_tool_calls = if tool_calls_acc.is_empty() {
+        None
+    } else {
+        Some(tool_calls_acc)
+    };
     let _ = app.emit(
         "chat-stream-done",
         StreamDonePayload {
@@ -419,6 +481,7 @@ async fn do_stream(
             } else {
                 Some(full_reasoning)
             },
+            tool_calls: final_tool_calls,
             error: None,
         },
     );

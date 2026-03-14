@@ -7,6 +7,8 @@ import type {
   Agent,
   CreateAgentRequest,
   UpdateAgentRequest,
+  MemoryNote,
+  ToolCallLog,
 } from "./types";
 
 // ── Chat commands ──
@@ -60,6 +62,65 @@ export async function deleteMessagesAndMaybeResetSummary(
   messageId: string,
 ): Promise<{ summary_was_reset: boolean }> {
   return invoke("delete_messages_and_maybe_reset_summary", { conversationId, messageId });
+}
+
+// ── Memory Notes ──
+
+export async function createMemoryNote(agentId: string, title: string, content: string): Promise<MemoryNote> {
+  return invoke("create_memory_note", { agentId, title, content });
+}
+
+export async function listMemoryNotes(agentId: string): Promise<MemoryNote[]> {
+  return invoke("list_memory_notes", { agentId });
+}
+
+export async function updateMemoryNote(id: string, title?: string | null, content?: string | null): Promise<MemoryNote> {
+  return invoke("update_memory_note", { id, title: title ?? null, content: content ?? null });
+}
+
+export async function deleteMemoryNote(id: string): Promise<void> {
+  return invoke("delete_memory_note", { id });
+}
+
+// ── Tool Call Logs ──
+
+export async function createToolCallLog(
+  conversationId: string,
+  toolName: string,
+  toolInput: string,
+  messageId?: string | null,
+): Promise<ToolCallLog> {
+  return invoke("create_tool_call_log", { conversationId, messageId: messageId ?? null, toolName, toolInput });
+}
+
+export async function listToolCallLogs(conversationId: string): Promise<ToolCallLog[]> {
+  return invoke("list_tool_call_logs", { conversationId });
+}
+
+export async function updateToolCallLogStatus(
+  id: string,
+  status: string,
+  toolOutput?: string | null,
+  durationMs?: number | null,
+): Promise<void> {
+  return invoke("update_tool_call_log_status", { id, status, toolOutput: toolOutput ?? null, durationMs: durationMs ?? null });
+}
+
+// ── Tool Execution ──
+
+export interface ToolExecutionResult {
+  tool_call_log_id: string;
+  status: string;
+  output: string;
+  duration_ms: number;
+}
+
+export async function executeTool(
+  toolName: string,
+  toolInput: string,
+  conversationId: string,
+): Promise<ToolExecutionResult> {
+  return invoke("execute_tool", { toolName, toolInput, conversationId });
 }
 
 // ── Agent commands ──
@@ -197,13 +258,14 @@ export async function abortStream(requestId: string): Promise<boolean> {
 // ── Streaming API ──
 
 export async function chatCompletionStream(request: {
-  messages: { role: string; content: string }[];
+  messages: Record<string, unknown>[];
   system_prompt: string;
   model: string;
   temperature: number | null;
   thinking_enabled: boolean;
   thinking_budget: number | null;
   request_id: string;
+  tools?: object[] | null;
 }): Promise<void> {
   return invoke("chat_completion_stream", {
     request: {
@@ -213,7 +275,33 @@ export async function chatCompletionStream(request: {
       temperature: request.temperature,
       thinking_enabled: request.thinking_enabled,
       thinking_budget: request.thinking_budget,
+      tools: request.tools ?? null,
     },
     requestId: request.request_id,
   });
+}
+
+// ── Export / Import ──
+
+export async function exportConversation(conversationId: string): Promise<string> {
+  return invoke("export_conversation", { conversationId });
+}
+
+export async function exportAgent(
+  agentId: string,
+  includeConversations: boolean,
+): Promise<number[]> {
+  return invoke("export_agent", { agentId, includeConversations });
+}
+
+export interface ImportResult {
+  agents_imported: number;
+  conversations_imported: number;
+  messages_imported: number;
+  memory_notes_imported: number;
+  warnings: string[];
+}
+
+export async function importAgent(zipBytes: number[]): Promise<ImportResult> {
+  return invoke("import_agent", { zipBytes });
 }

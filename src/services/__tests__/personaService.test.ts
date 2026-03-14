@@ -36,16 +36,18 @@ describe("readPersonaFiles", () => {
 
     const result = await readPersonaFiles("test-agent");
 
-    expect(cmds.readAgentFile).toHaveBeenCalledTimes(4);
+    expect(cmds.readAgentFile).toHaveBeenCalledTimes(5);
     expect(cmds.readAgentFile).toHaveBeenCalledWith("test-agent", "IDENTITY.md");
     expect(cmds.readAgentFile).toHaveBeenCalledWith("test-agent", "SOUL.md");
     expect(cmds.readAgentFile).toHaveBeenCalledWith("test-agent", "USER.md");
     expect(cmds.readAgentFile).toHaveBeenCalledWith("test-agent", "AGENTS.md");
+    expect(cmds.readAgentFile).toHaveBeenCalledWith("test-agent", "TOOLS.md");
     expect(result).toEqual({
       identity: "content",
       soul: "content",
       user: "content",
       agents: "content",
+      tools: "content",
     });
   });
 
@@ -54,7 +56,7 @@ describe("readPersonaFiles", () => {
 
     const result = await readPersonaFiles("missing-agent");
 
-    expect(result).toEqual({ identity: "", soul: "", user: "", agents: "" });
+    expect(result).toEqual({ identity: "", soul: "", user: "", agents: "", tools: "" });
   });
 
   it("caches results on second call", async () => {
@@ -63,8 +65,8 @@ describe("readPersonaFiles", () => {
     await readPersonaFiles("cached-agent");
     await readPersonaFiles("cached-agent");
 
-    // Should only be called 4 times (first call), not 8
-    expect(cmds.readAgentFile).toHaveBeenCalledTimes(4);
+    // Should only be called 5 times (first call), not 10
+    expect(cmds.readAgentFile).toHaveBeenCalledTimes(5);
   });
 });
 
@@ -76,15 +78,17 @@ describe("writePersonaFiles", () => {
       soul: "so",
       user: "us",
       agents: "ag",
+      tools: "tl",
     };
 
     await writePersonaFiles("write-agent", files);
 
-    expect(cmds.writeAgentFile).toHaveBeenCalledTimes(4);
+    expect(cmds.writeAgentFile).toHaveBeenCalledTimes(5);
     expect(cmds.writeAgentFile).toHaveBeenCalledWith("write-agent", "IDENTITY.md", "id");
     expect(cmds.writeAgentFile).toHaveBeenCalledWith("write-agent", "SOUL.md", "so");
     expect(cmds.writeAgentFile).toHaveBeenCalledWith("write-agent", "USER.md", "us");
     expect(cmds.writeAgentFile).toHaveBeenCalledWith("write-agent", "AGENTS.md", "ag");
+    expect(cmds.writeAgentFile).toHaveBeenCalledWith("write-agent", "TOOLS.md", "tl");
   });
 
   it("updates cache so subsequent read skips IPC", async () => {
@@ -94,6 +98,7 @@ describe("writePersonaFiles", () => {
       soul: "written-so",
       user: "written-us",
       agents: "written-ag",
+      tools: "written-tl",
     };
 
     await writePersonaFiles("cache-agent", files);
@@ -110,13 +115,13 @@ describe("invalidatePersonaCache", () => {
     vi.mocked(cmds.readAgentFile).mockResolvedValue("data");
 
     await readPersonaFiles("folder-a");
-    expect(cmds.readAgentFile).toHaveBeenCalledTimes(4);
+    expect(cmds.readAgentFile).toHaveBeenCalledTimes(5);
 
     invalidatePersonaCache("folder-a");
 
     await readPersonaFiles("folder-a");
-    // Should be called again (4 more = 8 total)
-    expect(cmds.readAgentFile).toHaveBeenCalledTimes(8);
+    // Should be called again (5 more = 10 total)
+    expect(cmds.readAgentFile).toHaveBeenCalledTimes(10);
   });
 
   it("clears all cache when no args", async () => {
@@ -124,13 +129,13 @@ describe("invalidatePersonaCache", () => {
 
     await readPersonaFiles("folder-x");
     await readPersonaFiles("folder-y");
-    expect(cmds.readAgentFile).toHaveBeenCalledTimes(8);
+    expect(cmds.readAgentFile).toHaveBeenCalledTimes(10);
 
     invalidatePersonaCache();
 
     await readPersonaFiles("folder-x");
     await readPersonaFiles("folder-y");
-    expect(cmds.readAgentFile).toHaveBeenCalledTimes(16);
+    expect(cmds.readAgentFile).toHaveBeenCalledTimes(20);
   });
 });
 
@@ -141,6 +146,7 @@ describe("assembleSystemPrompt", () => {
       soul: "Be kind",
       user: "",
       agents: "Agent list",
+      tools: "",
     };
 
     const result = assembleSystemPrompt(files);
@@ -156,6 +162,7 @@ describe("assembleSystemPrompt", () => {
       soul: "",
       user: "",
       agents: "",
+      tools: "",
     };
 
     const result = assembleSystemPrompt(files);
@@ -173,6 +180,7 @@ describe("assembleManagerPrompt", () => {
     soul: "",
     user: "",
     agents: "",
+    tools: "",
   };
 
   it("appends agent list section", () => {

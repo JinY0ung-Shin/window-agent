@@ -1,9 +1,11 @@
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
-import type { Conversation, ChatMessage, ActiveRun } from "../services/types";
+import type { Conversation, ChatMessage, ActiveRun, ToolCall, ToolRunState } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
+import { useMemoryStore } from "./memoryStore";
+import { useDebugStore } from "./debugStore";
 import { buildChatMessages, buildConversationContext } from "../services/chatHelpers";
 import { estimateTokens, estimateMessageTokens } from "../services/tokenEstimator";
 import {
@@ -18,6 +20,7 @@ import {
   parseAgentName,
   isBootstrapComplete,
 } from "../services/bootstrapService";
+import { getToolsForAgent, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
   DEFAULT_CONVERSATION_TITLE,
@@ -29,11 +32,18 @@ import {
   TITLE_GENERATION_PROMPT,
   SUMMARY_GENERATION_PROMPT,
   parseErrorMessage,
+  DEFAULT_TOOLS_MD,
 } from "../constants";
 
 // ── Stream event types ────────────────────────────────
 type StreamChunkEvent = { request_id: string; delta: string; reasoning_delta: string | null };
-type StreamDoneEvent = { request_id: string; full_content: string; reasoning_content: string | null; error: string | null };
+type StreamDoneEvent = {
+  request_id: string;
+  full_content: string;
+  reasoning_content: string | null;
+  tool_calls: { id: string; type: string; function: { name: string; arguments: string } }[] | null;
+  error: string | null;
+};
 
 // ── Helpers ────────────────────────────────────────────
 
@@ -82,6 +92,11 @@ interface ChatState {
   summaryUpToMessageId: string | null;
   summaryJobId: string | null;
 
+  // Tool run state
+  toolRunState: ToolRunState;
+  pendingToolCalls: ToolCall[];
+  toolIterationCount: number;
+
   // Bootstrap mode
   isBootstrapping: boolean;
   bootstrapFolderName: string | null;
@@ -100,7 +115,17 @@ interface ChatState {
   copyMessage: (messageId: string) => void;
   regenerateMessage: (messageId: string) => Promise<void>;
   abortStream: () => Promise<void>;
+  approveToolCall: () => Promise<void>;
+  rejectToolCall: () => void;
 }
+
+const TOOL_RESET = {
+  toolRunState: "idle" as ToolRunState,
+  pendingToolCalls: [] as ToolCall[],
+  toolIterationCount: 0,
+};
+
+const MAX_TOOL_ITERATIONS = 10;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: [],
@@ -111,6 +136,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   currentSummary: null,
   summaryUpToMessageId: null,
   summaryJobId: null,
+  ...TOOL_RESET,
   ...BOOTSTRAP_RESET,
 
   setInputValue: (v) => set({ inputValue: v }),
@@ -154,35 +180,72 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await cmds.abortStream(activeRun.requestId);
   },
 
+  approveToolCall: async () => {
+    set({ toolRunState: "tool_running" });
+    if (_toolApprovalResolve) {
+      _toolApprovalResolve(true);
+      _toolApprovalResolve = null;
+    }
+  },
+
+  rejectToolCall: () => {
+    if (_toolApprovalResolve) {
+      _toolApprovalResolve(false);
+      _toolApprovalResolve = null;
+    }
+  },
+
   loadConversations: async () => {
     const conversations = await cmds.getConversations();
     set({ conversations });
   },
 
   selectConversation: async (id) => {
-    set({ currentConversationId: id, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...BOOTSTRAP_RESET });
+    set({ currentConversationId: id, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...TOOL_RESET, ...BOOTSTRAP_RESET });
     const [detail, dbMessages] = await Promise.all([
       cmds.getConversationDetail(id),
       cmds.getMessages(id),
     ]);
     if (get().currentConversationId !== id) return; // stale guard
-    const messages: ChatMessage[] = dbMessages.map((m) => ({
-      id: m.id,
-      dbMessageId: m.id,
-      type: m.role === "user" ? "user" : "agent",
-      content: m.content,
-      status: "complete" as const,
-    }));
+    const messages: ChatMessage[] = dbMessages.map((m) => {
+      if (m.role === "user") {
+        return { id: m.id, dbMessageId: m.id, type: "user" as const, content: m.content, status: "complete" as const };
+      }
+      // Tool result messages (role=assistant but have tool_call_id)
+      if (m.tool_call_id) {
+        return {
+          id: m.id, dbMessageId: m.id, type: "tool" as const, content: m.content, status: "complete" as const,
+          tool_call_id: m.tool_call_id, tool_name: m.tool_name ?? undefined,
+        };
+      }
+      // Assistant messages (may have tool_calls stored as tool_name/tool_input)
+      const chatMsg: ChatMessage = { id: m.id, dbMessageId: m.id, type: "agent" as const, content: m.content, status: "complete" as const };
+      if (m.tool_name && m.tool_input) {
+        // Reconstruct tool_calls from DB storage (tool_name is JSON array of names, tool_input is JSON)
+        try {
+          chatMsg.tool_calls = JSON.parse(m.tool_input);
+        } catch { /* ignore parse errors */ }
+      }
+      return chatMsg;
+    });
     set({ messages, currentSummary: detail.summary ?? null, summaryUpToMessageId: detail.summary_up_to_message_id ?? null });
+    // Sync agent selection and load memory notes for this conversation's agent
+    if (detail.agent_id) {
+      useAgentStore.getState().selectAgent(detail.agent_id);
+      useMemoryStore.getState().loadNotes(detail.agent_id);
+    }
+    // Load debug logs for this conversation
+    useDebugStore.getState().loadLogs(id);
   },
 
   createNewConversation: () => {
-    set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...BOOTSTRAP_RESET });
+    set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...TOOL_RESET, ...BOOTSTRAP_RESET });
     useAgentStore.getState().selectAgent(null);
+    useDebugStore.getState().clear();
   },
 
   prepareForAgent: (agentId: string) => {
-    set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...BOOTSTRAP_RESET });
+    set({ currentConversationId: null, messages: [], activeRun: null, currentSummary: null, summaryUpToMessageId: null, summaryJobId: null, ...TOOL_RESET, ...BOOTSTRAP_RESET });
     useAgentStore.getState().selectAgent(agentId);
   },
 
@@ -252,6 +315,154 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }));
 
+// ── Tool approval mechanism ────────────────────────────
+let _toolApprovalResolve: ((approved: boolean) => void) | null = null;
+const TOOL_APPROVAL_TIMEOUT_MS = 60_000;
+
+function waitForToolApproval(): Promise<boolean> {
+  return new Promise((resolve) => {
+    _toolApprovalResolve = resolve;
+    // Auto-reject after 60 seconds
+    setTimeout(() => {
+      if (_toolApprovalResolve === resolve) {
+        _toolApprovalResolve = null;
+        resolve(false);
+      }
+    }, TOOL_APPROVAL_TIMEOUT_MS);
+  });
+}
+
+// ── Stream one turn (extracted helper) ─────────────────
+
+async function streamOneTurn(
+  set: (partial: Partial<ChatState>) => void,
+  get: () => ChatState,
+  params: {
+    baseSystemPrompt: string;
+    effective: { model: string; temperature: number | null; thinkingEnabled: boolean; thinkingBudget: number | null };
+    requestId: string;
+    msgId: string;
+    tools?: object[];
+  },
+): Promise<StreamDoneEvent> {
+  const { baseSystemPrompt, effective, requestId, msgId, tools } = params;
+
+  // Build conversation context each iteration (messages may have grown with tool results)
+  const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
+    messages: get().messages,
+    summary: get().currentSummary,
+    baseSystemPrompt,
+    memoryNotes: useMemoryStore.getState().notes,
+  });
+
+  // rAF-based chunk coalescing
+  let pendingDelta = "";
+  let pendingReasoning = "";
+  let rafId: number | null = null;
+
+  const flushDelta = () => {
+    if (!pendingDelta && !pendingReasoning) return;
+    const delta = pendingDelta;
+    pendingDelta = "";
+    pendingReasoning = "";
+
+    set({
+      messages: get().messages.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              content: m.content === LOADING_MESSAGE ? delta : m.content + delta,
+              status: "streaming" as const,
+            }
+          : m,
+      ),
+      activeRun: get().activeRun ? { ...get().activeRun!, status: "streaming" } : null,
+    });
+  };
+
+  let doneResolve: (v: StreamDoneEvent) => void;
+  const donePromise = new Promise<StreamDoneEvent>((r) => { doneResolve = r; });
+
+  const unlistenChunk = await listen<StreamChunkEvent>(
+    "chat-stream-chunk",
+    (event) => {
+      if (event.payload.request_id !== requestId) return;
+      pendingDelta += event.payload.delta;
+      if (event.payload.reasoning_delta) {
+        pendingReasoning += event.payload.reasoning_delta;
+      }
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          flushDelta();
+          rafId = null;
+        });
+      }
+    },
+  );
+
+  const unlistenDone = await listen<StreamDoneEvent>(
+    "chat-stream-done",
+    (event) => {
+      if (event.payload.request_id !== requestId) return;
+      doneResolve(event.payload);
+    },
+  );
+
+  try {
+    await cmds.chatCompletionStream({
+      messages: chatMessages as Record<string, unknown>[],
+      system_prompt: systemPrompt,
+      model: effective.model,
+      temperature: effective.temperature,
+      thinking_enabled: effective.thinkingEnabled,
+      thinking_budget: effective.thinkingBudget,
+      request_id: requestId,
+      tools: tools && tools.length > 0 ? tools : null,
+    });
+
+    const done = await donePromise;
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    flushDelta();
+    return done;
+  } finally {
+    unlistenChunk();
+    unlistenDone();
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+}
+
+// ── Execute tool calls via Rust backend ────────────────
+
+async function executeToolCalls(
+  toolCalls: ToolCall[],
+  conversationId: string,
+): Promise<ChatMessage[]> {
+  const results: ChatMessage[] = [];
+  for (const tc of toolCalls) {
+    try {
+      const result = await cmds.executeTool(tc.name, tc.arguments, conversationId);
+      results.push({
+        id: `tool-result-${Date.now()}-${tc.id}`,
+        type: "tool",
+        content: result.output,
+        status: "complete",
+        tool_call_id: tc.id,
+        tool_name: tc.name,
+      });
+    } catch (error) {
+      results.push({
+        id: `tool-error-${Date.now()}-${tc.id}`,
+        type: "tool",
+        content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        status: "complete",
+        tool_call_id: tc.id,
+        tool_name: tc.name,
+      });
+    }
+  }
+  return results;
+}
+
 // ── Normal message flow ────────────────────────────────
 
 async function sendNormalMessage(
@@ -308,16 +519,17 @@ async function sendNormalMessage(
     status: "complete",
   };
 
-  const requestId = `req-${Date.now()}`;
-  const { msgId, msg: pendingMsg } = createPendingMessage(requestId);
+  let currentRequestId = `req-${Date.now()}`;
+  const { msgId: firstMsgId, msg: pendingMsg } = createPendingMessage(currentRequestId);
+  let currentMsgId = firstMsgId;
 
   set({
     messages: [...messages, userMsg, pendingMsg],
     inputValue: "",
     activeRun: {
-      requestId,
+      requestId: currentRequestId,
       conversationId: convId,
-      targetMessageId: msgId,
+      targetMessageId: currentMsgId,
       status: "pending",
     },
   });
@@ -345,140 +557,228 @@ async function sendNormalMessage(
           thinkingBudget: settings.thinkingBudget,
         };
 
-    // Build conversation context (shared path)
-    const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
-      messages: get().messages,
-      summary: get().currentSummary,
-      baseSystemPrompt,
-    });
+    // Load tools for agent
+    let toolDefinitions: ToolDefinition[] = [];
+    if (agent && !agent.is_default) {
+      try {
+        toolDefinitions = await getToolsForAgent(agent.folder_name);
+      } catch { /* no tools */ }
+    }
+    const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
 
-    // rAF-based chunk coalescing
-    let pendingDelta = "";
-    let pendingReasoning = "";
-    let rafId: number | null = null;
+    // ── Tool iteration loop ──
+    let iterationCount = 0;
 
-    const flushDelta = () => {
-      if (!pendingDelta && !pendingReasoning) return;
-      const delta = pendingDelta;
-      pendingDelta = "";
-      pendingReasoning = "";
-
-      set({
-        messages: get().messages.map((m) =>
-          m.id === msgId
-            ? {
-                ...m,
-                content: m.content === LOADING_MESSAGE ? delta : m.content + delta,
-                status: "streaming" as const,
-              }
-            : m,
-        ),
-        activeRun: get().activeRun ? { ...get().activeRun!, status: "streaming" } : null,
+    while (iterationCount <= MAX_TOOL_ITERATIONS) {
+      const done = await streamOneTurn(set, get, {
+        baseSystemPrompt,
+        effective,
+        requestId: currentRequestId,
+        msgId: currentMsgId,
+        tools: openAITools,
       });
-    };
-
-    // Register BOTH listeners before starting the stream (fix: done-listener race)
-    let doneResolve: (v: StreamDoneEvent) => void;
-    const donePromise = new Promise<StreamDoneEvent>((r) => { doneResolve = r; });
-
-    const unlistenChunk = await listen<StreamChunkEvent>(
-      "chat-stream-chunk",
-      (event) => {
-        if (event.payload.request_id !== requestId) return;
-        pendingDelta += event.payload.delta;
-        if (event.payload.reasoning_delta) {
-          pendingReasoning += event.payload.reasoning_delta;
-        }
-        if (rafId === null) {
-          rafId = requestAnimationFrame(() => {
-            flushDelta();
-            rafId = null;
-          });
-        }
-      },
-    );
-
-    const unlistenDone = await listen<StreamDoneEvent>(
-      "chat-stream-done",
-      (event) => {
-        if (event.payload.request_id !== requestId) return;
-        doneResolve(event.payload);
-      },
-    );
-
-    try {
-      // Start streaming
-      await cmds.chatCompletionStream({
-        messages: chatMessages,
-        system_prompt: systemPrompt,
-        model: effective.model,
-        temperature: effective.temperature,
-        thinking_enabled: effective.thinkingEnabled,
-        thinking_budget: effective.thinkingBudget,
-        request_id: requestId,
-      });
-
-      // Wait for completion
-      const done = await donePromise;
-
-      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-      flushDelta();
 
       if (done.error) {
         if (done.error === "aborted") {
           set({
-            messages: updateMessage(get().messages, msgId, { status: "aborted" }),
+            messages: updateMessage(get().messages, currentMsgId, { status: "aborted" }),
             activeRun: null,
+            ...TOOL_RESET,
           });
-          // Don't throw — fall through to loadConversations below
-        } else {
-          throw new Error(done.error);
+          break;
         }
-      } else {
-        const replyContent = done.full_content || NO_RESPONSE_MESSAGE;
-        const reasoningContent = done.reasoning_content ?? undefined;
+        throw new Error(done.error);
+      }
 
+      const replyContent = done.full_content || "";
+      const reasoningContent = done.reasoning_content ?? undefined;
+      const toolCalls = done.tool_calls;
+
+      // No tool calls → normal completion
+      if (!toolCalls || toolCalls.length === 0) {
+        const finalContent = replyContent || NO_RESPONSE_MESSAGE;
         const savedAssistant = await cmds.saveMessage({
           conversation_id: convId,
           role: "assistant",
-          content: replyContent,
+          content: finalContent,
         });
 
         set({
-          messages: updateMessage(get().messages, msgId, {
+          messages: updateMessage(get().messages, currentMsgId, {
             dbMessageId: savedAssistant.id,
-            content: replyContent,
+            content: finalContent,
             reasoningContent,
             status: "complete",
           }),
           activeRun: null,
+          ...TOOL_RESET,
         });
 
         // Auto-generate title on first assistant message
         const completedAgentMsgs = get().messages.filter((m) => m.type === "agent" && m.status === "complete");
         if (completedAgentMsgs.length === 1) {
-          // Use captured initialTitle for new convs, or look up existing title
           const expectedTitle = initialTitle ?? get().conversations.find((c) => c.id === convId)?.title ?? null;
-          generateTitle(convId, inputValue, replyContent, expectedTitle, get, set);
+          generateTitle(convId, inputValue, finalContent, expectedTitle, get, set);
         }
 
-        // Background summary generation (pass actual system prompt for accurate budget)
         maybeGenerateSummary(convId, baseSystemPrompt, get, set);
+        break;
       }
-    } finally {
-      unlistenChunk();
-      unlistenDone();
-      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+
+      // ── Has tool calls → enter tool execution ──
+      iterationCount++;
+      if (iterationCount > MAX_TOOL_ITERATIONS) {
+        set({
+          messages: updateMessage(get().messages, currentMsgId, {
+            content: replyContent || "최대 도구 호출 반복 횟수에 도달했습니다.",
+            status: "failed",
+          }),
+          activeRun: null,
+          ...TOOL_RESET,
+        });
+        break;
+      }
+
+      const parsedToolCalls: ToolCall[] = toolCalls.map((tc) => ({
+        id: tc.id,
+        name: tc.function.name,
+        arguments: tc.function.arguments,
+      }));
+
+      // Save assistant message with tool_calls to DB
+      const savedAssistant = await cmds.saveMessage({
+        conversation_id: convId,
+        role: "assistant",
+        content: replyContent,
+        tool_name: "tool_calls",
+        tool_input: JSON.stringify(parsedToolCalls),
+      });
+
+      set({
+        messages: updateMessage(get().messages, currentMsgId, {
+          dbMessageId: savedAssistant.id,
+          content: replyContent,
+          reasoningContent,
+          tool_calls: parsedToolCalls,
+          status: "complete",
+        }),
+        toolRunState: "tool_pending",
+        pendingToolCalls: parsedToolCalls,
+        toolIterationCount: iterationCount,
+      });
+
+      // Per-tool permission handling: each tool call evaluated individually
+      let savedToolMsgs: ChatMessage[] = [];
+      const autoTools: ToolCall[] = [];
+      const confirmTools: ToolCall[] = [];
+      const denyTools: ToolCall[] = [];
+
+      for (const tc of parsedToolCalls) {
+        const tier = getToolTier(toolDefinitions, tc.name);
+        if (tier === "deny") denyTools.push(tc);
+        else if (tier === "confirm") confirmTools.push(tc);
+        else autoTools.push(tc);
+      }
+
+      // 1. Persist deny results immediately
+      for (const tc of denyTools) {
+        const saved = await cmds.saveMessage({
+          conversation_id: convId,
+          role: "tool",
+          content: "Tool denied by policy.",
+          tool_call_id: tc.id,
+          tool_name: tc.name,
+        });
+        savedToolMsgs.push({
+          id: saved.id,
+          type: "tool" as const,
+          content: "Tool denied by policy.",
+          status: "complete" as const,
+          tool_call_id: tc.id,
+          tool_name: tc.name,
+        });
+      }
+
+      // 2. Execute auto-tier tools immediately (no approval needed)
+      if (autoTools.length > 0) {
+        set({ toolRunState: "tool_running" });
+        const autoResults = await executeToolCalls(autoTools, convId);
+        for (const toolMsg of autoResults) {
+          const saved = await cmds.saveMessage({
+            conversation_id: convId,
+            role: "tool",
+            content: toolMsg.content,
+            tool_call_id: toolMsg.tool_call_id,
+            tool_name: toolMsg.tool_name,
+          });
+          savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
+        }
+      }
+
+      // 3. Ask user approval for confirm-tier tools (if any)
+      if (confirmTools.length > 0) {
+        set({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
+        const confirmApproved = await waitForToolApproval();
+        if (confirmApproved) {
+          set({ toolRunState: "tool_running" });
+          const confirmResults = await executeToolCalls(confirmTools, convId);
+          for (const toolMsg of confirmResults) {
+            const saved = await cmds.saveMessage({
+              conversation_id: convId,
+              role: "tool",
+              content: toolMsg.content,
+              tool_call_id: toolMsg.tool_call_id,
+              tool_name: toolMsg.tool_name,
+            });
+            savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
+          }
+        } else {
+          for (const tc of confirmTools) {
+            const saved = await cmds.saveMessage({
+              conversation_id: convId,
+              role: "tool",
+              content: "Tool call rejected by user.",
+              tool_call_id: tc.id,
+              tool_name: tc.name,
+            });
+            savedToolMsgs.push({
+              id: saved.id,
+              type: "tool" as const,
+              content: "Tool call rejected by user.",
+              status: "complete" as const,
+              tool_call_id: tc.id,
+              tool_name: tc.name,
+            });
+          }
+        }
+      }
+
+      // Prepare for next iteration — model will reflect on tool results (including denials)
+      currentRequestId = `req-${Date.now()}`;
+      const { msgId: nextMsgId, msg: nextPending } = createPendingMessage(currentRequestId);
+      currentMsgId = nextMsgId;
+
+      set({
+        messages: [...get().messages, ...savedToolMsgs, nextPending],
+        toolRunState: "continuing",
+        activeRun: {
+          requestId: currentRequestId,
+          conversationId: convId,
+          targetMessageId: currentMsgId,
+          status: "pending",
+        },
+      });
     }
   } catch (error) {
     console.error("API Error:", error);
     set({
-      messages: updateMessage(get().messages, msgId, {
+      messages: updateMessage(get().messages, currentMsgId, {
         content: parseErrorMessage(error),
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
       }),
       activeRun: null,
+      ...TOOL_RESET,
     });
   }
 
@@ -546,6 +846,7 @@ async function regenerateStream(
       messages: get().messages,
       summary: get().currentSummary,
       baseSystemPrompt,
+      memoryNotes: useMemoryStore.getState().notes,
     });
 
     // rAF-based chunk coalescing
@@ -751,6 +1052,18 @@ async function completeBootstrap(
   // Bootstrap wrote files directly via IPC — invalidate any stale cache
   invalidatePersonaCache(bootstrapFolderName);
 
+  // Write default TOOLS.md if not already present
+  try {
+    await cmds.readAgentFile(bootstrapFolderName, "TOOLS.md");
+    // File exists — don't overwrite
+  } catch {
+    try {
+      await cmds.writeAgentFile(bootstrapFolderName, "TOOLS.md", DEFAULT_TOOLS_MD);
+    } catch (e) {
+      console.warn("Failed to write default TOOLS.md:", e);
+    }
+  }
+
   let agentName: string;
   try {
     const identity = await cmds.readAgentFile(
@@ -793,7 +1106,7 @@ async function generateTitle(
   assistantMsg: string,
   expectedCurrentTitle: string | null,
   get: () => ChatState,
-  set: (partial: Partial<ChatState>) => void,
+  _set: (partial: Partial<ChatState>) => void,
 ) {
   try {
     const settings = useSettingsStore.getState();

@@ -1,6 +1,6 @@
 // ── Role types ──────────────────────────────────────
-export type MessageRole = "user" | "assistant" | "system";
-export type SaveMessageRole = "user" | "assistant";
+export type MessageRole = "user" | "assistant" | "system" | "tool";
+export type SaveMessageRole = "user" | "assistant" | "tool";
 
 // DB models (match Rust structs)
 export interface ConversationListItem {
@@ -24,6 +24,9 @@ export interface DbMessage {
   conversation_id: string;
   role: MessageRole;
   content: string;
+  tool_call_id?: string | null;
+  tool_name?: string | null;
+  tool_input?: string | null;
   created_at: string;
 }
 
@@ -31,6 +34,30 @@ export interface SaveMessageRequest {
   conversation_id: string;
   role: SaveMessageRole;
   content: string;
+  tool_call_id?: string | null;
+  tool_name?: string | null;
+  tool_input?: string | null;
+}
+
+export interface MemoryNote {
+  id: string;
+  agent_id: string;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ToolCallLog {
+  id: string;
+  conversation_id: string;
+  message_id: string | null;
+  tool_name: string;
+  tool_input: string;
+  tool_output: string | null;
+  status: string;
+  duration_ms: number | null;
+  created_at: string;
 }
 
 // Agent model (matches Rust Agent struct — serde serializes bool, not integer)
@@ -80,20 +107,39 @@ export interface PersonaFiles {
   soul: string;
   user: string;
   agents: string;
+  tools: string;
 }
+
+// ── Tool calling types ──────────────────────────────
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+export interface ToolResult {
+  tool_call_id: string;
+  content: string;
+}
+
+export type ToolPermissionTier = "auto" | "confirm" | "deny";
+export type ToolRunState = "idle" | "streaming" | "tool_pending" | "tool_waiting" | "tool_running" | "continuing";
 
 // UI model
 export type MessageStatus = "pending" | "streaming" | "complete" | "failed" | "aborted";
 
 export interface ChatMessage {
   id: string;
-  type: "user" | "agent";
+  type: "user" | "agent" | "tool";
   content: string;
   reasoningContent?: string;
   status: MessageStatus;
   requestId?: string;
   dbMessageId?: string;
   error?: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  tool_name?: string;
 }
 
 export interface ActiveRun {

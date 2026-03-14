@@ -64,6 +64,17 @@ pub fn run() {
             commands::abort_stream,
             commands::bootstrap_completion,
             commands::list_models,
+            commands::create_memory_note,
+            commands::list_memory_notes,
+            commands::update_memory_note,
+            commands::delete_memory_note,
+            commands::create_tool_call_log,
+            commands::list_tool_call_logs,
+            commands::update_tool_call_log_status,
+            commands::execute_tool,
+            commands::export_conversation,
+            commands::export_agent,
+            commands::import_agent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

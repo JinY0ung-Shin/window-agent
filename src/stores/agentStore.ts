@@ -26,13 +26,14 @@ interface AgentState {
   deleteAgent: (id: string) => Promise<void>;
 }
 
-export type PersonaTab = "identity" | "soul" | "user" | "agents";
+export type PersonaTab = "identity" | "soul" | "user" | "agents" | "tools";
 
 const EMPTY_PERSONA: PersonaFiles = {
   identity: "",
   soul: "",
   user: "",
   agents: "",
+  tools: "",
 };
 
 export const useAgentStore = create<AgentState>((set, get) => ({

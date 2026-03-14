@@ -26,6 +26,43 @@ export const TITLE_GENERATION_PROMPT =
 export const SUMMARY_GENERATION_PROMPT =
   "대화 요약기입니다. 이전 요약과 새 메시지를 통합하여 간결한 요약을 생성하세요. 핵심 사실, 결정 사항, 사용자 선호만 포함. 200자 이내. 한국어로 작성하세요.";
 
+// ── Default TOOLS.md Template ───────────────────────
+export const DEFAULT_TOOLS_MD = `# Tools
+
+## read_file
+- description: 지정 경로의 파일 내용을 읽습니다
+- tier: auto
+- parameters:
+  - path (string, required): 파일 경로
+
+## write_file
+- description: 지정 경로에 파일을 씁니다
+- tier: confirm
+- parameters:
+  - path (string, required): 파일 경로
+  - content (string, required): 파일 내용
+
+## list_directory
+- description: 디렉토리 내 파일 목록을 조회합니다
+- tier: auto
+- parameters:
+  - path (string, required): 디렉토리 경로
+
+## web_search
+- description: 웹에서 정보를 검색합니다
+- tier: confirm
+- parameters:
+  - query (string, required): 검색 쿼리 또는 URL
+
+## memory_note
+- description: 에이전트 메모리 노트를 관리합니다
+- tier: auto
+- parameters:
+  - action (string, required): create | read | update | delete
+  - title (string, required): 노트 제목
+  - content (string, optional): 노트 내용
+`;
+
 // ── UI Messages ─────────────────────────────────────
 export const LOADING_MESSAGE = "생각 중...";
 export const ERROR_MESSAGE =

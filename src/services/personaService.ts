@@ -7,6 +7,7 @@ export const PERSONA_FILE_NAMES: Array<keyof PersonaFiles> = [
   "soul",
   "user",
   "agents",
+  "tools",
 ];
 
 export const FILE_NAME_MAP: Record<keyof PersonaFiles, string> = {
@@ -14,6 +15,7 @@ export const FILE_NAME_MAP: Record<keyof PersonaFiles, string> = {
   soul: "SOUL.md",
   user: "USER.md",
   agents: "AGENTS.md",
+  tools: "TOOLS.md",
 };
 
 // In-memory cache to avoid re-reading persona files on every message send.
@@ -26,7 +28,7 @@ export async function readPersonaFiles(folderName: string): Promise<PersonaFiles
   const cached = personaCache.get(folderName);
   if (cached) return cached;
 
-  const files: PersonaFiles = { identity: "", soul: "", user: "", agents: "" };
+  const files: PersonaFiles = { identity: "", soul: "", user: "", agents: "", tools: "" };
 
   await Promise.all(
     PERSONA_FILE_NAMES.map(async (key) => {
@@ -79,11 +81,13 @@ export function assembleSystemPrompt(files: PersonaFiles): string {
   const soul = files.soul.trim();
   const user = files.user.trim();
   const agents = files.agents.trim();
+  const tools = files.tools.trim();
 
   if (identity) sections.push(`[IDENTITY]\n${identity}`);
   if (soul) sections.push(`[SOUL]\n${soul}`);
   if (user) sections.push(`[USER]\n${user}`);
   if (agents) sections.push(`[AGENTS]\n${agents}`);
+  if (tools) sections.push(`[TOOLS]\n${tools}`);
 
   return sections.join("\n\n---\n\n");
 }

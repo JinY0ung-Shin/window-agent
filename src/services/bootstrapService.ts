@@ -1,9 +1,9 @@
 import * as cmds from "./tauriCommands";
-import { FILE_NAME_MAP } from "./personaService";
+
 import { DEFAULT_AGENT_NAME } from "../constants";
 
-/** The 4 persona file names that must be written for bootstrap to complete. */
-const PERSONA_FILE_NAMES = Object.values(FILE_NAME_MAP);
+/** The 4 core persona file names that must be written for bootstrap to complete. */
+const REQUIRED_BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"] as const;
 
 /** OpenAI function-calling tool definitions for bootstrap. */
 const BOOTSTRAP_TOOLS = [
@@ -157,5 +157,5 @@ export function parseAgentName(identityContent: string): string {
  * Check if all 4 persona files have been written.
  */
 export function isBootstrapComplete(filesWritten: string[]): boolean {
-  return PERSONA_FILE_NAMES.every((f) => filesWritten.includes(f));
+  return REQUIRED_BOOTSTRAP_FILES.every((f) => filesWritten.includes(f));
 }

@@ -34,6 +34,8 @@ mod tests {
         assert!(tables.contains(&"conversations".to_string()));
         assert!(tables.contains(&"messages".to_string()));
         assert!(tables.contains(&"agents".to_string()));
+        assert!(tables.contains(&"memory_notes".to_string()));
+        assert!(tables.contains(&"tool_call_logs".to_string()));
     }
 
     #[test]

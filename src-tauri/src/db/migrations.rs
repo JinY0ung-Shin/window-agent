@@ -82,7 +82,70 @@ fn all_migrations() -> &'static [Migration] {
                 ALTER TABLE conversations ADD COLUMN summary_up_to_message_id TEXT REFERENCES messages(id) ON DELETE SET NULL;
             ",
         },
+        Migration {
+            version: 4,
+            description: "Tool call support: message tool fields, memory_notes, tool_call_logs",
+            sql: "",  // handled by custom migration function
+        },
     ]
+}
+
+/// Migration v4 with safe ALTER TABLE (skips columns that already exist).
+fn migrate_v3_to_v4(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Check existing columns on messages table
+    let has_column = |table: &str, col: &str| -> bool {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({})", table))
+            .unwrap();
+        let cols: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        cols.contains(&col.to_string())
+    };
+
+    // Add tool columns to messages (skip if already present)
+    if !has_column("messages", "tool_call_id") {
+        conn.execute_batch("ALTER TABLE messages ADD COLUMN tool_call_id TEXT;")?;
+    }
+    if !has_column("messages", "tool_name") {
+        conn.execute_batch("ALTER TABLE messages ADD COLUMN tool_name TEXT;")?;
+    }
+    if !has_column("messages", "tool_input") {
+        conn.execute_batch("ALTER TABLE messages ADD COLUMN tool_input TEXT;")?;
+    }
+
+    // Create memory_notes table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS memory_notes (
+            id         TEXT PRIMARY KEY,
+            agent_id   TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+            title      TEXT NOT NULL,
+            content    TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_memory_notes_agent_id ON memory_notes(agent_id);",
+    )?;
+
+    // Create tool_call_logs table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS tool_call_logs (
+            id              TEXT PRIMARY KEY,
+            conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            message_id      TEXT REFERENCES messages(id) ON DELETE SET NULL,
+            tool_name       TEXT NOT NULL,
+            tool_input      TEXT NOT NULL,
+            tool_output     TEXT,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            duration_ms     INTEGER,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_tool_call_logs_conversation ON tool_call_logs(conversation_id);",
+    )?;
+
+    Ok(())
 }
 
 /// Ensure the _migrations tracking table exists.
@@ -113,7 +176,12 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
     for migration in all_migrations() {
         if migration.version > current {
             let tx = conn.unchecked_transaction()?;
-            tx.execute_batch(migration.sql)?;
+            if migration.version == 4 {
+                // v4 uses custom migration with safe ALTER TABLE checks
+                migrate_v3_to_v4(&tx)?;
+            } else {
+                tx.execute_batch(migration.sql)?;
+            }
             tx.execute(
                 "INSERT INTO _migrations (version, description) VALUES (?1, ?2)",
                 rusqlite::params![migration.version, migration.description],
@@ -161,7 +229,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
     }
 
     #[test]
@@ -170,7 +238,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
 
         let desc: String = conn
             .query_row(
@@ -276,9 +344,9 @@ mod tests {
             [],
         ).unwrap();
 
-        // Run v3 migration
+        // Run remaining migrations (v3 + v4)
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 3);
+        assert_eq!(current_version(&conn).unwrap(), 4);
 
         // Verify existing data is preserved
         let title: String = conn
@@ -334,5 +402,92 @@ mod tests {
             .query_row("SELECT summary_up_to_message_id FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
             .unwrap();
         assert!(summary_msg_id.is_none(), "ON DELETE SET NULL should clear summary_up_to_message_id");
+    }
+
+    #[test]
+    fn test_v4_migration_creates_tables_and_columns() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+        assert_eq!(current_version(&conn).unwrap(), 4);
+
+        // Verify new tables exist
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        assert!(tables.contains(&"memory_notes".to_string()));
+        assert!(tables.contains(&"tool_call_logs".to_string()));
+
+        // Verify tool columns on messages
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, description, created_at, updated_at) VALUES ('a1', 'test', 'Test', '', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES ('c1', 'Chat', 'a1', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at) VALUES ('m1', 'c1', 'assistant', 'result', 'tc1', 'search', '{\"q\":\"test\"}', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        let tool_name: Option<String> = conn
+            .query_row("SELECT tool_name FROM messages WHERE id = 'm1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(tool_name.as_deref(), Some("search"));
+    }
+
+    #[test]
+    fn test_v4_migration_preserves_existing_messages() {
+        let conn = setup_conn();
+
+        // Run v1-v3 first
+        ensure_migrations_table(&conn).unwrap();
+        for m in &all_migrations()[..3] {
+            let tx = conn.unchecked_transaction().unwrap();
+            if m.version == 4 {
+                migrate_v3_to_v4(&tx).unwrap();
+            } else {
+                tx.execute_batch(m.sql).unwrap();
+            }
+            tx.execute(
+                "INSERT INTO _migrations (version, description) VALUES (?1, ?2)",
+                rusqlite::params![m.version, m.description],
+            ).unwrap();
+            tx.commit().unwrap();
+        }
+
+        // Insert data at v3 level
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, description, created_at, updated_at) VALUES ('a1', 'test', 'Test', '', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES ('c1', 'Chat', 'a1', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES ('m1', 'c1', 'user', 'hello', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        // Run v4
+        run_migrations(&conn).unwrap();
+        assert_eq!(current_version(&conn).unwrap(), 4);
+
+        // Verify existing data preserved, new columns are NULL
+        let content: String = conn
+            .query_row("SELECT content FROM messages WHERE id = 'm1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(content, "hello");
+
+        let tool_name: Option<String> = conn
+            .query_row("SELECT tool_name FROM messages WHERE id = 'm1'", [], |row| row.get(0))
+            .unwrap();
+        assert!(tool_name.is_none());
     }
 }
