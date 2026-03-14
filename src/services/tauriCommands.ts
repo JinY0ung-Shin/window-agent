@@ -92,3 +92,15 @@ export async function resizeAvatar(imageBase64: string): Promise<string> {
 export async function getBootstrapPrompt(): Promise<string> {
   return invoke("get_bootstrap_prompt");
 }
+
+// ── Config commands ──
+
+export interface EnvConfig {
+  api_key: string | null;
+  base_url: string | null;
+  model: string | null;
+}
+
+export async function getEnvConfig(): Promise<EnvConfig> {
+  return invoke("get_env_config");
+}

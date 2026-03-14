@@ -6,6 +6,8 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    dotenvy::dotenv().ok();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -41,6 +43,7 @@ pub fn run() {
             commands::seed_manager_agent,
             commands::resize_avatar,
             commands::get_bootstrap_prompt,
+            commands::get_env_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

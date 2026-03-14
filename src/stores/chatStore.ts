@@ -174,6 +174,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const { inputValue, isBootstrapping } = get();
     if (!inputValue.trim()) return;
 
+    // Wait for env defaults to load before checking API key
+    await useSettingsStore.getState().waitForEnv();
+
     // Common API key guard
     const settings = useSettingsStore.getState();
     if (!settings.apiKey) {

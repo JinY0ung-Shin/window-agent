@@ -9,11 +9,13 @@ import "./App.css";
 
 function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const loadEnvDefaults = useSettingsStore((s) => s.loadEnvDefaults);
   const loadConversations = useChatStore((s) => s.loadConversations);
   const loadAgents = useAgentStore((s) => s.loadAgents);
 
   useEffect(() => {
     loadSettings();
+    loadEnvDefaults();
 
     // Initialize agents: seed manager → sync FS → load into store
     cmds.seedManagerAgent()

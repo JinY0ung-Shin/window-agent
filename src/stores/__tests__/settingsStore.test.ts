@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../settingsStore";
 import {
   DEFAULT_BASE_URL,
@@ -6,11 +7,13 @@ import {
   DEFAULT_THINKING_BUDGET,
 } from "../../constants";
 
+const mockedInvoke = vi.mocked(invoke);
 const initialState = useSettingsStore.getState();
 
 beforeEach(() => {
   useSettingsStore.setState(initialState, true);
   localStorage.clear();
+  mockedInvoke.mockReset();
 });
 
 describe("settingsStore", () => {
@@ -125,5 +128,83 @@ describe("settingsStore", () => {
     expect(s.thinkingEnabled).toBe(true);
     expect(s.thinkingBudget).toBe(16384);
     expect(s.isSettingsOpen).toBe(false);
+  });
+
+  describe("loadEnvDefaults", () => {
+    it("applies env values when localStorage is absent", async () => {
+      mockedInvoke.mockResolvedValue({
+        api_key: "env-key",
+        base_url: "http://env-url/v1",
+        model: "env-model",
+      });
+
+      await useSettingsStore.getState().loadEnvDefaults();
+      const s = useSettingsStore.getState();
+
+      expect(s.apiKey).toBe("env-key");
+      expect(s.baseUrl).toBe("http://env-url/v1");
+      expect(s.modelName).toBe("env-model");
+      expect(s.envLoaded).toBe(true);
+    });
+
+    it("does NOT override when localStorage has values", async () => {
+      localStorage.setItem("openai_api_key", "local-key");
+      localStorage.setItem("openai_base_url", "http://local-url");
+      localStorage.setItem("openai_model_name", "local-model");
+
+      mockedInvoke.mockResolvedValue({
+        api_key: "env-key",
+        base_url: "http://env-url/v1",
+        model: "env-model",
+      });
+
+      useSettingsStore.getState().loadSettings();
+      await useSettingsStore.getState().loadEnvDefaults();
+      const s = useSettingsStore.getState();
+
+      expect(s.apiKey).toBe("local-key");
+      expect(s.baseUrl).toBe("http://local-url");
+      expect(s.modelName).toBe("local-model");
+    });
+
+    it("preserves user's intentional empty value in localStorage", async () => {
+      // User explicitly saved an empty API key
+      localStorage.setItem("openai_api_key", "");
+
+      mockedInvoke.mockResolvedValue({
+        api_key: "env-key",
+        base_url: null,
+        model: null,
+      });
+
+      await useSettingsStore.getState().loadEnvDefaults();
+      const s = useSettingsStore.getState();
+
+      // Should NOT override — localStorage entry exists (even if empty)
+      expect(s.apiKey).toBe("");
+    });
+
+    it("sets envLoaded even when env has no values", async () => {
+      mockedInvoke.mockResolvedValue({
+        api_key: null,
+        base_url: null,
+        model: null,
+      });
+
+      await useSettingsStore.getState().loadEnvDefaults();
+      const s = useSettingsStore.getState();
+
+      expect(s.envLoaded).toBe(true);
+      expect(s.apiKey).toBe("");
+    });
+
+    it("sets envLoaded even when Tauri invoke fails", async () => {
+      mockedInvoke.mockRejectedValue(new Error("Tauri not available"));
+
+      await useSettingsStore.getState().loadEnvDefaults();
+      const s = useSettingsStore.getState();
+
+      expect(s.envLoaded).toBe(true);
+    });
   });
 });

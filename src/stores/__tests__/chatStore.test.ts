@@ -49,7 +49,7 @@ const initialAgentState = useAgentStore.getState();
 
 beforeEach(() => {
   useChatStore.setState(initialChatState, true);
-  useSettingsStore.setState(initialSettingsState, true);
+  useSettingsStore.setState({ ...initialSettingsState, envLoaded: true }, true);
   useAgentStore.setState(initialAgentState, true);
   vi.clearAllMocks();
 });

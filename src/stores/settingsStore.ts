@@ -4,6 +4,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_THINKING_BUDGET,
 } from "../constants";
+import { getEnvConfig } from "../services/tauriCommands";
 
 // ── localStorage key constants ──────────────────────
 const LS_API_KEY = "openai_api_key";
@@ -19,8 +20,11 @@ interface SettingsState {
   thinkingEnabled: boolean;
   thinkingBudget: number;
   isSettingsOpen: boolean;
+  envLoaded: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   loadSettings: () => void;
+  loadEnvDefaults: () => Promise<void>;
+  waitForEnv: () => Promise<void>;
   saveSettings: (s: SettingValues) => void;
 }
 
@@ -50,13 +54,49 @@ function readSettings(): SettingValues {
 
 const initial = readSettings();
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+// Promise that resolves once env defaults have been loaded (or failed).
+let envReadyResolve: () => void;
+const envReadyPromise = new Promise<void>((r) => { envReadyResolve = r; });
+
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...initial,
   isSettingsOpen: false,
+  envLoaded: false,
 
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
 
   loadSettings: () => set(readSettings()),
+
+  loadEnvDefaults: async () => {
+    try {
+      const env = await getEnvConfig();
+      const updates: Partial<SettingValues> = {};
+
+      // Only apply env fallback when localStorage truly has no entry (null).
+      // This preserves intentional user clears (empty string saved).
+      if (localStorage.getItem(LS_API_KEY) === null && env.api_key) {
+        updates.apiKey = env.api_key;
+      }
+      if (localStorage.getItem(LS_BASE_URL) === null && env.base_url) {
+        updates.baseUrl = env.base_url;
+      }
+      if (localStorage.getItem(LS_MODEL_NAME) === null && env.model) {
+        updates.modelName = env.model;
+      }
+
+      set({ ...updates, envLoaded: true });
+    } catch {
+      // Tauri not available (e.g. tests) — silently ignore
+      set({ envLoaded: true });
+    } finally {
+      envReadyResolve();
+    }
+  },
+
+  waitForEnv: async () => {
+    if (get().envLoaded) return;
+    await envReadyPromise;
+  },
 
   saveSettings: (s) => {
     const model = s.modelName || DEFAULT_MODEL;
