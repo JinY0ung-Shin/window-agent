@@ -4,7 +4,13 @@ import AgentEditor from "../AgentEditor";
 import { useAgentStore } from "../../../stores/agentStore";
 import { makeAgent, EMPTY_PERSONA } from "../../../__tests__/testFactories";
 
-vi.mock("../../../services/tauriCommands");
+vi.mock("../../../services/tauriCommands", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../services/tauriCommands")>();
+  return {
+    ...actual,
+    listModels: vi.fn().mockResolvedValue(["model-a", "model-b"]),
+  };
+});
 vi.mock("../AvatarUploader", () => ({
   default: () => <div data-testid="avatar-uploader" />,
 }));

@@ -55,6 +55,7 @@ pub fn run() {
             commands::set_api_config,
             commands::chat_completion,
             commands::bootstrap_completion,
+            commands::list_models,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -154,3 +154,7 @@ export async function bootstrapCompletion(
 ): Promise<BootstrapCompletionResponse> {
   return invoke("bootstrap_completion", { request });
 }
+
+export async function listModels(): Promise<string[]> {
+  return invoke("list_models");
+}

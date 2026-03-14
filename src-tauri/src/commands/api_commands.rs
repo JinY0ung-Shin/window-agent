@@ -120,7 +120,59 @@ pub async fn bootstrap_completion(
     Ok(BootstrapCompletionResponse { message })
 }
 
+#[tauri::command]
+pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, String> {
+    let (api_key, base_url) = api.effective();
+
+    if api_key.is_empty() {
+        return Err("API key not configured".into());
+    }
+
+    let url = models_url(&base_url);
+    let client = reqwest::Client::new();
+
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", api_key))
+        .send()
+        .await
+        .map_err(|e| format!("HTTP error: {}", e))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        return Err(format!("API error {}: {}", status, text));
+    }
+
+    let json: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("JSON parse error: {}", e))?;
+
+    let mut models: Vec<String> = json["data"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m["id"].as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    models.sort();
+    Ok(models)
+}
+
 // ── Internal helpers ──
+
+/// Build the models endpoint URL from base_url.
+fn models_url(base_url: &str) -> String {
+    let trimmed = base_url.trim_end_matches('/');
+    // Strip /chat/completions suffix if present to get the base
+    let base = trimmed
+        .strip_suffix("/chat/completions")
+        .unwrap_or(trimmed);
+    format!("{}/models", base.trim_end_matches('/'))
+}
 
 /// Build the completions endpoint URL.
 /// If base_url already contains "/chat/completions", use it as-is.

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, Trash2 } from "lucide-react";
 import { useAgentStore, type PersonaTab } from "../../stores/agentStore";
+import { listModels } from "../../services/tauriCommands";
 import AvatarUploader from "./AvatarUploader";
 
 const PERSONA_TABS: { key: PersonaTab; label: string }[] = [
@@ -40,6 +41,13 @@ export default function AgentEditor() {
   const [temperature, setTemperature] = useState("");
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean | null>(null);
   const [thinkingBudget, setThinkingBudget] = useState("");
+  const [models, setModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isEditorOpen) {
+      listModels().then(setModels).catch(() => setModels([]));
+    }
+  }, [isEditorOpen]);
 
   useEffect(() => {
     if (editingAgent) {
@@ -128,12 +136,18 @@ export default function AgentEditor() {
 
             <div className="form-group">
               <label>모델 (비워두면 글로벌 설정 사용)</label>
-              <input
-                type="text"
+              <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder="글로벌 설정 사용"
-              />
+              >
+                <option value="">글로벌 설정 사용</option>
+                {!models.includes(model) && model && (
+                  <option value={model}>{model}</option>
+                )}
+                {models.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">

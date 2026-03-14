@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Settings, X } from "lucide-react";
+import { Settings, X, RefreshCw } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { listModels } from "../../services/tauriCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
 
 type Tab = "general" | "thinking";
@@ -16,6 +17,24 @@ export default function SettingsModal() {
   const [tempThinkingEnabled, setTempThinkingEnabled] = useState(true);
   const [tempThinkingBudget, setTempThinkingBudget] = useState(DEFAULT_THINKING_BUDGET);
 
+  const [models, setModels] = useState<string[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState("");
+
+  const fetchModels = async () => {
+    setModelsLoading(true);
+    setModelsError("");
+    try {
+      const result = await listModels();
+      setModels(result);
+    } catch (e) {
+      setModelsError("모델 목록을 불러올 수 없습니다");
+      setModels([]);
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isSettingsOpen) {
       setTempApiKey("");
@@ -24,6 +43,7 @@ export default function SettingsModal() {
       setTempThinkingEnabled(store.thinkingEnabled);
       setTempThinkingBudget(store.thinkingBudget);
       setTab("general");
+      fetchModels();
     }
   }, [isSettingsOpen]);
 
@@ -93,14 +113,40 @@ export default function SettingsModal() {
               </div>
 
               <div className="form-group">
-                <label htmlFor="modelName">Model 이름</label>
-                <input
-                  id="modelName"
-                  type="text"
-                  placeholder={`${DEFAULT_MODEL} (기본값)`}
-                  value={tempModelName}
-                  onChange={(e) => setTempModelName(e.target.value)}
-                />
+                <label htmlFor="modelName">
+                  모델
+                  <button
+                    type="button"
+                    className="model-refresh-btn"
+                    onClick={fetchModels}
+                    disabled={modelsLoading}
+                    title="모델 목록 새로고침"
+                  >
+                    <RefreshCw size={14} className={modelsLoading ? "spinning" : ""} />
+                  </button>
+                </label>
+                {models.length > 0 ? (
+                  <select
+                    id="modelName"
+                    value={tempModelName}
+                    onChange={(e) => setTempModelName(e.target.value)}
+                  >
+                    {!models.includes(tempModelName) && tempModelName && (
+                      <option value={tempModelName}>{tempModelName}</option>
+                    )}
+                    {models.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="modelName"
+                    type="text"
+                    placeholder={modelsError || `${DEFAULT_MODEL} (기본값)`}
+                    value={tempModelName}
+                    onChange={(e) => setTempModelName(e.target.value)}
+                  />
+                )}
                 <p className="form-text">
                   API 키는 백엔드에서만 관리되며 브라우저에 저장되지 않습니다.
                 </p>
