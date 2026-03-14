@@ -8,7 +8,10 @@ use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Load .env from project root (CWD may differ in tauri dev)
     dotenvy::dotenv().ok();
+    // Also try parent directory (handles src-tauri/ as CWD)
+    dotenvy::from_filename("../.env").ok();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())

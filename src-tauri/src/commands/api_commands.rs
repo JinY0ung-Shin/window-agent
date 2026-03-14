@@ -93,7 +93,7 @@ pub async fn bootstrap_completion(
     });
 
     let client = reqwest::Client::new();
-    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+    let url = completions_url(&base_url);
 
     let resp = client
         .post(&url)
@@ -120,7 +120,19 @@ pub async fn bootstrap_completion(
     Ok(BootstrapCompletionResponse { message })
 }
 
-// ── Internal helper ──
+// ── Internal helpers ──
+
+/// Build the completions endpoint URL.
+/// If base_url already contains "/chat/completions", use it as-is.
+/// Otherwise append "/chat/completions" to the base URL.
+fn completions_url(base_url: &str) -> String {
+    let trimmed = base_url.trim_end_matches('/');
+    if trimmed.ends_with("/chat/completions") {
+        trimmed.to_string()
+    } else {
+        format!("{}/chat/completions", trimmed)
+    }
+}
 
 async fn do_completion(
     api_key: &str,
@@ -128,7 +140,7 @@ async fn do_completion(
     body: &serde_json::Value,
 ) -> Result<ChatCompletionResponse, String> {
     let client = reqwest::Client::new();
-    let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+    let url = completions_url(&base_url);
 
     let resp = client
         .post(&url)
