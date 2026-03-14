@@ -8,6 +8,9 @@ use tauri_plugin_store::StoreExt;
 /// For stronger at-rest protection, migrate to OS keychain in the future.
 pub struct ApiState {
     inner: Mutex<ApiConfig>,
+    /// Shared HTTP client – reqwest::Client is already Arc-wrapped and Clone,
+    /// so it lives outside the Mutex for lock-free reuse.
+    client: reqwest::Client,
 }
 
 #[derive(Clone)]
@@ -60,6 +63,7 @@ impl ApiState {
 
         Self {
             inner: Mutex::new(ApiConfig { api_key, base_url }),
+            client: reqwest::Client::new(),
         }
     }
 
@@ -76,21 +80,35 @@ impl ApiState {
         key: Option<String>,
         url: Option<String>,
         app: &tauri::AppHandle,
-    ) {
-        let mut cfg = self.inner.lock().unwrap();
-        if let Some(k) = key {
-            cfg.api_key = k;
-        }
-        if let Some(u) = url {
-            cfg.base_url = if u.is_empty() { DEFAULT_BASE_URL.to_string() } else { u };
-        }
+    ) -> Result<(), String> {
+        let cfg = self.inner.lock().unwrap();
+        // Compute new values without mutating yet
+        let new_key = key.unwrap_or_else(|| cfg.api_key.clone());
+        let new_url = match url {
+            Some(u) if u.is_empty() => DEFAULT_BASE_URL.to_string(),
+            Some(u) => u,
+            None => cfg.base_url.clone(),
+        };
+        drop(cfg); // release lock before I/O
 
-        // Persist to store (best-effort, don't block on failure)
-        if let Ok(store) = app.store(STORE_FILE) {
-            let _ = store.set(STORE_KEY_API_KEY, serde_json::json!(cfg.api_key));
-            let _ = store.set(STORE_KEY_BASE_URL, serde_json::json!(cfg.base_url));
-            let _ = store.save();
-        }
+        // Persist FIRST — if this fails, in-memory state stays unchanged
+        let store = app.store(STORE_FILE)
+            .map_err(|e| format!("Failed to open config store: {e}"))?;
+        store.set(STORE_KEY_API_KEY, serde_json::json!(&new_key));
+        store.set(STORE_KEY_BASE_URL, serde_json::json!(&new_url));
+        store.save()
+            .map_err(|e| format!("Failed to persist config: {e}"))?;
+
+        // Persistence succeeded — now update in-memory state
+        let mut cfg = self.inner.lock().unwrap();
+        cfg.api_key = new_key;
+        cfg.base_url = new_url;
+        Ok(())
+    }
+
+    /// Return a clone of the shared reqwest::Client (cheap – internally Arc'd).
+    pub fn client(&self) -> reqwest::Client {
+        self.client.clone()
     }
 
     /// Get the API key and base URL from backend state only.

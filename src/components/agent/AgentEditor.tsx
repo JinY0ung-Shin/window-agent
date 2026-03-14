@@ -29,6 +29,7 @@ export default function AgentEditor() {
   const updatePersonaFile = useAgentStore((s) => s.updatePersonaFile);
   const saveAgent = useAgentStore((s) => s.saveAgent);
   const deleteAgent = useAgentStore((s) => s.deleteAgent);
+  const editorError = useAgentStore((s) => s.editorError);
 
   const editingAgent = editingAgentId
     ? agents.find((a) => a.id === editingAgentId) ?? null
@@ -238,6 +239,9 @@ export default function AgentEditor() {
         </div>
 
         {/* Footer */}
+        {editorError && (
+          <div className="modal-error">{editorError}</div>
+        )}
         <div className="modal-footer">
           <button className="btn-secondary" onClick={closeEditor}>
             취소

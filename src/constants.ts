@@ -4,7 +4,7 @@ export const CONVERSATION_TITLE_MAX_LENGTH = 50;
 export const DEFAULT_CONVERSATION_TITLE = "새 대화";
 
 // ── API Defaults ────────────────────────────────────
-export const DEFAULT_BASE_URL = "http://192.168.0.105:8317/v1";
+export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_MODEL = "gpt-5.3-codex";
 export const DEFAULT_THINKING_BUDGET = 4096;
 

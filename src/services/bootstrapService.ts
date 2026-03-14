@@ -76,6 +76,10 @@ export async function executeBootstrapTurn(
       tools: BOOTSTRAP_TOOLS,
     });
 
+    if (!response || !response.message) {
+      throw new Error("Bootstrap API returned an invalid response: missing message field");
+    }
+
     const assistantMsg = response.message;
     messages.push(assistantMsg);
 
@@ -83,22 +87,35 @@ export async function executeBootstrapTurn(
       for (const tc of assistantMsg.tool_calls) {
         if (tc.type !== "function") continue;
         const toolFn = tc.function;
-        const args = JSON.parse(toolFn.arguments);
+        let args: Record<string, unknown>;
+        try {
+          args = JSON.parse(toolFn.arguments);
+        } catch (parseError) {
+          messages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: `Error: failed to parse tool arguments as JSON: ${parseError}`,
+          });
+          continue;
+        }
         let result: string;
 
         if (toolFn.name === "write_file") {
+          const path = String(args.path ?? "");
+          const content = String(args.content ?? "");
           try {
-            await cmds.writeAgentFile(folderName, args.path, args.content);
-            filesWritten.push(args.path);
-            result = `Successfully wrote ${args.path}`;
+            await cmds.writeAgentFile(folderName, path, content);
+            filesWritten.push(path);
+            result = `Successfully wrote ${path}`;
           } catch (e) {
-            result = `Error writing ${args.path}: ${e}`;
+            result = `Error writing ${path}: ${e}`;
           }
         } else if (toolFn.name === "read_file") {
+          const path = String(args.path ?? "");
           try {
-            result = await cmds.readAgentFile(folderName, args.path);
+            result = await cmds.readAgentFile(folderName, path);
           } catch {
-            result = `File not found: ${args.path}`;
+            result = `File not found: ${path}`;
           }
         } else {
           result = `Unknown function: ${toolFn.name}`;

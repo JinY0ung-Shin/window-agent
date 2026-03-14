@@ -12,8 +12,7 @@ pub fn set_api_config(
     api: State<'_, ApiState>,
     request: SetApiConfigRequest,
 ) -> Result<(), String> {
-    api.set_config(request.api_key, request.base_url, &app);
-    Ok(())
+    api.set_config(request.api_key, request.base_url, &app)
 }
 
 #[tauri::command]
@@ -22,6 +21,7 @@ pub async fn chat_completion(
     request: ChatCompletionRequest,
 ) -> Result<ChatCompletionResponse, String> {
     let (api_key, base_url) = api.effective();
+    let client = api.client();
 
     if api_key.is_empty() {
         return Err("API key not configured".into());
@@ -59,18 +59,25 @@ pub async fn chat_completion(
             });
         }
 
-        match do_completion(&api_key, &base_url, &body).await {
+        match do_completion(&client, &api_key, &base_url, &body).await {
             Ok(resp) => return Ok(resp),
-            Err(_) => {
-                // Fallback: remove thinking and retry
-                if let Some(obj) = body.as_object_mut() {
-                    obj.remove("thinking");
+            Err(e) => {
+                // Only retry without thinking for thinking-specific failures
+                // (HTTP 400/422 with thinking-related error text).
+                // For auth, rate-limit, server, or network errors, propagate directly.
+                if is_thinking_specific_error(&e) {
+                    if let Some(obj) = body.as_object_mut() {
+                        obj.remove("thinking");
+                    }
+                    // Fall through to retry without thinking below
+                } else {
+                    return Err(e);
                 }
             }
         }
     }
 
-    do_completion(&api_key, &base_url, &body)
+    do_completion(&client, &api_key, &base_url, &body)
         .await
         .map_err(|e| e.to_string())
 }
@@ -81,6 +88,7 @@ pub async fn bootstrap_completion(
     request: BootstrapCompletionRequest,
 ) -> Result<BootstrapCompletionResponse, String> {
     let (api_key, base_url) = api.effective();
+    let client = api.client();
 
     if api_key.is_empty() {
         return Err("API key not configured".into());
@@ -92,7 +100,6 @@ pub async fn bootstrap_completion(
         "tools": request.tools,
     });
 
-    let client = reqwest::Client::new();
     let url = completions_url(&base_url);
 
     let resp = client
@@ -105,15 +112,15 @@ pub async fn bootstrap_completion(
         .map_err(|e| format!("HTTP error: {}", e))?;
 
     if !resp.status().is_success() {
-        let status = resp.status();
+        let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("API error {}: {}", status, text));
+        return Err(format!("HTTP_{}: {}", status, text));
     }
 
     let json: serde_json::Value = resp
         .json()
         .await
-        .map_err(|e| format!("JSON parse error: {}", e))?;
+        .map_err(|e| format!("PARSE_ERROR: JSON parse error: {}", e))?;
 
     let message = json["choices"][0]["message"].clone();
 
@@ -123,13 +130,13 @@ pub async fn bootstrap_completion(
 #[tauri::command]
 pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, String> {
     let (api_key, base_url) = api.effective();
+    let client = api.client();
 
     if api_key.is_empty() {
         return Err("API key not configured".into());
     }
 
     let url = models_url(&base_url);
-    let client = reqwest::Client::new();
 
     let resp = client
         .get(&url)
@@ -139,15 +146,15 @@ pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, String
         .map_err(|e| format!("HTTP error: {}", e))?;
 
     if !resp.status().is_success() {
-        let status = resp.status();
+        let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("API error {}: {}", status, text));
+        return Err(format!("HTTP_{}: {}", status, text));
     }
 
     let json: serde_json::Value = resp
         .json()
         .await
-        .map_err(|e| format!("JSON parse error: {}", e))?;
+        .map_err(|e| format!("PARSE_ERROR: JSON parse error: {}", e))?;
 
     let mut models: Vec<String> = json["data"]
         .as_array()
@@ -186,13 +193,31 @@ fn completions_url(base_url: &str) -> String {
     }
 }
 
+/// Check whether an error string from `do_completion` indicates a thinking-specific
+/// failure (HTTP 400 or 422 with thinking/unsupported related text), as opposed to
+/// auth, rate-limit, server, or network errors that should not trigger a retry.
+fn is_thinking_specific_error(err: &str) -> bool {
+    // Must be an HTTP error with status 400 or 422
+    let is_relevant_status = err.starts_with("HTTP_400:") || err.starts_with("HTTP_422:");
+    if !is_relevant_status {
+        return false;
+    }
+
+    let lower = err.to_lowercase();
+    lower.contains("thinking")
+        || lower.contains("not supported")
+        || lower.contains("not_supported")
+        || lower.contains("unsupported")
+        || lower.contains("budget_tokens")
+}
+
 async fn do_completion(
+    client: &reqwest::Client,
     api_key: &str,
     base_url: &str,
     body: &serde_json::Value,
 ) -> Result<ChatCompletionResponse, String> {
-    let client = reqwest::Client::new();
-    let url = completions_url(&base_url);
+    let url = completions_url(base_url);
 
     let resp = client
         .post(&url)
@@ -204,15 +229,15 @@ async fn do_completion(
         .map_err(|e| format!("HTTP error: {}", e))?;
 
     if !resp.status().is_success() {
-        let status = resp.status();
+        let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("API error {}: {}", status, text));
+        return Err(format!("HTTP_{}: {}", status, text));
     }
 
     let json: serde_json::Value = resp
         .json()
         .await
-        .map_err(|e| format!("JSON parse error: {}", e))?;
+        .map_err(|e| format!("PARSE_ERROR: JSON parse error: {}", e))?;
 
     let content = json["choices"][0]["message"]["content"]
         .as_str()
@@ -222,6 +247,11 @@ async fn do_completion(
     let reasoning_content = json["choices"][0]["message"]["reasoning_content"]
         .as_str()
         .map(|s| s.to_string());
+
+    // Reject empty responses – the API returned no useful content
+    if content.is_empty() && reasoning_content.is_none() {
+        return Err("EMPTY_RESPONSE: No content in API response".to_string());
+    }
 
     Ok(ChatCompletionResponse {
         content,

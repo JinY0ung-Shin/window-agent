@@ -8,7 +8,7 @@ type Tab = "general" | "thinking";
 
 export default function SettingsModal() {
   const store = useSettingsStore();
-  const { isSettingsOpen, setIsSettingsOpen, saveSettings } = store;
+  const { isSettingsOpen, setIsSettingsOpen, saveSettings, settingsError } = store;
 
   const [tab, setTab] = useState<Tab>("general");
   const [tempApiKey, setTempApiKey] = useState("");
@@ -201,6 +201,10 @@ export default function SettingsModal() {
             </>
           )}
         </div>
+
+        {settingsError && (
+          <div className="modal-error">{settingsError}</div>
+        )}
 
         <div className="modal-footer">
           <button className="btn-secondary" onClick={() => setIsSettingsOpen(false)}>

@@ -735,6 +735,16 @@ body {
   color: var(--text-muted);
 }
 
+.modal-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 13px;
+}
+
 .modal-footer {
   margin-top: 32px;
   display: flex;

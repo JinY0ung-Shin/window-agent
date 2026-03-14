@@ -20,6 +20,7 @@ interface SettingsState {
   thinkingBudget: number;
   isSettingsOpen: boolean;
   envLoaded: boolean;
+  settingsError: string | null;
   setIsSettingsOpen: (open: boolean) => void;
   loadSettings: () => void;
   loadEnvDefaults: () => Promise<void>;
@@ -61,8 +62,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   hasApiKey: false,
   isSettingsOpen: false,
   envLoaded: false,
+  settingsError: null,
 
-  setIsSettingsOpen: (open) => set({ isSettingsOpen: open }),
+  setIsSettingsOpen: (open) => set({ isSettingsOpen: open, ...(open ? { settingsError: null } : {}) }),
 
   loadSettings: () => set(readNonSecretSettings()),
 
@@ -114,7 +116,10 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const keyExists = await checkApiKey();
       set({ hasApiKey: keyExists });
     } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to set API config:", e);
+      set({ settingsError: `설정 저장 실패: ${errorMsg}` });
+      return;
     }
 
     // Persist non-secret settings in localStorage
@@ -128,6 +133,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       thinkingEnabled: s.thinkingEnabled,
       thinkingBudget: s.thinkingBudget,
       isSettingsOpen: false,
+      settingsError: null,
     });
   },
 }));

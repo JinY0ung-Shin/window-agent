@@ -3,11 +3,25 @@ use crate::db::models::{Agent, CreateAgentRequest, UpdateAgentRequest};
 use crate::db::Database;
 use tauri::{AppHandle, Manager, State};
 
+/// Validate a folder name to prevent path traversal and invalid directory names.
+fn validate_folder_name(name: &str) -> Result<(), String> {
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains("..")
+        || name.starts_with('.')
+    {
+        return Err(format!("Invalid folder name: {name}"));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn create_agent(
     db: State<'_, Database>,
     request: CreateAgentRequest,
 ) -> Result<Agent, String> {
+    validate_folder_name(&request.folder_name)?;
     Ok(agent_operations::create_agent_impl(&db, request)?)
 }
 
@@ -31,8 +45,34 @@ pub fn update_agent(
 }
 
 #[tauri::command]
-pub fn delete_agent(db: State<'_, Database>, id: String) -> Result<(), String> {
-    Ok(agent_operations::delete_agent_impl(&db, id)?)
+pub fn delete_agent(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
+    // Get the agent's folder_name before deleting
+    let agent = agent_operations::get_agent_impl(&db, id.clone())
+        .map_err(|e| e.to_string())?;
+    let folder_name = &agent.folder_name;
+
+    validate_folder_name(folder_name)?;
+
+    // Delete folder FIRST so that if it fails, DB (and conversations) remain intact
+    let agents_dir = get_agents_dir(&app)?;
+    let folder_path = agents_dir.join(folder_name);
+    if folder_path.exists() {
+        // Verify the canonical path is still within agents_dir
+        let canonical = folder_path.canonicalize()
+            .map_err(|e| format!("Cannot resolve path: {e}"))?;
+        let canonical_base = agents_dir.canonicalize()
+            .map_err(|e| format!("Cannot resolve agents dir: {e}"))?;
+        if !canonical.starts_with(&canonical_base) {
+            return Err("Folder path escapes agents directory".into());
+        }
+        std::fs::remove_dir_all(&folder_path)
+            .map_err(|e| format!("Failed to delete agent folder: {e}"))?;
+    }
+
+    // Folder removed (or didn't exist) — now safe to delete DB row
+    agent_operations::delete_agent_impl(&db, id)?;
+
+    Ok(())
 }
 
 /// Allowed persona file names (whitelist).
@@ -153,7 +193,12 @@ pub fn sync_agents_from_fs(
     // Add folders that exist on disk but not in DB
     for folder in &fs_folders {
         if !existing_folders.contains(folder) {
-            // Try to read IDENTITY.md for the agent name
+            // Skip folders with invalid names (e.g. hidden dirs, path traversal)
+            if validate_folder_name(folder).is_err() {
+                eprintln!("Warning: skipping invalid agent folder name: '{}'", folder);
+                continue;
+            }
+
             let name = folder.clone();
 
             let _ = agent_operations::create_agent_impl(
@@ -174,11 +219,16 @@ pub fn sync_agents_from_fs(
         }
     }
 
-    // Remove DB entries whose folders no longer exist on disk
-    // (but never remove the default/manager agent)
+    // Log warnings for DB entries whose folders no longer exist on disk.
+    // We intentionally keep the DB rows to preserve conversation history;
+    // the folder may have been deleted intentionally via delete_agent (which
+    // already removes the DB row) or may be temporarily missing.
     for agent in &existing_agents {
         if !fs_folders.contains(&agent.folder_name) && !agent.is_default {
-            let _ = agent_operations::delete_agent_impl(&db, agent.id.clone());
+            eprintln!(
+                "Warning: agent folder missing for '{}', keeping DB record",
+                agent.folder_name
+            );
         }
     }
 

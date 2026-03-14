@@ -14,6 +14,7 @@ interface AgentState {
   editingAgentId: string | null;
   personaFiles: PersonaFiles | null;
   personaTab: PersonaTab;
+  editorError: string | null;
 
   loadAgents: () => Promise<void>;
   selectAgent: (id: string | null) => void;
@@ -41,6 +42,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   editingAgentId: null,
   personaFiles: null,
   personaTab: "identity",
+  editorError: null,
 
   loadAgents: async () => {
     try {
@@ -58,6 +60,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       isEditorOpen: true,
       editingAgentId: agentId,
       personaTab: "identity",
+      editorError: null,
     });
 
     if (agentId) {
@@ -136,9 +139,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         await writePersonaFiles(folderName, personaFiles);
       }
     } catch (e) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to save agent:", e);
+      set({ editorError: `에이전트 저장 실패: ${errorMsg}` });
+      return;
     }
 
+    set({ editorError: null });
     await get().loadAgents();
     get().closeEditor();
   },
