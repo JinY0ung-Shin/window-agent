@@ -49,7 +49,19 @@ const STRUCTURAL_ROLES = new Set([
 const MAX_ELEMENTS = 200;
 
 async function generateSnapshot(page) {
-  const tree = await page.accessibility.snapshot();
+  // Use CDP Accessibility.getFullAXTree since page.accessibility was removed in Playwright 1.50+
+  let tree = null;
+  try {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Accessibility.enable');
+    const { nodes } = await cdp.send('Accessibility.getFullAXTree');
+    await cdp.send('Accessibility.disable');
+    await cdp.detach();
+    tree = buildTreeFromCDP(nodes);
+  } catch (err) {
+    log(`CDP accessibility failed: ${err.message}, falling back to empty tree`);
+  }
+
   const refs = [];
   let refCounter = 1;
   selectorCounts.clear(); // Reset duplicate tracking for each snapshot
@@ -79,7 +91,7 @@ async function generateSnapshot(page) {
         role,
         name,
         tag: node.tag || '',
-        isPassword: role === 'textbox' && node.autocomplete === 'current-password',
+        isPassword: role === 'textbox' && (node.autocomplete === 'current-password' || node.isPassword),
       });
     }
 
@@ -107,8 +119,62 @@ async function generateSnapshot(page) {
   return { snapshotText, refMap, elementCount: refs.length };
 }
 
+// Convert CDP Accessibility.getFullAXTree flat node list into a tree structure
+function buildTreeFromCDP(nodes) {
+  if (!nodes || nodes.length === 0) return null;
+
+  const nodeMap = new Map();
+  for (const n of nodes) {
+    const role = getProperty(n, 'role');
+    const name = getProperty(n, 'name');
+    const value = getProperty(n, 'value');
+    const checked = getProperty(n, 'checked');
+    const disabled = getProperty(n, 'disabled');
+
+    nodeMap.set(n.nodeId, {
+      role: role || 'none',
+      name: name || '',
+      value: value || '',
+      checked: checked === 'true' ? true : checked === 'false' ? false : undefined,
+      disabled: disabled === 'true',
+      isPassword: n.role && n.role.value === 'textbox' && hasProperty(n, 'autocomplete', 'current-password'),
+      children: [],
+    });
+  }
+
+  // Build parent-child relationships
+  for (const n of nodes) {
+    const parent = nodeMap.get(n.nodeId);
+    if (n.childIds) {
+      for (const childId of n.childIds) {
+        const child = nodeMap.get(childId);
+        if (child) parent.children.push(child);
+      }
+    }
+  }
+
+  return nodeMap.get(nodes[0].nodeId) || null;
+}
+
+function getProperty(node, propName) {
+  // CDP AX nodes have role and name as top-level fields (not in properties)
+  if (propName === 'name' && node.name) return node.name.value || '';
+  if (propName === 'role' && node.role) return node.role.value || '';
+
+  if (!node.properties) return '';
+  const prop = node.properties.find(p => p.name === propName);
+  if (!prop) return '';
+  return prop.value ? (prop.value.value || '') : '';
+}
+
+function hasProperty(node, propName, expectedValue) {
+  if (!node.properties) return false;
+  const prop = node.properties.find(p => p.name === propName);
+  return prop && prop.value && prop.value.value === expectedValue;
+}
+
 // Exported for testing
-module.exports = { generateSnapshot, buildResponse, buildSelector, selectorCounts, INTERACTIVE_ROLES, STRUCTURAL_ROLES, MAX_ELEMENTS };
+module.exports = { generateSnapshot, buildResponse, buildSelector, buildTreeFromCDP, selectorCounts, INTERACTIVE_ROLES, STRUCTURAL_ROLES, MAX_ELEMENTS };
 
 // --- Browser Management ---
 
