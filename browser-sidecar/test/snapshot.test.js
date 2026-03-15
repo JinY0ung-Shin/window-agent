@@ -108,7 +108,7 @@ describe('snapshot generation (unit)', () => {
         childIds,
         properties: [],
       };
-      if (node.value) cdpNode.properties.push({ name: 'value', value: { value: node.value } });
+      if (node.value) cdpNode.value = { value: node.value };
       if (node.checked !== undefined) cdpNode.properties.push({ name: 'checked', value: { value: String(node.checked) } });
       if (node.disabled) cdpNode.properties.push({ name: 'disabled', value: { value: 'true' } });
       if (node.autocomplete) cdpNode.properties.push({ name: 'autocomplete', value: { value: node.autocomplete } });

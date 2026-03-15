@@ -108,7 +108,9 @@ export default function ChatMessage({ message }: Props) {
                         href={href}
                         onClick={(e) => {
                           e.preventDefault();
-                          if (href) openUrl(href).catch(() => {});
+                          if (href && /^https?:\/\//i.test(href)) {
+                            openUrl(href).catch(() => {});
+                          }
                         }}
                       >
                         {children}

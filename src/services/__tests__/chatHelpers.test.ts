@@ -48,45 +48,45 @@ describe("buildChatMessages (legacy – no systemPromptTokens)", () => {
 });
 
 describe("buildChatMessages (token-based)", () => {
+  // Tests use MAX_CONTEXT_TOKENS (1000000) as the total budget.
+  // systemPromptTokens is set close to the budget to test truncation behavior.
+
   it("selects messages within token budget", () => {
-    // systemPromptTokens = 7900, budget = 8000 - 7900 = 100
-    // Each short msg ≈ 4 + ceil(3*0.25)=5 tokens per msg = 5
+    // systemPromptTokens = 999900, budget = 1000000 - 999900 = 100
     const messages = Array.from({ length: 20 }, (_, i) =>
       makeMsg(String(i), `msg`),
     );
-    const result = buildChatMessages(messages, 7900);
-    // budget=100, each msg costs 5 tokens → 20 msgs fit
+    const result = buildChatMessages(messages, 999900);
     expect(result.length).toBeGreaterThan(0);
     expect(result.length).toBeLessThanOrEqual(20);
   });
 
   it("prefers latest messages when budget is limited", () => {
-    // budget = 8000 - 7980 = 20 tokens
+    // budget = 1000000 - 999980 = 20 tokens
     // "hi" = ceil(2*0.25)=1, +4 overhead = 5 tokens per msg → 4 msgs fit
     const messages = Array.from({ length: 10 }, (_, i) =>
       makeMsg(String(i), `hi`),
     );
-    const result = buildChatMessages(messages, 7980);
+    const result = buildChatMessages(messages, 999980);
     expect(result.length).toBe(4);
-    // Should be the last 4 messages
     expect(result[0].content).toBe("hi");
     expect(result.length).toBe(4);
   });
 
   it("subtracts summaryTokens from budget", () => {
-    // budget = 8000 - 7980 - 10 = 10 tokens
+    // budget = 1000000 - 999980 - 10 = 10 tokens
     // "hi" = 5 tokens per msg → 2 msgs fit
     const messages = Array.from({ length: 10 }, (_, i) =>
       makeMsg(String(i), `hi`),
     );
-    const result = buildChatMessages(messages, 7980, 10);
+    const result = buildChatMessages(messages, 999980, 10);
     expect(result.length).toBe(2);
   });
 
   it("guarantees at least 1 message even when budget is exhausted", () => {
-    // budget = 8000 - 8000 = 0 → would normally select 0, but safety kicks in
+    // budget = 1000000 - 1000000 = 0 → safety kicks in
     const messages = [makeMsg("1", "안녕하세요 이것은 긴 메시지입니다")];
-    const result = buildChatMessages(messages, 8000);
+    const result = buildChatMessages(messages, 1000000);
     expect(result).toHaveLength(1);
     expect(result[0].content).toBe("안녕하세요 이것은 긴 메시지입니다");
   });
@@ -98,11 +98,11 @@ describe("buildChatMessages (token-based)", () => {
 
   it("handles Korean messages with correct token estimation", () => {
     // "안녕" = 2 Korean chars * 1.5 = 3 → ceil = 3, + 4 overhead = 7 tokens per msg
-    // budget = 8000 - 7980 = 20 → 20/7 = 2 msgs fit
+    // budget = 1000000 - 999980 = 20 → 20/7 = 2 msgs fit
     const messages = Array.from({ length: 5 }, (_, i) =>
       makeMsg(String(i), "안녕"),
     );
-    const result = buildChatMessages(messages, 7980);
+    const result = buildChatMessages(messages, 999980);
     expect(result.length).toBe(2);
   });
 });
@@ -133,23 +133,25 @@ describe("buildConversationContext", () => {
   });
 
   it("adjusts token budget based on actual system prompt size", () => {
-    // Long summary → larger system prompt → fewer messages fit
-    const longSummary = "요약입니다 ".repeat(800); // large Korean summary
-    // Each msg: "안녕하세요 반갑습니다" → ~18 tokens + 4 overhead = ~22 per msg
+    // Verify that a larger system prompt (with summary) reduces the number of
+    // messages that fit. Use a huge base prompt to leave very little budget.
+    // Budget without summary: 1000000 - 999000 = 1000 tokens → ~45 msgs
+    // Budget with summary (~500 tokens): 1000000 - 999000 - 500 = 500 → ~22 msgs
+    const hugeBasePrompt = "x".repeat(3996000); // ~999000 tokens
     const messages = Array.from({ length: 200 }, (_, i) =>
       makeMsg(String(i), "안녕하세요 반갑습니다 오늘 날씨가 좋습니다"),
     );
     const withSummary = buildConversationContext({
       messages,
-      summary: longSummary,
-      baseSystemPrompt: "You are helpful.",
+      summary: "요약입니다 ".repeat(50), // ~462 tokens
+      baseSystemPrompt: hugeBasePrompt,
     });
     const withoutSummary = buildConversationContext({
       messages,
       summary: null,
-      baseSystemPrompt: "You are helpful.",
+      baseSystemPrompt: hugeBasePrompt,
     });
-    // With a long summary, fewer messages should fit
+    // With a summary, fewer messages should fit
     expect(withSummary.apiMessages.length).toBeLessThan(withoutSummary.apiMessages.length);
   });
 });

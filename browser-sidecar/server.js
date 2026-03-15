@@ -157,9 +157,10 @@ function buildTreeFromCDP(nodes) {
 }
 
 function getProperty(node, propName) {
-  // CDP AX nodes have role and name as top-level fields (not in properties)
+  // CDP AX nodes have role, name, and value as top-level fields
   if (propName === 'name' && node.name) return node.name.value || '';
   if (propName === 'role' && node.role) return node.role.value || '';
+  if (propName === 'value' && node.value) return node.value.value || '';
 
   if (!node.properties) return '';
   const prop = node.properties.find(p => p.name === propName);
