@@ -1,14 +1,20 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import ChatInput from "../ChatInput";
-import { useChatStore } from "../../../stores/chatStore";
+import { useMessageStore } from "../../../stores/messageStore";
+import { useChatFlowStore } from "../../../stores/chatFlowStore";
+import { useToolRunStore } from "../../../stores/toolRunStore";
 
 vi.mock("../../../services/tauriCommands");
 
-const initialState = useChatStore.getState();
+const initialMsgState = useMessageStore.getState();
+const initialFlowState = useChatFlowStore.getState();
+const initialToolState = useToolRunStore.getState();
 
 beforeEach(() => {
-  useChatStore.setState(initialState, true);
+  useMessageStore.setState(initialMsgState, true);
+  useChatFlowStore.setState(initialFlowState, true);
+  useToolRunStore.setState(initialToolState, true);
 });
 
 describe("ChatInput", () => {
@@ -19,13 +25,13 @@ describe("ChatInput", () => {
   });
 
   it("send button is disabled when input is empty", () => {
-    useChatStore.setState({ inputValue: "" });
+    useMessageStore.setState({ inputValue: "" });
     render(<ChatInput />);
     expect(screen.getByRole("button")).toBeDisabled();
   });
 
   it("shows cancel button while sending", () => {
-    useChatStore.setState({
+    useMessageStore.setState({
       inputValue: "test",
       messages: [{ id: "1", type: "agent", content: "...", status: "pending" as const }],
     });
@@ -39,12 +45,13 @@ describe("ChatInput", () => {
     render(<ChatInput />);
     const input = screen.getByPlaceholderText("메시지를 입력하세요...");
     fireEvent.change(input, { target: { value: "hello" } });
-    expect(useChatStore.getState().inputValue).toBe("hello");
+    expect(useMessageStore.getState().inputValue).toBe("hello");
   });
 
   it("Enter key triggers sendMessage", () => {
     const sendSpy = vi.fn();
-    useChatStore.setState({ inputValue: "test", sendMessage: sendSpy });
+    useMessageStore.setState({ inputValue: "test" });
+    useChatFlowStore.setState({ sendMessage: sendSpy });
     render(<ChatInput />);
     const input = screen.getByPlaceholderText("메시지를 입력하세요...");
     fireEvent.keyDown(input, { key: "Enter" });
@@ -53,7 +60,8 @@ describe("ChatInput", () => {
 
   it("Shift+Enter does not send message", () => {
     const sendSpy = vi.fn();
-    useChatStore.setState({ inputValue: "test", sendMessage: sendSpy });
+    useMessageStore.setState({ inputValue: "test" });
+    useChatFlowStore.setState({ sendMessage: sendSpy });
     render(<ChatInput />);
     const input = screen.getByPlaceholderText("메시지를 입력하세요...");
     fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
@@ -61,7 +69,7 @@ describe("ChatInput", () => {
   });
 
   it("send button enabled when input has content and not loading", () => {
-    useChatStore.setState({ inputValue: "hello", messages: [] });
+    useMessageStore.setState({ inputValue: "hello", messages: [] });
     render(<ChatInput />);
     expect(screen.getByRole("button")).not.toBeDisabled();
   });

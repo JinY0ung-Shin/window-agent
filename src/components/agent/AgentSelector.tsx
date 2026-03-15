@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, Plus, Bot, Shield } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
-import { useChatStore } from "../../stores/chatStore";
+import { useBootstrapStore } from "../../stores/bootstrapStore";
+import { useChatFlowStore } from "../../stores/chatFlowStore";
 import { readAgentFile } from "../../services/tauriCommands";
 
 export default function AgentSelector() {
   const agents = useAgentStore((s) => s.agents);
-  const startBootstrap = useChatStore((s) => s.startBootstrap);
-  const prepareForAgent = useChatStore((s) => s.prepareForAgent);
+  const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
+  const prepareForAgent = useChatFlowStore((s) => s.prepareForAgent);
   const [dormantIds, setDormantIds] = useState<Set<string>>(new Set());
 
   // Check folder existence for each agent

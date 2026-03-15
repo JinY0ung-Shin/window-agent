@@ -1,18 +1,21 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import AgentSelector from "../AgentSelector";
 import { useAgentStore } from "../../../stores/agentStore";
-import { useChatStore } from "../../../stores/chatStore";
+import { useBootstrapStore } from "../../../stores/bootstrapStore";
+import { useChatFlowStore } from "../../../stores/chatFlowStore";
 import { makeAgent } from "../../../__tests__/testFactories";
 
 vi.mock("../../../services/tauriCommands");
 
 const initialAgentState = useAgentStore.getState();
-const initialChatState = useChatStore.getState();
+const initialBootstrapState = useBootstrapStore.getState();
+const initialFlowState = useChatFlowStore.getState();
 
 beforeEach(() => {
   useAgentStore.setState(initialAgentState, true);
-  useChatStore.setState(initialChatState, true);
+  useBootstrapStore.setState(initialBootstrapState, true);
+  useChatFlowStore.setState(initialFlowState, true);
 });
 
 describe("AgentSelector", () => {
@@ -21,37 +24,37 @@ describe("AgentSelector", () => {
     expect(screen.getByText("에이전트 선택")).toBeInTheDocument();
   });
 
-  it("renders agent cards when agents present", () => {
+  it("renders agent cards when agents present", async () => {
     useAgentStore.setState({ agents: [makeAgent({ name: "에이전트 1" }), makeAgent({ id: "a2", name: "에이전트 2" })] });
-    render(<AgentSelector />);
+    await act(async () => { render(<AgentSelector />); });
     expect(screen.getByText("에이전트 1")).toBeInTheDocument();
     expect(screen.getByText("에이전트 2")).toBeInTheDocument();
   });
 
-  it("renders agent name and description", () => {
+  it("renders agent name and description", async () => {
     useAgentStore.setState({ agents: [makeAgent({ name: "테스트 에이전트", description: "테스트 설명" })] });
-    render(<AgentSelector />);
+    await act(async () => { render(<AgentSelector />); });
     expect(screen.getByText("테스트 에이전트")).toBeInTheDocument();
     expect(screen.getByText("테스트 설명")).toBeInTheDocument();
   });
 
-  it("shows MANAGER badge for default agent (is_default=true)", () => {
+  it("shows MANAGER badge for default agent (is_default=true)", async () => {
     useAgentStore.setState({ agents: [makeAgent({ name: "매니저", is_default: true })] });
-    render(<AgentSelector />);
+    await act(async () => { render(<AgentSelector />); });
     expect(screen.getByText("MANAGER")).toBeInTheDocument();
   });
 
-  it("hides MANAGER badge for non-default agent", () => {
+  it("hides MANAGER badge for non-default agent", async () => {
     useAgentStore.setState({ agents: [makeAgent({ name: "일반 에이전트", is_default: false })] });
-    render(<AgentSelector />);
+    await act(async () => { render(<AgentSelector />); });
     expect(screen.queryByText("MANAGER")).not.toBeInTheDocument();
   });
 
-  it("clicking card calls prepareForAgent with correct agent ID", () => {
+  it("clicking card calls prepareForAgent with correct agent ID", async () => {
     const prepareSpy = vi.fn();
-    useChatStore.setState({ prepareForAgent: prepareSpy });
+    useChatFlowStore.setState({ prepareForAgent: prepareSpy });
     useAgentStore.setState({ agents: [makeAgent({ id: "agent-x", name: "클릭 대상" })] });
-    render(<AgentSelector />);
+    await act(async () => { render(<AgentSelector />); });
 
     fireEvent.click(screen.getByText("클릭 대상"));
     expect(prepareSpy).toHaveBeenCalledWith("agent-x");
@@ -64,7 +67,7 @@ describe("AgentSelector", () => {
 
   it("clicking new agent card calls startBootstrap", () => {
     const bootstrapSpy = vi.fn();
-    useChatStore.setState({ startBootstrap: bootstrapSpy });
+    useBootstrapStore.setState({ startBootstrap: bootstrapSpy });
     render(<AgentSelector />);
 
     fireEvent.click(screen.getByText("새 에이전트"));

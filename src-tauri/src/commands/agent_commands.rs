@@ -1,6 +1,7 @@
 use crate::db::agent_operations;
 use crate::db::models::{Agent, CreateAgentRequest, UpdateAgentRequest};
 use crate::db::Database;
+use crate::error::AppError;
 use crate::utils::path_security::{validate_agent_filename, validate_no_traversal};
 use tauri::{AppHandle, Manager, State};
 
@@ -13,18 +14,18 @@ fn validate_folder_name(name: &str) -> Result<(), String> {
 pub fn create_agent(
     db: State<'_, Database>,
     request: CreateAgentRequest,
-) -> Result<Agent, String> {
-    validate_folder_name(&request.folder_name)?;
+) -> Result<Agent, AppError> {
+    validate_folder_name(&request.folder_name).map_err(AppError::Validation)?;
     Ok(agent_operations::create_agent_impl(&db, request)?)
 }
 
 #[tauri::command]
-pub fn get_agent(db: State<'_, Database>, id: String) -> Result<Agent, String> {
+pub fn get_agent(db: State<'_, Database>, id: String) -> Result<Agent, AppError> {
     Ok(agent_operations::get_agent_impl(&db, id)?)
 }
 
 #[tauri::command]
-pub fn list_agents(db: State<'_, Database>) -> Result<Vec<Agent>, String> {
+pub fn list_agents(db: State<'_, Database>) -> Result<Vec<Agent>, AppError> {
     Ok(agent_operations::list_agents_impl(&db)?)
 }
 
@@ -33,33 +34,32 @@ pub fn update_agent(
     db: State<'_, Database>,
     id: String,
     request: UpdateAgentRequest,
-) -> Result<Agent, String> {
+) -> Result<Agent, AppError> {
     Ok(agent_operations::update_agent_impl(&db, id, request)?)
 }
 
 #[tauri::command]
-pub fn delete_agent(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), String> {
+pub fn delete_agent(app: AppHandle, db: State<'_, Database>, id: String) -> Result<(), AppError> {
     // Get the agent's folder_name before deleting
-    let agent = agent_operations::get_agent_impl(&db, id.clone())
-        .map_err(|e| e.to_string())?;
+    let agent = agent_operations::get_agent_impl(&db, id.clone())?;
     let folder_name = &agent.folder_name;
 
-    validate_folder_name(folder_name)?;
+    validate_folder_name(folder_name).map_err(AppError::Validation)?;
 
     // Delete folder FIRST so that if it fails, DB (and conversations) remain intact
-    let agents_dir = get_agents_dir(&app)?;
+    let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
     let folder_path = agents_dir.join(folder_name);
     if folder_path.exists() {
         // Verify the canonical path is still within agents_dir
         let canonical = folder_path.canonicalize()
-            .map_err(|e| format!("Cannot resolve path: {e}"))?;
+            .map_err(|e| AppError::Io(format!("Cannot resolve path: {e}")))?;
         let canonical_base = agents_dir.canonicalize()
-            .map_err(|e| format!("Cannot resolve agents dir: {e}"))?;
+            .map_err(|e| AppError::Io(format!("Cannot resolve agents dir: {e}")))?;
         if !canonical.starts_with(&canonical_base) {
-            return Err("Folder path escapes agents directory".into());
+            return Err(AppError::Validation("Folder path escapes agents directory".into()));
         }
         std::fs::remove_dir_all(&folder_path)
-            .map_err(|e| format!("Failed to delete agent folder: {e}"))?;
+            .map_err(|e| AppError::Io(format!("Failed to delete agent folder: {e}")))?;
     }
 
     // Folder removed (or didn't exist) — now safe to delete DB row
@@ -111,17 +111,18 @@ pub fn write_agent_file(
     folder_name: String,
     file_name: String,
     content: String,
-) -> Result<(), String> {
-    let file_path = resolve_agent_file_path(&app, &folder_name, &file_name)?;
+) -> Result<(), AppError> {
+    let file_path = resolve_agent_file_path(&app, &folder_name, &file_name)
+        .map_err(AppError::Validation)?;
 
     // Ensure parent directory exists
     if let Some(parent) = file_path.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create agent directory: {}", e))?;
+            .map_err(|e| AppError::Io(format!("Failed to create agent directory: {}", e)))?;
     }
 
     std::fs::write(&file_path, &content)
-        .map_err(|e| format!("Failed to write file: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to write file: {}", e)))?;
 
     Ok(())
 }
@@ -132,11 +133,12 @@ pub fn read_agent_file(
     app: AppHandle,
     folder_name: String,
     file_name: String,
-) -> Result<String, String> {
-    let file_path = resolve_agent_file_path(&app, &folder_name, &file_name)?;
+) -> Result<String, AppError> {
+    let file_path = resolve_agent_file_path(&app, &folder_name, &file_name)
+        .map_err(AppError::Validation)?;
 
     std::fs::read_to_string(&file_path)
-        .map_err(|e| format!("Failed to read file: {}", e))
+        .map_err(|e| AppError::Io(format!("Failed to read file: {}", e)))
 }
 
 /// Sync .md files from filesystem to DB on app startup.
@@ -146,14 +148,13 @@ pub fn read_agent_file(
 pub fn sync_agents_from_fs(
     app: AppHandle,
     db: State<'_, Database>,
-) -> Result<Vec<Agent>, String> {
-    let agents_dir = get_agents_dir(&app)?;
+) -> Result<Vec<Agent>, AppError> {
+    let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
 
     std::fs::create_dir_all(&agents_dir)
-        .map_err(|e| format!("Failed to create agents dir: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to create agents dir: {}", e)))?;
 
-    let existing_agents = agent_operations::list_agents_impl(&db)
-        .map_err(|e| e.to_string())?;
+    let existing_agents = agent_operations::list_agents_impl(&db)?;
 
     let existing_folders: std::collections::HashSet<String> = existing_agents
         .iter()
@@ -162,11 +163,11 @@ pub fn sync_agents_from_fs(
 
     // Scan filesystem for agent folders
     let fs_entries = std::fs::read_dir(&agents_dir)
-        .map_err(|e| format!("Failed to read agents directory: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to read agents directory: {}", e)))?;
 
     let mut fs_folders = std::collections::HashSet::new();
     for entry in fs_entries {
-        let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
+        let entry = entry.map_err(|e| AppError::Io(format!("Failed to read dir entry: {}", e)))?;
         if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             if let Some(name) = entry.file_name().to_str() {
                 fs_folders.insert(name.to_string());
@@ -217,7 +218,7 @@ pub fn sync_agents_from_fs(
     }
 
     // Return updated list
-    agent_operations::list_agents_impl(&db).map_err(|e| e.to_string())
+    Ok(agent_operations::list_agents_impl(&db)?)
 }
 
 /// Seed the default manager agent on first run.
@@ -226,7 +227,7 @@ pub fn sync_agents_from_fs(
 pub fn seed_manager_agent(
     app: AppHandle,
     db: State<'_, Database>,
-) -> Result<Agent, String> {
+) -> Result<Agent, AppError> {
     // Check if manager already exists
     if let Ok(Some(agent)) =
         agent_operations::get_agent_by_folder_impl(&db, "매니저".into())
@@ -248,14 +249,13 @@ pub fn seed_manager_agent(
             is_default: Some(true),
             sort_order: Some(0),
         },
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     // Create .md files from bundled resources
-    let agents_dir = get_agents_dir(&app)?;
+    let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
     let manager_dir = agents_dir.join("매니저");
     std::fs::create_dir_all(&manager_dir)
-        .map_err(|e| format!("Failed to create manager directory: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to create manager directory: {}", e)))?;
 
     let files = [
         ("IDENTITY.md", include_str!("../../resources/default-agent/IDENTITY.md")),
@@ -266,7 +266,7 @@ pub fn seed_manager_agent(
 
     for (filename, content) in &files {
         std::fs::write(manager_dir.join(filename), content)
-            .map_err(|e| format!("Failed to write {}: {}", filename, e))?;
+            .map_err(|e| AppError::Io(format!("Failed to write {}: {}", filename, e)))?;
     }
 
     Ok(agent)
@@ -275,15 +275,15 @@ pub fn seed_manager_agent(
 /// Resize avatar image to 128x128 and return as Base64 string.
 /// Input: Base64-encoded image data (without data URI prefix).
 #[tauri::command]
-pub fn resize_avatar(image_base64: String) -> Result<String, String> {
+pub fn resize_avatar(image_base64: String) -> Result<String, AppError> {
     use std::io::Cursor;
 
     // Decode base64
-    let image_bytes = base64_decode(&image_base64)?;
+    let image_bytes = base64_decode(&image_base64).map_err(AppError::Validation)?;
 
     // Load image
     let img = image::load_from_memory(&image_bytes)
-        .map_err(|e| format!("Failed to load image: {}", e))?;
+        .map_err(|e| AppError::Validation(format!("Failed to load image: {}", e)))?;
 
     // Resize to 128x128
     let resized = img.resize_exact(128, 128, image::imageops::FilterType::Lanczos3);
@@ -292,7 +292,7 @@ pub fn resize_avatar(image_base64: String) -> Result<String, String> {
     let mut buf = Cursor::new(Vec::new());
     resized
         .write_to(&mut buf, image::ImageFormat::Png)
-        .map_err(|e| format!("Failed to encode image: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to encode image: {}", e)))?;
 
     let encoded = base64_encode(&buf.into_inner());
     Ok(encoded)

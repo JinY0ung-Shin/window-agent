@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::services::skill_service;
 use crate::utils::path_security::{validate_no_traversal, validate_skill_path};
 use serde::{Deserialize, Serialize};
@@ -121,21 +122,21 @@ fn enumerate_resource_files(skill_dir: &Path) -> Vec<String> {
 pub fn list_skills(
     app: AppHandle,
     folder_name: String,
-) -> Result<Vec<SkillMetadata>, String> {
-    validate_name(&folder_name)?;
+) -> Result<Vec<SkillMetadata>, AppError> {
+    validate_name(&folder_name).map_err(AppError::Validation)?;
 
     let mut skills: HashMap<String, SkillMetadata> = HashMap::new();
 
     // Scan global skills first
-    let global_dir = get_global_skills_dir(&app)?;
+    let global_dir = get_global_skills_dir(&app).map_err(AppError::Io)?;
     if global_dir.is_dir() {
-        scan_skills_dir(&global_dir, "global", &mut skills)?;
+        scan_skills_dir(&global_dir, "global", &mut skills).map_err(AppError::Io)?;
     }
 
     // Scan agent skills (overrides global on name conflict)
-    let agent_dir = get_agent_skills_dir(&app, &folder_name)?;
+    let agent_dir = get_agent_skills_dir(&app, &folder_name).map_err(AppError::Io)?;
     if agent_dir.is_dir() {
-        scan_skills_dir(&agent_dir, "agent", &mut skills)?;
+        scan_skills_dir(&agent_dir, "agent", &mut skills).map_err(AppError::Io)?;
     }
 
     let mut result: Vec<SkillMetadata> = skills.into_values().collect();
@@ -188,12 +189,12 @@ pub fn read_skill(
     app: AppHandle,
     folder_name: String,
     skill_name: String,
-) -> Result<SkillContent, String> {
-    let skill_dir = resolve_skill_dir(&app, &folder_name, &skill_name)?;
+) -> Result<SkillContent, AppError> {
+    let skill_dir = resolve_skill_dir(&app, &folder_name, &skill_name).map_err(AppError::Io)?;
     let skill_md_path = skill_dir.join("SKILL.md");
 
     let content = std::fs::read_to_string(&skill_md_path)
-        .map_err(|e| format!("Failed to read SKILL.md: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to read SKILL.md: {}", e)))?;
 
     let dir_name = skill_dir
         .file_name()
@@ -233,21 +234,21 @@ pub fn read_skill_resource(
     folder_name: String,
     skill_name: String,
     resource_path: String,
-) -> Result<String, String> {
-    let skill_dir = resolve_skill_dir(&app, &folder_name, &skill_name)?;
+) -> Result<String, AppError> {
+    let skill_dir = resolve_skill_dir(&app, &folder_name, &skill_name).map_err(AppError::Io)?;
 
     // Validate resource_path doesn't contain traversal
     if resource_path.contains("..") || resource_path.starts_with('/') || resource_path.starts_with('\\') {
-        return Err("Invalid resource path".to_string());
+        return Err(AppError::Validation("Invalid resource path".to_string()));
     }
 
     let full_path = skill_dir.join(&resource_path);
 
     // Validate path is within the skill directory (not just app_data_dir)
-    validate_path_within(&full_path, &skill_dir)?;
+    validate_path_within(&full_path, &skill_dir).map_err(AppError::Validation)?;
 
     std::fs::read_to_string(&full_path)
-        .map_err(|e| format!("Failed to read resource '{}': {}", resource_path, e))
+        .map_err(|e| AppError::Io(format!("Failed to read resource '{}': {}", resource_path, e)))
 }
 
 #[tauri::command]
@@ -255,19 +256,19 @@ pub fn create_skill(
     app: AppHandle,
     folder_name: String,
     skill_name: String,
-) -> Result<SkillMetadata, String> {
-    validate_name(&folder_name)?;
+) -> Result<SkillMetadata, AppError> {
+    validate_name(&folder_name).map_err(AppError::Validation)?;
     skill_service::validate_skill_name(&skill_name)?;
 
-    let skills_dir = get_agent_skills_dir(&app, &folder_name)?;
+    let skills_dir = get_agent_skills_dir(&app, &folder_name).map_err(AppError::Io)?;
     let skill_dir = skills_dir.join(&skill_name);
 
     if skill_dir.exists() {
-        return Err(format!("Skill '{}' already exists", skill_name));
+        return Err(AppError::Validation(format!("Skill '{}' already exists", skill_name)));
     }
 
     std::fs::create_dir_all(&skill_dir)
-        .map_err(|e| format!("Failed to create skill directory: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to create skill directory: {}", e)))?;
 
     let template = format!(
         "---\nname: {}\ndescription: 새 특기에 대한 설명을 입력하세요.\n---\n\n# {}\n\n여기에 에이전트가 따를 지침을 작성하세요.\n",
@@ -276,7 +277,7 @@ pub fn create_skill(
 
     let skill_md = skill_dir.join("SKILL.md");
     std::fs::write(&skill_md, &template)
-        .map_err(|e| format!("Failed to write SKILL.md: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to write SKILL.md: {}", e)))?;
 
     // Parse back the template to return metadata
     let (fm, _body, diagnostics) = parse_skill_md(&template, &skill_name);
@@ -297,14 +298,14 @@ pub fn update_skill(
     folder_name: String,
     skill_name: String,
     content: String,
-) -> Result<SkillContent, String> {
-    validate_name(&folder_name)?;
-    validate_name(&skill_name)?;
+) -> Result<SkillContent, AppError> {
+    validate_name(&folder_name).map_err(AppError::Validation)?;
+    validate_name(&skill_name).map_err(AppError::Validation)?;
 
     // Only operate on agent-scoped skills, never fall back to global
-    let skill_dir = get_agent_skills_dir(&app, &folder_name)?.join(&skill_name);
+    let skill_dir = get_agent_skills_dir(&app, &folder_name).map_err(AppError::Io)?.join(&skill_name);
     if !skill_dir.exists() {
-        return Err(format!("Agent skill '{}' not found (global skills cannot be modified from agent editor)", skill_name));
+        return Err(AppError::NotFound(format!("Agent skill '{}' not found (global skills cannot be modified from agent editor)", skill_name)));
     }
 
     let skill_md = skill_dir.join("SKILL.md");
@@ -313,11 +314,11 @@ pub fn update_skill(
     let app_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    validate_path_within(&skill_md, &app_dir)?;
+        .map_err(|e| AppError::Io(format!("Failed to resolve app data dir: {}", e)))?;
+    validate_path_within(&skill_md, &app_dir).map_err(AppError::Validation)?;
 
     std::fs::write(&skill_md, &content)
-        .map_err(|e| format!("Failed to write SKILL.md: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to write SKILL.md: {}", e)))?;
 
     let dir_name = skill_dir
         .file_name()
@@ -347,25 +348,25 @@ pub fn delete_skill(
     app: AppHandle,
     folder_name: String,
     skill_name: String,
-) -> Result<(), String> {
-    validate_name(&folder_name)?;
-    validate_name(&skill_name)?;
+) -> Result<(), AppError> {
+    validate_name(&folder_name).map_err(AppError::Validation)?;
+    validate_name(&skill_name).map_err(AppError::Validation)?;
 
     // Only operate on agent-scoped skills, never fall back to global
-    let skill_dir = get_agent_skills_dir(&app, &folder_name)?.join(&skill_name);
+    let skill_dir = get_agent_skills_dir(&app, &folder_name).map_err(AppError::Io)?.join(&skill_name);
     if !skill_dir.exists() {
-        return Err(format!("Agent skill '{}' not found (global skills cannot be deleted from agent editor)", skill_name));
+        return Err(AppError::NotFound(format!("Agent skill '{}' not found (global skills cannot be deleted from agent editor)", skill_name)));
     }
 
     // Validate path is within app data dir
     let app_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    validate_path_within(&skill_dir, &app_dir)?;
+        .map_err(|e| AppError::Io(format!("Failed to resolve app data dir: {}", e)))?;
+    validate_path_within(&skill_dir, &app_dir).map_err(AppError::Validation)?;
 
     std::fs::remove_dir_all(&skill_dir)
-        .map_err(|e| format!("Failed to delete skill: {}", e))?;
+        .map_err(|e| AppError::Io(format!("Failed to delete skill: {}", e)))?;
 
     Ok(())
 }

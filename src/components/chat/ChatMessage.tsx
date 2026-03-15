@@ -4,7 +4,9 @@ import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
-import { useChatStore } from "../../stores/chatStore";
+import { useMessageStore } from "../../stores/messageStore";
+import { useChatFlowStore } from "../../stores/chatFlowStore";
+import { useToolRunStore } from "../../stores/toolRunStore";
 import ToolCallBubble from "./ToolCallBubble";
 
 interface Props {
@@ -15,12 +17,12 @@ export default function ChatMessage({ message }: Props) {
   const isPending = message.status === "pending";
   const [showReasoning, setShowReasoning] = useState(false);
   const [copied, setCopied] = useState(false);
-  const copyMessage = useChatStore((s) => s.copyMessage);
-  const regenerateMessage = useChatStore((s) => s.regenerateMessage);
-  const toolRunState = useChatStore((s) => s.toolRunState);
-  const pendingToolCalls = useChatStore((s) => s.pendingToolCalls);
-  const approveToolCall = useChatStore((s) => s.approveToolCall);
-  const rejectToolCall = useChatStore((s) => s.rejectToolCall);
+  const copyMessage = useMessageStore((s) => s.copyMessage);
+  const regenerateMessage = useChatFlowStore((s) => s.regenerateMessage);
+  const toolRunState = useToolRunStore((s) => s.toolRunState);
+  const pendingToolCalls = useToolRunStore((s) => s.pendingToolCalls);
+  const approveToolCall = useToolRunStore((s) => s.approveToolCall);
+  const rejectToolCall = useToolRunStore((s) => s.rejectToolCall);
 
   const handleCopy = () => {
     copyMessage(message.id);

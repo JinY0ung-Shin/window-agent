@@ -1,8 +1,7 @@
 import { create } from "zustand";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
-import { useMemoryStore } from "./memoryStore";
-import { buildChatMessages, buildConversationContext } from "../services/chatHelpers";
+import { buildChatMessages } from "../services/chatHelpers";
 import { estimateTokens, estimateMessageTokens } from "../services/tokenEstimator";
 import type { ChatMessage } from "../services/types";
 import { useConversationStore } from "./conversationStore";

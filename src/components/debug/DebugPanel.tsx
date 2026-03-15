@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
 import { useDebugStore } from "../../stores/debugStore";
-import { useChatStore } from "../../stores/chatStore";
+import { useConversationStore } from "../../stores/conversationStore";
 
 const STATUS_COLORS: Record<string, string> = {
   executed: "var(--success, #22c55e)",
@@ -43,7 +43,7 @@ export default function DebugPanel() {
   const loadLogs = useDebugStore((s) => s.loadLogs);
   const getFilteredLogs = useDebugStore((s) => s.getFilteredLogs);
 
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
+  const currentConversationId = useConversationStore((s) => s.currentConversationId);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 

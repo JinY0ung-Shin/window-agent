@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import Sidebar from "../Sidebar";
-import { useChatStore } from "../../../stores/chatStore";
+import { useConversationStore } from "../../../stores/conversationStore";
 import { useSettingsStore } from "../../../stores/settingsStore";
 
 vi.mock("../../../services/tauriCommands");
 
-const initialChatState = useChatStore.getState();
+const initialConvState = useConversationStore.getState();
 const initialSettingsState = useSettingsStore.getState();
 
 beforeEach(() => {
-  useChatStore.setState(initialChatState, true);
+  useConversationStore.setState(initialConvState, true);
   useSettingsStore.setState(initialSettingsState, true);
 });
 
@@ -26,7 +26,7 @@ describe("Sidebar", () => {
   });
 
   it("renders conversation list", () => {
-    useChatStore.setState({
+    useConversationStore.setState({
       conversations: [
         { id: "1", title: "대화 A", agent_id: "a1", created_at: "", updated_at: "" },
         { id: "2", title: "대화 B", agent_id: "a1", created_at: "", updated_at: "" },
@@ -39,7 +39,7 @@ describe("Sidebar", () => {
 
   it("clicking new chat calls createNewConversation", () => {
     const spy = vi.fn();
-    useChatStore.setState({ createNewConversation: spy });
+    useConversationStore.setState({ createNewConversation: spy });
     render(<Sidebar />);
     fireEvent.click(screen.getByText("새 대화"));
     expect(spy).toHaveBeenCalled();
@@ -47,7 +47,7 @@ describe("Sidebar", () => {
 
   it("clicking conversation calls selectConversation", () => {
     const spy = vi.fn();
-    useChatStore.setState({
+    useConversationStore.setState({
       conversations: [{ id: "c1", title: "Test Conv", agent_id: "a1", created_at: "", updated_at: "" }],
       selectConversation: spy,
     });

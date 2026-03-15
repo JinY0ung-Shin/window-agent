@@ -2,6 +2,7 @@ use crate::db::agent_operations;
 use crate::db::models::*;
 use crate::db::operations::*;
 use crate::db::Database;
+use crate::error::AppError;
 use crate::utils::path_security::validate_zip_entry;
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read as _, Write as _};
@@ -45,11 +46,9 @@ pub struct ImportResult {
 pub fn export_conversation(
     db: State<'_, Database>,
     conversation_id: String,
-) -> Result<String, String> {
-    let detail = get_conversation_detail_impl(&db, conversation_id.clone())
-        .map_err(|e| format!("Failed to load conversation: {e}"))?;
-    let messages = get_messages_impl(&db, conversation_id)
-        .map_err(|e| format!("Failed to load messages: {e}"))?;
+) -> Result<String, AppError> {
+    let detail = get_conversation_detail_impl(&db, conversation_id.clone())?;
+    let messages = get_messages_impl(&db, conversation_id)?;
 
     let export = ConversationExport {
         version: "1.0".to_string(),
@@ -60,7 +59,7 @@ pub fn export_conversation(
     };
 
     serde_json::to_string_pretty(&export)
-        .map_err(|e| format!("JSON serialization failed: {e}"))
+        .map_err(|e| AppError::Io(format!("JSON serialization failed: {e}")))
 }
 
 // ── Export agent ──
@@ -71,9 +70,8 @@ pub fn export_agent(
     db: State<'_, Database>,
     agent_id: String,
     include_conversations: bool,
-) -> Result<Vec<u8>, String> {
-    let agent = agent_operations::get_agent_impl(&db, agent_id.clone())
-        .map_err(|e| format!("Failed to load agent: {e}"))?;
+) -> Result<Vec<u8>, AppError> {
+    let agent = agent_operations::get_agent_impl(&db, agent_id.clone())?;
 
     let mut buf = Cursor::new(Vec::new());
     {
@@ -89,17 +87,17 @@ pub fn export_agent(
             agent: agent.clone(),
         };
         let meta_json = serde_json::to_string_pretty(&meta)
-            .map_err(|e| format!("JSON error: {e}"))?;
+            .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
         zip.start_file("agent.json", options.clone())
-            .map_err(|e| format!("ZIP error: {e}"))?;
+            .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
         zip.write_all(meta_json.as_bytes())
-            .map_err(|e| format!("ZIP write error: {e}"))?;
+            .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
 
         // persona files
         let agents_dir = app
             .path()
             .app_data_dir()
-            .map_err(|e| format!("Failed to resolve app dir: {e}"))?
+            .map_err(|e| AppError::Io(format!("Failed to resolve app dir: {e}")))?
             .join("agents")
             .join(&agent.folder_name);
 
@@ -108,11 +106,11 @@ pub fn export_agent(
             let path = agents_dir.join(fname);
             if path.exists() {
                 let content = std::fs::read_to_string(&path)
-                    .map_err(|e| format!("Failed to read {fname}: {e}"))?;
+                    .map_err(|e| AppError::Io(format!("Failed to read {fname}: {e}")))?;
                 zip.start_file(format!("persona/{fname}"), options.clone())
-                    .map_err(|e| format!("ZIP error: {e}"))?;
+                    .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
                 zip.write_all(content.as_bytes())
-                    .map_err(|e| format!("ZIP write error: {e}"))?;
+                    .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
             }
         }
 
@@ -124,24 +122,24 @@ pub fn export_agent(
                 base: &std::path::Path,
                 zip: &mut zip::ZipWriter<&mut Cursor<Vec<u8>>>,
                 options: &FileOptions<()>,
-            ) -> Result<(), String> {
+            ) -> Result<(), AppError> {
                 let entries = std::fs::read_dir(dir)
-                    .map_err(|e| format!("Failed to read skills dir: {e}"))?;
+                    .map_err(|e| AppError::Io(format!("Failed to read skills dir: {e}")))?;
                 for entry in entries.flatten() {
                     let path = entry.path();
                     let relative = path
                         .strip_prefix(base)
-                        .map_err(|e| format!("Path strip error: {e}"))?;
+                        .map_err(|e| AppError::Io(format!("Path strip error: {e}")))?;
                     let zip_path = format!("skills/{}", relative.to_string_lossy().replace('\\', "/"));
                     if path.is_dir() {
                         walk_dir_recursive(&path, base, zip, options)?;
                     } else if path.is_file() {
                         let content = std::fs::read(&path)
-                            .map_err(|e| format!("Failed to read skill file: {e}"))?;
+                            .map_err(|e| AppError::Io(format!("Failed to read skill file: {e}")))?;
                         zip.start_file(zip_path, options.clone())
-                            .map_err(|e| format!("ZIP error: {e}"))?;
+                            .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
                         zip.write_all(&content)
-                            .map_err(|e| format!("ZIP write error: {e}"))?;
+                            .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
                     }
                 }
                 Ok(())
@@ -150,31 +148,27 @@ pub fn export_agent(
         }
 
         // memory notes
-        let notes = list_memory_notes_impl(&db, agent_id.clone())
-            .map_err(|e| format!("Failed to load memory notes: {e}"))?;
+        let notes = list_memory_notes_impl(&db, agent_id.clone())?;
         if !notes.is_empty() {
             let notes_json = serde_json::to_string_pretty(&notes)
-                .map_err(|e| format!("JSON error: {e}"))?;
+                .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
             zip.start_file("memory_notes.json", options.clone())
-                .map_err(|e| format!("ZIP error: {e}"))?;
+                .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
             zip.write_all(notes_json.as_bytes())
-                .map_err(|e| format!("ZIP write error: {e}"))?;
+                .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
         }
 
         // conversations
         if include_conversations {
-            let all_convs = get_conversations_impl(&db)
-                .map_err(|e| format!("Failed to load conversations: {e}"))?;
+            let all_convs = get_conversations_impl(&db)?;
             let agent_convs: Vec<_> = all_convs
                 .into_iter()
                 .filter(|c| c.agent_id == agent_id)
                 .collect();
 
             for conv in &agent_convs {
-                let detail = get_conversation_detail_impl(&db, conv.id.clone())
-                    .map_err(|e| format!("Failed to load conversation detail: {e}"))?;
-                let messages = get_messages_impl(&db, conv.id.clone())
-                    .map_err(|e| format!("Failed to load messages: {e}"))?;
+                let detail = get_conversation_detail_impl(&db, conv.id.clone())?;
+                let messages = get_messages_impl(&db, conv.id.clone())?;
 
                 let conv_export = ConversationExport {
                     version: "1.0".to_string(),
@@ -184,16 +178,16 @@ pub fn export_agent(
                     messages,
                 };
                 let conv_json = serde_json::to_string_pretty(&conv_export)
-                    .map_err(|e| format!("JSON error: {e}"))?;
+                    .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
 
                 zip.start_file(format!("conversations/{}.json", conv.id), options.clone())
-                    .map_err(|e| format!("ZIP error: {e}"))?;
+                    .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
                 zip.write_all(conv_json.as_bytes())
-                    .map_err(|e| format!("ZIP write error: {e}"))?;
+                    .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
             }
         }
 
-        zip.finish().map_err(|e| format!("ZIP finalize error: {e}"))?;
+        zip.finish().map_err(|e| AppError::Io(format!("ZIP finalize error: {e}")))?;
     }
 
     Ok(buf.into_inner())
@@ -206,22 +200,22 @@ pub fn import_agent(
     app: AppHandle,
     db: State<'_, Database>,
     zip_bytes: Vec<u8>,
-) -> Result<ImportResult, String> {
+) -> Result<ImportResult, AppError> {
     let cursor = Cursor::new(zip_bytes);
     let mut archive = zip::ZipArchive::new(cursor)
-        .map_err(|e| format!("Invalid ZIP file: {e}"))?;
+        .map_err(|e| AppError::Io(format!("Invalid ZIP file: {e}")))?;
 
     let mut warnings: Vec<String> = Vec::new();
 
     // 1. Read agent.json
     let agent_meta: AgentExportMeta = {
         let mut file = archive.by_name("agent.json")
-            .map_err(|_| "ZIP missing agent.json".to_string())?;
+            .map_err(|_| AppError::Validation("ZIP missing agent.json".to_string()))?;
         let mut content = String::new();
         file.read_to_string(&mut content)
-            .map_err(|e| format!("Failed to read agent.json: {e}"))?;
+            .map_err(|e| AppError::Io(format!("Failed to read agent.json: {e}")))?;
         serde_json::from_str(&content)
-            .map_err(|e| format!("Invalid agent.json: {e}"))?
+            .map_err(|e| AppError::Validation(format!("Invalid agent.json: {e}")))?
     };
 
     let old_agent = agent_meta.agent;
@@ -244,7 +238,7 @@ pub fn import_agent(
             }
             suffix += 1;
             if suffix > 100 {
-                return Err("Too many folder name collisions".to_string());
+                return Err(AppError::Validation("Too many folder name collisions".to_string()));
             }
         }
         warnings.push(format!(
@@ -321,8 +315,8 @@ pub fn import_agent(
     }
 
     // 6. Execute import in a single transaction
-    let mut conn = db.conn.lock().map_err(|_| "DB lock failed".to_string())?;
-    let mut tx = conn.savepoint().map_err(|e| format!("Transaction start failed: {e}"))?;
+    let mut conn = db.conn.lock().map_err(|_| AppError::Database("DB lock failed".to_string()))?;
+    let mut tx = conn.savepoint().map_err(|e| AppError::Database(format!("Transaction start failed: {e}")))?;
 
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -344,7 +338,7 @@ pub fn import_agent(
             now,
             now,
         ],
-    ).map_err(|e| format!("Failed to insert agent: {e}"))?;
+    ).map_err(|e| AppError::Database(format!("Failed to insert agent: {e}")))?;
 
     let mut conversations_imported = 0usize;
     let mut messages_imported = 0usize;
@@ -367,7 +361,7 @@ pub fn import_agent(
                 conv_detail.created_at,
                 conv_detail.updated_at,
             ],
-        ).map_err(|e| format!("Failed to insert conversation: {e}"))?;
+        ).map_err(|e| AppError::Database(format!("Failed to insert conversation: {e}")))?;
         conversations_imported += 1;
 
         for msg in msgs {
@@ -384,7 +378,7 @@ pub fn import_agent(
                     msg.tool_input,
                     msg.created_at,
                 ],
-            ).map_err(|e| format!("Failed to insert message: {e}"))?;
+            ).map_err(|e| AppError::Database(format!("Failed to insert message: {e}")))?;
             messages_imported += 1;
         }
     }
@@ -403,7 +397,7 @@ pub fn import_agent(
                 note.created_at,
                 note.updated_at,
             ],
-        ).map_err(|e| format!("Failed to insert memory note: {e}"))?;
+        ).map_err(|e| AppError::Database(format!("Failed to insert memory note: {e}")))?;
         memory_notes_imported += 1;
     }
 
@@ -411,20 +405,20 @@ pub fn import_agent(
     let agents_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app dir: {e}"))?
+        .map_err(|e| AppError::Io(format!("Failed to resolve app dir: {e}")))?
         .join("agents")
         .join(&new_folder);
 
     std::fs::create_dir_all(&agents_dir)
-        .map_err(|e| format!("Failed to create agent directory: {e}"))?;
+        .map_err(|e| AppError::Io(format!("Failed to create agent directory: {e}")))?;
 
     for (fname, content) in &persona_contents {
         let path = agents_dir.join(fname);
         if let Err(e) = std::fs::write(&path, content) {
             // Filesystem write failed — clean up and rollback DB
             let _ = std::fs::remove_dir_all(&agents_dir);
-            tx.rollback().map_err(|re| format!("Rollback failed after fs error: {re}"))?;
-            return Err(format!("Failed to write {fname}: {e}"));
+            tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
+            return Err(AppError::Io(format!("Failed to write {fname}: {e}")));
         }
     }
 
@@ -433,10 +427,10 @@ pub fn import_agent(
         let relative = zip_path.strip_prefix("skills/").unwrap_or(zip_path);
 
         // Security: reject path traversal attempts (absolute paths, ".." components)
-        if let Err(_) = validate_zip_entry(relative) {
+        if validate_zip_entry(relative).is_err() {
             let _ = std::fs::remove_dir_all(&agents_dir);
-            tx.rollback().map_err(|re| format!("Rollback failed: {re}"))?;
-            return Err(format!("Invalid skill path in ZIP: {}", zip_path));
+            tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
+            return Err(AppError::Validation(format!("Invalid skill path in ZIP: {}", zip_path)));
         }
 
         let target_path = agents_dir.join("skills").join(relative);
@@ -453,21 +447,21 @@ pub fn import_agent(
             let canonical_skills = skills_dir.canonicalize().unwrap_or(skills_dir.clone());
             if !canonical_target.starts_with(&canonical_skills) {
                 let _ = std::fs::remove_dir_all(&agents_dir);
-                tx.rollback().map_err(|re| format!("Rollback failed: {re}"))?;
-                return Err(format!("Skill path escapes agent directory: {}", zip_path));
+                tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
+                return Err(AppError::Validation(format!("Skill path escapes agent directory: {}", zip_path)));
             }
         }
         if let Some(parent) = target_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
                 let _ = std::fs::remove_dir_all(&agents_dir);
-                tx.rollback().map_err(|re| format!("Rollback failed after fs error: {re}"))?;
-                return Err(format!("Failed to create skill dir: {e}"));
+                tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
+                return Err(AppError::Io(format!("Failed to create skill dir: {e}")));
             }
         }
         if let Err(e) = std::fs::write(&target_path, content) {
             let _ = std::fs::remove_dir_all(&agents_dir);
-            tx.rollback().map_err(|re| format!("Rollback failed after fs error: {re}"))?;
-            return Err(format!("Failed to write skill file '{}': {e}", zip_path));
+            tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
+            return Err(AppError::Io(format!("Failed to write skill file '{}': {e}", zip_path)));
         }
     }
 
@@ -475,7 +469,7 @@ pub fn import_agent(
     if let Err(e) = tx.commit() {
         // DB commit failed — clean up filesystem
         let _ = std::fs::remove_dir_all(&agents_dir);
-        return Err(format!("Transaction commit failed: {e}"));
+        return Err(AppError::Database(format!("Transaction commit failed: {e}")));
     }
     drop(conn);
 

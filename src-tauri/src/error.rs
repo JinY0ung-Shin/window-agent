@@ -2,9 +2,7 @@ use crate::db::error::DbError;
 use serde::Serialize;
 use std::fmt;
 
-/// Unified application error type.
-/// New services use AppError instead of raw `String` errors.
-/// Existing Tauri commands are not changed in this phase.
+/// Unified application error type for all Tauri commands and services.
 #[derive(Debug)]
 pub enum AppError {
     Database(String),
@@ -28,7 +26,10 @@ impl fmt::Display for AppError {
 
 impl From<DbError> for AppError {
     fn from(e: DbError) -> Self {
-        AppError::Database(e.to_string())
+        match e {
+            DbError::Sqlite(msg) => AppError::Database(msg),
+            DbError::Lock => AppError::Database("database lock error".to_string()),
+        }
     }
 }
 

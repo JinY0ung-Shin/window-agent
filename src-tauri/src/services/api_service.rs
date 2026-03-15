@@ -1,4 +1,5 @@
 use crate::api::*;
+use crate::error::AppError;
 use crate::models::api_types::{CompletionChunk, CompletionResponse};
 use futures::StreamExt;
 use tauri::Emitter;
@@ -29,17 +30,22 @@ pub fn completions_url(base_url: &str) -> String {
 
 // ── Thinking fallback ──
 
-/// Check whether an error string indicates a thinking-specific failure
+/// Check whether an AppError indicates a thinking-specific failure
 /// (HTTP 400 or 422 with thinking/unsupported related text), as opposed to
 /// auth, rate-limit, server, or network errors that should not trigger a retry.
-pub fn is_thinking_specific_error(err: &str) -> bool {
+pub fn is_thinking_specific_error(err: &AppError) -> bool {
+    let msg = match err {
+        AppError::Api(msg) => msg.as_str(),
+        _ => return false,
+    };
+
     // Must be an HTTP error with status 400 or 422
-    let is_relevant_status = err.starts_with("HTTP_400:") || err.starts_with("HTTP_422:");
+    let is_relevant_status = msg.starts_with("HTTP_400:") || msg.starts_with("HTTP_422:");
     if !is_relevant_status {
         return false;
     }
 
-    let lower = err.to_lowercase();
+    let lower = msg.to_lowercase();
     lower.contains("thinking")
         || lower.contains("not supported")
         || lower.contains("not_supported")
@@ -55,7 +61,7 @@ pub async fn do_completion(
     api_key: &str,
     base_url: &str,
     body: &serde_json::Value,
-) -> Result<ChatCompletionResponse, String> {
+) -> Result<ChatCompletionResponse, AppError> {
     let url = completions_url(base_url);
 
     let resp = client
@@ -64,19 +70,18 @@ pub async fn do_completion(
         .header("Content-Type", "application/json")
         .json(body)
         .send()
-        .await
-        .map_err(|e| format!("HTTP error: {}", e))?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("HTTP_{}: {}", status, text));
+        return Err(AppError::Api(format!("HTTP_{}: {}", status, text)));
     }
 
     let parsed: CompletionResponse = resp
         .json()
         .await
-        .map_err(|e| format!("PARSE_ERROR: JSON parse error: {}", e))?;
+        .map_err(|e| AppError::Api(format!("PARSE_ERROR: JSON parse error: {}", e)))?;
 
     let msg = parsed
         .choices
@@ -93,7 +98,7 @@ pub async fn do_completion(
 
     // Reject empty responses – the API returned no useful content
     if content.is_empty() && reasoning_content.is_none() {
-        return Err("EMPTY_RESPONSE: No content in API response".to_string());
+        return Err(AppError::Api("EMPTY_RESPONSE: No content in API response".to_string()));
     }
 
     Ok(ChatCompletionResponse {
@@ -112,7 +117,7 @@ pub async fn stream_completion(
     base_url: &str,
     body: &serde_json::Value,
     request_id: &str,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let url = completions_url(base_url);
 
     let resp = client
@@ -121,14 +126,13 @@ pub async fn stream_completion(
         .header("Content-Type", "application/json")
         .json(body)
         .send()
-        .await
-        .map_err(|e| format!("HTTP error: {}", e))?;
+        .await?;
 
     // Check HTTP status before attempting to stream
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("HTTP_{}: {}", status, text));
+        return Err(AppError::Api(format!("HTTP_{}: {}", status, text)));
     }
 
     let mut stream = resp.bytes_stream();
@@ -139,7 +143,7 @@ pub async fn stream_completion(
     let mut tool_calls_acc: Vec<ToolCall> = Vec::new();
 
     while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
+        let chunk = chunk.map_err(|e| AppError::Api(format!("Stream error: {}", e)))?;
         buffer.push_str(&String::from_utf8_lossy(&chunk));
 
         while let Some(line_end) = buffer.find('\n') {

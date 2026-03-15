@@ -3,18 +3,18 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import SkillBar from "../SkillBar";
 import { useSkillStore } from "../../../stores/skillStore";
 import { useAgentStore } from "../../../stores/agentStore";
-import { useChatStore } from "../../../stores/chatStore";
+import { useConversationStore } from "../../../stores/conversationStore";
 
 vi.mock("../../../services/tauriCommands");
 
 const initialSkillState = useSkillStore.getState();
 const initialAgentState = useAgentStore.getState();
-const initialChatState = useChatStore.getState();
+const initialConvState = useConversationStore.getState();
 
 beforeEach(() => {
   useSkillStore.setState(initialSkillState, true);
   useAgentStore.setState(initialAgentState, true);
-  useChatStore.setState(initialChatState, true);
+  useConversationStore.setState(initialConvState, true);
 });
 
 describe("SkillBar", () => {

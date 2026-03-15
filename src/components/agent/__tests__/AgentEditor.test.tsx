@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import AgentEditor from "../AgentEditor";
 import { useAgentStore } from "../../../stores/agentStore";
 import { makeAgent, EMPTY_PERSONA } from "../../../__tests__/testFactories";
@@ -38,77 +38,77 @@ describe("AgentEditor", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("renders modal when isEditorOpen=true", () => {
+  it("renders modal when isEditorOpen=true", async () => {
     openNewEditor();
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("새 에이전트");
   });
 
-  it("shows '새 에이전트' title for new agent (editingAgentId=null)", () => {
+  it("shows '새 에이전트' title for new agent (editingAgentId=null)", async () => {
     openNewEditor();
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("새 에이전트");
   });
 
-  it("shows '에이전트 편집' title when editing (editingAgentId set)", () => {
+  it("shows '에이전트 편집' title when editing (editingAgentId set)", async () => {
     useAgentStore.setState({
       isEditorOpen: true,
       editingAgentId: "test-id",
       agents: [makeAgent()],
       personaFiles: EMPTY_PERSONA,
     });
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
     expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("에이전트 편집");
   });
 
-  it("renders 4 persona tabs", () => {
+  it("renders 4 persona tabs", async () => {
     openNewEditor();
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
     expect(screen.getByText("IDENTITY")).toBeInTheDocument();
     expect(screen.getByText("SOUL")).toBeInTheDocument();
     expect(screen.getByText("USER")).toBeInTheDocument();
     expect(screen.getByText("AGENTS")).toBeInTheDocument();
   });
 
-  it("clicking tab calls setPersonaTab", () => {
+  it("clicking tab calls setPersonaTab", async () => {
     const setTabSpy = vi.fn();
     openNewEditor({ setPersonaTab: setTabSpy });
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
 
     fireEvent.click(screen.getByText("SOUL"));
     expect(setTabSpy).toHaveBeenCalledWith("soul");
   });
 
-  it("save button calls saveAgent", () => {
+  it("save button calls saveAgent", async () => {
     const saveSpy = vi.fn();
     openNewEditor({ saveAgent: saveSpy });
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
 
     fireEvent.click(screen.getByText("저장"));
     expect(saveSpy).toHaveBeenCalled();
   });
 
-  it("cancel button calls closeEditor", () => {
+  it("cancel button calls closeEditor", async () => {
     const closeSpy = vi.fn();
     openNewEditor({ closeEditor: closeSpy });
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
 
     fireEvent.click(screen.getByText("취소"));
     expect(closeSpy).toHaveBeenCalled();
   });
 
-  it("delete button hidden for default agent (is_default=true)", () => {
+  it("delete button hidden for default agent (is_default=true)", async () => {
     useAgentStore.setState({
       isEditorOpen: true,
       editingAgentId: "test-id",
       agents: [makeAgent({ is_default: true })],
       personaFiles: EMPTY_PERSONA,
     });
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
     expect(screen.queryByText("에이전트 삭제")).not.toBeInTheDocument();
   });
 
-  it("delete button visible and works for non-default agent", () => {
+  it("delete button visible and works for non-default agent", async () => {
     const deleteSpy = vi.fn();
     useAgentStore.setState({
       isEditorOpen: true,
@@ -117,7 +117,7 @@ describe("AgentEditor", () => {
       personaFiles: EMPTY_PERSONA,
       deleteAgent: deleteSpy,
     });
-    render(<AgentEditor />);
+    await act(async () => { render(<AgentEditor />); });
 
     const deleteBtn = screen.getByText("에이전트 삭제");
     expect(deleteBtn).toBeInTheDocument();

@@ -1,6 +1,7 @@
 use crate::db::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, MemoryNote, Message, SaveMessageRequest, ToolCallLog};
 use crate::db::operations;
 use crate::db::Database;
+use crate::error::AppError;
 use tauri::State;
 
 #[tauri::command]
@@ -8,12 +9,12 @@ pub fn create_conversation(
     db: State<'_, Database>,
     title: Option<String>,
     agent_id: String,
-) -> Result<ConversationListItem, String> {
+) -> Result<ConversationListItem, AppError> {
     Ok(operations::create_conversation_impl(&db, title, agent_id)?)
 }
 
 #[tauri::command]
-pub fn get_conversations(db: State<'_, Database>) -> Result<Vec<ConversationListItem>, String> {
+pub fn get_conversations(db: State<'_, Database>) -> Result<Vec<ConversationListItem>, AppError> {
     Ok(operations::get_conversations_impl(&db)?)
 }
 
@@ -21,7 +22,7 @@ pub fn get_conversations(db: State<'_, Database>) -> Result<Vec<ConversationList
 pub fn get_conversation_detail(
     db: State<'_, Database>,
     id: String,
-) -> Result<ConversationDetail, String> {
+) -> Result<ConversationDetail, AppError> {
     Ok(operations::get_conversation_detail_impl(&db, id)?)
 }
 
@@ -29,7 +30,7 @@ pub fn get_conversation_detail(
 pub fn get_messages(
     db: State<'_, Database>,
     conversation_id: String,
-) -> Result<Vec<Message>, String> {
+) -> Result<Vec<Message>, AppError> {
     Ok(operations::get_messages_impl(&db, conversation_id)?)
 }
 
@@ -37,7 +38,7 @@ pub fn get_messages(
 pub fn save_message(
     db: State<'_, Database>,
     request: SaveMessageRequest,
-) -> Result<Message, String> {
+) -> Result<Message, AppError> {
     Ok(operations::save_message_impl(&db, request)?)
 }
 
@@ -46,7 +47,7 @@ pub fn delete_messages_from(
     db: State<'_, Database>,
     conversation_id: String,
     message_id: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     Ok(operations::delete_messages_from_impl(&db, conversation_id, message_id)?)
 }
 
@@ -54,7 +55,7 @@ pub fn delete_messages_from(
 pub fn delete_conversation(
     db: State<'_, Database>,
     conversation_id: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     Ok(operations::delete_conversation_impl(&db, conversation_id)?)
 }
 
@@ -64,7 +65,7 @@ pub fn update_conversation_title(
     id: String,
     title: String,
     expected_current: Option<String>,
-) -> Result<i32, String> {
+) -> Result<i32, AppError> {
     Ok(operations::update_conversation_title_impl(&db, id, title, expected_current)?)
 }
 
@@ -75,7 +76,7 @@ pub fn update_conversation_summary(
     summary: Option<String>,
     up_to_message_id: Option<String>,
     expected_previous: Option<String>,
-) -> Result<i32, String> {
+) -> Result<i32, AppError> {
     Ok(operations::update_conversation_summary_impl(&db, id, summary, up_to_message_id, expected_previous)?)
 }
 
@@ -84,7 +85,7 @@ pub fn delete_messages_and_maybe_reset_summary(
     db: State<'_, Database>,
     conversation_id: String,
     message_id: String,
-) -> Result<DeleteMessagesResult, String> {
+) -> Result<DeleteMessagesResult, AppError> {
     Ok(operations::delete_messages_and_maybe_reset_summary_impl(&db, conversation_id, message_id)?)
 }
 
@@ -95,7 +96,7 @@ pub fn update_conversation_skills(
     db: State<'_, Database>,
     id: String,
     skills_json: Option<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     Ok(operations::update_conversation_skills_impl(&db, id, skills_json)?)
 }
 
@@ -107,7 +108,7 @@ pub fn create_memory_note(
     agent_id: String,
     title: String,
     content: String,
-) -> Result<MemoryNote, String> {
+) -> Result<MemoryNote, AppError> {
     Ok(operations::create_memory_note_impl(&db, agent_id, title, content)?)
 }
 
@@ -115,7 +116,7 @@ pub fn create_memory_note(
 pub fn list_memory_notes(
     db: State<'_, Database>,
     agent_id: String,
-) -> Result<Vec<MemoryNote>, String> {
+) -> Result<Vec<MemoryNote>, AppError> {
     Ok(operations::list_memory_notes_impl(&db, agent_id)?)
 }
 
@@ -125,7 +126,7 @@ pub fn update_memory_note(
     id: String,
     title: Option<String>,
     content: Option<String>,
-) -> Result<MemoryNote, String> {
+) -> Result<MemoryNote, AppError> {
     Ok(operations::update_memory_note_impl(&db, id, title, content)?)
 }
 
@@ -133,7 +134,7 @@ pub fn update_memory_note(
 pub fn delete_memory_note(
     db: State<'_, Database>,
     id: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     Ok(operations::delete_memory_note_impl(&db, id)?)
 }
 
@@ -146,7 +147,7 @@ pub fn create_tool_call_log(
     message_id: Option<String>,
     tool_name: String,
     tool_input: String,
-) -> Result<ToolCallLog, String> {
+) -> Result<ToolCallLog, AppError> {
     Ok(operations::create_tool_call_log_impl(&db, conversation_id, message_id, tool_name, tool_input)?)
 }
 
@@ -154,7 +155,7 @@ pub fn create_tool_call_log(
 pub fn list_tool_call_logs(
     db: State<'_, Database>,
     conversation_id: String,
-) -> Result<Vec<ToolCallLog>, String> {
+) -> Result<Vec<ToolCallLog>, AppError> {
     Ok(operations::list_tool_call_logs_impl(&db, conversation_id)?)
 }
 
@@ -165,6 +166,6 @@ pub fn update_tool_call_log_status(
     status: String,
     tool_output: Option<String>,
     duration_ms: Option<i64>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     Ok(operations::update_tool_call_log_status_impl(&db, id, status, tool_output, duration_ms)?)
 }

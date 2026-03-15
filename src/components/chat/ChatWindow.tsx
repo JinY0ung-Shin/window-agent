@@ -1,6 +1,8 @@
 import { useRef, useEffect } from "react";
 import { X } from "lucide-react";
-import { useChatStore } from "../../stores/chatStore";
+import { useMessageStore } from "../../stores/messageStore";
+import { useConversationStore } from "../../stores/conversationStore";
+import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useAgentStore } from "../../stores/agentStore";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
@@ -10,11 +12,11 @@ import MemoryBar from "../memory/MemoryBar";
 import SkillBar from "../skill/SkillBar";
 
 export default function ChatWindow() {
-  const messages = useChatStore((s) => s.messages);
-  const conversations = useChatStore((s) => s.conversations);
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
-  const isBootstrapping = useChatStore((s) => s.isBootstrapping);
-  const cancelBootstrap = useChatStore((s) => s.cancelBootstrap);
+  const messages = useMessageStore((s) => s.messages);
+  const conversations = useConversationStore((s) => s.conversations);
+  const currentConversationId = useConversationStore((s) => s.currentConversationId);
+  const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
+  const cancelBootstrap = useBootstrapStore((s) => s.cancelBootstrap);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
   const openEditor = useAgentStore((s) => s.openEditor);

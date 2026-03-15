@@ -1,15 +1,17 @@
 import { create } from "zustand";
 import { listen } from "@tauri-apps/api/event";
-import type { ChatMessage, ActiveRun, ToolCall, ToolRunState } from "../services/types";
+import type { ChatMessage, ToolCall } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
-import { useDebugStore } from "./debugStore";
 import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
 import { useBootstrapStore } from "./bootstrapStore";
 import { useToolRunStore } from "./toolRunStore";
+import { useConversationStore } from "./conversationStore";
+import { useMessageStore } from "./messageStore";
+import { useStreamStore } from "./streamStore";
 import { buildConversationContext } from "../services/chatHelpers";
 import {
   readPersonaFiles,
@@ -36,9 +38,6 @@ import {
   parseErrorMessage,
   DEFAULT_TOOLS_MD,
 } from "../constants";
-// Circular import: chatStore → chatFlowStore → chatStore
-// Safe because useChatStore is only accessed inside functions (never at module evaluation time)
-import { useChatStore } from "./chatStore";
 
 // ── Stream event types ────────────────────────────────
 type StreamChunkEvent = { request_id: string; delta: string; reasoning_delta: string | null };
@@ -76,30 +75,15 @@ function updateMessageInList(
   );
 }
 
-const TOOL_RESET = {
-  toolRunState: "idle" as ToolRunState,
-  pendingToolCalls: [] as ToolCall[],
-  toolIterationCount: 0,
-};
-
-const BOOTSTRAP_RESET = {
-  isBootstrapping: false,
-  bootstrapFolderName: null as string | null,
-  bootstrapApiHistory: [] as any[],
-  bootstrapFilesWritten: [] as string[],
-};
-
 const MAX_TOOL_ITERATIONS = 10;
 
-// ── ChatStore accessor ──
+// ── Store accessors (shorthand) ──
 
-function chatGet() {
-  return useChatStore.getState();
-}
-
-function chatSet(partial: Record<string, unknown>) {
-  useChatStore.setState(partial);
-}
+const msg = () => useMessageStore.getState();
+const conv = () => useConversationStore.getState();
+const stream = () => useStreamStore.getState();
+const boot = () => useBootstrapStore.getState();
+const summary = () => useSummaryStore.getState();
 
 // ── ChatFlowStore ─────────────────────────────────────
 
@@ -111,7 +95,8 @@ interface ChatFlowState {
 
 export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
   sendMessage: async () => {
-    const { inputValue, isBootstrapping } = chatGet();
+    const { inputValue } = msg();
+    const { isBootstrapping } = boot();
     if (!inputValue.trim()) return;
 
     await useSettingsStore.getState().waitForEnv();
@@ -136,7 +121,9 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
   },
 
   regenerateMessage: async (messageId: string) => {
-    const { messages, activeRun, currentConversationId } = chatGet();
+    const { messages } = msg();
+    const { activeRun } = stream();
+    const { currentConversationId } = conv();
     if (!currentConversationId || activeRun) return;
 
     const idx = messages.findIndex((m: ChatMessage) => m.id === messageId);
@@ -148,12 +135,11 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
     if (targetMsg.dbMessageId) {
       const result = await cmds.deleteMessagesAndMaybeResetSummary(currentConversationId, targetMsg.dbMessageId);
       if (result.summary_was_reset) {
-        chatSet({ currentSummary: null, summaryUpToMessageId: null });
-        useSummaryStore.getState().resetSummary();
+        useSummaryStore.setState({ currentSummary: null, summaryUpToMessageId: null });
       }
     }
 
-    chatSet({ messages: truncated });
+    useMessageStore.setState({ messages: truncated });
 
     const lastUserMsg = [...truncated].reverse().find((m: ChatMessage) => m.type === "user");
     if (!lastUserMsg) return;
@@ -162,11 +148,12 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
   },
 
   prepareForAgent: (agentId: string) => {
-    chatSet({
-      currentConversationId: null, messages: [], activeRun: null,
-      currentSummary: null, summaryUpToMessageId: null, summaryJobId: null,
-      ...TOOL_RESET, ...BOOTSTRAP_RESET,
-    });
+    useConversationStore.setState({ currentConversationId: null });
+    useMessageStore.setState({ messages: [], inputValue: "" });
+    useStreamStore.setState({ activeRun: null });
+    useSummaryStore.setState({ currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
+    useToolRunStore.getState().resetToolState();
+    useBootstrapStore.getState().resetBootstrap();
     useAgentStore.getState().selectAgent(agentId);
     useSkillStore.getState().clear();
     const agent = useAgentStore.getState().agents.find((a: any) => a.id === agentId);
@@ -180,7 +167,7 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
 
 async function handleSkillCommand(command: string) {
   const skillStore = useSkillStore.getState();
-  const { currentConversationId, conversations, messages } = chatGet();
+  const { currentConversationId, conversations } = conv();
 
   const parts = command.split(/\s+/);
   const subCommand = parts[1];
@@ -201,8 +188,8 @@ async function handleSkillCommand(command: string) {
           .join("\n") || "(없음)"
       }\n\n활성: ${active.length}개 | 토큰: ~${skillStore.activeSkillTokens}/2000`;
   } else if ((subCommand === "장착" || subCommand === "on") && skillName) {
-    const conv = conversations.find((c: any) => c.id === currentConversationId);
-    const agentId = conv?.agent_id ?? useAgentStore.getState().selectedAgentId;
+    const convObj = conversations.find((c: any) => c.id === currentConversationId);
+    const agentId = convObj?.agent_id ?? useAgentStore.getState().selectedAgentId;
     const agent = agentId
       ? useAgentStore.getState().agents.find((a: any) => a.id === agentId)
       : null;
@@ -235,7 +222,7 @@ async function handleSkillCommand(command: string) {
     content: resultMessage,
     status: "complete",
   };
-  chatSet({ messages: [...chatGet().messages, sysMsg], inputValue: "" });
+  useMessageStore.setState({ messages: [...msg().messages, sysMsg], inputValue: "" });
 }
 
 // ── Stream one turn ─────────────────────────────────────
@@ -253,8 +240,8 @@ async function streamOneTurn(
   const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection } = params;
 
   const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
-    messages: chatGet().messages,
-    summary: chatGet().currentSummary,
+    messages: msg().messages,
+    summary: summary().currentSummary,
     baseSystemPrompt,
     skillsSection,
     memoryNotes: useMemoryStore.getState().notes,
@@ -270,8 +257,8 @@ async function streamOneTurn(
     pendingDelta = "";
     pendingReasoning = "";
 
-    chatSet({
-      messages: chatGet().messages.map((m: ChatMessage) =>
+    useMessageStore.setState({
+      messages: msg().messages.map((m: ChatMessage) =>
         m.id === msgId
           ? {
               ...m,
@@ -280,8 +267,11 @@ async function streamOneTurn(
             }
           : m,
       ),
-      activeRun: chatGet().activeRun ? { ...chatGet().activeRun!, status: "streaming" } : null,
     });
+    const activeRun = stream().activeRun;
+    if (activeRun) {
+      useStreamStore.setState({ activeRun: { ...activeRun, status: "streaming" } });
+    }
   };
 
   let doneResolve: (v: StreamDoneEvent) => void;
@@ -338,7 +328,10 @@ async function streamOneTurn(
 // ── Normal message flow ────────────────────────────────
 
 async function sendNormalMessage() {
-  const { inputValue, currentConversationId, messages, conversations } = chatGet();
+  const inputValue = msg().inputValue;
+  const currentConversationId = conv().currentConversationId;
+  const messages = msg().messages;
+  const conversations = conv().conversations;
   const settings = useSettingsStore.getState();
 
   const agentStore = useAgentStore.getState();
@@ -346,8 +339,8 @@ async function sendNormalMessage() {
   let agent = null;
 
   if (currentConversationId) {
-    const conv = conversations.find((c: any) => c.id === currentConversationId);
-    agentId = conv?.agent_id ?? null;
+    const convObj = conversations.find((c: any) => c.id === currentConversationId);
+    agentId = convObj?.agent_id ?? null;
   } else {
     agentId = agentStore.selectedAgentId;
   }
@@ -370,9 +363,9 @@ async function sendNormalMessage() {
     initialTitle =
       inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) ||
       DEFAULT_CONVERSATION_TITLE;
-    const conv = await cmds.createConversation(agentId, initialTitle);
-    convId = conv.id;
-    chatSet({ currentConversationId: convId });
+    const newConv = await cmds.createConversation(agentId, initialTitle);
+    convId = newConv.id;
+    useConversationStore.setState({ currentConversationId: convId });
 
     const skillNames = useSkillStore.getState().activeSkillNames;
     if (skillNames.length > 0) {
@@ -398,9 +391,11 @@ async function sendNormalMessage() {
   const { msgId: firstMsgId, msg: pendingMsg } = createPendingMessage(currentRequestId);
   let currentMsgId = firstMsgId;
 
-  chatSet({
+  useMessageStore.setState({
     messages: [...messages, userMsg, pendingMsg],
     inputValue: "",
+  });
+  useStreamStore.setState({
     activeRun: {
       requestId: currentRequestId,
       conversationId: convId,
@@ -455,11 +450,11 @@ async function sendNormalMessage() {
 
       if (done.error) {
         if (done.error === "aborted") {
-          chatSet({
-            messages: updateMessageInList(chatGet().messages, currentMsgId, { status: "aborted" }),
-            activeRun: null,
-            ...TOOL_RESET,
+          useMessageStore.setState({
+            messages: updateMessageInList(msg().messages, currentMsgId, { status: "aborted" }),
           });
+          useStreamStore.setState({ activeRun: null });
+          useToolRunStore.getState().resetToolState();
           break;
         }
         throw new Error(done.error);
@@ -477,39 +472,39 @@ async function sendNormalMessage() {
           content: finalContent,
         });
 
-        chatSet({
-          messages: updateMessageInList(chatGet().messages, currentMsgId, {
+        useMessageStore.setState({
+          messages: updateMessageInList(msg().messages, currentMsgId, {
             dbMessageId: savedAssistant.id,
             content: finalContent,
             reasoningContent,
             status: "complete",
           }),
-          activeRun: null,
-          ...TOOL_RESET,
         });
+        useStreamStore.setState({ activeRun: null });
+        useToolRunStore.getState().resetToolState();
 
-        const completedAgentMsgs = chatGet().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
+        const completedAgentMsgs = msg().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
         if (completedAgentMsgs.length === 1) {
-          const expectedTitle = initialTitle ?? chatGet().conversations.find((c: any) => c.id === convId)?.title ?? null;
-          generateTitle(convId, inputValue, finalContent, expectedTitle, () => chatGet().loadConversations());
+          const expectedTitle = initialTitle ?? conv().conversations.find((c: any) => c.id === convId)?.title ?? null;
+          generateTitle(convId, inputValue, finalContent, expectedTitle, () => conv().loadConversations());
         }
 
-        useSummaryStore.getState().maybeGenerateSummary(
-          convId, baseSystemPrompt, chatGet().messages, () => chatGet().loadConversations(),
+        summary().maybeGenerateSummary(
+          convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
         );
         break;
       }
 
       iterationCount++;
       if (iterationCount > MAX_TOOL_ITERATIONS) {
-        chatSet({
-          messages: updateMessageInList(chatGet().messages, currentMsgId, {
+        useMessageStore.setState({
+          messages: updateMessageInList(msg().messages, currentMsgId, {
             content: replyContent || "최대 도구 호출 반복 횟수에 도달했습니다.",
             status: "failed",
           }),
-          activeRun: null,
-          ...TOOL_RESET,
         });
+        useStreamStore.setState({ activeRun: null });
+        useToolRunStore.getState().resetToolState();
         break;
       }
 
@@ -527,14 +522,16 @@ async function sendNormalMessage() {
         tool_input: JSON.stringify(parsedToolCalls),
       });
 
-      chatSet({
-        messages: updateMessageInList(chatGet().messages, currentMsgId, {
+      useMessageStore.setState({
+        messages: updateMessageInList(msg().messages, currentMsgId, {
           dbMessageId: savedAssistant.id,
           content: replyContent,
           reasoningContent,
           tool_calls: parsedToolCalls,
           status: "complete",
         }),
+      });
+      useToolRunStore.setState({
         toolRunState: "tool_pending",
         pendingToolCalls: parsedToolCalls,
         toolIterationCount: iterationCount,
@@ -571,7 +568,7 @@ async function sendNormalMessage() {
       }
 
       if (autoTools.length > 0) {
-        chatSet({ toolRunState: "tool_running" });
+        useToolRunStore.setState({ toolRunState: "tool_running" });
         const autoResults = await executeToolCalls(autoTools, convId);
         for (const toolMsg of autoResults) {
           const saved = await cmds.saveMessage({
@@ -586,10 +583,10 @@ async function sendNormalMessage() {
       }
 
       if (confirmTools.length > 0) {
-        chatSet({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
+        useToolRunStore.setState({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
         const confirmApproved = await useToolRunStore.getState().waitForToolApproval();
         if (confirmApproved) {
-          chatSet({ toolRunState: "tool_running" });
+          useToolRunStore.setState({ toolRunState: "tool_running" });
           const confirmResults = await executeToolCalls(confirmTools, convId);
           for (const toolMsg of confirmResults) {
             const saved = await cmds.saveMessage({
@@ -626,9 +623,11 @@ async function sendNormalMessage() {
       const { msgId: nextMsgId, msg: nextPending } = createPendingMessage(currentRequestId);
       currentMsgId = nextMsgId;
 
-      chatSet({
-        messages: [...chatGet().messages, ...savedToolMsgs, nextPending],
-        toolRunState: "continuing",
+      useMessageStore.setState({
+        messages: [...msg().messages, ...savedToolMsgs, nextPending],
+      });
+      useToolRunStore.setState({ toolRunState: "continuing" });
+      useStreamStore.setState({
         activeRun: {
           requestId: currentRequestId,
           conversationId: convId,
@@ -639,18 +638,18 @@ async function sendNormalMessage() {
     }
   } catch (error) {
     console.error("API Error:", error);
-    chatSet({
-      messages: updateMessageInList(chatGet().messages, currentMsgId, {
+    useMessageStore.setState({
+      messages: updateMessageInList(msg().messages, currentMsgId, {
         content: parseErrorMessage(error),
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
       }),
-      activeRun: null,
-      ...TOOL_RESET,
     });
+    useStreamStore.setState({ activeRun: null });
+    useToolRunStore.getState().resetToolState();
   }
 
-  await chatGet().loadConversations();
+  await conv().loadConversations();
 }
 
 // ── Regenerate stream flow ──────────────────────────────
@@ -662,10 +661,10 @@ async function regenerateStream(
 ) {
   const settings = useSettingsStore.getState();
   const agentStore = useAgentStore.getState();
-  const conversations = chatGet().conversations;
+  const conversations = conv().conversations;
 
-  const conv = conversations.find((c: any) => c.id === convId);
-  const agentId = conv?.agent_id ?? null;
+  const convObj = conversations.find((c: any) => c.id === convId);
+  const agentId = convObj?.agent_id ?? null;
   const agent = agentId
     ? agentStore.agents.find((a: any) => a.id === agentId) ?? null
     : null;
@@ -673,8 +672,8 @@ async function regenerateStream(
   const requestId = `req-${Date.now()}`;
   const { msgId, msg: pendingMsg } = createPendingMessage(requestId);
 
-  chatSet({
-    messages: [...truncated, pendingMsg],
+  useMessageStore.setState({ messages: [...truncated, pendingMsg] });
+  useStreamStore.setState({
     activeRun: {
       requestId,
       conversationId: convId,
@@ -707,8 +706,8 @@ async function regenerateStream(
 
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
     const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
-      messages: chatGet().messages,
-      summary: chatGet().currentSummary,
+      messages: msg().messages,
+      summary: summary().currentSummary,
       baseSystemPrompt,
       skillsSection,
       memoryNotes: useMemoryStore.getState().notes,
@@ -724,8 +723,8 @@ async function regenerateStream(
       pendingDelta = "";
       pendingReasoning = "";
 
-      chatSet({
-        messages: chatGet().messages.map((m: ChatMessage) =>
+      useMessageStore.setState({
+        messages: msg().messages.map((m: ChatMessage) =>
           m.id === msgId
             ? {
                 ...m,
@@ -734,8 +733,11 @@ async function regenerateStream(
               }
             : m,
         ),
-        activeRun: chatGet().activeRun ? { ...chatGet().activeRun!, status: "streaming" } : null,
       });
+      const activeRun = stream().activeRun;
+      if (activeRun) {
+        useStreamStore.setState({ activeRun: { ...activeRun, status: "streaming" } });
+      }
     };
 
     let doneResolve: (v: StreamDoneEvent) => void;
@@ -784,10 +786,10 @@ async function regenerateStream(
 
       if (done.error) {
         if (done.error === "aborted") {
-          chatSet({
-            messages: updateMessageInList(chatGet().messages, msgId, { status: "aborted" }),
-            activeRun: null,
+          useMessageStore.setState({
+            messages: updateMessageInList(msg().messages, msgId, { status: "aborted" }),
           });
+          useStreamStore.setState({ activeRun: null });
         } else {
           throw new Error(done.error);
         }
@@ -801,24 +803,24 @@ async function regenerateStream(
           content: replyContent,
         });
 
-        chatSet({
-          messages: updateMessageInList(chatGet().messages, msgId, {
+        useMessageStore.setState({
+          messages: updateMessageInList(msg().messages, msgId, {
             dbMessageId: savedAssistant.id,
             content: replyContent,
             reasoningContent,
             status: "complete",
           }),
-          activeRun: null,
         });
+        useStreamStore.setState({ activeRun: null });
 
-        const completedAgentMsgs = chatGet().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
+        const completedAgentMsgs = msg().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
         if (completedAgentMsgs.length === 1) {
-          const currentTitle = chatGet().conversations.find((c: any) => c.id === convId)?.title;
-          generateTitle(convId, lastUserContent, replyContent, currentTitle ?? null, () => chatGet().loadConversations());
+          const currentTitle = conv().conversations.find((c: any) => c.id === convId)?.title;
+          generateTitle(convId, lastUserContent, replyContent, currentTitle ?? null, () => conv().loadConversations());
         }
 
-        useSummaryStore.getState().maybeGenerateSummary(
-          convId, baseSystemPrompt, chatGet().messages, () => chatGet().loadConversations(),
+        summary().maybeGenerateSummary(
+          convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
         );
       }
     } finally {
@@ -828,29 +830,25 @@ async function regenerateStream(
     }
   } catch (error) {
     console.error("Regenerate Error:", error);
-    chatSet({
-      messages: updateMessageInList(chatGet().messages, msgId, {
+    useMessageStore.setState({
+      messages: updateMessageInList(msg().messages, msgId, {
         content: parseErrorMessage(error),
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
       }),
-      activeRun: null,
     });
+    useStreamStore.setState({ activeRun: null });
   }
 
-  await chatGet().loadConversations();
+  await conv().loadConversations();
 }
 
 // ── Bootstrap message flow ─────────────────────────────
 
 async function sendBootstrapMessage() {
-  const {
-    inputValue,
-    messages,
-    bootstrapApiHistory,
-    bootstrapFolderName,
-    bootstrapFilesWritten,
-  } = chatGet();
+  const inputValue = msg().inputValue;
+  const messages = msg().messages;
+  const { bootstrapApiHistory, bootstrapFolderName, bootstrapFilesWritten } = boot();
 
   const settings = useSettingsStore.getState();
   if (!bootstrapFolderName) return;
@@ -863,7 +861,7 @@ async function sendBootstrapMessage() {
   };
 
   const { msgId, msg: pendingMsg } = createPendingMessage();
-  chatSet({ messages: [...messages, userMsg, pendingMsg], inputValue: "" });
+  useMessageStore.setState({ messages: [...messages, userMsg, pendingMsg], inputValue: "" });
 
   try {
     const result = await executeBootstrapTurn(
@@ -878,10 +876,12 @@ async function sendBootstrapMessage() {
       if (!allFilesWritten.includes(f)) allFilesWritten.push(f);
     }
 
-    chatSet({
+    useBootstrapStore.setState({
       bootstrapApiHistory: result.apiMessages,
       bootstrapFilesWritten: allFilesWritten,
-      messages: updateMessageInList(chatGet().messages, msgId, {
+    });
+    useMessageStore.setState({
+      messages: updateMessageInList(msg().messages, msgId, {
         id: `resp-${Date.now()}`,
         content: result.responseText,
         status: "complete",
@@ -893,8 +893,8 @@ async function sendBootstrapMessage() {
     }
   } catch (error) {
     console.error("Bootstrap API Error:", error);
-    chatSet({
-      messages: updateMessageInList(chatGet().messages, msgId, {
+    useMessageStore.setState({
+      messages: updateMessageInList(msg().messages, msgId, {
         content: parseErrorMessage(error),
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
@@ -904,7 +904,7 @@ async function sendBootstrapMessage() {
 }
 
 async function completeBootstrap() {
-  const { bootstrapFolderName } = chatGet();
+  const { bootstrapFolderName } = boot();
   if (!bootstrapFolderName) return;
 
   invalidatePersonaCache(bootstrapFolderName);
@@ -933,14 +933,13 @@ async function completeBootstrap() {
       name: agentName,
     });
 
-    chatSet({
-      ...BOOTSTRAP_RESET, messages: [],
-      currentSummary: null, summaryUpToMessageId: null, summaryJobId: null,
-    });
+    useBootstrapStore.getState().resetBootstrap();
+    useMessageStore.setState({ messages: [] });
+    useSummaryStore.setState({ currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
 
-    const agentStore = useAgentStore.getState();
-    await agentStore.loadAgents();
-    agentStore.selectAgent(agent.id);
+    const agentStoreRef = useAgentStore.getState();
+    await agentStoreRef.loadAgents();
+    agentStoreRef.selectAgent(agent.id);
   } catch (error) {
     console.error("Failed to complete bootstrap:", error);
     const errorMsg: ChatMessage = {
@@ -949,6 +948,6 @@ async function completeBootstrap() {
       content: `에이전트 생성에 실패했습니다: ${error}. 다시 시도하거나 취소 버튼을 눌러주세요.`,
       status: "failed",
     };
-    chatSet({ messages: [...chatGet().messages, errorMsg] });
+    useMessageStore.setState({ messages: [...msg().messages, errorMsg] });
   }
 }

@@ -1,5 +1,5 @@
 import { useSettingsStore } from "../stores/settingsStore";
-import { useChatStore } from "../stores/chatStore";
+import { useConversationStore } from "../stores/conversationStore";
 import { useAgentStore } from "../stores/agentStore";
 import * as cmds from "./tauriCommands";
 
@@ -7,7 +7,7 @@ export async function initializeApp(): Promise<void> {
   const loadSettings = useSettingsStore.getState().loadSettings;
   const loadEnvDefaults = useSettingsStore.getState().loadEnvDefaults;
   const loadAgents = useAgentStore.getState().loadAgents;
-  const loadConversations = useChatStore.getState().loadConversations;
+  const loadConversations = useConversationStore.getState().loadConversations;
 
   // Step 1: Load settings (best-effort)
   try {

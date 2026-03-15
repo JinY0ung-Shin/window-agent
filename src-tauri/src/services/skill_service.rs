@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -153,21 +154,21 @@ pub fn enumerate_resource_files(skill_dir: &Path) -> Vec<String> {
 }
 
 /// Validate a skill name: lowercase alphanumeric + hyphens, 1-64 chars.
-pub fn validate_skill_name(name: &str) -> Result<(), String> {
+pub fn validate_skill_name(name: &str) -> Result<(), AppError> {
     if name.is_empty() || name.len() > 64 {
-        return Err(format!(
+        return Err(AppError::Validation(format!(
             "Skill name must be 1-64 characters, got {}",
             name.len()
-        ));
+        )));
     }
     if !name
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
     {
-        return Err(format!(
+        return Err(AppError::Validation(format!(
             "Skill name must contain only lowercase alphanumeric characters and hyphens: {}",
             name
-        ));
+        )));
     }
     Ok(())
 }

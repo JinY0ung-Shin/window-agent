@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useSkillStore } from "../../stores/skillStore";
 import { useAgentStore } from "../../stores/agentStore";
-import { useChatStore } from "../../stores/chatStore";
+import { useConversationStore } from "../../stores/conversationStore";
 import SkillChip from "./SkillChip";
 
 interface Props {
@@ -21,7 +21,7 @@ export default function SkillBar({ agentId }: Props) {
   const [togglingSkill, setTogglingSkill] = useState<string | null>(null);
 
   const agent = useAgentStore((s) => s.agents.find((a) => a.id === agentId));
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
+  const currentConversationId = useConversationStore((s) => s.currentConversationId);
 
   const handleToggle = useCallback(
     async (skillName: string) => {

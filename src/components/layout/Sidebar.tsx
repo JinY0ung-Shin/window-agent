@@ -1,16 +1,16 @@
 import { useMemo } from "react";
 import { Bot, MessageSquare, Plus, Settings, Trash2, Users } from "lucide-react";
-import { useChatStore } from "../../stores/chatStore";
+import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { DEFAULT_CONVERSATION_TITLE } from "../../constants";
 
 export default function Sidebar() {
-  const conversations = useChatStore((s) => s.conversations);
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
-  const selectConversation = useChatStore((s) => s.selectConversation);
-  const createNewConversation = useChatStore((s) => s.createNewConversation);
-  const deleteConversation = useChatStore((s) => s.deleteConversation);
+  const conversations = useConversationStore((s) => s.conversations);
+  const currentConversationId = useConversationStore((s) => s.currentConversationId);
+  const selectConversation = useConversationStore((s) => s.selectConversation);
+  const createNewConversation = useConversationStore((s) => s.createNewConversation);
+  const deleteConversation = useConversationStore((s) => s.deleteConversation);
   const setIsSettingsOpen = useSettingsStore((s) => s.setIsSettingsOpen);
   const agents = useAgentStore((s) => s.agents);
   const openEditor = useAgentStore((s) => s.openEditor);

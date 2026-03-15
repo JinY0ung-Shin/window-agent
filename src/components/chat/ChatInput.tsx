@@ -1,14 +1,17 @@
 import React, { useRef, useCallback, useEffect } from "react";
 import { Send, Square } from "lucide-react";
-import { useChatStore } from "../../stores/chatStore";
+import { useMessageStore } from "../../stores/messageStore";
+import { useChatFlowStore } from "../../stores/chatFlowStore";
+import { useStreamStore } from "../../stores/streamStore";
+import { useToolRunStore } from "../../stores/toolRunStore";
 
 export default function ChatInput() {
-  const inputValue = useChatStore((s) => s.inputValue);
-  const setInputValue = useChatStore((s) => s.setInputValue);
-  const sendMessage = useChatStore((s) => s.sendMessage);
-  const abortStream = useChatStore((s) => s.abortStream);
-  const messages = useChatStore((s) => s.messages);
-  const toolRunState = useChatStore((s) => s.toolRunState);
+  const inputValue = useMessageStore((s) => s.inputValue);
+  const setInputValue = useMessageStore((s) => s.setInputValue);
+  const sendMessage = useChatFlowStore((s) => s.sendMessage);
+  const abortStream = useStreamStore((s) => s.abortStream);
+  const messages = useMessageStore((s) => s.messages);
+  const toolRunState = useToolRunStore((s) => s.toolRunState);
   const isSending = messages.some((m) => m.status === "pending" || m.status === "streaming");
   const isToolBusy = toolRunState === "tool_waiting" || toolRunState === "tool_running" || toolRunState === "continuing";
 

@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import SettingsModal from "../SettingsModal";
 import { useSettingsStore } from "../../../stores/settingsStore";
+
+vi.mock("../../../services/tauriCommands", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../services/tauriCommands")>();
+  return {
+    ...actual,
+    listModels: vi.fn().mockResolvedValue(["model-a", "model-b"]),
+  };
+});
 
 const initialState = useSettingsStore.getState();
 
@@ -16,39 +24,38 @@ describe("SettingsModal", () => {
     expect(container.innerHTML).toBe("");
   });
 
-  it("renders when isSettingsOpen is true", () => {
+  it("renders when isSettingsOpen is true", async () => {
     useSettingsStore.setState({ isSettingsOpen: true });
-    render(<SettingsModal />);
+    await act(async () => { render(<SettingsModal />); });
     expect(screen.getByText("환경 설정")).toBeInTheDocument();
   });
 
-  it("general tab is active by default", () => {
+  it("general tab is active by default", async () => {
     useSettingsStore.setState({ isSettingsOpen: true });
-    render(<SettingsModal />);
+    await act(async () => { render(<SettingsModal />); });
     const generalTab = screen.getByText("일반");
     expect(generalTab.className).toContain("active");
   });
 
-  it("switching to thinking tab shows thinking controls", () => {
+  it("switching to thinking tab shows thinking controls", async () => {
     useSettingsStore.setState({ isSettingsOpen: true });
-    render(<SettingsModal />);
+    await act(async () => { render(<SettingsModal />); });
     fireEvent.click(screen.getByText("추론 (Thinking)"));
     expect(screen.getByText("Thinking 모드 사용")).toBeInTheDocument();
     expect(screen.getByText("Budget Tokens")).toBeInTheDocument();
   });
 
-  it("clicking cancel closes modal", () => {
+  it("clicking cancel closes modal", async () => {
     useSettingsStore.setState({ isSettingsOpen: true });
-    render(<SettingsModal />);
+    await act(async () => { render(<SettingsModal />); });
     fireEvent.click(screen.getByText("취소"));
     expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
   });
 
   it("clicking save calls saveSettings and closes modal", async () => {
     useSettingsStore.setState({ isSettingsOpen: true, hasApiKey: true });
-    render(<SettingsModal />);
-    fireEvent.click(screen.getByText("저장"));
-    // saveSettings is async; wait for state to update
+    await act(async () => { render(<SettingsModal />); });
+    await act(async () => { fireEvent.click(screen.getByText("저장")); });
     await vi.waitFor(() => {
       expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
     });

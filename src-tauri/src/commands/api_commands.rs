@@ -1,4 +1,5 @@
 use crate::api::*;
+use crate::error::AppError;
 use crate::models::api_types::ModelsResponse;
 use crate::services::api_service;
 use tauri::{Emitter, State};
@@ -13,20 +14,21 @@ pub fn set_api_config(
     app: tauri::AppHandle,
     api: State<'_, ApiState>,
     request: SetApiConfigRequest,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     api.set_config(request.api_key, request.base_url, &app)
+        .map_err(AppError::Io)
 }
 
 #[tauri::command]
 pub async fn chat_completion(
     api: State<'_, ApiState>,
     request: ChatCompletionRequest,
-) -> Result<ChatCompletionResponse, String> {
+) -> Result<ChatCompletionResponse, AppError> {
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
     if api_key.is_empty() {
-        return Err("API key not configured".into());
+        return Err(AppError::Validation("API key not configured".into()));
     }
 
     // Build messages array: system prompt + user messages
@@ -72,21 +74,19 @@ pub async fn chat_completion(
         }
     }
 
-    api_service::do_completion(&client, &api_key, &base_url, &body)
-        .await
-        .map_err(|e| e.to_string())
+    api_service::do_completion(&client, &api_key, &base_url, &body).await
 }
 
 #[tauri::command]
 pub async fn bootstrap_completion(
     api: State<'_, ApiState>,
     request: BootstrapCompletionRequest,
-) -> Result<BootstrapCompletionResponse, String> {
+) -> Result<BootstrapCompletionResponse, AppError> {
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
     if api_key.is_empty() {
-        return Err("API key not configured".into());
+        return Err(AppError::Validation("API key not configured".into()));
     }
 
     let body = serde_json::json!({
@@ -103,19 +103,18 @@ pub async fn bootstrap_completion(
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
-        .await
-        .map_err(|e| format!("HTTP error: {}", e))?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("HTTP_{}: {}", status, text));
+        return Err(AppError::Api(format!("HTTP_{}: {}", status, text)));
     }
 
     let json: serde_json::Value = resp
         .json()
         .await
-        .map_err(|e| format!("PARSE_ERROR: JSON parse error: {}", e))?;
+        .map_err(|e| AppError::Api(format!("PARSE_ERROR: JSON parse error: {}", e)))?;
 
     let message = json["choices"][0]["message"].clone();
 
@@ -123,12 +122,12 @@ pub async fn bootstrap_completion(
 }
 
 #[tauri::command]
-pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, String> {
+pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, AppError> {
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
     if api_key.is_empty() {
-        return Err("API key not configured".into());
+        return Err(AppError::Validation("API key not configured".into()));
     }
 
     let url = api_service::models_url(&base_url);
@@ -137,19 +136,18 @@ pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, String
         .get(&url)
         .header("Authorization", format!("Bearer {}", api_key))
         .send()
-        .await
-        .map_err(|e| format!("HTTP error: {}", e))?;
+        .await?;
 
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(format!("HTTP_{}: {}", status, text));
+        return Err(AppError::Api(format!("HTTP_{}: {}", status, text)));
     }
 
     let parsed: ModelsResponse = resp
         .json()
         .await
-        .map_err(|e| format!("PARSE_ERROR: JSON parse error: {}", e))?;
+        .map_err(|e| AppError::Api(format!("PARSE_ERROR: JSON parse error: {}", e)))?;
 
     let mut models: Vec<String> = parsed.data.into_iter().map(|m| m.id).collect();
 
@@ -164,7 +162,7 @@ pub async fn chat_completion_stream(
     registry: State<'_, RunRegistry>,
     request: ChatCompletionRequest,
     request_id: String,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
@@ -179,7 +177,7 @@ pub async fn chat_completion_stream(
                 error: Some("API key not configured".into()),
             },
         );
-        return Err("API key not configured".into());
+        return Err(AppError::Validation("API key not configured".into()));
     }
 
     // Build messages array — messages are already JSON values from frontend
@@ -248,7 +246,7 @@ pub async fn chat_completion_stream(
                                     full_content: String::new(),
                                     reasoning_content: None,
                                     tool_calls: None,
-                                    error: Some(e2),
+                                    error: Some(e2.to_string()),
                                 },
                             );
                         }
@@ -262,7 +260,7 @@ pub async fn chat_completion_stream(
                                 full_content: String::new(),
                                 reasoning_content: None,
                                 tool_calls: None,
-                                error: Some(e),
+                                error: Some(e.to_string()),
                             },
                         );
                         reg.remove(&rid).await;
@@ -281,7 +279,7 @@ pub async fn chat_completion_stream(
                     full_content: String::new(),
                     reasoning_content: None,
                     tool_calls: None,
-                    error: Some(e),
+                    error: Some(e.to_string()),
                 },
             );
         }
@@ -297,7 +295,7 @@ pub async fn abort_stream(
     app: tauri::AppHandle,
     registry: State<'_, RunRegistry>,
     request_id: String,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     let aborted = registry.abort(&request_id).await;
     if aborted {
         let _ = app.emit(

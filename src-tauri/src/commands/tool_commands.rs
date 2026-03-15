@@ -1,5 +1,6 @@
 use crate::db::operations;
 use crate::db::Database;
+use crate::error::AppError;
 use crate::utils::path_security::validate_tool_roots;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -201,10 +202,10 @@ pub async fn execute_tool(
     tool_name: String,
     tool_input: String,
     conversation_id: String,
-) -> Result<ToolExecutionResult, String> {
+) -> Result<ToolExecutionResult, AppError> {
     // Parse input JSON
     let input: serde_json::Value =
-        serde_json::from_str(&tool_input).map_err(|e| format!("Invalid tool_input JSON: {}", e))?;
+        serde_json::from_str(&tool_input).map_err(|e| AppError::Validation(format!("Invalid tool_input JSON: {}", e)))?;
 
     // Create pending log entry
     let log_entry = operations::create_tool_call_log_impl(
@@ -213,8 +214,7 @@ pub async fn execute_tool(
         None,
         tool_name.clone(),
         tool_input,
-    )
-    .map_err(|e| format!("Failed to create tool call log: {}", e))?;
+    )?;
 
     let start = Instant::now();
 
