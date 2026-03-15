@@ -114,6 +114,7 @@ export interface PersonaFiles {
 // ── Tool config types ─────────────────────────────────
 export interface ToolConfig {
   version: number;
+  auto_approve?: boolean;
   native: Record<string, { enabled: boolean; tier: ToolPermissionTier }>;
   credentials?: Record<string, { allowed: boolean }>;
 }

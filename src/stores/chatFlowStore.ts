@@ -27,6 +27,7 @@ import {
   isBootstrapComplete,
 } from "../services/bootstrapService";
 import { getEffectiveTools, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
+import { readToolConfig } from "../services/nativeToolRegistry";
 import { executeToolCalls } from "../services/toolService";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
@@ -79,6 +80,11 @@ const MAX_TOOL_ITERATIONS = 10;
 // ── Browser domain approval (per conversation) ──
 
 const browserApprovedDomains = new Map<string, Set<string>>();
+
+function hasCredentialRefs(tc: { name: string; arguments: string }): boolean {
+  if (tc.name !== "http_request") return false;
+  return /\{\{credential:[^}]+\}\}/.test(tc.arguments);
+}
 
 function extractBrowserDomain(toolName: string, toolArgs: string): string | null {
   if (!toolName.startsWith("browser_")) return null;
@@ -492,10 +498,15 @@ async function sendNormalMessage() {
         };
 
     let toolDefinitions: ToolDefinition[] = [];
+    let autoApproveEnabled = false;
     if (agent) {
       try {
         toolDefinitions = await getEffectiveTools(agent.folder_name);
       } catch { /* no tools */ }
+      try {
+        const tc = await readToolConfig(agent.folder_name);
+        autoApproveEnabled = tc?.auto_approve ?? false;
+      } catch { /* default false */ }
     }
     const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
 
@@ -591,12 +602,6 @@ async function sendNormalMessage() {
           status: "complete",
         }),
       });
-      useToolRunStore.setState({
-        toolRunState: "tool_pending",
-        pendingToolCalls: parsedToolCalls,
-        toolIterationCount: iterationCount,
-      });
-
       let savedToolMsgs: ChatMessage[] = [];
       const autoTools: ToolCall[] = [];
       const confirmTools: ToolCall[] = [];
@@ -611,12 +616,30 @@ async function sendNormalMessage() {
           const domain = extractBrowserDomain(tc.name, tc.arguments);
           if (domain && isBrowserDomainApproved(convId, domain)) {
             autoTools.push(tc);
+          } else if (autoApproveEnabled && !hasCredentialRefs(tc)) {
+            // auto_approve: skip confirmation for non-credential tools
+            autoTools.push(tc);
           } else {
             confirmTools.push(tc);
           }
         } else {
           autoTools.push(tc);
         }
+      }
+
+      // Set pending state: only confirmTools need user approval UI
+      if (confirmTools.length > 0) {
+        useToolRunStore.setState({
+          toolRunState: "tool_pending",
+          pendingToolCalls: confirmTools,
+          toolIterationCount: iterationCount,
+        });
+      } else {
+        useToolRunStore.setState({
+          toolRunState: "tool_running",
+          pendingToolCalls: [],
+          toolIterationCount: iterationCount,
+        });
       }
 
       for (const tc of denyTools) {

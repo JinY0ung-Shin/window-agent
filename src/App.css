@@ -2759,29 +2759,30 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 14px;
-  background-color: #fafbfc;
+  background-color: var(--surface);
   font-size: 0.85rem;
 }
 
 .tool-call-bubble.tool-status-pending {
-  border-color: #fbbf24;
-  background-color: #fffbeb;
+  border-color: var(--primary);
+  background-color: var(--surface);
 }
 
 .tool-call-bubble.tool-status-running {
-  border-color: #6366f1;
-  background-color: #eef2ff;
+  border-color: var(--primary);
+  background-color: var(--surface);
 }
 
 .tool-call-bubble.tool-status-executed {
-  border-color: #22c55e;
-  background-color: #f0fdf4;
+  border-color: var(--border);
+  background-color: var(--surface);
 }
 
 .tool-call-bubble.tool-status-denied,
 .tool-call-bubble.tool-status-error {
-  border-color: #ef4444;
-  background-color: #fef2f2;
+  border-color: var(--border);
+  background-color: var(--surface);
+  opacity: 0.7;
 }
 
 .tool-call-header {
@@ -2794,7 +2795,7 @@ body {
 .tool-call-icon {
   display: flex;
   align-items: center;
-  color: #8b5cf6;
+  color: var(--primary);
   flex-shrink: 0;
 }
 
@@ -2813,12 +2814,12 @@ body {
   margin-left: auto;
 }
 
-.tool-badge-pending { background-color: #f59e0b; }
-.tool-badge-approved { background-color: #8b5cf6; }
-.tool-badge-running { background-color: #6366f1; }
-.tool-badge-executed { background-color: #22c55e; }
-.tool-badge-denied { background-color: #ef4444; }
-.tool-badge-error { background-color: #ef4444; }
+.tool-badge-pending { background-color: var(--primary); }
+.tool-badge-approved { background-color: var(--primary); opacity: 0.8; }
+.tool-badge-running { background-color: var(--primary); }
+.tool-badge-executed { background-color: var(--text-muted); }
+.tool-badge-denied { background-color: var(--text-muted); }
+.tool-badge-error { background-color: var(--text-muted); }
 
 .tool-call-expand {
   color: var(--text-muted);
@@ -2839,7 +2840,7 @@ body {
 .tool-call-preview {
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 0.72rem;
-  background: #f8f8f8;
+  background: var(--bg-color);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 8px;
@@ -2864,7 +2865,7 @@ body {
   gap: 4px;
   padding: 6px 14px;
   border-radius: 8px;
-  border: none;
+  border: 1px solid var(--border);
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
@@ -2873,21 +2874,23 @@ body {
 }
 
 .tool-approve-btn {
-  background-color: #22c55e;
+  background-color: var(--primary);
   color: white;
+  border-color: var(--primary);
 }
 
 .tool-approve-btn:hover {
-  background-color: #16a34a;
+  background-color: var(--primary-hover);
 }
 
 .tool-reject-btn {
-  background-color: #ef4444;
-  color: white;
+  background-color: var(--surface);
+  color: var(--text-muted);
 }
 
 .tool-reject-btn:hover {
-  background-color: #dc2626;
+  background-color: var(--bg-hover);
+  color: var(--text-main);
 }
 
 .tool-call-result {
@@ -2907,8 +2910,8 @@ body {
 
 .tool-call-result.tool-result-error {
   color: #ef4444;
-  border-color: #fecaca;
-  background-color: #fef2f2;
+  border-color: var(--border);
+  background-color: var(--surface);
 }
 
 .tool-status-denied .tool-call-name {

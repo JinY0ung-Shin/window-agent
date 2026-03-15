@@ -41,7 +41,7 @@ pub fn get_default_tool_config() -> Result<String, String> {
             serde_json::json!({ "enabled": true, "tier": def.default_tier }),
         );
     }
-    let config = serde_json::json!({ "version": 2, "native": native, "credentials": {} });
+    let config = serde_json::json!({ "version": 2, "auto_approve": false, "native": native, "credentials": {} });
     serde_json::to_string_pretty(&config).map_err(|e| format!("JSON serialization error: {}", e))
 }
 
@@ -659,6 +659,12 @@ pub fn normalize_tool_config(config_str: &str) -> Result<(String, bool), String>
                 changed = true;
             }
         }
+    }
+
+    // Ensure auto_approve field exists (default: false)
+    if config.get("auto_approve").is_none() {
+        config["auto_approve"] = serde_json::json!(false);
+        changed = true;
     }
 
     // Ensure credentials section exists

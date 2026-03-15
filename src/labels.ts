@@ -116,6 +116,8 @@ export interface Labels {
   credentialHostPlaceholder: string;
   credentialSaved: string;
   changeValue: string;
+  autoApproveTools: string;
+  autoApproveToolsDesc: string;
 
   // ── Chat flow ──
   noAgentForSkill: string;
@@ -235,6 +237,8 @@ const CLASSIC: Labels = {
   credentialHostPlaceholder: "호스트 입력 후 Enter",
   credentialSaved: "저장됨",
   changeValue: "값 변경",
+  autoApproveTools: "도구 자동 승인",
+  autoApproveToolsDesc: "confirm 등급 도구를 사용자 확인 없이 자동 실행합니다",
 
   // ── Chat flow ──
   noAgentForSkill: "현재 에이전트를 찾을 수 없습니다",
@@ -354,6 +358,8 @@ const ORG: Labels = {
   credentialHostPlaceholder: "호스트 입력 후 Enter",
   credentialSaved: "저장됨",
   changeValue: "값 변경",
+  autoApproveTools: "도구 자동 승인",
+  autoApproveToolsDesc: "confirm 등급 도구를 사용자 확인 없이 자동 실행합니다",
 
   // ── Chat flow ──
   noAgentForSkill: "현재 직원을 찾을 수 없습니다",

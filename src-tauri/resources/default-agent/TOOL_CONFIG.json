@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "auto_approve": false,
   "native": {
     "read_file": { "enabled": true, "tier": "auto" },
     "write_file": { "enabled": true, "tier": "confirm" },

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import type { ToolConfig, NativeToolDef, ToolPermissionTier } from "../../services/types";
 import { getNativeTools } from "../../services/nativeToolRegistry";
+import { useLabels } from "../../hooks/useLabels";
 
 const TIER_INFO: Record<ToolPermissionTier, { label: string; color: string }> = {
   auto: { label: "Auto", color: "#22c55e" },
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export default function NativeToolPanel({ folderName: _folderName, toolConfig, onChange }: Props) {
+  const labels = useLabels();
   const [nativeTools, setNativeTools] = useState<NativeToolDef[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -94,8 +96,25 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
     return tools.every((t) => toolConfig.native[t.name]?.enabled);
   };
 
+  const toggleAutoApprove = (enabled: boolean) => {
+    onChange({ ...toolConfig, auto_approve: enabled });
+  };
+
   return (
     <div className="native-tool-panel">
+      <div className="native-tool-auto-approve">
+        <div className="toggle-row">
+          <label>{labels.autoApproveTools}</label>
+          <button
+            className={`toggle-switch ${toolConfig.auto_approve ? "on" : ""}`}
+            onClick={() => toggleAutoApprove(!toolConfig.auto_approve)}
+          >
+            <span className="toggle-knob" />
+          </button>
+        </div>
+        <p className="form-text">{labels.autoApproveToolsDesc}</p>
+      </div>
+
       {Array.from(groups.entries()).map(([category, tools]) => {
         const allEnabled = isCategoryAllEnabled(category);
         return (
