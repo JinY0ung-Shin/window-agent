@@ -138,6 +138,37 @@ body {
   background-color: #fef2f2;
 }
 
+.delete-confirm-inline {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.delete-confirm-inline button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  line-height: 0;
+}
+
+.delete-confirm-yes {
+  color: #ef4444;
+}
+
+.delete-confirm-yes:hover {
+  background-color: #fef2f2;
+}
+
+.delete-confirm-no {
+  color: var(--text-muted);
+}
+
+.delete-confirm-no:hover {
+  background-color: var(--bg-hover);
+}
+
 .sidebar-content {
   flex: 1;
   overflow-y: auto;

@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Bot, Eraser, Plus, Settings, Users } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Bot, Check, Eraser, Plus, Settings, Users, X } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -20,6 +20,7 @@ export default function Sidebar() {
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
   const labels = useLabels();
   const companyName = useCompanyName();
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Build a map: agentId → most recent conversation's updated_at
   const agentLastActivity = useMemo(() => {
@@ -124,16 +125,37 @@ export default function Sidebar() {
                 )}
               </div>
               {agentHasConv.has(agent.id) && (
-                <button
-                  className="delete-btn"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearAgentChat(agent.id);
-                  }}
-                  title={labels.clearChat}
-                >
-                  <Eraser size={14} />
-                </button>
+                confirmDeleteId === agent.id ? (
+                  <div className="delete-confirm-inline" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="delete-confirm-yes"
+                      onClick={() => {
+                        clearAgentChat(agent.id);
+                        setConfirmDeleteId(null);
+                      }}
+                      title={labels.clearChat}
+                    >
+                      <Check size={14} />
+                    </button>
+                    <button
+                      className="delete-confirm-no"
+                      onClick={() => setConfirmDeleteId(null)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    className="delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setConfirmDeleteId(agent.id);
+                    }}
+                    title={labels.clearChat}
+                  >
+                    <Eraser size={14} />
+                  </button>
+                )
               )}
             </div>
           ))}
