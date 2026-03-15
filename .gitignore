@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Environment
+.env
+.env.*
+
+# AutoFlow plan artifacts
+.ccb/
