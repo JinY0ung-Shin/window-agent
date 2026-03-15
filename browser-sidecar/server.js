@@ -91,7 +91,7 @@ async function generateSnapshot(page) {
         role,
         name,
         tag: node.tag || '',
-        isPassword: role === 'textbox' && (node.autocomplete === 'current-password' || node.isPassword),
+        isPassword: !!(role === 'textbox' && (node.autocomplete === 'current-password' || node.isPassword)),
       });
     }
 
