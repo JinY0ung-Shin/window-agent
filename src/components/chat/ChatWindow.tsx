@@ -30,11 +30,16 @@ export default function ChatWindow() {
     return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
   };
 
+  // Derive a scroll trigger key from message count + last message content/status
+  // so scroll fires on new messages, streaming updates, and tool status changes
+  const lastMsg = messages[messages.length - 1];
+  const scrollTrigger = `${messages.length}:${lastMsg?.content?.length ?? 0}:${lastMsg?.status ?? ""}`;
+
   useEffect(() => {
     if (isNearBottom()) {
       messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
     }
-  }, [messages]);
+  }, [scrollTrigger]);
 
   const selectedAgent = selectedAgentId
     ? agents.find((a) => a.id === selectedAgentId)
