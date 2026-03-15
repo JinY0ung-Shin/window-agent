@@ -5,7 +5,6 @@ import {
   isBootstrapComplete,
   executeBootstrapTurn,
 } from "../bootstrapService";
-import { DEFAULT_AGENT_NAME } from "../../constants";
 
 vi.mock("../tauriCommands");
 
@@ -20,16 +19,16 @@ describe("parseAgentName", () => {
     expect(parseAgentName("# MyAgent\nsome content")).toBe("MyAgent");
   });
 
-  it("returns DEFAULT_AGENT_NAME for no heading", () => {
-    expect(parseAgentName("no heading here")).toBe(DEFAULT_AGENT_NAME);
+  it("returns fallback for no heading", () => {
+    expect(parseAgentName("no heading here")).toBe("Agent");
   });
 
   it("trims whitespace", () => {
     expect(parseAgentName("#  Spaced  ")).toBe("Spaced");
   });
 
-  it("returns DEFAULT_AGENT_NAME for empty string", () => {
-    expect(parseAgentName("")).toBe(DEFAULT_AGENT_NAME);
+  it("returns fallback for empty string", () => {
+    expect(parseAgentName("")).toBe("Agent");
   });
 });
 

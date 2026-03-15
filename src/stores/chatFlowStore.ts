@@ -925,6 +925,7 @@ async function sendBootstrapMessage() {
 async function completeBootstrap() {
   const { bootstrapFolderName } = boot();
   if (!bootstrapFolderName) return;
+  const labels = getLabels(useSettingsStore.getState().uiTheme);
 
   invalidatePersonaCache(bootstrapFolderName);
 
@@ -932,7 +933,7 @@ async function completeBootstrap() {
     await cmds.readAgentFile(bootstrapFolderName, "TOOLS.md");
   } catch {
     try {
-      await cmds.writeAgentFile(bootstrapFolderName, "TOOLS.md", DEFAULT_TOOLS_MD);
+      await cmds.writeAgentFile(bootstrapFolderName, "TOOLS.md", buildDefaultToolsMd(labels.memoryNoteToolDesc));
     } catch (e) {
       console.warn("Failed to write default TOOLS.md:", e);
     }
@@ -941,9 +942,9 @@ async function completeBootstrap() {
   let agentName: string;
   try {
     const identity = await cmds.readAgentFile(bootstrapFolderName, "IDENTITY.md");
-    agentName = parseAgentName(identity);
+    agentName = parseAgentName(identity, labels.newAgent);
   } catch {
-    agentName = DEFAULT_AGENT_NAME;
+    agentName = labels.newAgent;
   }
 
   try {
@@ -964,7 +965,7 @@ async function completeBootstrap() {
     const errorMsg: ChatMessage = {
       id: `error-${Date.now()}`,
       type: "agent",
-      content: `에이전트 생성에 실패했습니다: ${error}. 다시 시도하거나 취소 버튼을 눌러주세요.`,
+      content: labels.bootstrapFailed(String(error)),
       status: "failed",
     };
     useMessageStore.setState({ messages: [...msg().messages, errorMsg] });

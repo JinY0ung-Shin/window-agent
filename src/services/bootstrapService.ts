@@ -1,7 +1,5 @@
 import * as cmds from "./tauriCommands";
 
-import { DEFAULT_AGENT_NAME } from "../constants";
-
 /** The 4 core persona file names that must be written for bootstrap to complete. */
 const REQUIRED_BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"] as const;
 
@@ -148,9 +146,9 @@ export async function executeBootstrapTurn(
 /**
  * Parse agent name from IDENTITY.md content (first `# heading`).
  */
-export function parseAgentName(identityContent: string): string {
+export function parseAgentName(identityContent: string, fallback = "Agent"): string {
   const match = identityContent.match(/^#\s+(.+)/m);
-  return match?.[1]?.trim() || DEFAULT_AGENT_NAME;
+  return match?.[1]?.trim() || fallback;
 }
 
 /**
