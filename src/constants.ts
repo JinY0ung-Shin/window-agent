@@ -55,6 +55,46 @@ export function buildDefaultToolsMd(memoryNoteDesc: string): string {
   - action (string, required): create | read | update | delete
   - title (string, required): 노트 제목
   - content (string, optional): 노트 내용
+
+## browser_navigate
+- description: Navigate to a URL and return a snapshot of the page with interactive elements
+- tier: confirm
+- parameters:
+  - url (string, required): The URL to navigate to
+
+## browser_snapshot
+- description: Take a snapshot of the current page showing all interactive elements
+- tier: auto
+- parameters:
+
+## browser_click
+- description: Click an interactive element on the page by its reference number
+- tier: confirm
+- parameters:
+  - ref (number, required): The reference number of the element to click
+
+## browser_type
+- description: Type text into an input field by its reference number (cannot type into password fields)
+- tier: confirm
+- parameters:
+  - ref (number, required): The reference number of the input field
+  - text (string, required): The text to type
+
+## browser_wait
+- description: Wait for a specified number of seconds then take a new snapshot
+- tier: auto
+- parameters:
+  - seconds (number, optional): Number of seconds to wait (default 2, max 10)
+
+## browser_back
+- description: Go back to the previous page in browser history
+- tier: confirm
+- parameters:
+
+## browser_close
+- description: Close the browser session for this conversation
+- tier: confirm
+- parameters:
 `;
 }
 

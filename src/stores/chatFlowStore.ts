@@ -77,6 +77,43 @@ function updateMessageInList(
 
 const MAX_TOOL_ITERATIONS = 10;
 
+// ── Browser domain approval (per conversation) ──
+
+const browserApprovedDomains = new Map<string, Set<string>>();
+
+function extractBrowserDomain(toolName: string, toolArgs: string): string | null {
+  if (!toolName.startsWith("browser_")) return null;
+  try {
+    const args = JSON.parse(toolArgs);
+    if (args.url) {
+      const url = new URL(args.url);
+      return url.hostname;
+    }
+  } catch { /* ignore */ }
+  return null; // non-navigate browser tools don't change domain
+}
+
+function isBrowserDomainApproved(conversationId: string, domain: string | null): boolean {
+  if (!domain) return false;
+  const approved = browserApprovedDomains.get(conversationId);
+  return approved?.has(domain) ?? false;
+}
+
+function approveBrowserDomain(conversationId: string, domain: string) {
+  if (!browserApprovedDomains.has(conversationId)) {
+    browserApprovedDomains.set(conversationId, new Set());
+  }
+  browserApprovedDomains.get(conversationId)!.add(domain);
+  // Sync approval to backend so Rust security policy also allows this domain
+  cmds.approveBrowserDomain(conversationId, domain).catch(() => {
+    // Backend session may not exist yet; approval will apply on next tool call
+  });
+}
+
+function clearBrowserApprovals(conversationId: string) {
+  browserApprovedDomains.delete(conversationId);
+}
+
 // ── Store accessors (shorthand) ──
 
 const msg = () => useMessageStore.getState();
@@ -568,9 +605,19 @@ async function sendNormalMessage() {
 
       for (const tc of parsedToolCalls) {
         const tier = getToolTier(toolDefinitions, tc.name);
-        if (tier === "deny") denyTools.push(tc);
-        else if (tier === "confirm") confirmTools.push(tc);
-        else autoTools.push(tc);
+        if (tier === "deny") {
+          denyTools.push(tc);
+        } else if (tier === "confirm") {
+          // Browser tools with already-approved domains skip confirmation
+          const domain = extractBrowserDomain(tc.name, tc.arguments);
+          if (domain && isBrowserDomainApproved(convId, domain)) {
+            autoTools.push(tc);
+          } else {
+            confirmTools.push(tc);
+          }
+        } else {
+          autoTools.push(tc);
+        }
       }
 
       for (const tc of denyTools) {
@@ -603,6 +650,8 @@ async function sendNormalMessage() {
             tool_name: toolMsg.tool_name,
           });
           savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
+          // Clear frontend approval cache when browser session is closed
+          if (toolMsg.tool_name === "browser_close") clearBrowserApprovals(convId);
         }
       }
 
@@ -610,6 +659,11 @@ async function sendNormalMessage() {
         useToolRunStore.setState({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
         const confirmApproved = await useToolRunStore.getState().waitForToolApproval();
         if (confirmApproved) {
+          // Record approved browser domains for this conversation
+          for (const tc of confirmTools) {
+            const domain = extractBrowserDomain(tc.name, tc.arguments);
+            if (domain) approveBrowserDomain(convId, domain);
+          }
           useToolRunStore.setState({ toolRunState: "tool_running" });
           const confirmResults = await executeToolCalls(confirmTools, convId);
           for (const toolMsg of confirmResults) {
@@ -621,6 +675,7 @@ async function sendNormalMessage() {
               tool_name: toolMsg.tool_name,
             });
             savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
+            if (toolMsg.tool_name === "browser_close") clearBrowserApprovals(convId);
           }
         } else {
           for (const tc of confirmTools) {

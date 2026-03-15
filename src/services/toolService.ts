@@ -9,10 +9,11 @@ export async function executeToolCalls(
   for (const tc of toolCalls) {
     try {
       const result = await cmds.executeTool(tc.name, tc.arguments, conversationId);
+      const isError = result.status === "error";
       results.push({
         id: `tool-result-${Date.now()}-${tc.id}`,
         type: "tool",
-        content: result.output,
+        content: isError ? `Error: ${result.output}` : result.output,
         status: "complete",
         tool_call_id: tc.id,
         tool_name: tc.name,

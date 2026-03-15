@@ -26,6 +26,27 @@ function formatArgsSummary(args: string): string {
   }
 }
 
+function isBrowserTool(toolName: string): boolean {
+  return toolName.startsWith("browser_");
+}
+
+function parseBrowserResult(output: string): { url?: string; title?: string; snapshot?: string; elementCount?: number } | null {
+  try {
+    const parsed = JSON.parse(output);
+    if (parsed.success !== undefined) {
+      return {
+        url: parsed.url,
+        title: parsed.title,
+        snapshot: parsed.snapshot,
+        elementCount: parsed.element_count,
+      };
+    }
+  } catch {
+    // Not JSON, return null
+  }
+  return null;
+}
+
 function getWriteFilePreview(args: string): string | null {
   try {
     const parsed = JSON.parse(args);
@@ -99,11 +120,63 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
         </div>
       )}
 
-      {expanded && result && (
-        <pre className={`tool-call-result ${status === "error" ? "tool-result-error" : ""}`}>
-          {result}
-        </pre>
-      )}
+      {expanded && result && (() => {
+        if (isBrowserTool(toolCall.name)) {
+          const browserResult = parseBrowserResult(result);
+          if (browserResult) {
+            return (
+              <div className="browser-result">
+                {browserResult.url && (
+                  <div className="browser-url-bar" style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '6px 12px',
+                    backgroundColor: 'var(--bg-secondary, #f5f5f5)',
+                    borderRadius: '6px',
+                    marginBottom: '8px',
+                    fontSize: '12px',
+                    fontFamily: 'monospace',
+                  }}>
+                    <span style={{ opacity: 0.5 }}>[URL]</span>
+                    <span style={{ opacity: 0.7 }}>{browserResult.url}</span>
+                    {browserResult.title && (
+                      <span style={{ marginLeft: 'auto', opacity: 0.5 }}>
+                        {browserResult.title}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {browserResult.snapshot && (
+                  <pre style={{
+                    fontSize: '11px',
+                    lineHeight: '1.4',
+                    padding: '8px',
+                    backgroundColor: 'var(--bg-tertiary, #f0f0f0)',
+                    borderRadius: '4px',
+                    maxHeight: '300px',
+                    overflow: 'auto',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}>
+                    {browserResult.snapshot}
+                  </pre>
+                )}
+                {browserResult.elementCount !== undefined && (
+                  <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px' }}>
+                    {browserResult.elementCount} interactive elements
+                  </div>
+                )}
+              </div>
+            );
+          }
+        }
+        return (
+          <pre className={`tool-call-result ${status === "error" ? "tool-result-error" : ""}`}>
+            {result}
+          </pre>
+        );
+      })()}
     </div>
   );
 }

@@ -9,6 +9,7 @@ use tauri::{AppHandle, Manager, State};
 use tokio::time::{timeout, Duration};
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(30);
+const BROWSER_TOOL_TIMEOUT: Duration = Duration::from_secs(90);
 
 /// Result returned by execute_tool to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,7 +211,7 @@ pub async fn execute_tool(
     // Create pending log entry
     let log_entry = operations::create_tool_call_log_impl(
         &db,
-        conversation_id,
+        conversation_id.clone(),
         None,
         tool_name.clone(),
         tool_input,
@@ -218,12 +219,26 @@ pub async fn execute_tool(
 
     let start = Instant::now();
 
+    // Browser tools get a longer timeout to account for sidecar startup + page loads
+    let tool_timeout = if tool_name.starts_with("browser_") {
+        BROWSER_TOOL_TIMEOUT
+    } else {
+        TOOL_TIMEOUT
+    };
+
     // Execute the tool with timeout
-    let result = match timeout(TOOL_TIMEOUT, execute_tool_inner(&app, &db, &tool_name, &input))
-        .await
+    let result = match timeout(
+        tool_timeout,
+        execute_tool_inner(&app, &db, &tool_name, &input, &conversation_id),
+    )
+    .await
     {
         Ok(inner_result) => inner_result,
-        Err(_) => Err(format!("Tool '{}' timed out after 30 seconds", tool_name)),
+        Err(_) => Err(format!(
+            "Tool '{}' timed out after {} seconds",
+            tool_name,
+            tool_timeout.as_secs()
+        )),
     };
 
     let duration_ms = start.elapsed().as_millis() as i64;
@@ -261,6 +276,7 @@ async fn execute_tool_inner(
     db: &Database,
     tool_name: &str,
     input: &serde_json::Value,
+    conversation_id: &str,
 ) -> Result<serde_json::Value, String> {
     let allowed = allowed_roots(app);
 
@@ -293,8 +309,74 @@ async fn execute_tool_inner(
             tool_web_search(url).await
         }
         "memory_note" => tool_memory_note(db, input),
+
+        // ── Browser automation tools ──
+        "browser_navigate" => {
+            let url = input["url"]
+                .as_str()
+                .ok_or("browser_navigate: missing 'url' parameter")?;
+            let browser = app.state::<crate::browser::BrowserManager>();
+            let result = browser.navigate(conversation_id, url).await?;
+            Ok(serde_json::to_value(result).unwrap())
+        }
+        "browser_snapshot" => {
+            let browser = app.state::<crate::browser::BrowserManager>();
+            let result = browser.snapshot(conversation_id).await?;
+            Ok(serde_json::to_value(result).unwrap())
+        }
+        "browser_click" => {
+            let ref_num = input["ref"]
+                .as_u64()
+                .ok_or("browser_click: missing 'ref' parameter (u32)")? as u32;
+            let browser = app.state::<crate::browser::BrowserManager>();
+            let result = browser.click(conversation_id, ref_num).await?;
+            Ok(serde_json::to_value(result).unwrap())
+        }
+        "browser_type" => {
+            let ref_num = input["ref"]
+                .as_u64()
+                .ok_or("browser_type: missing 'ref' parameter (u32)")? as u32;
+            let text = input["text"]
+                .as_str()
+                .ok_or("browser_type: missing 'text' parameter")?;
+            let browser = app.state::<crate::browser::BrowserManager>();
+            let result = browser.type_text(conversation_id, ref_num, text).await?;
+            Ok(serde_json::to_value(result).unwrap())
+        }
+        "browser_wait" => {
+            let seconds = input["seconds"].as_f64().unwrap_or(2.0);
+            let browser = app.state::<crate::browser::BrowserManager>();
+            let result = browser.wait(conversation_id, seconds).await?;
+            Ok(serde_json::to_value(result).unwrap())
+        }
+        "browser_back" => {
+            let browser = app.state::<crate::browser::BrowserManager>();
+            let result = browser.back(conversation_id).await?;
+            Ok(serde_json::to_value(result).unwrap())
+        }
+        "browser_close" => {
+            let browser = app.state::<crate::browser::BrowserManager>();
+            browser.close_session(conversation_id).await?;
+            Ok(serde_json::json!({ "success": true }))
+        }
+
         _ => Err(format!("Unknown tool: '{}'", tool_name)),
     }
+}
+
+/// Approve a domain for browser access in a conversation's session.
+/// Called by the frontend when user confirms a browser navigation.
+#[tauri::command]
+pub async fn approve_browser_domain(
+    app: AppHandle,
+    conversation_id: String,
+    domain: String,
+) -> Result<(), AppError> {
+    let browser = app.state::<crate::browser::BrowserManager>();
+    browser
+        .approve_domain(&conversation_id, &domain)
+        .await
+        .map_err(AppError::Validation)
 }
 
 #[cfg(test)]

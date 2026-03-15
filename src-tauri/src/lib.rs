@@ -1,4 +1,5 @@
 mod api;
+mod browser;
 mod commands;
 mod db;
 mod error;
@@ -36,6 +37,7 @@ pub fn run() {
             app.manage(database);
             app.manage(ApiState::load(app.handle()));
             app.manage(RunRegistry::new());
+            app.manage(browser::BrowserManager::new());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -86,7 +88,17 @@ pub fn run() {
             commands::create_skill,
             commands::update_skill,
             commands::delete_skill,
+            commands::approve_browser_domain,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                let browser = window.state::<browser::BrowserManager>();
+                let browser = browser.inner().clone();
+                tauri::async_runtime::spawn(async move {
+                    browser.shutdown().await;
+                });
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
