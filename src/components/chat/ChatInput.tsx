@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Send, Square } from "lucide-react";
 import { useMessageStore } from "../../stores/messageStore";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
@@ -18,6 +18,20 @@ export default function ChatInput() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposing = useRef(false);
 
+  // Local buffer so the textarea always reflects the latest value including
+  // intermediate IME composition states. The Zustand store is only updated
+  // when NOT composing (or on compositionEnd) to prevent React re-renders
+  // from resetting the textarea value mid-composition.
+  const [localValue, setLocalValue] = useState(inputValue);
+
+  // Sync store → local when the store changes externally
+  // (e.g. input cleared after sending a message)
+  useEffect(() => {
+    if (!isComposing.current) {
+      setLocalValue(inputValue);
+    }
+  }, [inputValue]);
+
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -27,12 +41,34 @@ export default function ChatInput() {
 
   useEffect(() => {
     adjustHeight();
-  }, [inputValue, adjustHeight]);
+  }, [localValue, adjustHeight]);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setLocalValue(val);
+    if (!isComposing.current) {
+      setInputValue(val);
+    }
+  }, [setInputValue]);
+
+  const handleCompositionEnd = useCallback((e: React.CompositionEvent<HTMLTextAreaElement>) => {
+    isComposing.current = false;
+    const val = (e.target as HTMLTextAreaElement).value;
+    setLocalValue(val);
+    setInputValue(val);
+  }, [setInputValue]);
+
+  // Flush localValue to the store before delegating to chatFlowStore.sendMessage(),
+  // so the store always has the latest text even if composition just ended.
+  const flushAndSend = useCallback(() => {
+    setInputValue(localValue);
+    sendMessage();
+  }, [localValue, setInputValue, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && !isComposing.current) {
       e.preventDefault();
-      sendMessage();
+      flushAndSend();
     }
   };
 
@@ -51,12 +87,12 @@ export default function ChatInput() {
           ref={textareaRef}
           className="chat-input"
           placeholder={placeholder}
-          value={inputValue}
+          value={localValue}
           rows={1}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={handleChange}
           onKeyDown={handleKeyDown}
           onCompositionStart={() => { isComposing.current = true; }}
-          onCompositionEnd={() => { isComposing.current = false; }}
+          onCompositionEnd={handleCompositionEnd}
           disabled={isToolBusy}
         />
         {isSending || isToolBusy ? (
@@ -66,8 +102,8 @@ export default function ChatInput() {
         ) : (
           <button
             className="send-button"
-            onClick={sendMessage}
-            disabled={!inputValue.trim()}
+            onClick={flushAndSend}
+            disabled={!localValue.trim()}
           >
             <Send size={18} />
           </button>
