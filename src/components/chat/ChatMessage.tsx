@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, type AnchorHTMLAttributes } from "react";
 import { Bot, User, Wrench, ChevronDown, ChevronRight, Copy, Check, RefreshCw } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 import { useMessageStore } from "../../stores/messageStore";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
@@ -97,7 +98,24 @@ export default function ChatMessage({ message }: Props) {
             )}
             {message.content && (
               <div className="markdown-body">
-                <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                <Markdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeHighlight]}
+                  components={{
+                    a: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) => (
+                      <a
+                        {...props}
+                        href={href}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (href) openUrl(href).catch(() => {});
+                        }}
+                      >
+                        {children}
+                      </a>
+                    ),
+                  }}
+                >
                   {message.content}
                 </Markdown>
               </div>
