@@ -70,6 +70,12 @@ export interface Labels {
   exportAgent: string;
   importAgent: string;
   selectAgentExport: string;
+  exportIncludeConversations: string;
+  exporting: string;
+  exportButton: string;
+  importing: string;
+  importButton: string;
+  importResult: (agents: number, convs: number, msgs: number, notes: number) => string;
 
   // ── Conversation ──
   newConversation: string;
@@ -103,7 +109,7 @@ export interface Labels {
 
 const CLASSIC: Labels = {
   // ── App ──
-  appTitle: (name) => name || "Agent Workspace",
+  appTitle: () => "Agent Workspace",
 
   // ── Entity ──
   agent: "에이전트",
@@ -167,6 +173,12 @@ const CLASSIC: Labels = {
   exportAgent: "에이전트 내보내기",
   importAgent: "에이전트 불러오기",
   selectAgentExport: "에이전트 선택...",
+  exportIncludeConversations: "대화 포함",
+  exporting: "내보내는 중...",
+  exportButton: "내보내기",
+  importing: "불러오는 중...",
+  importButton: "ZIP 파일 선택",
+  importResult: (a, c, m, n) => `에이전트 ${a}개, 대화 ${c}개, 메시지 ${m}개, 메모리 ${n}개 불러옴`,
 
   // ── Conversation ──
   newConversation: "새 대화",
@@ -264,6 +276,12 @@ const ORG: Labels = {
   exportAgent: "직원 내보내기",
   importAgent: "영입하기",
   selectAgentExport: "직원 선택...",
+  exportIncludeConversations: "대화 포함",
+  exporting: "내보내는 중...",
+  exportButton: "내보내기",
+  importing: "영입하는 중...",
+  importButton: "ZIP 파일 선택",
+  importResult: (a, c, m, n) => `직원 ${a}명, 대화 ${c}개, 메시지 ${m}개, 업무일지 ${n}개 영입 완료`,
 
   // ── Conversation ──
   newConversation: "새 대화",
@@ -299,7 +317,8 @@ const THEME_MAP: Record<UITheme, Labels> = { classic: CLASSIC, org: ORG };
 
 /**
  * Pure label resolver — usable from stores, helpers, and components.
+ * Falls back to "org" if theme is invalid.
  */
 export function getLabels(theme: UITheme = "org"): Labels {
-  return THEME_MAP[theme];
+  return THEME_MAP[theme] ?? THEME_MAP.org;
 }

@@ -86,7 +86,7 @@ export default function ExportSection() {
               checked={includeConversations}
               onChange={(e) => setIncludeConversations(e.target.checked)}
             />
-            대화 포함
+            {labels.exportIncludeConversations}
           </label>
           <button
             className="btn-secondary export-btn"
@@ -94,7 +94,7 @@ export default function ExportSection() {
             disabled={!selectedAgentId || exporting}
           >
             <Download size={14} />
-            {exporting ? "내보내는 중..." : "내보내기"}
+            {exporting ? labels.exporting : labels.exportButton}
           </button>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function ExportSection() {
             disabled={importing}
           >
             <Upload size={14} />
-            {importing ? "불러오는 중..." : "ZIP 파일 선택"}
+            {importing ? labels.importing : labels.importButton}
           </button>
         </div>
       </div>
@@ -125,8 +125,7 @@ export default function ExportSection() {
       {result && (
         <div className="export-result">
           <p>
-            에이전트 {result.agents_imported}개, 대화 {result.conversations_imported}개,
-            메시지 {result.messages_imported}개, 메모리 {result.memory_notes_imported}개 불러옴
+            {labels.importResult(result.agents_imported, result.conversations_imported, result.messages_imported, result.memory_notes_imported)}
           </p>
           {result.warnings.map((w, i) => (
             <p key={i} className="export-warning">{w}</p>

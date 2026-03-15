@@ -56,7 +56,8 @@ export default function SettingsModal() {
   if (!isSettingsOpen) return null;
 
   const handleSave = () => {
-    // Save branding settings directly (they don't go through the async saveSettings)
+    // Branding settings are localStorage-only (cannot fail), so apply immediately.
+    // API settings go through async saveSettings() which may fail independently.
     store.setCompanyName(tempCompanyName.trim());
     store.setUITheme(tempUITheme);
     saveSettings({

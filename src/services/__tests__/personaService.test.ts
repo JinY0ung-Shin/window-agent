@@ -201,7 +201,7 @@ describe("assembleManagerPrompt", () => {
 
     const result = assembleManagerPrompt(baseFiles, agents);
 
-    expect(result).toContain("현재 등록된 전문 에이전트가 없습니다");
+    expect(result).toContain("No registered agents.");
   });
 
   it("filters out default agents from list", () => {

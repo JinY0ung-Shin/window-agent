@@ -103,16 +103,16 @@ export function assembleManagerPrompt(
 
   const otherAgents = allAgents.filter((a) => !a.is_default);
   if (otherAgents.length === 0) {
-    return basePrompt + "\n\n---\n\n[REGISTERED AGENTS]\n현재 등록된 전문 에이전트가 없습니다.";
+    return basePrompt + "\n\n---\n\n[REGISTERED AGENTS]\nNo registered agents.";
   }
 
   const agentList = otherAgents
-    .map((a) => `- **${a.name}**: ${a.description || "설명 없음"}`)
+    .map((a) => `- **${a.name}**: ${a.description || "(no description)"}`)
     .join("\n");
 
   return (
     basePrompt +
-    `\n\n---\n\n[REGISTERED AGENTS]\n현재 등록된 전문 에이전트 목록:\n${agentList}`
+    `\n\n---\n\n[REGISTERED AGENTS]\n${agentList}`
   );
 }
 
