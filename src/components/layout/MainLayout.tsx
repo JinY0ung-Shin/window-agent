@@ -11,12 +11,22 @@ export default function MainLayout() {
   const setDebugOpen = useDebugStore((s) => s.setOpen);
   const [chromiumInstalling, setChromiumInstalling] = useState(false);
 
+  const [chromiumError, setChromiumError] = useState<string | null>(null);
+
   useEffect(() => {
-    const unlisten1 = listen("browser:chromium-installing", () => setChromiumInstalling(true));
+    const unlisten1 = listen("browser:chromium-installing", () => {
+      setChromiumInstalling(true);
+      setChromiumError(null);
+    });
     const unlisten2 = listen("browser:chromium-installed", () => setChromiumInstalling(false));
+    const unlisten3 = listen<string>("browser:chromium-install-failed", (event) => {
+      setChromiumInstalling(false);
+      setChromiumError(event.payload || "Installation failed");
+    });
     return () => {
       unlisten1.then(f => f());
       unlisten2.then(f => f());
+      unlisten3.then(f => f());
     };
   }, []);
 
@@ -32,7 +42,7 @@ export default function MainLayout() {
         <Bug size={18} />
       </button>
       <DebugPanel />
-      {chromiumInstalling && (
+      {(chromiumInstalling || chromiumError) && (
         <div style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
@@ -47,13 +57,40 @@ export default function MainLayout() {
             padding: '24px 32px',
             borderRadius: '12px',
             textAlign: 'center',
+            maxWidth: '400px',
           }}>
-            <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
-              Installing Chromium...
-            </div>
-            <div style={{ fontSize: '13px', opacity: 0.7 }}>
-              First-time browser setup. This may take a moment.
-            </div>
+            {chromiumError ? (
+              <>
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-error, #e53e3e)' }}>
+                  Chromium 설치 실패
+                </div>
+                <div style={{ fontSize: '13px', opacity: 0.7, marginBottom: '12px' }}>
+                  {chromiumError}
+                </div>
+                <button
+                  onClick={() => setChromiumError(null)}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--border-primary, #ccc)',
+                    backgroundColor: 'transparent',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                  }}
+                >
+                  닫기
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
+                  Installing Chromium...
+                </div>
+                <div style={{ fontSize: '13px', opacity: 0.7 }}>
+                  First-time browser setup. This may take a moment.
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

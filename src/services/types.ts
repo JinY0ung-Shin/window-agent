@@ -58,6 +58,7 @@ export interface ToolCallLog {
   tool_output: string | null;
   status: string;
   duration_ms: number | null;
+  artifact_id: string | null;
   created_at: string;
 }
 

@@ -61,15 +61,19 @@ pub async fn delete_conversation(
     let browser = app.state::<crate::browser::BrowserManager>();
     let _ = browser.close_session(&conversation_id).await;
 
-    // Clean up screenshot files before DB cascade deletes the rows
-    if let Ok(paths) = operations::delete_browser_artifacts_for_conversation(&db, &conversation_id) {
-        for path in paths {
-            let _ = std::fs::remove_file(&path);
-        }
-    }
+    // Collect screenshot paths before DB cascade deletes the rows
+    let screenshot_paths = operations::get_browser_artifact_screenshot_paths(&db, &conversation_id)
+        .unwrap_or_default();
 
     // Delete conversation (cascades browser_artifacts rows via FK)
-    Ok(operations::delete_conversation_impl(&db, conversation_id)?)
+    operations::delete_conversation_impl(&db, conversation_id)?;
+
+    // Clean up screenshot files after DB deletion
+    for path in screenshot_paths {
+        let _ = std::fs::remove_file(&path);
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -180,5 +184,5 @@ pub fn update_tool_call_log_status(
     tool_output: Option<String>,
     duration_ms: Option<i64>,
 ) -> Result<(), AppError> {
-    Ok(operations::update_tool_call_log_status_impl(&db, id, status, tool_output, duration_ms)?)
+    Ok(operations::update_tool_call_log_status_impl(&db, id, status, tool_output, duration_ms, None)?)
 }

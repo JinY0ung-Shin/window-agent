@@ -414,6 +414,7 @@ pub fn create_tool_call_log_impl(
             tool_output: None,
             status: "pending".to_string(),
             duration_ms: None,
+            artifact_id: None,
             created_at: now,
         };
 
@@ -432,7 +433,7 @@ pub fn list_tool_call_logs_impl(
 ) -> Result<Vec<ToolCallLog>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, conversation_id, message_id, tool_name, tool_input, tool_output, status, duration_ms, created_at FROM tool_call_logs WHERE conversation_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, conversation_id, message_id, tool_name, tool_input, tool_output, status, duration_ms, artifact_id, created_at FROM tool_call_logs WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )?;
 
         let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
@@ -445,7 +446,8 @@ pub fn list_tool_call_logs_impl(
                 tool_output: row.get(5)?,
                 status: row.get(6)?,
                 duration_ms: row.get(7)?,
-                created_at: row.get(8)?,
+                artifact_id: row.get(8)?,
+                created_at: row.get(9)?,
             })
         })?;
 
@@ -459,11 +461,12 @@ pub fn update_tool_call_log_status_impl(
     status: String,
     tool_output: Option<String>,
     duration_ms: Option<i64>,
+    artifact_id: Option<String>,
 ) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE tool_call_logs SET status = ?1, tool_output = ?2, duration_ms = ?3 WHERE id = ?4",
-            rusqlite::params![status, tool_output, duration_ms, id],
+            "UPDATE tool_call_logs SET status = ?1, tool_output = ?2, duration_ms = ?3, artifact_id = ?4 WHERE id = ?5",
+            rusqlite::params![status, tool_output, duration_ms, artifact_id, id],
         )?;
         Ok(())
     })
@@ -520,8 +523,8 @@ pub fn get_browser_artifact(
     })
 }
 
-/// Delete all browser artifacts for a conversation and return their screenshot paths for file cleanup.
-pub fn delete_browser_artifacts_for_conversation(
+/// Get screenshot file paths for a conversation's browser artifacts (for file cleanup before DB cascade).
+pub fn get_browser_artifact_screenshot_paths(
     db: &Database,
     conversation_id: &str,
 ) -> Result<Vec<String>, DbError> {
@@ -533,12 +536,6 @@ pub fn delete_browser_artifacts_for_conversation(
             .query_map(rusqlite::params![conversation_id], |row| row.get(0))?
             .filter_map(|r| r.ok())
             .collect();
-
-        conn.execute(
-            "DELETE FROM browser_artifacts WHERE conversation_id = ?1",
-            rusqlite::params![conversation_id],
-        )?;
-
         Ok(paths)
     })
 }
@@ -1178,7 +1175,7 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_browser_artifacts_for_conversation() {
+    fn test_get_browser_artifact_screenshot_paths() {
         let db = setup_db();
         let (_agent, conv) = create_test_conversation(&db);
 
@@ -1192,20 +1189,17 @@ mod tests {
         create_browser_artifact(&db, &a2).unwrap();
         create_browser_artifact(&db, &a3).unwrap();
 
-        let paths = delete_browser_artifacts_for_conversation(&db, &conv.id).unwrap();
+        let paths = get_browser_artifact_screenshot_paths(&db, &conv.id).unwrap();
         assert_eq!(paths.len(), 2);
         assert!(paths.contains(&"/tmp/s1.png".to_string()));
         assert!(paths.contains(&"/tmp/s3.png".to_string()));
-
-        // Verify artifacts are gone
-        assert!(get_browser_artifact(&db, &a1.id).is_err());
     }
 
     #[test]
-    fn test_delete_browser_artifacts_empty_conversation() {
+    fn test_get_browser_artifact_screenshot_paths_empty() {
         let db = setup_db();
         let (_agent, conv) = create_test_conversation(&db);
-        let paths = delete_browser_artifacts_for_conversation(&db, &conv.id).unwrap();
+        let paths = get_browser_artifact_screenshot_paths(&db, &conv.id).unwrap();
         assert!(paths.is_empty());
     }
 

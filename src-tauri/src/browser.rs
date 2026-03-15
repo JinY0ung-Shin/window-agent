@@ -136,6 +136,7 @@ impl BrowserManager {
                 continue;
             }
             if let Some(reason) = line.strip_prefix("CHROMIUM_INSTALL_FAILED=") {
+                self.emit_event("browser:chromium-install-failed", reason);
                 return Err(format!("Chromium installation failed: {}", reason));
             }
             if let Some(p) = line.strip_prefix("SIDECAR_PORT=") {

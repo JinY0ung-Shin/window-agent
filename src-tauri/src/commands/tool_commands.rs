@@ -244,13 +244,17 @@ pub async fn execute_tool(
 
     let duration_ms = start.elapsed().as_millis() as i64;
 
-    // Determine status and output
-    let (status, output) = match result {
-        Ok(value) => (
-            "executed".to_string(),
-            serde_json::to_string(&value).unwrap_or_default(),
-        ),
-        Err(err) => ("error".to_string(), serde_json::json!({ "error": err }).to_string()),
+    // Determine status, output, and artifact_id
+    let (status, output, artifact_id) = match result {
+        Ok(value) => {
+            let aid = value.get("artifact_id").and_then(|v| v.as_str()).map(|s| s.to_string());
+            (
+                "executed".to_string(),
+                serde_json::to_string(&value).unwrap_or_default(),
+                aid,
+            )
+        }
+        Err(err) => ("error".to_string(), serde_json::json!({ "error": err }).to_string(), None),
     };
 
     // Update the log entry
@@ -260,6 +264,7 @@ pub async fn execute_tool(
         status.clone(),
         Some(output.clone()),
         Some(duration_ms),
+        artifact_id,
     );
 
     Ok(ToolExecutionResult {

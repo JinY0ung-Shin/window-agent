@@ -134,5 +134,6 @@ pub struct ToolCallLog {
     pub tool_output: Option<String>,
     pub status: String,
     pub duration_ms: Option<i64>,
+    pub artifact_id: Option<String>,
     pub created_at: String,
 }
