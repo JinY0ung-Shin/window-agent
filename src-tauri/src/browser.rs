@@ -31,10 +31,12 @@ struct SidecarProcess {
 
 pub struct BrowserSession {
     pub session_id: String,
+    #[allow(dead_code)] // Used as HashMap key context; may be needed for logging
     pub conversation_id: String,
     pub last_url: String,
     pub last_title: String,
     pub last_ref_map: HashMap<u32, ElementRef>,
+    #[allow(dead_code)] // Retained for future session analytics
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_active: chrono::DateTime<chrono::Utc>,
     pub security_policy: SessionSecurityPolicy,
@@ -52,6 +54,7 @@ pub struct ElementRef {
 pub struct SessionSecurityPolicy {
     pub blocked_origins: Vec<String>,
     pub approved_domains: HashSet<String>,
+    #[allow(dead_code)] // Reserved for per-session snapshot size control
     pub max_snapshot_size: usize,
 }
 

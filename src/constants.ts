@@ -43,16 +43,17 @@ export function buildDefaultToolsMd(memoryNoteDesc: string): string {
   - path (string, required): 디렉토리 경로
 
 ## web_search
-- description: 웹에서 정보를 검색합니다
+- description: URL의 웹 페이지 내용을 가져옵니다
 - tier: confirm
 - parameters:
-  - query (string, required): 검색 쿼리 또는 URL
+  - url (string, required): 가져올 URL
 
 ## memory_note
 - description: ${memoryNoteDesc}
 - tier: auto
 - parameters:
   - action (string, required): create | read | update | delete
+  - id (string, optional): 노트 ID (update/delete 시 필요)
   - title (string, required): 노트 제목
   - content (string, optional): 노트 내용
 

@@ -232,6 +232,17 @@ pub fn seed_manager_agent(
     if let Ok(Some(agent)) =
         agent_operations::get_agent_by_folder_impl(&db, "매니저".into())
     {
+        // Ensure TOOLS.md exists for existing manager agents (added in later update)
+        let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
+        let tools_path = agents_dir.join("매니저").join("TOOLS.md");
+        if !tools_path.exists() {
+            if let Err(e) = std::fs::write(
+                &tools_path,
+                include_str!("../../resources/default-agent/TOOLS.md"),
+            ) {
+                eprintln!("Warning: failed to write TOOLS.md for manager agent: {}", e);
+            }
+        }
         return Ok(agent);
     }
 
@@ -262,6 +273,7 @@ pub fn seed_manager_agent(
         ("SOUL.md", include_str!("../../resources/default-agent/SOUL.md")),
         ("USER.md", include_str!("../../resources/default-agent/USER.md")),
         ("AGENTS.md", include_str!("../../resources/default-agent/AGENTS.md")),
+        ("TOOLS.md", include_str!("../../resources/default-agent/TOOLS.md")),
     ];
 
     for (filename, content) in &files {

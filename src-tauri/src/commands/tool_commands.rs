@@ -139,16 +139,19 @@ async fn tool_web_search(url: &str) -> Result<serde_json::Value, String> {
 fn tool_memory_note(
     db: &Database,
     input: &serde_json::Value,
+    auto_agent_id: &str,
 ) -> Result<serde_json::Value, String> {
     let action = input["action"]
         .as_str()
         .ok_or("memory_note: missing 'action' field")?;
 
+    // Use agent_id from input if provided, otherwise use the auto-injected one
+    let agent_id = input["agent_id"]
+        .as_str()
+        .unwrap_or(auto_agent_id);
+
     match action {
         "create" => {
-            let agent_id = input["agent_id"]
-                .as_str()
-                .ok_or("memory_note create: missing 'agent_id'")?;
             let title = input["title"]
                 .as_str()
                 .ok_or("memory_note create: missing 'title'")?;
@@ -165,9 +168,6 @@ fn tool_memory_note(
             Ok(serde_json::to_value(note).unwrap())
         }
         "read" => {
-            let agent_id = input["agent_id"]
-                .as_str()
-                .ok_or("memory_note read: missing 'agent_id'")?;
             let notes = operations::list_memory_notes_impl(db, agent_id.to_string())
                 .map_err(|e| format!("memory_note read failed: {}", e))?;
             Ok(serde_json::to_value(notes).unwrap())
@@ -311,10 +311,17 @@ async fn execute_tool_inner(
         "web_search" => {
             let url = input["url"]
                 .as_str()
-                .ok_or("web_search: missing 'url' parameter")?;
+                .or_else(|| input["query"].as_str())
+                .ok_or("web_search: missing 'url' or 'query' parameter")?;
             tool_web_search(url).await
         }
-        "memory_note" => tool_memory_note(db, input),
+        "memory_note" => {
+            // Auto-inject agent_id from conversation so LLM doesn't need to know the DB ID
+            let agent_id = operations::get_conversation_detail_impl(db, conversation_id.to_string())
+                .map(|c| c.agent_id)
+                .unwrap_or_default();
+            tool_memory_note(db, input, &agent_id)
+        }
 
         // ── Browser automation tools ──
         "browser_navigate" | "browser_snapshot" | "browser_click" | "browser_type"
@@ -550,7 +557,7 @@ mod tests {
     fn test_memory_note_unknown_action() {
         let db = crate::db::Database::new_in_memory().unwrap();
         let input = serde_json::json!({ "action": "fly" });
-        let result = tool_memory_note(&db, &input);
+        let result = tool_memory_note(&db, &input, "test-agent-id");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unknown action"));
     }
@@ -559,7 +566,7 @@ mod tests {
     fn test_memory_note_create_missing_fields() {
         let db = crate::db::Database::new_in_memory().unwrap();
         let input = serde_json::json!({ "action": "create" });
-        let result = tool_memory_note(&db, &input);
+        let result = tool_memory_note(&db, &input, "test-agent-id");
         assert!(result.is_err());
     }
 
@@ -587,24 +594,22 @@ mod tests {
         )
         .unwrap();
 
-        // Create
+        // Create — agent_id auto-injected via auto_agent_id param
         let create_input = serde_json::json!({
             "action": "create",
-            "agent_id": agent.id,
             "title": "Test Note",
             "content": "Note body"
         });
-        let created = tool_memory_note(&db, &create_input).unwrap();
+        let created = tool_memory_note(&db, &create_input, &agent.id).unwrap();
         assert_eq!(created["title"], "Test Note");
 
         let note_id = created["id"].as_str().unwrap();
 
-        // Read
+        // Read — agent_id auto-injected
         let read_input = serde_json::json!({
-            "action": "read",
-            "agent_id": agent.id
+            "action": "read"
         });
-        let notes = tool_memory_note(&db, &read_input).unwrap();
+        let notes = tool_memory_note(&db, &read_input, &agent.id).unwrap();
         let arr = notes.as_array().unwrap();
         assert_eq!(arr.len(), 1);
 
@@ -614,7 +619,7 @@ mod tests {
             "id": note_id,
             "title": "Updated Title"
         });
-        let updated = tool_memory_note(&db, &update_input).unwrap();
+        let updated = tool_memory_note(&db, &update_input, &agent.id).unwrap();
         assert_eq!(updated["title"], "Updated Title");
 
         // Delete
@@ -622,11 +627,11 @@ mod tests {
             "action": "delete",
             "id": note_id
         });
-        let deleted = tool_memory_note(&db, &delete_input).unwrap();
+        let deleted = tool_memory_note(&db, &delete_input, &agent.id).unwrap();
         assert_eq!(deleted["success"], true);
 
         // Verify empty
-        let notes_after = tool_memory_note(&db, &read_input).unwrap();
+        let notes_after = tool_memory_note(&db, &read_input, &agent.id).unwrap();
         assert_eq!(notes_after.as_array().unwrap().len(), 0);
     }
 }

@@ -493,7 +493,7 @@ async function sendNormalMessage() {
         };
 
     let toolDefinitions: ToolDefinition[] = [];
-    if (agent && !agent.is_default) {
+    if (agent) {
       try {
         toolDefinitions = await getToolsForAgent(agent.folder_name);
       } catch { /* no tools */ }
