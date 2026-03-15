@@ -141,8 +141,10 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
                     checked={enabled}
                     onChange={(e) => toggleTool(tool.name, e.target.checked)}
                   />
-                  <span className="native-tool-name">{tool.name}</span>
-                  <span className="native-tool-desc">{tool.description}</span>
+                  <div className="native-tool-meta">
+                    <span className="native-tool-name">{tool.name}</span>
+                    <span className="native-tool-desc">{tool.description}</span>
+                  </div>
                   <select
                     className="native-tool-tier"
                     value={tier}
