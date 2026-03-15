@@ -83,7 +83,7 @@ export const ERROR_MESSAGES: Record<string, string> = {
 
 export function parseErrorMessage(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error);
-  const prefix = msg.match(/^(HTTP_\d{3}|PARSE_ERROR|EMPTY_RESPONSE):/)?.[1];
+  const prefix = msg.match(/(HTTP_\d{3}|PARSE_ERROR|EMPTY_RESPONSE):/)?.[1];
   if (prefix && ERROR_MESSAGES[prefix]) return ERROR_MESSAGES[prefix];
   if (msg.includes("HTTP error") || msg.includes("fetch")) return ERROR_MESSAGES.NETWORK;
   return ERROR_MESSAGE;
