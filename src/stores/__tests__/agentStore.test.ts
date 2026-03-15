@@ -141,7 +141,7 @@ describe("agentStore", () => {
 
     useAgentStore.setState({
       editingAgentId: null,
-      personaFiles: { identity: "id", soul: "so", user: "us", agents: "ag", tools: "" },
+      personaFiles: { identity: "id", soul: "so", user: "us", agents: "ag" },
     });
 
     await useAgentStore.getState().saveAgent({ name: "Helper" });
@@ -154,7 +154,6 @@ describe("agentStore", () => {
       soul: "so",
       user: "us",
       agents: "ag",
-      tools: "",
     });
   });
 
@@ -166,7 +165,7 @@ describe("agentStore", () => {
     useAgentStore.setState({
       agents: [agent],
       editingAgentId: "existing-1",
-      personaFiles: { identity: "updated", soul: "", user: "", agents: "", tools: "" },
+      personaFiles: { identity: "updated", soul: "", user: "", agents: "" },
     });
 
     await useAgentStore.getState().saveAgent({ name: "Updated" });
@@ -180,7 +179,6 @@ describe("agentStore", () => {
       soul: "",
       user: "",
       agents: "",
-      tools: "",
     });
   });
 

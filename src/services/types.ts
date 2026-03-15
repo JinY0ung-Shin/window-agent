@@ -109,7 +109,20 @@ export interface PersonaFiles {
   soul: string;
   user: string;
   agents: string;
-  tools: string;
+}
+
+// ── Tool config types ─────────────────────────────────
+export interface ToolConfig {
+  version: number;
+  native: Record<string, { enabled: boolean; tier: ToolPermissionTier }>;
+}
+
+export interface NativeToolDef {
+  name: string;
+  description: string;
+  category: string;
+  default_tier: ToolPermissionTier;
+  parameters: Record<string, any>;
 }
 
 // ── Tool calling types ──────────────────────────────

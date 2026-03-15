@@ -26,7 +26,7 @@ import {
   parseAgentName,
   isBootstrapComplete,
 } from "../services/bootstrapService";
-import { getToolsForAgent, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
+import { getEffectiveTools, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
 import { executeToolCalls } from "../services/toolService";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
@@ -35,7 +35,6 @@ import {
   LOADING_MESSAGE,
   NO_RESPONSE_MESSAGE,
   parseErrorMessage,
-  buildDefaultToolsMd,
 } from "../constants";
 import { getLabels } from "../labels";
 
@@ -495,7 +494,7 @@ async function sendNormalMessage() {
     let toolDefinitions: ToolDefinition[] = [];
     if (agent) {
       try {
-        toolDefinitions = await getToolsForAgent(agent.folder_name);
+        toolDefinitions = await getEffectiveTools(agent.folder_name);
       } catch { /* no tools */ }
     }
     const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
@@ -736,7 +735,7 @@ async function sendNormalMessage() {
 async function regenerateStream(
   convId: string,
   truncated: ChatMessage[],
-  lastUserContent: string,
+  _lastUserContent: string,
 ) {
   const settings = useSettingsStore.getState();
   const agentStore = useAgentStore.getState();
@@ -982,16 +981,6 @@ async function completeBootstrap() {
   const labels = getLabels(useSettingsStore.getState().uiTheme);
 
   invalidatePersonaCache(bootstrapFolderName);
-
-  try {
-    await cmds.readAgentFile(bootstrapFolderName, "TOOLS.md");
-  } catch {
-    try {
-      await cmds.writeAgentFile(bootstrapFolderName, "TOOLS.md", buildDefaultToolsMd(labels.memoryNoteToolDesc));
-    } catch (e) {
-      console.warn("Failed to write default TOOLS.md:", e);
-    }
-  }
 
   let agentName: string;
   try {

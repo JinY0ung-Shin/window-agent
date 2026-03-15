@@ -3,6 +3,7 @@ use crate::db::models::{Agent, CreateAgentRequest, UpdateAgentRequest};
 use crate::db::Database;
 use crate::error::AppError;
 use crate::utils::path_security::{validate_agent_filename, validate_no_traversal};
+use crate::utils::tool_migration::ensure_tool_config;
 use tauri::{AppHandle, Manager, State};
 
 /// Validate a folder name to prevent path traversal and invalid directory names.
@@ -204,6 +205,14 @@ pub fn sync_agents_from_fs(
         }
     }
 
+    // Migrate TOOLS.md → TOOL_CONFIG.json for each agent folder
+    for folder in &fs_folders {
+        let agent_dir = agents_dir.join(folder);
+        if let Err(e) = ensure_tool_config(&agent_dir) {
+            eprintln!("Warning: tool config migration failed for '{}': {}", folder, e);
+        }
+    }
+
     // Log warnings for DB entries whose folders no longer exist on disk.
     // We intentionally keep the DB rows to preserve conversation history;
     // the folder may have been deleted intentionally via delete_agent (which
@@ -232,16 +241,11 @@ pub fn seed_manager_agent(
     if let Ok(Some(agent)) =
         agent_operations::get_agent_by_folder_impl(&db, "매니저".into())
     {
-        // Ensure TOOLS.md exists for existing manager agents (added in later update)
+        // Ensure TOOL_CONFIG.json exists (migrates from TOOLS.md if needed)
         let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
-        let tools_path = agents_dir.join("매니저").join("TOOLS.md");
-        if !tools_path.exists() {
-            if let Err(e) = std::fs::write(
-                &tools_path,
-                include_str!("../../resources/default-agent/TOOLS.md"),
-            ) {
-                eprintln!("Warning: failed to write TOOLS.md for manager agent: {}", e);
-            }
+        let agent_dir = agents_dir.join("매니저");
+        if let Err(e) = ensure_tool_config(&agent_dir) {
+            eprintln!("Warning: failed to ensure tool config for manager agent: {}", e);
         }
         return Ok(agent);
     }
@@ -273,7 +277,7 @@ pub fn seed_manager_agent(
         ("SOUL.md", include_str!("../../resources/default-agent/SOUL.md")),
         ("USER.md", include_str!("../../resources/default-agent/USER.md")),
         ("AGENTS.md", include_str!("../../resources/default-agent/AGENTS.md")),
-        ("TOOLS.md", include_str!("../../resources/default-agent/TOOLS.md")),
+        ("TOOL_CONFIG.json", include_str!("../../resources/default-agent/TOOL_CONFIG.json")),
     ];
 
     for (filename, content) in &files {
@@ -348,7 +352,7 @@ mod tests {
 
     #[test]
     fn validate_accepts_all_allowed_file_names() {
-        for name in &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md"] {
+        for name in &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md", "TOOL_CONFIG.json", "TOOLS_LEGACY.md"] {
             assert!(
                 validate_agent_file_inputs("my-agent", name).is_ok(),
                 "expected Ok for {name}"

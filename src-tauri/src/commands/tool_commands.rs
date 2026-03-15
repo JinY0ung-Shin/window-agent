@@ -2,7 +2,7 @@ use crate::db::models::BrowserArtifact;
 use crate::db::operations;
 use crate::db::Database;
 use crate::error::AppError;
-use crate::utils::path_security::validate_tool_roots;
+use crate::utils::path_security::{validate_no_traversal, validate_tool_roots};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -10,6 +10,168 @@ use tauri::{AppHandle, Manager, State};
 use tokio::time::{timeout, Duration};
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(30);
+
+// ── Native tool definitions & config commands ──
+
+#[derive(Debug, Clone, Serialize)]
+pub struct NativeToolDef {
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub default_tier: String,
+    pub parameters: serde_json::Value,
+}
+
+/// Returns all 12 native tool definitions with full schemas.
+#[tauri::command]
+pub fn get_native_tools() -> Result<Vec<NativeToolDef>, String> {
+    Ok(native_tool_definitions())
+}
+
+/// Generates default TOOL_CONFIG.json from native tool definitions (all enabled, default tiers).
+#[tauri::command]
+pub fn get_default_tool_config() -> Result<String, String> {
+    let defs = native_tool_definitions();
+    let mut native = serde_json::Map::new();
+    for def in &defs {
+        native.insert(
+            def.name.clone(),
+            serde_json::json!({ "enabled": true, "tier": def.default_tier }),
+        );
+    }
+    let config = serde_json::json!({ "version": 1, "native": native });
+    serde_json::to_string_pretty(&config).map_err(|e| format!("JSON serialization error: {}", e))
+}
+
+/// Read TOOL_CONFIG.json for an agent.
+#[tauri::command]
+pub fn read_tool_config(app: AppHandle, folder_name: String) -> Result<String, String> {
+    validate_no_traversal(&folder_name, "folder name")?;
+    let agents_dir = get_agents_dir_for_tools(&app)?;
+    let config_path = agents_dir.join(&folder_name).join("TOOL_CONFIG.json");
+    std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read TOOL_CONFIG.json: {}", e))
+}
+
+/// Write TOOL_CONFIG.json for an agent.
+#[tauri::command]
+pub fn write_tool_config(
+    app: AppHandle,
+    folder_name: String,
+    config: String,
+) -> Result<(), String> {
+    validate_no_traversal(&folder_name, "folder name")?;
+
+    // Validate that the config is valid JSON
+    serde_json::from_str::<serde_json::Value>(&config)
+        .map_err(|e| format!("Invalid JSON: {}", e))?;
+
+    let agents_dir = get_agents_dir_for_tools(&app)?;
+    let agent_dir = agents_dir.join(&folder_name);
+    std::fs::create_dir_all(&agent_dir)
+        .map_err(|e| format!("Failed to create agent directory: {}", e))?;
+
+    let config_path = agent_dir.join("TOOL_CONFIG.json");
+    std::fs::write(&config_path, &config)
+        .map_err(|e| format!("Failed to write TOOL_CONFIG.json: {}", e))
+}
+
+fn get_agents_dir_for_tools(app: &AppHandle) -> Result<PathBuf, String> {
+    let app_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
+    Ok(app_dir.join("agents"))
+}
+
+fn native_tool_definitions() -> Vec<NativeToolDef> {
+    vec![
+        NativeToolDef {
+            name: "read_file".into(),
+            description: "지정 경로의 파일 내용을 읽습니다".into(),
+            category: "file".into(),
+            default_tier: "auto".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"파일 경로"}},"required":["path"]}),
+        },
+        NativeToolDef {
+            name: "write_file".into(),
+            description: "지정 경로에 파일을 씁니다".into(),
+            category: "file".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"파일 경로"},"content":{"type":"string","description":"파일 내용"}},"required":["path","content"]}),
+        },
+        NativeToolDef {
+            name: "list_directory".into(),
+            description: "디렉토리 내 파일 목록을 조회합니다".into(),
+            category: "file".into(),
+            default_tier: "auto".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"디렉토리 경로"}},"required":["path"]}),
+        },
+        NativeToolDef {
+            name: "web_search".into(),
+            description: "URL의 웹 페이지 내용을 가져옵니다".into(),
+            category: "web".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"url":{"type":"string","description":"가져올 URL"}},"required":["url"]}),
+        },
+        NativeToolDef {
+            name: "memory_note".into(),
+            description: "에이전트의 메모리 노트를 관리합니다".into(),
+            category: "memory".into(),
+            default_tier: "auto".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"action":{"type":"string","description":"create | read | update | delete"},"id":{"type":"string","description":"노트 ID (update/delete 시 필요)"},"title":{"type":"string","description":"노트 제목"},"content":{"type":"string","description":"노트 내용"}},"required":["action","title"]}),
+        },
+        NativeToolDef {
+            name: "browser_navigate".into(),
+            description: "Navigate to a URL and return a snapshot of the page".into(),
+            category: "browser".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"url":{"type":"string","description":"The URL to navigate to"}},"required":["url"]}),
+        },
+        NativeToolDef {
+            name: "browser_snapshot".into(),
+            description: "Take a snapshot of the current page showing all interactive elements".into(),
+            category: "browser".into(),
+            default_tier: "auto".into(),
+            parameters: serde_json::json!({"type":"object","properties":{}}),
+        },
+        NativeToolDef {
+            name: "browser_click".into(),
+            description: "Click an interactive element on the page by its reference number".into(),
+            category: "browser".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"ref":{"type":"number","description":"The reference number of the element to click"}},"required":["ref"]}),
+        },
+        NativeToolDef {
+            name: "browser_type".into(),
+            description: "Type text into an input field by its reference number".into(),
+            category: "browser".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"ref":{"type":"number","description":"The reference number of the input field"},"text":{"type":"string","description":"The text to type"}},"required":["ref","text"]}),
+        },
+        NativeToolDef {
+            name: "browser_wait".into(),
+            description: "Wait for a specified number of seconds then take a new snapshot".into(),
+            category: "browser".into(),
+            default_tier: "auto".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"seconds":{"type":"number","description":"Number of seconds to wait (default 2, max 10)"}}}),
+        },
+        NativeToolDef {
+            name: "browser_back".into(),
+            description: "Go back to the previous page in browser history".into(),
+            category: "browser".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{}}),
+        },
+        NativeToolDef {
+            name: "browser_close".into(),
+            description: "Close the browser session for this conversation".into(),
+            category: "browser".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{}}),
+        },
+    ]
+}
 const BROWSER_TOOL_TIMEOUT: Duration = Duration::from_secs(360); // 6 min: allows for Chromium install on first run
 
 /// Result returned by execute_tool to the frontend.

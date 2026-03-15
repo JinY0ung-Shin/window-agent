@@ -1,10 +1,15 @@
 import { create } from "zustand";
-import type { Agent, PersonaFiles } from "../services/types";
+import type { Agent, PersonaFiles, ToolConfig } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import {
   readPersonaFiles,
   writePersonaFiles,
 } from "../services/personaService";
+import {
+  readToolConfig,
+  writeToolConfig,
+  getDefaultToolConfig,
+} from "../services/nativeToolRegistry";
 import { getLabels } from "../labels";
 import { useSettingsStore } from "./settingsStore";
 
@@ -16,6 +21,7 @@ interface AgentState {
   personaFiles: PersonaFiles | null;
   personaTab: PersonaTab;
   editorError: string | null;
+  toolConfig: ToolConfig | null;
 
   loadAgents: () => Promise<void>;
   selectAgent: (id: string | null) => void;
@@ -25,16 +31,17 @@ interface AgentState {
   updatePersonaFile: (fileName: PersonaTab, content: string) => void;
   saveAgent: (updates: Partial<Agent>) => Promise<void>;
   deleteAgent: (id: string) => Promise<void>;
+  loadToolConfig: (folderName: string) => Promise<void>;
+  saveToolConfig: (folderName: string, config: ToolConfig) => Promise<void>;
 }
 
-export type PersonaTab = "identity" | "soul" | "user" | "agents" | "tools";
+export type PersonaTab = "identity" | "soul" | "user" | "agents";
 
 const EMPTY_PERSONA: PersonaFiles = {
   identity: "",
   soul: "",
   user: "",
   agents: "",
-  tools: "",
 };
 
 export const useAgentStore = create<AgentState>((set, get) => ({
@@ -45,6 +52,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
   personaFiles: null,
   personaTab: "identity",
   editorError: null,
+  toolConfig: null,
 
   loadAgents: async () => {
     try {
@@ -63,6 +71,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       editingAgentId: agentId,
       personaTab: "identity",
       editorError: null,
+      toolConfig: null,
     });
 
     if (agentId) {
@@ -71,6 +80,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         if (agent) {
           const files = await readPersonaFiles(agent.folder_name);
           set({ personaFiles: files });
+          const tc = await readToolConfig(agent.folder_name);
+          set({ toolConfig: tc });
         } else {
           set({ personaFiles: { ...EMPTY_PERSONA } });
         }
@@ -79,6 +90,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       }
     } else {
       set({ personaFiles: { ...EMPTY_PERSONA } });
+      // New agent: load default tool config so tools panel is pre-populated
+      try {
+        const defaultConfig = await getDefaultToolConfig();
+        set({ toolConfig: defaultConfig });
+      } catch {
+        // fallback: null means no tools
+      }
     }
   },
 
@@ -140,6 +158,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       if (personaFiles) {
         await writePersonaFiles(folderName, personaFiles);
       }
+
+      // Write tool config separately (if null for new agent, write defaults)
+      let { toolConfig } = get();
+      if (!toolConfig && !editingAgentId) {
+        try { toolConfig = await getDefaultToolConfig(); } catch { /* proceed without */ }
+      }
+      if (toolConfig) {
+        await writeToolConfig(folderName, toolConfig);
+      }
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to save agent:", e);
@@ -163,5 +190,15 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       set({ selectedAgentId: null });
     }
     await get().loadAgents();
+  },
+
+  loadToolConfig: async (folderName) => {
+    const tc = await readToolConfig(folderName);
+    set({ toolConfig: tc });
+  },
+
+  saveToolConfig: async (folderName, config) => {
+    await writeToolConfig(folderName, config);
+    set({ toolConfig: config });
   },
 }));

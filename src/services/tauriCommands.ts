@@ -7,3 +7,4 @@ export * from "./commands/skillCommands";
 export * from "./commands/apiCommands";
 export * from "./commands/memoryCommands";
 export * from "./commands/browserCommands";
+export * from "./commands/toolCommands";

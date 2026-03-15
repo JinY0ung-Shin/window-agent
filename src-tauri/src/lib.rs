@@ -97,6 +97,10 @@ pub fn run() {
             commands::delete_skill,
             commands::approve_browser_domain,
             commands::get_browser_artifact,
+            commands::get_native_tools,
+            commands::get_default_tool_config,
+            commands::read_tool_config,
+            commands::write_tool_config,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

@@ -5,7 +5,6 @@ export const EMPTY_PERSONA: PersonaFiles = {
   soul: "",
   user: "",
   agents: "",
-  tools: "",
 };
 
 export function makeAgent(overrides: Partial<Agent> = {}): Agent {

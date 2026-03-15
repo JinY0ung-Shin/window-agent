@@ -4,6 +4,7 @@ use crate::db::operations::*;
 use crate::db::Database;
 use crate::error::AppError;
 use crate::utils::path_security::validate_zip_entry;
+use crate::utils::tool_migration::ensure_tool_config;
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read as _, Write as _};
 use tauri::{AppHandle, Manager, State};
@@ -101,7 +102,7 @@ pub fn export_agent(
             .join("agents")
             .join(&agent.folder_name);
 
-        let persona_files = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md"];
+        let persona_files = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json", "TOOLS.md", "TOOLS_LEGACY.md"];
         for fname in &persona_files {
             let path = agents_dir.join(fname);
             if path.exists() {
@@ -248,7 +249,7 @@ pub fn import_agent(
     }
 
     // 3. Read persona files from ZIP
-    let persona_files_list = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md"];
+    let persona_files_list = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json", "TOOLS.md", "TOOLS_LEGACY.md"];
     let mut persona_contents: Vec<(String, String)> = Vec::new();
     for fname in &persona_files_list {
         let zip_path = format!("persona/{fname}");
@@ -463,6 +464,11 @@ pub fn import_agent(
             tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
             return Err(AppError::Io(format!("Failed to write skill file '{}': {e}", zip_path)));
         }
+    }
+
+    // Migrate legacy TOOLS.md → TOOL_CONFIG.json for imported agent
+    if let Err(e) = ensure_tool_config(&agents_dir) {
+        eprintln!("Warning: tool config migration failed for imported agent '{}': {}", new_folder, e);
     }
 
     // Only commit DB after all filesystem writes succeed

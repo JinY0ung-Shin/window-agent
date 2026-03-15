@@ -6,7 +6,9 @@ import { useLabels } from "../../hooks/useLabels";
 import AgentMetadataForm from "./AgentMetadataForm";
 import AgentPersonaEditor, { PERSONA_TABS } from "./AgentPersonaEditor";
 import AgentSkillsPanel from "./AgentSkillsPanel";
-import ToolManagementPanel from "./ToolManagementPanel";
+import NativeToolPanel from "./NativeToolPanel";
+import type { ToolConfig } from "../../services/types";
+import { useAgentStore } from "../../stores/agentStore";
 
 export default function AgentEditor() {
   const {
@@ -17,6 +19,8 @@ export default function AgentEditor() {
   } = useAgentEditor();
 
   const labels = useLabels();
+  const toolConfig = useAgentStore((s) => s.toolConfig);
+  const setToolConfig = (config: ToolConfig) => useAgentStore.setState({ toolConfig: config });
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -174,10 +178,11 @@ export default function AgentEditor() {
             </div>
 
             {activePanel === "tools" ? (
-              <ToolManagementPanel
+              <NativeToolPanel
                 key={editingAgentId}
-                rawContent={personaFiles?.tools ?? ""}
-                onChange={(c) => updatePersonaFile("tools", c)}
+                folderName={editingAgent?.folder_name ?? ""}
+                toolConfig={toolConfig}
+                onChange={setToolConfig}
               />
             ) : activePanel === "skills" ? (
               <AgentSkillsPanel
