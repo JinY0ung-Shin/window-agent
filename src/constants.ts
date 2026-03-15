@@ -2,7 +2,7 @@
 export const MAX_HISTORY_MESSAGES = 10;
 
 // ── Token Budget ───────────────────────────────────
-export const MAX_CONTEXT_TOKENS = 8000;
+export const MAX_CONTEXT_TOKENS = 1000000;
 export const CONVERSATION_TITLE_MAX_LENGTH = 50;
 export const DEFAULT_CONVERSATION_TITLE = "새 대화";
 
