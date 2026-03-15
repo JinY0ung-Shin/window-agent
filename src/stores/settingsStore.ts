@@ -5,12 +5,16 @@ import {
   DEFAULT_THINKING_BUDGET,
 } from "../constants";
 import { getEnvConfig, hasApiKey as checkApiKey, setApiConfig } from "../services/tauriCommands";
+import type { UITheme } from "../labels";
 
 // ── localStorage key constants (non-secret settings only) ──
 const LS_BASE_URL = "openai_base_url";
 const LS_MODEL_NAME = "openai_model_name";
 const LS_THINKING_ENABLED = "thinking_enabled";
 const LS_THINKING_BUDGET = "thinking_budget";
+const LS_UI_THEME = "ui_theme";
+const LS_COMPANY_NAME = "company_name";
+const LS_BRANDING_INITIALIZED = "branding_initialized";
 
 interface SettingsState {
   hasApiKey: boolean;
@@ -21,11 +25,19 @@ interface SettingsState {
   isSettingsOpen: boolean;
   envLoaded: boolean;
   settingsError: string | null;
+  // ── Branding ──
+  uiTheme: UITheme;
+  companyName: string;
+  brandingInitialized: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   loadSettings: () => void;
   loadEnvDefaults: () => Promise<void>;
   waitForEnv: () => Promise<void>;
   saveSettings: (s: SettingValues) => Promise<void>;
+  // ── Branding actions ──
+  setUITheme: (theme: UITheme) => void;
+  setCompanyName: (name: string) => void;
+  initializeBranding: (companyName: string, theme?: UITheme) => void;
 }
 
 export interface SettingValues {
@@ -48,6 +60,9 @@ function readNonSecretSettings() {
     modelName: raw(LS_MODEL_NAME, DEFAULT_MODEL),
     thinkingEnabled: thinkingRaw !== null ? thinkingRaw === "true" : true,
     thinkingBudget: budgetRaw ? (parseInt(budgetRaw, 10) || DEFAULT_THINKING_BUDGET) : DEFAULT_THINKING_BUDGET,
+    uiTheme: (localStorage.getItem(LS_UI_THEME) || "org") as UITheme,
+    companyName: localStorage.getItem(LS_COMPANY_NAME) || "",
+    brandingInitialized: localStorage.getItem(LS_BRANDING_INITIALIZED) === "true",
   };
 }
 
@@ -135,5 +150,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       isSettingsOpen: false,
       settingsError: null,
     });
+  },
+
+  // ── Branding actions ──
+  setUITheme: (theme) => {
+    localStorage.setItem(LS_UI_THEME, theme);
+    set({ uiTheme: theme });
+  },
+
+  setCompanyName: (name) => {
+    localStorage.setItem(LS_COMPANY_NAME, name);
+    set({ companyName: name });
+  },
+
+  initializeBranding: (companyName, theme = "org") => {
+    localStorage.setItem(LS_COMPANY_NAME, companyName);
+    localStorage.setItem(LS_UI_THEME, theme);
+    localStorage.setItem(LS_BRANDING_INITIALIZED, "true");
+    set({ companyName, uiTheme: theme, brandingInitialized: true });
   },
 }));
