@@ -101,6 +101,10 @@ pub fn run() {
             commands::get_default_tool_config,
             commands::read_tool_config,
             commands::write_tool_config,
+            commands::list_credentials,
+            commands::add_credential,
+            commands::update_credential,
+            commands::remove_credential,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

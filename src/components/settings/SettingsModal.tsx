@@ -5,8 +5,9 @@ import { listModels } from "../../services/tauriCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
 import type { UITheme } from "../../labels";
 import ExportSection from "./ExportSection";
+import CredentialManager from "./CredentialManager";
 
-type Tab = "general" | "thinking" | "branding" | "backup";
+type Tab = "general" | "thinking" | "branding" | "credentials" | "backup";
 
 export default function SettingsModal() {
   const store = useSettingsStore();
@@ -100,6 +101,12 @@ export default function SettingsModal() {
             onClick={() => setTab("branding")}
           >
             브랜딩
+          </button>
+          <button
+            className={`settings-tab ${tab === "credentials" ? "active" : ""}`}
+            onClick={() => setTab("credentials")}
+          >
+            보안 키
           </button>
           <button
             className={`settings-tab ${tab === "backup" ? "active" : ""}`}
@@ -256,6 +263,8 @@ export default function SettingsModal() {
               </div>
             </>
           )}
+
+          {tab === "credentials" && <CredentialManager />}
 
           {tab === "backup" && <ExportSection />}
         </div>

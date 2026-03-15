@@ -415,6 +415,15 @@ body {
   text-decoration: underline;
 }
 
+.message.user .markdown-body a {
+  color: #c7d2fe;
+  text-decoration: underline;
+}
+
+.message.user .markdown-body a:hover {
+  color: #e0e7ff;
+}
+
 .message.user .bubble {
   background-color: var(--primary);
   color: white;
@@ -1945,6 +1954,227 @@ body {
 .native-tool-tier:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+/* ── Credential Manager (Settings) ─────────────────── */
+.cred-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cred-loading {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 12px 0;
+}
+
+.cred-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 16px 0;
+  text-align: center;
+}
+
+.cred-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.cred-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cred-item-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.cred-item-id {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.cred-item-value {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+}
+
+.cred-item-hosts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.cred-host-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  background: #e0e7ff;
+  color: var(--primary);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.cred-host-tag.removable {
+  cursor: pointer;
+}
+
+.cred-host-tag.removable:hover {
+  background: #c7d2fe;
+}
+
+.cred-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cred-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cred-action-btn:hover {
+  background: var(--bg-color);
+  color: var(--text-main);
+}
+
+.cred-action-btn.danger {
+  color: #ef4444;
+}
+
+.cred-action-btn.danger:hover {
+  background: #fef2f2;
+}
+
+.cred-confirm-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #ef4444;
+}
+
+.cred-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.cred-add-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.cred-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.cred-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.cred-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cred-form-field label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.cred-form-field input {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--bg-color);
+  color: var(--text-main);
+}
+
+.cred-form-field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cred-host-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.cred-host-input-row input {
+  flex: 1;
+}
+
+.cred-host-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.cred-form-error {
+  font-size: 0.8rem;
+  color: #ef4444;
+  padding: 4px 0;
+}
+
+.cred-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 /* ── Avatar Uploader ────────────────────────────────── */

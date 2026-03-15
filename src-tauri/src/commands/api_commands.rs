@@ -1,7 +1,7 @@
 use crate::api::*;
 use crate::error::AppError;
 use crate::models::api_types::ModelsResponse;
-use crate::services::api_service;
+use crate::services::{api_service, credential_service};
 use tauri::{Emitter, State};
 
 #[tauri::command]
@@ -21,6 +21,7 @@ pub fn set_api_config(
 
 #[tauri::command]
 pub async fn chat_completion(
+    app: tauri::AppHandle,
     api: State<'_, ApiState>,
     request: ChatCompletionRequest,
 ) -> Result<ChatCompletionResponse, AppError> {
@@ -39,6 +40,13 @@ pub async fn chat_completion(
     }));
     for msg in request.messages {
         api_messages.push(msg);
+    }
+
+    // Defense-in-depth: scrub any credential values that may have leaked into messages
+    if let Ok(credentials) = credential_service::get_all_secret_values(&app) {
+        if !credentials.is_empty() {
+            credential_service::scrub_messages(&mut api_messages, &credentials);
+        }
     }
 
     // Build request body
@@ -188,6 +196,13 @@ pub async fn chat_completion_stream(
     }));
     for msg in request.messages {
         api_messages.push(msg);
+    }
+
+    // Defense-in-depth: scrub any credential values that may have leaked into messages
+    if let Ok(credentials) = credential_service::get_all_secret_values(&app) {
+        if !credentials.is_empty() {
+            credential_service::scrub_messages(&mut api_messages, &credentials);
+        }
     }
 
     let mut body = serde_json::json!({

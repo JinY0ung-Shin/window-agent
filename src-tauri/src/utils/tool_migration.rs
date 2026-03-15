@@ -1,7 +1,26 @@
 use serde_json::json;
 use std::path::Path;
 
-/// The 12 native tools built into the runtime.
+/// The 13 native tools built into the runtime, with their default tiers.
+/// Must stay in sync with `native_tool_definitions()` in tool_commands.rs.
+/// Must stay in sync with `native_tool_definitions()` in tool_commands.rs.
+const NATIVE_TOOLS: &[(&str, &str)] = &[
+    ("read_file", "auto"),
+    ("write_file", "confirm"),
+    ("list_directory", "auto"),
+    ("web_search", "confirm"),
+    ("memory_note", "auto"),
+    ("browser_navigate", "confirm"),
+    ("browser_snapshot", "auto"),
+    ("browser_click", "confirm"),
+    ("browser_type", "confirm"),
+    ("browser_wait", "auto"),
+    ("browser_back", "confirm"),
+    ("browser_close", "confirm"),
+    ("http_request", "confirm"),
+];
+
+/// Just the names, for iteration.
 const NATIVE_TOOL_NAMES: &[&str] = &[
     "read_file",
     "write_file",
@@ -15,6 +34,7 @@ const NATIVE_TOOL_NAMES: &[&str] = &[
     "browser_wait",
     "browser_back",
     "browser_close",
+    "http_request",
 ];
 
 /// Per-agent idempotent migration from TOOLS.md → TOOL_CONFIG.json.
@@ -111,11 +131,11 @@ fn parse_tools_md_to_config(content: &str) -> serde_json::Value {
 
     // Build native section: only native tools go into config
     let mut native = serde_json::Map::new();
-    for &name in NATIVE_TOOL_NAMES {
+    for &(name, default_tier) in NATIVE_TOOLS {
         let (enabled, tier) = if let Some(t) = found_map.get(name) {
             (true, t.as_str())
         } else {
-            (false, "auto")
+            (false, default_tier)
         };
         native.insert(
             name.to_string(),
@@ -248,10 +268,10 @@ mod tests {
 
     #[test]
     fn test_parse_all_native_tools() {
-        // Verify all 12 native tools appear in output even if not in input
+        // Verify all 13 native tools appear in output even if not in input
         let config = parse_tools_md_to_config("## read_file\n- tier: auto\n");
         let native = config["native"].as_object().unwrap();
-        assert_eq!(native.len(), 12);
+        assert_eq!(native.len(), 13);
         for &name in NATIVE_TOOL_NAMES {
             assert!(native.contains_key(name), "missing native tool: {}", name);
         }

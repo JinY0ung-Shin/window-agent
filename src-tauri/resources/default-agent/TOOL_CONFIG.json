@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "native": {
     "read_file": { "enabled": true, "tier": "auto" },
     "write_file": { "enabled": true, "tier": "confirm" },
@@ -12,6 +12,8 @@
     "browser_type": { "enabled": true, "tier": "confirm" },
     "browser_wait": { "enabled": true, "tier": "auto" },
     "browser_back": { "enabled": true, "tier": "confirm" },
-    "browser_close": { "enabled": true, "tier": "confirm" }
-  }
+    "browser_close": { "enabled": true, "tier": "confirm" },
+    "http_request": { "enabled": true, "tier": "confirm" }
+  },
+  "credentials": {}
 }

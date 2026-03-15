@@ -7,6 +7,7 @@ import AgentMetadataForm from "./AgentMetadataForm";
 import AgentPersonaEditor, { PERSONA_TABS } from "./AgentPersonaEditor";
 import AgentSkillsPanel from "./AgentSkillsPanel";
 import NativeToolPanel from "./NativeToolPanel";
+import CredentialPanel from "./CredentialPanel";
 import type { ToolConfig } from "../../services/types";
 import { useAgentStore } from "../../stores/agentStore";
 
@@ -30,7 +31,7 @@ export default function AgentEditor() {
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean | null>(null);
   const [thinkingBudget, setThinkingBudget] = useState("");
   const [models, setModels] = useState<string[]>([]);
-  const [activePanel, setActivePanel] = useState<"persona" | "tools" | "skills">("persona");
+  const [activePanel, setActivePanel] = useState<"persona" | "tools" | "credentials" | "skills">("persona");
 
   useEffect(() => {
     if (isEditorOpen) {
@@ -168,6 +169,12 @@ export default function AgentEditor() {
                 {labels.personaTools}
               </button>
               <button
+                className={`persona-tab ${activePanel === "credentials" ? "active" : ""}`}
+                onClick={() => setActivePanel("credentials")}
+              >
+                {labels.credentials}
+              </button>
+              <button
                 className={`persona-tab ${activePanel === "skills" ? "active" : ""}`}
                 disabled={!editingAgentId}
                 title={!editingAgentId ? "먼저 저장하세요" : undefined}
@@ -181,6 +188,12 @@ export default function AgentEditor() {
               <NativeToolPanel
                 key={editingAgentId}
                 folderName={editingAgent?.folder_name ?? ""}
+                toolConfig={toolConfig}
+                onChange={setToolConfig}
+              />
+            ) : activePanel === "credentials" ? (
+              <CredentialPanel
+                key={editingAgentId}
                 toolConfig={toolConfig}
                 onChange={setToolConfig}
               />

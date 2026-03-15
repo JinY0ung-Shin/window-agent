@@ -101,6 +101,22 @@ export interface Labels {
   // ── Tool editor ──
   toolAgentCapability: string;
 
+  // ── Credentials ──
+  credentials: string;
+  credentialName: string;
+  credentialId: string;
+  credentialValue: string;
+  allowedHosts: string;
+  addCredential: string;
+  editCredential: string;
+  deleteCredentialAction: string;
+  noCredentials: string;
+  noCredentialsHint: string;
+  confirmDeleteCredential: string;
+  credentialHostPlaceholder: string;
+  credentialSaved: string;
+  changeValue: string;
+
   // ── Chat flow ──
   noAgentForSkill: string;
   maxToolIterations: string;
@@ -204,6 +220,22 @@ const CLASSIC: Labels = {
   // ── Tool editor ──
   toolAgentCapability: "도구를 추가하면 에이전트가 외부 기능을 실행할 수 있습니다.",
 
+  // ── Credentials ──
+  credentials: "보안 키",
+  credentialName: "이름",
+  credentialId: "ID",
+  credentialValue: "값",
+  allowedHosts: "허용 호스트",
+  addCredential: "추가",
+  editCredential: "수정",
+  deleteCredentialAction: "삭제",
+  noCredentials: "등록된 보안 키가 없습니다",
+  noCredentialsHint: "환경 설정에서 보안 키를 추가하세요.",
+  confirmDeleteCredential: "이 보안 키를 삭제하시겠습니까?",
+  credentialHostPlaceholder: "호스트 입력 후 Enter",
+  credentialSaved: "저장됨",
+  changeValue: "값 변경",
+
   // ── Chat flow ──
   noAgentForSkill: "현재 에이전트를 찾을 수 없습니다",
   maxToolIterations: "최대 도구 호출 반복 횟수에 도달했습니다.",
@@ -306,6 +338,22 @@ const ORG: Labels = {
 
   // ── Tool editor ──
   toolAgentCapability: "도구를 추가하면 직원이 외부 기능을 실행할 수 있습니다.",
+
+  // ── Credentials ──
+  credentials: "보안 키",
+  credentialName: "이름",
+  credentialId: "ID",
+  credentialValue: "값",
+  allowedHosts: "허용 호스트",
+  addCredential: "추가",
+  editCredential: "수정",
+  deleteCredentialAction: "삭제",
+  noCredentials: "등록된 보안 키가 없습니다",
+  noCredentialsHint: "환경 설정에서 보안 키를 추가하세요.",
+  confirmDeleteCredential: "이 보안 키를 삭제하시겠습니까?",
+  credentialHostPlaceholder: "호스트 입력 후 Enter",
+  credentialSaved: "저장됨",
+  changeValue: "값 변경",
 
   // ── Chat flow ──
   noAgentForSkill: "현재 직원을 찾을 수 없습니다",

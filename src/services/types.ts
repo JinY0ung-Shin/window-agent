@@ -115,6 +115,16 @@ export interface PersonaFiles {
 export interface ToolConfig {
   version: number;
   native: Record<string, { enabled: boolean; tier: ToolPermissionTier }>;
+  credentials?: Record<string, { allowed: boolean }>;
+}
+
+// ── Credential types ──────────────────────────────────
+export interface CredentialMeta {
+  id: string;
+  name: string;
+  allowed_hosts: string[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface NativeToolDef {
