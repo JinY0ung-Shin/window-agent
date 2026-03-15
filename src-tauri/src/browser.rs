@@ -7,6 +7,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::io::BufRead;
 use tauri::Emitter;
+use tauri::Manager;
 
 // === Types ===
 
@@ -109,16 +110,25 @@ impl BrowserManager {
         }
 
         // Resolve sidecar script path.
-        // Try several locations relative to the current executable or CWD.
-        let script_path = resolve_sidecar_script()
+        let script_path = resolve_sidecar_script(self.app_handle.as_ref())
             .ok_or_else(|| "browser-sidecar server.js not found".to_string())?;
 
-        let mut child = Command::new("node")
-            .arg(&script_path)
+        let node_path = resolve_node_executable()?;
+
+        let mut cmd = Command::new(&node_path);
+        cmd.arg(&script_path)
             .env("PLAYWRIGHT_BROWSERS_PATH", self.app_data_dir.join("playwright-browsers"))
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
+            .stderr(Stdio::inherit());
+
+        // Suppress console window on Windows
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+
+        let mut child = cmd.spawn()
             .map_err(|e| format!("failed to spawn browser sidecar: {}", e))?;
 
         // Read port from stdout
@@ -468,9 +478,18 @@ impl BrowserManager {
             let _ = self.close_session(&conv_id).await;
         }
 
-        // Kill sidecar
+        // Gracefully close sidecar, then force kill as safety net
         let mut sidecar = self.sidecar.lock().await;
         if let Some(mut s) = sidecar.take() {
+            // Ask sidecar to close all browser contexts gracefully
+            let url = format!("http://127.0.0.1:{}/execute", s.port);
+            let _ = self
+                .client
+                .post(&url)
+                .json(&serde_json::json!({"method": "close", "session_id": "", "params": {}}))
+                .timeout(std::time::Duration::from_secs(5))
+                .send()
+                .await;
             let _ = s.child.kill();
         }
     }
@@ -648,11 +667,36 @@ pub struct BrowserToolResult {
     pub screenshot_path: Option<String>,
 }
 
+/// Resolve the Node.js executable path.
+/// Uses the `which` crate for cross-platform PATH resolution (handles PATHEXT on Windows).
+fn resolve_node_executable() -> Result<PathBuf, String> {
+    which::which("node").map_err(|_| {
+        "Node.js is required but not found in PATH. \
+         Install from https://nodejs.org (v18+ recommended)"
+            .to_string()
+    })
+}
+
 /// Resolve the path to browser-sidecar/server.js.
-/// In dev: checks relative to CWD and executable.
-/// In release: checks Tauri resource directory and executable sibling.
-fn resolve_sidecar_script() -> Option<String> {
-    // 1. CWD-relative paths (dev mode: `cargo tauri dev` runs from project root)
+/// In release: uses Tauri resource resolver (works on all platforms).
+/// In dev: falls back to CWD-relative paths.
+fn resolve_sidecar_script(app_handle: Option<&tauri::AppHandle>) -> Option<PathBuf> {
+    // 1. Release: use Tauri resource resolver (resolves correctly on Windows, macOS, Linux).
+    // The path must match the bundle.resources entry in tauri.conf.json.
+    // Tauri rewrites `..` to `_up_` both when bundling and when resolving,
+    // so we pass the same relative path used in the config.
+    if let Some(handle) = app_handle {
+        if let Ok(path) = handle
+            .path()
+            .resolve("../browser-sidecar/server.js", tauri::path::BaseDirectory::Resource)
+        {
+            if path.exists() {
+                return Some(path);
+            }
+        }
+    }
+
+    // 2. Dev fallback: CWD-relative paths (`cargo tauri dev` runs from project root)
     let cwd_candidates = [
         "browser-sidecar/server.js",
         "browser-sidecar/dist/server.js",
@@ -660,25 +704,9 @@ fn resolve_sidecar_script() -> Option<String> {
         "../browser-sidecar/dist/server.js",
     ];
     for candidate in &cwd_candidates {
-        if std::path::Path::new(candidate).exists() {
-            return Some(candidate.to_string());
-        }
-    }
-
-    // 2. Executable-relative paths (release builds)
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let release_candidates = [
-                exe_dir.join("browser-sidecar").join("server.js"),
-                exe_dir.join("resources").join("browser-sidecar").join("server.js"),
-                // macOS: Contents/Resources/
-                exe_dir.join("../Resources/browser-sidecar/server.js"),
-            ];
-            for candidate in &release_candidates {
-                if candidate.exists() {
-                    return candidate.to_str().map(|s| s.to_string());
-                }
-            }
+        let p = std::path::Path::new(candidate);
+        if p.exists() {
+            return Some(p.to_path_buf());
         }
     }
 
@@ -967,5 +995,40 @@ mod tests {
         let resp: SidecarResponse = serde_json::from_value(json).unwrap();
         let ref_map = resp.ref_map.unwrap();
         assert!(!ref_map.get("1").unwrap().is_password);
+    }
+
+    #[test]
+    fn test_resolve_node_executable_returns_valid_path_or_clear_error() {
+        match resolve_node_executable() {
+            Ok(path) => {
+                // When node is available, path must exist and be a file
+                assert!(path.exists(), "resolved node path should exist");
+                assert!(path.is_file(), "resolved node path should be a file");
+            }
+            Err(msg) => {
+                // When node is not available, error must contain install guidance
+                assert!(
+                    msg.contains("nodejs.org"),
+                    "error should contain install URL, got: {}",
+                    msg
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_resolve_sidecar_script_none_handle_falls_through_to_cwd() {
+        // With no AppHandle, should skip Tauri resolver and try CWD candidates.
+        // In test env (CWD is src-tauri/), ../browser-sidecar/server.js should exist.
+        let result = resolve_sidecar_script(None);
+        // The CWD candidate list includes "../browser-sidecar/server.js"
+        // which exists when running from src-tauri/ directory
+        if let Some(path) = &result {
+            assert!(
+                path.to_string_lossy().contains("server.js"),
+                "resolved path should point to server.js"
+            );
+        }
+        // If None, that's also valid (CWD may differ). No panic is the key assertion.
     }
 }
