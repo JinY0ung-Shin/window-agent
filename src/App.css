@@ -2381,18 +2381,23 @@ body {
 }
 
 .persona-tab {
-  flex: 1;
-  padding: 8px 12px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 8px 6px;
   border: none;
   background: none;
   border-radius: 8px;
-  font-size: 0.8rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
   font-family: inherit;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
+  white-space: nowrap;
+  word-break: keep-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .persona-tab:hover {
