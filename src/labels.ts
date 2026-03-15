@@ -94,6 +94,11 @@ export interface Labels {
 
   // ── Tool editor ──
   toolAgentCapability: string;
+
+  // ── Chat flow ──
+  noAgentForSkill: string;
+  maxToolIterations: string;
+  bootstrapFailed: (err: string) => string;
 }
 
 const CLASSIC: Labels = {
@@ -186,6 +191,11 @@ const CLASSIC: Labels = {
 
   // ── Tool editor ──
   toolAgentCapability: "도구를 추가하면 에이전트가 외부 기능을 실행할 수 있습니다.",
+
+  // ── Chat flow ──
+  noAgentForSkill: "현재 에이전트를 찾을 수 없습니다",
+  maxToolIterations: "최대 도구 호출 반복 횟수에 도달했습니다.",
+  bootstrapFailed: (err) => `에이전트 생성에 실패했습니다: ${err}. 다시 시도하거나 취소 버튼을 눌러주세요.`,
 };
 
 const ORG: Labels = {
@@ -278,6 +288,11 @@ const ORG: Labels = {
 
   // ── Tool editor ──
   toolAgentCapability: "도구를 추가하면 직원이 외부 기능을 실행할 수 있습니다.",
+
+  // ── Chat flow ──
+  noAgentForSkill: "현재 직원을 찾을 수 없습니다",
+  maxToolIterations: "최대 도구 호출 반복 횟수에 도달했습니다.",
+  bootstrapFailed: (err) => `직원 생성에 실패했습니다: ${err}. 다시 시도하거나 취소 버튼을 눌러주세요.`,
 };
 
 const THEME_MAP: Record<UITheme, Labels> = { classic: CLASSIC, org: ORG };

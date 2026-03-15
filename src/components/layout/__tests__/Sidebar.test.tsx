@@ -40,12 +40,12 @@ beforeEach(() => {
 describe("Sidebar (DM-style)", () => {
   it("renders app title", () => {
     render(<Sidebar />);
-    expect(screen.getByText("Agent Workspace")).toBeInTheDocument();
+    expect(screen.getByText("우리 회사")).toBeInTheDocument();
   });
 
   it("renders 'new agent' button instead of 'new chat'", () => {
     render(<Sidebar />);
-    expect(screen.getByText("새 에이전트")).toBeInTheDocument();
+    expect(screen.getByText("채용하기")).toBeInTheDocument();
     expect(screen.queryByText("새 대화")).not.toBeInTheDocument();
   });
 

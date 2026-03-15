@@ -36,7 +36,7 @@ describe("SkillBar", () => {
     });
 
     render(<SkillBar agentId="a1" />);
-    expect(screen.getByText("특기 1개 활성")).toBeInTheDocument();
+    expect(screen.getByText("스킬 1개 활성")).toBeInTheDocument();
   });
 
   it("shows chips when expanded", () => {
@@ -55,7 +55,7 @@ describe("SkillBar", () => {
     render(<SkillBar agentId="a1" />);
 
     // Click to expand
-    fireEvent.click(screen.getByText("특기 0개 활성"));
+    fireEvent.click(screen.getByText("스킬 0개 활성"));
 
     expect(screen.getByText("code-review")).toBeInTheDocument();
     expect(screen.getByText("translate")).toBeInTheDocument();
@@ -75,7 +75,7 @@ describe("SkillBar", () => {
     });
 
     render(<SkillBar agentId="a1" />);
-    fireEvent.click(screen.getByText("특기 1개 활성"));
+    fireEvent.click(screen.getByText("스킬 1개 활성"));
 
     const indicator = screen.getByText("~2100/2000 토큰");
     expect(indicator.classList.contains("skill-token-warn")).toBe(true);

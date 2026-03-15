@@ -31,7 +31,7 @@ describe("ChatWindow", () => {
     useConversationStore.setState({ currentConversationId: null });
     useAgentStore.setState({ selectedAgentId: null, agents: [] });
     render(<ChatWindow />);
-    expect(screen.getByText(/사이드바에서 에이전트를 선택/)).toBeInTheDocument();
+    expect(screen.getByText(/직원을 선택하거나 새로 채용하세요/)).toBeInTheDocument();
   });
 
   it("does not show AgentSelector component", () => {
@@ -39,7 +39,7 @@ describe("ChatWindow", () => {
     useConversationStore.setState({ currentConversationId: null });
     useAgentStore.setState({ selectedAgentId: null, agents: [] });
     render(<ChatWindow />);
-    expect(screen.queryByText("에이전트 선택")).not.toBeInTheDocument();
+    expect(screen.queryByText("직원 선택")).not.toBeInTheDocument();
   });
 
   it("renders messages when present", async () => {
@@ -86,13 +86,13 @@ describe("ChatWindow", () => {
     });
     render(<ChatWindow />);
     // ChatInput should be rendered (not hidden by showSelector)
-    expect(screen.queryByText(/사이드바에서 에이전트를 선택/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/직원을 선택하거나 새로 채용하세요/)).not.toBeInTheDocument();
   });
 
   it("shows bootstrap UI when bootstrapping", async () => {
     useBootstrapStore.setState({ isBootstrapping: true, bootstrapFolderName: "agent-123" });
     useMessageStore.setState({ messages: [] });
     await act(async () => { render(<ChatWindow />); });
-    expect(screen.getByText("새 에이전트 만들기")).toBeInTheDocument();
+    expect(screen.getByText("채용하기")).toBeInTheDocument();
   });
 });

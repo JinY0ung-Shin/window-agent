@@ -5,7 +5,6 @@ import {
   readPersonaFiles,
   writePersonaFiles,
 } from "../services/personaService";
-import { DEFAULT_AGENT_NAME } from "../constants";
 import { getLabels } from "../labels";
 import { useSettingsStore } from "./settingsStore";
 
@@ -120,7 +119,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         });
       } else {
         // Create new agent — generate folder_name from name
-        const name = (updates.name as string) || DEFAULT_AGENT_NAME;
+        const name = (updates.name as string) || getLabels(useSettingsStore.getState().uiTheme).newAgent;
         folderName = name.replace(/\s+/g, "-").toLowerCase();
 
         const created = await cmds.createAgent({

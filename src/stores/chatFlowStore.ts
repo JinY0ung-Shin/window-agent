@@ -32,12 +32,12 @@ import {
   CONVERSATION_TITLE_MAX_LENGTH,
   DEFAULT_CONVERSATION_TITLE,
   DEFAULT_SYSTEM_PROMPT,
-  DEFAULT_AGENT_NAME,
   LOADING_MESSAGE,
   NO_RESPONSE_MESSAGE,
   parseErrorMessage,
-  DEFAULT_TOOLS_MD,
+  buildDefaultToolsMd,
 } from "../constants";
+import { getLabels } from "../labels";
 
 // ── Stream event types ────────────────────────────────
 type StreamChunkEvent = { request_id: string; delta: string; reasoning_delta: string | null };
@@ -197,6 +197,7 @@ function matchSlashCommand(input: string): SlashCommand | null {
 
 async function handleSkillCommand(command: string) {
   const skillStore = useSkillStore.getState();
+  const labels = getLabels(useSettingsStore.getState().uiTheme);
   const { currentConversationId, conversations } = conv();
 
   const parts = command.split(/\s+/);
@@ -209,7 +210,7 @@ async function handleSkillCommand(command: string) {
     const available = skillStore.availableSkills;
     const active = skillStore.activeSkillNames;
     resultMessage =
-      `**사용 가능한 스킬:**\n${
+      `**${labels.slashSkillAvailable}**\n${
         available
           .map(
             (s: any) =>
@@ -230,20 +231,19 @@ async function handleSkillCommand(command: string) {
         currentConversationId ?? undefined,
       );
       resultMessage = success
-        ? `\u2705 스킬 "${skillName}" 장착 완료 (~${skillStore.activeSkillTokens}/2000 토큰)`
-        : `\u274C 스킬 "${skillName}" 장착 실패 (토큰 한도 초과 또는 존재하지 않음)`;
+        ? `\u2705 ${labels.slashSkillEquipped(skillName)} (~${skillStore.activeSkillTokens}/2000 토큰)`
+        : `\u274C ${labels.slashSkillFailed(skillName, "토큰 한도 초과 또는 존재하지 않음")}`;
     } else {
-      resultMessage = "\u274C 현재 직원을 찾을 수 없습니다";
+      resultMessage = `\u274C ${labels.noAgentForSkill}`;
     }
   } else if ((subCommand === "해제" || subCommand === "unequip") && skillName) {
     await skillStore.deactivateSkill(
       skillName,
       currentConversationId ?? undefined,
     );
-    resultMessage = `스킬 "${skillName}" 해제 완료`;
+    resultMessage = labels.slashSkillUnequipped(skillName);
   } else {
-    resultMessage =
-      "사용법: /skill [equip|unequip] [이름]\n예: /skill equip code-review";
+    resultMessage = labels.slashSkillUsage;
   }
 
   const sysMsg: ChatMessage = {
@@ -521,9 +521,10 @@ async function sendNormalMessage() {
 
       iterationCount++;
       if (iterationCount > MAX_TOOL_ITERATIONS) {
+        const flowLabels = getLabels(useSettingsStore.getState().uiTheme);
         useMessageStore.setState({
           messages: updateMessageInList(msg().messages, currentMsgId, {
-            content: replyContent || "최대 도구 호출 반복 횟수에 도달했습니다.",
+            content: replyContent || flowLabels.maxToolIterations,
             status: "failed",
           }),
         });

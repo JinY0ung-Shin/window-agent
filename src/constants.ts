@@ -15,15 +15,13 @@ export const DEFAULT_THINKING_BUDGET = 4096;
 export const DEFAULT_SYSTEM_PROMPT =
   "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner. Respond in the same language as the user's prompt (usually Korean).";
 
-// ── Agent Defaults ──────────────────────────────────
-export const DEFAULT_AGENT_NAME = "새 에이전트";
-
 // ── Summary Generation ─────────────────────────────
 export const SUMMARY_GENERATION_PROMPT =
   "대화 요약기입니다. 이전 요약과 새 메시지를 통합하여 간결한 요약을 생성하세요. 핵심 사실, 결정 사항, 사용자 선호만 포함. 200자 이내. 한국어로 작성하세요.";
 
 // ── Default TOOLS.md Template ───────────────────────
-export const DEFAULT_TOOLS_MD = `# Tools
+export function buildDefaultToolsMd(memoryNoteDesc: string): string {
+  return `# Tools
 
 ## read_file
 - description: 지정 경로의 파일 내용을 읽습니다
@@ -51,13 +49,14 @@ export const DEFAULT_TOOLS_MD = `# Tools
   - query (string, required): 검색 쿼리 또는 URL
 
 ## memory_note
-- description: 에이전트 메모리 노트를 관리합니다
+- description: ${memoryNoteDesc}
 - tier: auto
 - parameters:
   - action (string, required): create | read | update | delete
   - title (string, required): 노트 제목
   - content (string, optional): 노트 내용
 `;
+}
 
 // ── UI Messages ─────────────────────────────────────
 export const LOADING_MESSAGE = "생각 중...";

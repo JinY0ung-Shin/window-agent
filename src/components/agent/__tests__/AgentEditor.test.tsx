@@ -41,16 +41,16 @@ describe("AgentEditor", () => {
   it("renders modal when isEditorOpen=true", async () => {
     openNewEditor();
     await act(async () => { render(<AgentEditor />); });
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("새 에이전트");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("신규 채용");
   });
 
-  it("shows '새 에이전트' title for new agent (editingAgentId=null)", async () => {
+  it("shows '신규 채용' title for new agent (editingAgentId=null)", async () => {
     openNewEditor();
     await act(async () => { render(<AgentEditor />); });
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("새 에이전트");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("신규 채용");
   });
 
-  it("shows '에이전트 편집' title when editing (editingAgentId set)", async () => {
+  it("shows '인사 관리' title when editing (editingAgentId set)", async () => {
     useAgentStore.setState({
       isEditorOpen: true,
       editingAgentId: "test-id",
@@ -58,16 +58,16 @@ describe("AgentEditor", () => {
       personaFiles: EMPTY_PERSONA,
     });
     await act(async () => { render(<AgentEditor />); });
-    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("에이전트 편집");
+    expect(screen.getByRole("heading", { level: 2 })).toHaveTextContent("인사 관리");
   });
 
   it("renders 4 persona tabs", async () => {
     openNewEditor();
     await act(async () => { render(<AgentEditor />); });
-    expect(screen.getByText("IDENTITY")).toBeInTheDocument();
-    expect(screen.getByText("SOUL")).toBeInTheDocument();
-    expect(screen.getByText("USER")).toBeInTheDocument();
-    expect(screen.getByText("AGENTS")).toBeInTheDocument();
+    expect(screen.getByText("신상정보")).toBeInTheDocument();
+    expect(screen.getByText("성격/가치관")).toBeInTheDocument();
+    expect(screen.getByText("상사 정보")).toBeInTheDocument();
+    expect(screen.getByText("업무 규칙")).toBeInTheDocument();
   });
 
   it("clicking tab calls setPersonaTab", async () => {
@@ -75,7 +75,7 @@ describe("AgentEditor", () => {
     openNewEditor({ setPersonaTab: setTabSpy });
     await act(async () => { render(<AgentEditor />); });
 
-    fireEvent.click(screen.getByText("SOUL"));
+    fireEvent.click(screen.getByText("성격/가치관"));
     expect(setTabSpy).toHaveBeenCalledWith("soul");
   });
 
@@ -105,7 +105,7 @@ describe("AgentEditor", () => {
       personaFiles: EMPTY_PERSONA,
     });
     await act(async () => { render(<AgentEditor />); });
-    expect(screen.queryByText("에이전트 삭제")).not.toBeInTheDocument();
+    expect(screen.queryByText("해고하기")).not.toBeInTheDocument();
   });
 
   it("delete button visible and works for non-default agent", async () => {
@@ -119,7 +119,7 @@ describe("AgentEditor", () => {
     });
     await act(async () => { render(<AgentEditor />); });
 
-    const deleteBtn = screen.getByText("에이전트 삭제");
+    const deleteBtn = screen.getByText("해고하기");
     expect(deleteBtn).toBeInTheDocument();
     fireEvent.click(deleteBtn);
     expect(deleteSpy).toHaveBeenCalledWith("test-id");

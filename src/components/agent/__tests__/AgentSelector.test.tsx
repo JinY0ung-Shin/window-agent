@@ -19,9 +19,9 @@ beforeEach(() => {
 });
 
 describe("AgentSelector", () => {
-  it("renders header '에이전트 선택'", () => {
+  it("renders header '직원 선택'", () => {
     render(<AgentSelector />);
-    expect(screen.getByText("에이전트 선택")).toBeInTheDocument();
+    expect(screen.getByText("직원 선택")).toBeInTheDocument();
   });
 
   it("renders agent cards when agents present", async () => {
@@ -38,16 +38,16 @@ describe("AgentSelector", () => {
     expect(screen.getByText("테스트 설명")).toBeInTheDocument();
   });
 
-  it("shows MANAGER badge for default agent (is_default=true)", async () => {
+  it("shows 팀장 badge for default agent (is_default=true)", async () => {
     useAgentStore.setState({ agents: [makeAgent({ name: "매니저", is_default: true })] });
     await act(async () => { render(<AgentSelector />); });
-    expect(screen.getByText("MANAGER")).toBeInTheDocument();
+    expect(screen.getByText("팀장")).toBeInTheDocument();
   });
 
-  it("hides MANAGER badge for non-default agent", async () => {
+  it("hides 팀장 badge for non-default agent", async () => {
     useAgentStore.setState({ agents: [makeAgent({ name: "일반 에이전트", is_default: false })] });
     await act(async () => { render(<AgentSelector />); });
-    expect(screen.queryByText("MANAGER")).not.toBeInTheDocument();
+    expect(screen.queryByText("팀장")).not.toBeInTheDocument();
   });
 
   it("clicking card calls prepareForAgent with correct agent ID", async () => {
@@ -60,9 +60,9 @@ describe("AgentSelector", () => {
     expect(prepareSpy).toHaveBeenCalledWith("agent-x");
   });
 
-  it("renders '새 에이전트' card", () => {
+  it("renders '채용하기' card", () => {
     render(<AgentSelector />);
-    expect(screen.getByText("새 에이전트")).toBeInTheDocument();
+    expect(screen.getByText("채용하기")).toBeInTheDocument();
   });
 
   it("clicking new agent card calls startBootstrap", () => {
@@ -70,7 +70,7 @@ describe("AgentSelector", () => {
     useBootstrapStore.setState({ startBootstrap: bootstrapSpy });
     render(<AgentSelector />);
 
-    fireEvent.click(screen.getByText("새 에이전트"));
+    fireEvent.click(screen.getByText("채용하기"));
     expect(bootstrapSpy).toHaveBeenCalled();
   });
 });
