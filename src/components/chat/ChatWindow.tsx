@@ -32,7 +32,9 @@ export default function ChatWindow() {
   const pendingToolCalls = useToolRunStore((s) => s.pendingToolCalls);
   const activeRun = useStreamStore((s) => s.activeRun);
 
-  const wasNearBottomRef = useRef(true);
+  const shouldAutoScrollRef = useRef(true);
+  const lastScrollTopRef = useRef(0);
+  const touchStartYRef = useRef<number | null>(null);
 
   const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current;
@@ -48,14 +50,70 @@ export default function ChatWindow() {
   useEffect(() => {
     const el = messagesContainerRef.current;
     if (!el) return;
-    const onScroll = () => { wasNearBottomRef.current = isNearBottom(); };
+    lastScrollTopRef.current = el.scrollTop;
+
+    const onWheel = (event: WheelEvent) => {
+      if (event.deltaY < -2) {
+        shouldAutoScrollRef.current = false;
+      } else if (event.deltaY > 2 && isNearBottom()) {
+        shouldAutoScrollRef.current = true;
+      }
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      touchStartYRef.current = event.touches[0]?.clientY ?? null;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY;
+      if (currentY == null || touchStartYRef.current == null) return;
+      if (currentY > touchStartYRef.current + 4) {
+        shouldAutoScrollRef.current = false;
+      } else if (currentY < touchStartYRef.current - 4 && isNearBottom()) {
+        shouldAutoScrollRef.current = true;
+      }
+    };
+
+    const onScroll = () => {
+      const currentScrollTop = el.scrollTop;
+      const scrollingUp = currentScrollTop < lastScrollTopRef.current - 4;
+      const nearBottom = isNearBottom();
+
+      if (scrollingUp) {
+        shouldAutoScrollRef.current = false;
+      } else if (nearBottom) {
+        shouldAutoScrollRef.current = true;
+      }
+
+      lastScrollTopRef.current = currentScrollTop;
+    };
+
+    const onTouchEnd = () => {
+      touchStartYRef.current = null;
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
     el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("scroll", onScroll);
+    };
   }, [isNearBottom]);
+
+  useEffect(() => {
+    shouldAutoScrollRef.current = true;
+    lastScrollTopRef.current = 0;
+  }, [currentConversationId, selectedAgentId, isBootstrapping]);
 
   // Auto-scroll on any relevant state change
   useEffect(() => {
-    if (wasNearBottomRef.current) {
+    if (shouldAutoScrollRef.current) {
       scrollToBottom();
     }
   }, [messages, toolRunState, activeRun?.status, scrollToBottom]);
