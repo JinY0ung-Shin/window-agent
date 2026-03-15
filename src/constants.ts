@@ -86,5 +86,7 @@ export function parseErrorMessage(error: unknown): string {
   const prefix = msg.match(/(HTTP_\d{3}|PARSE_ERROR|EMPTY_RESPONSE):/)?.[1];
   if (prefix && ERROR_MESSAGES[prefix]) return ERROR_MESSAGES[prefix];
   if (msg.includes("HTTP error") || msg.includes("fetch")) return ERROR_MESSAGES.NETWORK;
+  // Show actual error instead of generic message for debugging
+  if (msg && msg !== "[object Object]") return msg;
   return ERROR_MESSAGE;
 }
