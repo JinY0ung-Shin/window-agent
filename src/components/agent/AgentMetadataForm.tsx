@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
 import AvatarUploader from "./AvatarUploader";
+import { useLabels } from "../../hooks/useLabels";
 
 interface Props {
   avatar: string | null;
@@ -31,6 +32,8 @@ export default function AgentMetadataForm({
   thinkingBudget, onThinkingBudgetChange,
   canDelete, onDelete,
 }: Props) {
+  const labels = useLabels();
+
   return (
     <div className="agent-editor-left">
       <AvatarUploader avatar={avatar} onChange={onAvatarChange} />
@@ -41,7 +44,7 @@ export default function AgentMetadataForm({
           type="text"
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
-          placeholder="에이전트 이름"
+          placeholder={labels.agentNamePlaceholder}
         />
       </div>
 
@@ -51,7 +54,7 @@ export default function AgentMetadataForm({
           type="text"
           value={description}
           onChange={(e) => onDescriptionChange(e.target.value)}
-          placeholder="에이전트 설명 (한 줄)"
+          placeholder={labels.agentDescPlaceholder}
         />
       </div>
 
@@ -130,7 +133,7 @@ export default function AgentMetadataForm({
           <div className="agent-editor-divider" />
           <button className="agent-delete-btn" onClick={onDelete}>
             <Trash2 size={16} />
-            에이전트 삭제
+            {labels.deleteAgent}
           </button>
         </>
       )}

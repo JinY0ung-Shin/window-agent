@@ -6,6 +6,8 @@ import {
   writePersonaFiles,
 } from "../services/personaService";
 import { DEFAULT_AGENT_NAME } from "../constants";
+import { getLabels } from "../labels";
+import { useSettingsStore } from "./settingsStore";
 
 interface AgentState {
   agents: Agent[];
@@ -142,7 +144,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to save agent:", e);
-      set({ editorError: `에이전트 저장 실패: ${errorMsg}` });
+      set({ editorError: getLabels(useSettingsStore.getState().uiTheme).agentSaveFailed(errorMsg) });
       return;
     }
 

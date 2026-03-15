@@ -4,11 +4,13 @@ import { useAgentStore } from "../../stores/agentStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
 import { readAgentFile } from "../../services/tauriCommands";
+import { useLabels } from "../../hooks/useLabels";
 
 export default function AgentSelector() {
   const agents = useAgentStore((s) => s.agents);
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const prepareForAgent = useChatFlowStore((s) => s.prepareForAgent);
+  const labels = useLabels();
   const [dormantIds, setDormantIds] = useState<Set<string>>(new Set());
 
   // Check folder existence for each agent
@@ -41,8 +43,8 @@ export default function AgentSelector() {
   return (
     <div className="agent-selector">
       <div className="agent-selector-header">
-        <h2>에이전트 선택</h2>
-        <p>대화할 에이전트를 선택하세요</p>
+        <h2>{labels.selectAgent}</h2>
+        <p>{labels.selectAgentDescription}</p>
       </div>
 
       <div className="agent-selector-list">
@@ -68,11 +70,11 @@ export default function AgentSelector() {
                   {agent.is_default && (
                     <span className="agent-badge-manager">
                       <Shield size={10} />
-                      MANAGER
+                      {labels.badgeDefault}
                     </span>
                   )}
                   {isDormant && (
-                    <span className="agent-badge-dormant">Dormant</span>
+                    <span className="agent-badge-dormant">{labels.badgeDormant}</span>
                   )}
                 </div>
                 {agent.description && (
@@ -89,8 +91,8 @@ export default function AgentSelector() {
             <Plus size={24} />
           </div>
           <div className="agent-selector-info">
-            <div className="agent-selector-name">새 에이전트</div>
-            <div className="agent-selector-desc">대화로 새 에이전트의 페르소나를 만듭니다</div>
+            <div className="agent-selector-name">{labels.newAgent}</div>
+            <div className="agent-selector-desc">{labels.newAgentDescription}</div>
           </div>
         </div>
       </div>

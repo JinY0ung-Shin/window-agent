@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { X, Plus, Bot } from "lucide-react";
 import { listModels } from "../../services/tauriCommands";
 import { useAgentEditor } from "../../hooks/useAgentEditor";
+import { useLabels } from "../../hooks/useLabels";
 import AgentMetadataForm from "./AgentMetadataForm";
 import AgentPersonaEditor, { PERSONA_TABS } from "./AgentPersonaEditor";
 import AgentSkillsPanel from "./AgentSkillsPanel";
@@ -14,6 +15,8 @@ export default function AgentEditor() {
     closeEditor, setPersonaTab, updatePersonaFile,
     saveAgent, deleteAgent, openEditor,
   } = useAgentEditor();
+
+  const labels = useLabels();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -58,7 +61,7 @@ export default function AgentEditor() {
 
   const handleSave = () => {
     saveAgent({
-      name: name || "새 에이전트",
+      name: name || labels.newAgent,
       description,
       avatar,
       model: model || null,
@@ -83,7 +86,7 @@ export default function AgentEditor() {
       <div className="agent-editor-modal">
         {/* Header */}
         <div className="modal-header">
-          <h2>{editingAgentId ? "에이전트 편집" : "새 에이전트"}</h2>
+          <h2>{editingAgentId ? labels.editorTitle : labels.editorNewTitle}</h2>
           <button className="close-button" onClick={closeEditor}>
             <X size={20} />
           </button>
@@ -110,7 +113,7 @@ export default function AgentEditor() {
             onClick={() => openEditor(null)}
           >
             <span className="agent-list-icon"><Plus size={14} /></span>
-            <span className="agent-list-name">새 에이전트</span>
+            <span className="agent-list-name">{labels.editorNewTitle}</span>
           </button>
         </div>
 
@@ -146,14 +149,19 @@ export default function AgentEditor() {
                   className={`persona-tab ${activePanel === "persona" && personaTab === tab.key ? "active" : ""}`}
                   onClick={() => { setPersonaTab(tab.key); setActivePanel("persona"); }}
                 >
-                  {tab.label}
+                  {({
+                    identity: labels.personaIdentity,
+                    soul: labels.personaSoul,
+                    user: labels.personaUser,
+                    agents: labels.personaAgents,
+                  } as Record<string, string>)[tab.key] ?? tab.label}
                 </button>
               ))}
               <button
                 className={`persona-tab ${activePanel === "tools" ? "active" : ""}`}
                 onClick={() => setActivePanel("tools")}
               >
-                TOOLS
+                {labels.personaTools}
               </button>
               <button
                 className={`persona-tab ${activePanel === "skills" ? "active" : ""}`}

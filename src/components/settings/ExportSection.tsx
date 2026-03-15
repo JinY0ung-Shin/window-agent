@@ -3,8 +3,10 @@ import { Download, Upload } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 import { exportAgent, importAgent } from "../../services/tauriCommands";
 import type { ImportResult } from "../../services/tauriCommands";
+import { useLabels } from "../../hooks/useLabels";
 
 export default function ExportSection() {
+  const labels = useLabels();
   const agents = useAgentStore((s) => s.agents);
   const loadAgents = useAgentStore((s) => s.loadAgents);
 
@@ -64,14 +66,14 @@ export default function ExportSection() {
   return (
     <>
       <div className="form-group">
-        <label>에이전트 내보내기</label>
+        <label>{labels.exportAgent}</label>
         <div className="export-row">
           <select
             value={selectedAgentId}
             onChange={(e) => setSelectedAgentId(e.target.value)}
             className="export-agent-select"
           >
-            <option value="">에이전트 선택...</option>
+            <option value="">{labels.selectAgentExport}</option>
             {agents.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -98,7 +100,7 @@ export default function ExportSection() {
       </div>
 
       <div className="form-group">
-        <label>에이전트 불러오기</label>
+        <label>{labels.importAgent}</label>
         <div className="export-row">
           <input
             ref={fileInputRef}

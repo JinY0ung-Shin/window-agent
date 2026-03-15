@@ -101,15 +101,18 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
 
     await useSettingsStore.getState().waitForEnv();
 
-    const settings = useSettingsStore.getState();
-    if (!settings.hasApiKey) {
-      settings.setIsSettingsOpen(true);
+    const trimmed = inputValue.trim();
+
+    // Dispatch slash commands BEFORE API-key check so local commands work during setup
+    const command = matchSlashCommand(trimmed);
+    if (command) {
+      await command.handler(trimmed);
       return;
     }
 
-    const trimmed = inputValue.trim();
-    if (trimmed.startsWith("/특기") || trimmed.startsWith("/skill")) {
-      await handleSkillCommand(trimmed);
+    const settings = useSettingsStore.getState();
+    if (!settings.hasApiKey) {
+      settings.setIsSettingsOpen(true);
       return;
     }
 
@@ -157,6 +160,39 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
   },
 }));
 
+// ── Slash command registry ────────────────────────────
+
+interface SlashCommand {
+  name: string;
+  aliases: string[];
+  description: string;
+  requiresApiKey: boolean;
+  requiresAgent: boolean;
+  handler: (args: string) => Promise<void>;
+}
+
+const slashCommands: SlashCommand[] = [
+  {
+    name: "/skill",
+    aliases: [],
+    description: "스킬 관리 (장착/해제/목록)",
+    requiresApiKey: false,
+    requiresAgent: false,
+    handler: handleSkillCommand,
+  },
+];
+
+function matchSlashCommand(input: string): SlashCommand | null {
+  const lower = input.toLowerCase();
+  for (const cmd of slashCommands) {
+    if (lower.startsWith(cmd.name)) return cmd;
+    for (const alias of cmd.aliases) {
+      if (lower.startsWith(alias)) return cmd;
+    }
+  }
+  return null;
+}
+
 // ── Skill slash command handler ──────────────────────
 
 async function handleSkillCommand(command: string) {
@@ -173,7 +209,7 @@ async function handleSkillCommand(command: string) {
     const available = skillStore.availableSkills;
     const active = skillStore.activeSkillNames;
     resultMessage =
-      `**사용 가능한 특기:**\n${
+      `**사용 가능한 스킬:**\n${
         available
           .map(
             (s: any) =>
@@ -181,7 +217,7 @@ async function handleSkillCommand(command: string) {
           )
           .join("\n") || "(없음)"
       }\n\n활성: ${active.length}개 | 토큰: ~${skillStore.activeSkillTokens}/2000`;
-  } else if ((subCommand === "장착" || subCommand === "on") && skillName) {
+  } else if ((subCommand === "장착" || subCommand === "equip") && skillName) {
     const convObj = conversations.find((c: any) => c.id === currentConversationId);
     const agentId = convObj?.agent_id ?? useAgentStore.getState().selectedAgentId;
     const agent = agentId
@@ -194,20 +230,20 @@ async function handleSkillCommand(command: string) {
         currentConversationId ?? undefined,
       );
       resultMessage = success
-        ? `\u2705 특기 "${skillName}" 장착 완료 (~${skillStore.activeSkillTokens}/2000 토큰)`
-        : `\u274C 특기 "${skillName}" 장착 실패 (토큰 한도 초과 또는 존재하지 않음)`;
+        ? `\u2705 스킬 "${skillName}" 장착 완료 (~${skillStore.activeSkillTokens}/2000 토큰)`
+        : `\u274C 스킬 "${skillName}" 장착 실패 (토큰 한도 초과 또는 존재하지 않음)`;
     } else {
-      resultMessage = "\u274C 현재 에이전트를 찾을 수 없습니다";
+      resultMessage = "\u274C 현재 직원을 찾을 수 없습니다";
     }
-  } else if ((subCommand === "해제" || subCommand === "off") && skillName) {
+  } else if ((subCommand === "해제" || subCommand === "unequip") && skillName) {
     await skillStore.deactivateSkill(
       skillName,
       currentConversationId ?? undefined,
     );
-    resultMessage = `특기 "${skillName}" 해제 완료`;
+    resultMessage = `스킬 "${skillName}" 해제 완료`;
   } else {
     resultMessage =
-      "사용법: /특기 [장착|해제] [이름]\n예: /특기 장착 code-review";
+      "사용법: /skill [equip|unequip] [이름]\n예: /skill equip code-review";
   }
 
   const sysMsg: ChatMessage = {

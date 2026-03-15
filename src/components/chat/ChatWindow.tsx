@@ -4,6 +4,7 @@ import { useMessageStore } from "../../stores/messageStore";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useLabels, useCompanyName } from "../../hooks/useLabels";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import AgentEditor from "../agent/AgentEditor";
@@ -18,6 +19,8 @@ export default function ChatWindow() {
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
   const openEditor = useAgentStore((s) => s.openEditor);
+  const labels = useLabels();
+  const companyName = useCompanyName();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -38,12 +41,12 @@ export default function ChatWindow() {
     : null;
 
   const currentTitle = isBootstrapping
-    ? "새 에이전트 만들기"
+    ? labels.bootstrapTitle
     : currentConversationId
       ? conversations.find((c) => c.id === currentConversationId)?.title ?? "대화"
       : selectedAgent
         ? selectedAgent.name
-        : "업무 보조 에이전트";
+        : labels.appTitle(companyName);
 
   // Show agent selector when no conversation, no agent selected, and not bootstrapping
   const showSelector =
@@ -72,7 +75,7 @@ export default function ChatWindow() {
           <button
             className="header-agent-btn"
             onClick={() => openEditor(currentAgent.id)}
-            title="에이전트 편집"
+            title={labels.editAgent}
           >
             {currentAgent.avatar ? (
               <img src={currentAgent.avatar} alt="" className="header-agent-avatar" />
@@ -95,8 +98,8 @@ export default function ChatWindow() {
         {showSelector ? (
           <div className="agent-selector">
             <div className="agent-selector-header">
-              <h2>Agent Workspace</h2>
-              <p>사이드바에서 에이전트를 선택하거나 새 에이전트를 만들어보세요</p>
+              <h2>{labels.appTitle(companyName)}</h2>
+              <p>{labels.chatSelectOrHire}</p>
             </div>
           </div>
         ) : (
@@ -129,7 +132,7 @@ export default function ChatWindow() {
                   </svg>
                 </div>
                 <div className="bubble">
-                  어떤 에이전트를 만들고 싶나요? 이름, 성격, 역할 등을 자유롭게 말해주세요.
+                  {labels.bootstrapPrompt}
                 </div>
               </div>
             )}

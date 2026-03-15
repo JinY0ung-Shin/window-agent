@@ -271,7 +271,7 @@ pub fn create_skill(
         .map_err(|e| AppError::Io(format!("Failed to create skill directory: {}", e)))?;
 
     let template = format!(
-        "---\nname: {}\ndescription: 새 특기에 대한 설명을 입력하세요.\n---\n\n# {}\n\n여기에 에이전트가 따를 지침을 작성하세요.\n",
+        "---\nname: {}\ndescription: 새 스킬에 대한 설명을 입력하세요.\n---\n\n# {}\n\n여기에 직원이 따를 업무 지침을 작성하세요.\n",
         skill_name, skill_name
     );
 
@@ -661,7 +661,7 @@ mod tests {
     fn test_create_template_is_parseable() {
         let skill_name = "test-skill";
         let template = format!(
-            "---\nname: {}\ndescription: 새 특기에 대한 설명을 입력하세요.\n---\n\n# {}\n\n여기에 에이전트가 따를 지침을 작성하세요.\n",
+            "---\nname: {}\ndescription: 새 스킬에 대한 설명을 입력하세요.\n---\n\n# {}\n\n여기에 직원이 따를 업무 지침을 작성하세요.\n",
             skill_name, skill_name
         );
 

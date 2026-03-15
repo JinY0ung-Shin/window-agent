@@ -92,6 +92,11 @@ fn all_migrations() -> &'static [Migration] {
             description: "Add active_skills column to conversations",
             sql: "",  // handled by custom migration function
         },
+        Migration {
+            version: 6,
+            description: "Rename default agent display name from 매니저 to 팀장",
+            sql: "",  // handled by custom migration function
+        },
     ]
 }
 
@@ -174,6 +179,16 @@ fn migrate_v4_to_v5(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Migration v6: rename default agent display name from 매니저 to 팀장.
+fn migrate_v5_to_v6(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "UPDATE agents SET name = '팀장',
+           description = '다른 직원을 안내하고 사용자의 질문에 답하는 팀장'
+           WHERE folder_name = '매니저' AND is_default = 1;",
+    )?;
+    Ok(())
+}
+
 /// Ensure the _migrations tracking table exists.
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
@@ -207,6 +222,8 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
                 migrate_v3_to_v4(&tx)?;
             } else if migration.version == 5 {
                 migrate_v4_to_v5(&tx)?;
+            } else if migration.version == 6 {
+                migrate_v5_to_v6(&tx)?;
             } else {
                 tx.execute_batch(migration.sql)?;
             }
@@ -257,7 +274,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
     }
 
     #[test]
@@ -266,7 +283,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
 
         let desc: String = conn
             .query_row(
@@ -372,9 +389,9 @@ mod tests {
             [],
         ).unwrap();
 
-        // Run remaining migrations (v3 + v4 + v5)
+        // Run remaining migrations (v3 + v4 + v5 + v6)
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 5);
+        assert_eq!(current_version(&conn).unwrap(), 6);
 
         // Verify existing data is preserved
         let title: String = conn
@@ -436,7 +453,7 @@ mod tests {
     fn test_v4_migration_creates_tables_and_columns() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 5);
+        assert_eq!(current_version(&conn).unwrap(), 6);
 
         // Verify new tables exist
         let tables: Vec<String> = conn
@@ -503,9 +520,9 @@ mod tests {
             [],
         ).unwrap();
 
-        // Run v4 + v5
+        // Run v4 + v5 + v6
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 5);
+        assert_eq!(current_version(&conn).unwrap(), 6);
 
         // Verify existing data preserved, new columns are NULL
         let content: String = conn
@@ -523,7 +540,7 @@ mod tests {
     fn test_v5_migration_adds_active_skills_column() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 5);
+        assert_eq!(current_version(&conn).unwrap(), 6);
 
         // Verify active_skills column exists
         conn.execute(

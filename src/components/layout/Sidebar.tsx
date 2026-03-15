@@ -5,6 +5,7 @@ import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { resetChatContext } from "../../stores/resetHelper";
+import { useLabels, useCompanyName } from "../../hooks/useLabels";
 
 export default function Sidebar() {
   const conversations = useConversationStore((s) => s.conversations);
@@ -17,6 +18,8 @@ export default function Sidebar() {
   const openEditor = useAgentStore((s) => s.openEditor);
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
+  const labels = useLabels();
+  const companyName = useCompanyName();
 
   // Build a map: agentId → most recent conversation's updated_at
   const agentLastActivity = useMemo(() => {
@@ -86,7 +89,7 @@ export default function Sidebar() {
         <div className="logo-icon">
           <Bot size={24} />
         </div>
-        <h1>Agent Workspace</h1>
+        <h1>{labels.appTitle(companyName)}</h1>
       </div>
 
       <div className="sidebar-content">
@@ -95,7 +98,7 @@ export default function Sidebar() {
           onClick={handleNewAgent}
         >
           <Plus size={20} />
-          <span>새 에이전트</span>
+          <span>{labels.sidebarNewButton}</span>
         </div>
 
         <div className="conversation-list">
@@ -127,7 +130,7 @@ export default function Sidebar() {
                     e.stopPropagation();
                     clearAgentChat(agent.id);
                   }}
-                  title="대화 초기화"
+                  title={labels.clearChat}
                 >
                   <Eraser size={14} />
                 </button>
@@ -141,7 +144,7 @@ export default function Sidebar() {
           onClick={handleOpenAgentEditor}
         >
           <Users size={20} />
-          <span>에이전트 관리</span>
+          <span>{labels.editAgent}</span>
         </div>
         <div
           className="menu-item settings-btn"

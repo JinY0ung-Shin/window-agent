@@ -3,6 +3,7 @@ import { X, Trash2, Plus, AlertTriangle, Pencil, Check } from "lucide-react";
 import { listSkills, createSkill, readSkill, updateSkill, deleteSkill } from "../../services/tauriCommands";
 import type { SkillMetadata } from "../../services/types";
 import type { Agent } from "../../services/types";
+import { useLabels } from "../../hooks/useLabels";
 
 interface Props {
   agent: Agent | null;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
+  const labels = useLabels();
   const [agentSkills, setAgentSkills] = useState<SkillMetadata[]>([]);
   const [globalSkills, setGlobalSkills] = useState<SkillMetadata[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
@@ -81,7 +83,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
 
   const handleDeleteSkill = async (skillName: string) => {
     if (!agent) return;
-    if (!confirm(`"${skillName}" 특기를 삭제하시겠습니까?`)) return;
+    if (!confirm(labels.deleteSkillConfirm)) return;
     setSkillError("");
     try {
       await deleteSkill(agent.folder_name, skillName);
@@ -126,13 +128,13 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
             <>
               <div className="skills-section">
                 <div className="skills-section-header">
-                  <span>에이전트 특기</span>
+                  <span>{labels.skills}</span>
                   {!isDefault && (
                     <button
                       className="btn-secondary skill-add-btn"
                       onClick={() => setShowNewSkill(true)}
                     >
-                      <Plus size={14} /> 새 특기 추가
+                      <Plus size={14} /> {labels.newSkill}
                     </button>
                   )}
                 </div>
@@ -143,7 +145,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                       type="text"
                       value={newSkillName}
                       onChange={(e) => setNewSkillName(e.target.value)}
-                      placeholder="특기 이름 (예: code-review)"
+                      placeholder={labels.skillNamePlaceholder}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleCreateSkill();
                         if (e.key === "Escape") setShowNewSkill(false);
@@ -156,7 +158,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                 )}
 
                 {agentSkills.length === 0 && !showNewSkill && (
-                  <div className="skills-empty">아직 특기가 없습니다</div>
+                  <div className="skills-empty">{labels.noSkills}</div>
                 )}
 
                 {agentSkills.map((skill) => (
@@ -187,7 +189,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
               {globalSkills.length > 0 && (
                 <div className="skills-section">
                   <div className="skills-section-header">
-                    <span>공유 특기 (읽기 전용)</span>
+                    <span>{labels.sharedSkills}</span>
                   </div>
                   {globalSkills.map((skill) => (
                     <div key={skill.name} className="skill-row skill-row-global">

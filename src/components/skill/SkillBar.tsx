@@ -4,12 +4,14 @@ import { useSkillStore } from "../../stores/skillStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useConversationStore } from "../../stores/conversationStore";
 import SkillChip from "./SkillChip";
+import { useLabels } from "../../hooks/useLabels";
 
 interface Props {
   agentId: string;
 }
 
 export default function SkillBar({ agentId }: Props) {
+  const labels = useLabels();
   const availableSkills = useSkillStore((s) => s.availableSkills);
   const activeSkillNames = useSkillStore((s) => s.activeSkillNames);
   const activeSkillTokens = useSkillStore((s) => s.activeSkillTokens);
@@ -57,7 +59,7 @@ export default function SkillBar({ agentId }: Props) {
       >
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span>
-          {isLoading ? "특기 로딩..." : `특기 ${activeSkillNames.length}개 활성`}
+          {isLoading ? labels.skillLoading : labels.skillCount(activeSkillNames.length)}
         </span>
       </button>
 

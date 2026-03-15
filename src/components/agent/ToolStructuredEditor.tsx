@@ -33,8 +33,10 @@ interface EditState {
 }
 
 import { useState } from "react";
+import { useLabels } from "../../hooks/useLabels";
 
 export default function ToolStructuredEditor({ tools, onToolsChange }: Props) {
+  const labels = useLabels();
   const [editState, setEditState] = useState<EditState>({
     editingIndex: null,
     showAddForm: false,
@@ -264,7 +266,7 @@ export default function ToolStructuredEditor({ tools, onToolsChange }: Props) {
 
           {tools.length === 0 && (
             <div className="tool-empty">
-              도구를 추가하면 에이전트가 외부 기능을 실행할 수 있습니다.
+              {labels.toolAgentCapability}
             </div>
           )}
 

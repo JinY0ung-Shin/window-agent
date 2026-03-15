@@ -3,9 +3,10 @@ import { Settings, X, RefreshCw } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { listModels } from "../../services/tauriCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
+import type { UITheme } from "../../labels";
 import ExportSection from "./ExportSection";
 
-type Tab = "general" | "thinking" | "backup";
+type Tab = "general" | "thinking" | "branding" | "backup";
 
 export default function SettingsModal() {
   const store = useSettingsStore();
@@ -17,6 +18,8 @@ export default function SettingsModal() {
   const [tempModelName, setTempModelName] = useState("");
   const [tempThinkingEnabled, setTempThinkingEnabled] = useState(true);
   const [tempThinkingBudget, setTempThinkingBudget] = useState(DEFAULT_THINKING_BUDGET);
+  const [tempCompanyName, setTempCompanyName] = useState("");
+  const [tempUITheme, setTempUITheme] = useState<UITheme>("org");
 
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -43,6 +46,8 @@ export default function SettingsModal() {
       setTempModelName(store.modelName);
       setTempThinkingEnabled(store.thinkingEnabled);
       setTempThinkingBudget(store.thinkingBudget);
+      setTempCompanyName(store.companyName);
+      setTempUITheme(store.uiTheme);
       setTab("general");
       fetchModels();
     }
@@ -51,6 +56,9 @@ export default function SettingsModal() {
   if (!isSettingsOpen) return null;
 
   const handleSave = () => {
+    // Save branding settings directly (they don't go through the async saveSettings)
+    store.setCompanyName(tempCompanyName.trim());
+    store.setUITheme(tempUITheme);
     saveSettings({
       apiKey: tempApiKey,
       baseUrl: tempBaseUrl,
@@ -85,6 +93,12 @@ export default function SettingsModal() {
             onClick={() => setTab("thinking")}
           >
             추론 (Thinking)
+          </button>
+          <button
+            className={`settings-tab ${tab === "branding" ? "active" : ""}`}
+            onClick={() => setTab("branding")}
+          >
+            브랜딩
           </button>
           <button
             className={`settings-tab ${tab === "backup" ? "active" : ""}`}
@@ -203,6 +217,40 @@ export default function SettingsModal() {
                 />
                 <p className="form-text">
                   모델이 추론에 사용할 수 있는 최대 토큰 수입니다. 높을수록 더 깊이 생각하지만 응답이 느려집니다.
+                </p>
+              </div>
+            </>
+          )}
+
+          {tab === "branding" && (
+            <>
+              <div className="form-group">
+                <label htmlFor="companyName">회사/워크스페이스 이름</label>
+                <input
+                  id="companyName"
+                  type="text"
+                  placeholder="예: 우리 회사"
+                  value={tempCompanyName}
+                  onChange={(e) => setTempCompanyName(e.target.value)}
+                />
+                <p className="form-text">
+                  사이드바 헤더와 환영 화면에 표시됩니다.
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label>UI 테마</label>
+                <div className="toggle-row">
+                  <span>{tempUITheme === "org" ? "조직 운영" : "클래식"}</span>
+                  <button
+                    className={`toggle-switch ${tempUITheme === "org" ? "on" : ""}`}
+                    onClick={() => setTempUITheme(tempUITheme === "org" ? "classic" : "org")}
+                  >
+                    <span className="toggle-knob" />
+                  </button>
+                </div>
+                <p className="form-text">
+                  클래식: 에이전트 중심 UI / 조직 운영: 회사·직원 메타포
                 </p>
               </div>
             </>

@@ -239,9 +239,9 @@ pub fn seed_manager_agent(
         &db,
         CreateAgentRequest {
             folder_name: "매니저".into(),
-            name: "매니저".into(),
+            name: "팀장".into(),
             avatar: None,
-            description: Some("다른 에이전트를 안내하고 사용자의 질문에 답하는 매니저".into()),
+            description: Some("다른 직원을 안내하고 사용자의 질문에 답하는 팀장".into()),
             model: None,
             temperature: None,
             thinking_enabled: None,
