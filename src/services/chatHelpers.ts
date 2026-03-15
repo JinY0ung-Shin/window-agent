@@ -76,6 +76,32 @@ export function buildChatMessages(
     selected.push(apiMessages[apiMessages.length - 1]);
   }
 
+  // Ensure tool_call pairs are complete: if the first selected message is a tool
+  // result, include all preceding tool results and their parent assistant message
+  // to avoid "No tool call found for function call output" API errors.
+  while (selected.length > 0 && selected[0].role === "tool") {
+    // Find the index of this orphaned tool message in apiMessages
+    const orphanIdx = apiMessages.indexOf(selected[0]);
+    if (orphanIdx <= 0) {
+      // Can't find parent, remove the orphan
+      selected.shift();
+      continue;
+    }
+    // Walk backwards to find the assistant message with tool_calls
+    let parentIdx = orphanIdx - 1;
+    while (parentIdx >= 0 && apiMessages[parentIdx].role === "tool") {
+      parentIdx--;
+    }
+    if (parentIdx >= 0 && apiMessages[parentIdx].tool_calls) {
+      // Insert the parent assistant + all tool results between parent and current start
+      const toInsert = apiMessages.slice(parentIdx, orphanIdx);
+      selected.unshift(...toInsert);
+    } else {
+      // No valid parent found, remove orphan tool messages
+      selected.shift();
+    }
+  }
+
   return selected;
 }
 
