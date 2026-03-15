@@ -48,6 +48,7 @@ pub struct ElementRef {
     pub role: String,
     pub name: String,
     pub tag: String,
+    #[serde(default, alias = "isPassword")]
     pub is_password: bool,
 }
 
@@ -919,5 +920,52 @@ mod tests {
         let result = manager.build_tool_result(&resp).unwrap();
         assert!(!result.artifact_id.is_empty());
         assert!(result.screenshot_path.is_none());
+    }
+
+    #[test]
+    fn test_sidecar_response_accepts_camel_case_is_password() {
+        let json = serde_json::json!({
+            "success": true,
+            "url": "https://example.com",
+            "title": "Example",
+            "snapshot": "[1] textbox \"Search\"",
+            "ref_map": {
+                "1": {
+                    "selector": "role=textbox[name=\"Search\"]",
+                    "role": "textbox",
+                    "name": "Search",
+                    "tag": "input",
+                    "isPassword": true
+                }
+            },
+            "element_count": 1
+        });
+
+        let resp: SidecarResponse = serde_json::from_value(json).unwrap();
+        let ref_map = resp.ref_map.unwrap();
+        assert!(ref_map.get("1").unwrap().is_password);
+    }
+
+    #[test]
+    fn test_sidecar_response_defaults_missing_is_password_to_false() {
+        let json = serde_json::json!({
+            "success": true,
+            "url": "https://example.com",
+            "title": "Example",
+            "snapshot": "[1] link \"Home\"",
+            "ref_map": {
+                "1": {
+                    "selector": "role=link[name=\"Home\"]",
+                    "role": "link",
+                    "name": "Home",
+                    "tag": "a"
+                }
+            },
+            "element_count": 1
+        });
+
+        let resp: SidecarResponse = serde_json::from_value(json).unwrap();
+        let ref_map = resp.ref_map.unwrap();
+        assert!(!ref_map.get("1").unwrap().is_password);
     }
 }
