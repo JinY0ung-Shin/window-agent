@@ -28,7 +28,6 @@ import {
 } from "../services/bootstrapService";
 import { getToolsForAgent, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
 import { executeToolCalls } from "../services/toolService";
-import { generateTitle } from "../services/titleService";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
   DEFAULT_CONVERSATION_TITLE,
@@ -478,12 +477,6 @@ async function sendNormalMessage() {
         useStreamStore.setState({ activeRun: null });
         useToolRunStore.getState().resetToolState();
 
-        const completedAgentMsgs = msg().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
-        if (completedAgentMsgs.length === 1) {
-          const expectedTitle = initialTitle ?? conv().conversations.find((c: any) => c.id === convId)?.title ?? null;
-          generateTitle(convId, inputValue, finalContent, expectedTitle, () => conv().loadConversations());
-        }
-
         summary().maybeGenerateSummary(
           convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
         );
@@ -807,12 +800,6 @@ async function regenerateStream(
           }),
         });
         useStreamStore.setState({ activeRun: null });
-
-        const completedAgentMsgs = msg().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
-        if (completedAgentMsgs.length === 1) {
-          const currentTitle = conv().conversations.find((c: any) => c.id === convId)?.title;
-          generateTitle(convId, lastUserContent, replyContent, currentTitle ?? null, () => conv().loadConversations());
-        }
 
         summary().maybeGenerateSummary(
           convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),

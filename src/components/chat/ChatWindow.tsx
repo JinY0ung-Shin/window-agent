@@ -7,7 +7,6 @@ import { useAgentStore } from "../../stores/agentStore";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import AgentEditor from "../agent/AgentEditor";
-import MemoryBar from "../memory/MemoryBar";
 import SkillBar from "../skill/SkillBar";
 
 export default function ChatWindow() {
@@ -106,12 +105,7 @@ export default function ChatWindow() {
               const conv = conversations.find((c) => c.id === currentConversationId);
               const agentId = conv?.agent_id ?? selectedAgentId;
               if (!agentId) return null;
-              return (
-                <>
-                  <MemoryBar agentId={agentId} />
-                  <SkillBar agentId={agentId} />
-                </>
-              );
+              return <SkillBar agentId={agentId} />;
             })()}
             {messages.length === 0 && isBootstrapping && (
               <div className="message agent">

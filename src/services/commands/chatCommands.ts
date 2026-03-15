@@ -24,10 +24,6 @@ export async function getConversationDetail(id: string): Promise<ConversationDet
   return invoke("get_conversation_detail", { id });
 }
 
-export async function updateConversationTitle(id: string, title: string, expectedCurrent?: string | null): Promise<number> {
-  return invoke("update_conversation_title", { id, title, expectedCurrent: expectedCurrent ?? null });
-}
-
 export async function updateConversationSummary(
   id: string,
   summary: string,

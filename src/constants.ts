@@ -18,10 +18,6 @@ export const DEFAULT_SYSTEM_PROMPT =
 // ── Agent Defaults ──────────────────────────────────
 export const DEFAULT_AGENT_NAME = "새 에이전트";
 
-// ── Title Generation ───────────────────────────────
-export const TITLE_GENERATION_PROMPT =
-  "다음 대화의 제목을 한국어로 10자 이내로 생성하세요. 따옴표 없이 제목만 출력하세요.";
-
 // ── Summary Generation ─────────────────────────────
 export const SUMMARY_GENERATION_PROMPT =
   "대화 요약기입니다. 이전 요약과 새 메시지를 통합하여 간결한 요약을 생성하세요. 핵심 사실, 결정 사항, 사용자 선호만 포함. 200자 이내. 한국어로 작성하세요.";
