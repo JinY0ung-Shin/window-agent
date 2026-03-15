@@ -149,7 +149,7 @@ describe("Sidebar (DM-style)", () => {
     expect(deleteButtons).toHaveLength(1);
   });
 
-  it("clear-chat calls clearAgentChat", () => {
+  it("clear-chat requires confirmation and then calls clearAgentChat", () => {
     const spy = vi.fn();
     useAgentStore.setState({
       agents: [makeAgent({ id: "a1", name: "Test Agent" })],
@@ -161,6 +161,8 @@ describe("Sidebar (DM-style)", () => {
       clearAgentChat: spy,
     });
     render(<Sidebar />);
+    fireEvent.click(screen.getByTitle("대화 초기화"));
+    expect(spy).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTitle("대화 초기화"));
     expect(spy).toHaveBeenCalledWith("a1");
   });

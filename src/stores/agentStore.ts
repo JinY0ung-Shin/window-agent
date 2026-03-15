@@ -75,23 +75,28 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     });
 
     if (agentId) {
-      try {
-        const agent = get().agents.find((a) => a.id === agentId);
-        if (agent) {
+      const agent = get().agents.find((a) => a.id === agentId);
+      if (agent) {
+        try {
           const files = await readPersonaFiles(agent.folder_name);
           set({ personaFiles: files });
-          const tc = await readToolConfig(agent.folder_name);
-          if (tc) {
-            set({ toolConfig: tc });
-          } else {
+        } catch {
+          set({ personaFiles: { ...EMPTY_PERSONA } });
+        }
+
+        const tc = await readToolConfig(agent.folder_name);
+        if (tc) {
+          set({ toolConfig: tc });
+        } else {
+          try {
             // TOOL_CONFIG.json missing — fall back to defaults
             const defaultConfig = await getDefaultToolConfig();
             set({ toolConfig: defaultConfig });
+          } catch {
+            // Keep the editor usable even if tool config defaults fail to load.
           }
-        } else {
-          set({ personaFiles: { ...EMPTY_PERSONA } });
         }
-      } catch {
+      } else {
         set({ personaFiles: { ...EMPTY_PERSONA } });
       }
     } else {

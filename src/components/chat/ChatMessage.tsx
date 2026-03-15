@@ -1,14 +1,12 @@
-import { useState, type AnchorHTMLAttributes } from "react";
-import { Bot, User, Wrench, ChevronDown, ChevronRight, Copy, Check, RefreshCw } from "lucide-react";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeHighlight from "rehype-highlight";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { useState } from "react";
+import { Bot, User, Wrench, Copy, Check, RefreshCw } from "lucide-react";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 import { useMessageStore } from "../../stores/messageStore";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
 import ToolCallBubble from "./ToolCallBubble";
+import MessageBody from "./MessageBody";
+import { classifyToolResultStatus } from "./toolCallUtils";
 
 interface Props {
   message: ChatMessageType;
@@ -16,7 +14,6 @@ interface Props {
 
 export default function ChatMessage({ message }: Props) {
   const isPending = message.status === "pending";
-  const [showReasoning, setShowReasoning] = useState(false);
   const [copied, setCopied] = useState(false);
   const copyMessage = useMessageStore((s) => s.copyMessage);
   const regenerateMessage = useChatFlowStore((s) => s.regenerateMessage);
@@ -33,7 +30,6 @@ export default function ChatMessage({ message }: Props) {
 
   // Tool result message — render as tool bubble
   if (message.type === "tool") {
-    const isError = message.content.startsWith("Error:") || message.content.startsWith("Tool denied") || message.content.startsWith("Tool call rejected");
     return (
       <div className="message agent">
         <div className="avatar tool-avatar">
@@ -42,7 +38,7 @@ export default function ChatMessage({ message }: Props) {
         <div className="bubble tool-result-bubble">
           <ToolCallBubble
             toolCall={{ id: message.tool_call_id ?? "", name: message.tool_name ?? "tool", arguments: "" }}
-            status={isError ? "error" : "executed"}
+            status={classifyToolResultStatus(message.content)}
             result={message.content}
           />
         </div>
@@ -87,41 +83,10 @@ export default function ChatMessage({ message }: Props) {
           </span>
         ) : (
           <>
-            {message.reasoningContent && (
-              <div className="reasoning-toggle" onClick={() => setShowReasoning(!showReasoning)}>
-                {showReasoning ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                <span>추론 과정</span>
-              </div>
-            )}
-            {showReasoning && message.reasoningContent && (
-              <div className="reasoning-content">{message.reasoningContent}</div>
-            )}
-            {message.content && (
-              <div className="markdown-body">
-                <Markdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeHighlight]}
-                  components={{
-                    a: ({ href, children, ...props }: AnchorHTMLAttributes<HTMLAnchorElement>) => (
-                      <a
-                        {...props}
-                        href={href}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          if (href && /^https?:\/\//i.test(href)) {
-                            openUrl(href).catch(() => {});
-                          }
-                        }}
-                      >
-                        {children}
-                      </a>
-                    ),
-                  }}
-                >
-                  {message.content}
-                </Markdown>
-              </div>
-            )}
+            <MessageBody
+              content={message.content}
+              reasoningContent={message.reasoningContent}
+            />
             {hasToolCalls && (
               <div className="tool-calls-list">
                 {message.tool_calls!.map((tc) => (

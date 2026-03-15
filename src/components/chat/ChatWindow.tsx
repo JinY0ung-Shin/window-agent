@@ -11,6 +11,8 @@ import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import AgentEditor from "../agent/AgentEditor";
 import SkillBar from "../skill/SkillBar";
+import ToolRunBlock from "./ToolRunBlock";
+import { buildChatRenderBlocks } from "./chatRenderBlocks";
 
 export default function ChatWindow() {
   const messages = useMessageStore((s) => s.messages);
@@ -27,6 +29,7 @@ export default function ChatWindow() {
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const toolRunState = useToolRunStore((s) => s.toolRunState);
+  const pendingToolCalls = useToolRunStore((s) => s.pendingToolCalls);
   const activeRun = useStreamStore((s) => s.activeRun);
 
   const wasNearBottomRef = useRef(true);
@@ -87,6 +90,7 @@ export default function ChatWindow() {
   const currentAgent = currentAgentId
     ? agents.find((a) => a.id === currentAgentId) ?? null
     : null;
+  const renderBlocks = buildChatRenderBlocks(messages, toolRunState, pendingToolCalls);
 
   return (
     <main className="main-area">
@@ -157,9 +161,21 @@ export default function ChatWindow() {
                 </div>
               </div>
             )}
-            {messages.map((msg) => (
-              <ChatMessage key={msg.id} message={msg} />
-            ))}
+            {renderBlocks.map((block) => {
+              if (block.type === "tool_run") {
+                return (
+                  <ToolRunBlock
+                    key={block.key}
+                    assistantMessage={block.assistantMessage}
+                    leadingContent={block.leadingContent}
+                    steps={block.steps}
+                    isActiveRun={block.isActiveRun}
+                  />
+                );
+              }
+
+              return <ChatMessage key={block.key} message={block.message} />;
+            })}
             <div ref={messagesEndRef} />
           </>
         )}

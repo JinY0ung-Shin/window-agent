@@ -1,9 +1,13 @@
 import { useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { Wrench, Check, X, Loader, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import type { ToolCall } from "../../services/types";
-
-type ToolCallStatus = "pending" | "approved" | "running" | "executed" | "denied" | "error";
+import ToolResultDetail from "./ToolResultDetail";
+import {
+  formatArgsSummary,
+  getToolStatusLabel,
+  getWriteFilePreview,
+  type ToolCallStatus,
+} from "./toolCallUtils";
 
 interface ToolCallBubbleProps {
   toolCall: ToolCall;
@@ -13,63 +17,9 @@ interface ToolCallBubbleProps {
   onReject?: () => void;
 }
 
-function formatArgsSummary(args: string): string {
-  try {
-    const parsed = JSON.parse(args);
-    return Object.entries(parsed)
-      .map(([k, v]) => {
-        const val = typeof v === "string" ? (v.length > 60 ? v.slice(0, 60) + "..." : v) : JSON.stringify(v);
-        return `${k}: ${val}`;
-      })
-      .join(", ");
-  } catch {
-    return args.length > 80 ? args.slice(0, 80) + "..." : args;
-  }
-}
-
-function isBrowserTool(toolName: string): boolean {
-  return toolName.startsWith("browser_");
-}
-
-function parseBrowserResult(output: string): {
-  url?: string;
-  title?: string;
-  snapshot?: string;
-  elementCount?: number;
-  artifact_id?: string;
-  screenshot_path?: string;
-} | null {
-  try {
-    const parsed = JSON.parse(output);
-    if (parsed.success !== undefined) {
-      return {
-        url: parsed.url,
-        title: parsed.title,
-        snapshot: parsed.snapshot,
-        elementCount: parsed.element_count,
-        artifact_id: parsed.artifact_id,
-        screenshot_path: parsed.screenshot_path,
-      };
-    }
-  } catch {
-    // Not JSON, return null
-  }
-  return null;
-}
-
-function getWriteFilePreview(args: string): string | null {
-  try {
-    const parsed = JSON.parse(args);
-    if (typeof parsed.content === "string") {
-      const lines = parsed.content.split("\n");
-      return lines.slice(0, 20).join("\n") + (lines.length > 20 ? "\n..." : "");
-    }
-  } catch { /* ignore */ }
-  return null;
-}
-
 export default function ToolCallBubble({ toolCall, status, result, onApprove, onReject }: ToolCallBubbleProps) {
   const [expanded, setExpanded] = useState(false);
+  const canExpand = !!result && (status === "executed" || status === "error" || status === "denied");
 
   const statusIcon = () => {
     switch (status) {
@@ -84,17 +34,8 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
         return <X size={14} />;
       case "error":
         return <AlertCircle size={14} />;
-    }
-  };
-
-  const statusLabel = () => {
-    switch (status) {
-      case "pending": return "승인 대기";
-      case "approved": return "승인됨";
-      case "running": return "실행 중...";
-      case "executed": return "완료";
-      case "denied": return "거부됨";
-      case "error": return "오류";
+      case "incomplete":
+        return <Wrench size={14} />;
     }
   };
 
@@ -102,11 +43,11 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
 
   return (
     <div className={`tool-call-bubble tool-status-${status}`}>
-      <div className="tool-call-header" onClick={() => (status === "executed" || status === "error") && setExpanded(!expanded)}>
+      <div className="tool-call-header" onClick={() => canExpand && setExpanded(!expanded)}>
         <span className="tool-call-icon">{statusIcon()}</span>
         <span className="tool-call-name">{toolCall.name}</span>
-        <span className={`tool-call-status-badge tool-badge-${status}`}>{statusLabel()}</span>
-        {(status === "executed" || status === "error") && result && (
+        <span className={`tool-call-status-badge tool-badge-${status === "incomplete" ? "approved" : status}`}>{getToolStatusLabel(status)}</span>
+        {canExpand && (
           <span className="tool-call-expand">
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </span>
@@ -130,96 +71,13 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
         </div>
       )}
 
-      {expanded && result && (() => {
-        if (isBrowserTool(toolCall.name)) {
-          const browserResult = parseBrowserResult(result);
-          if (browserResult) {
-            return (
-              <div className="browser-result">
-                {browserResult.url && (
-                  <div className="browser-url-bar" style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '6px 12px',
-                    backgroundColor: 'var(--bg-secondary, #f5f5f5)',
-                    borderRadius: '6px',
-                    marginBottom: '8px',
-                    fontSize: '12px',
-                    fontFamily: 'monospace',
-                  }}>
-                    <span style={{ opacity: 0.5 }}>[URL]</span>
-                    <span style={{ opacity: 0.7 }}>{browserResult.url}</span>
-                    {browserResult.title && (
-                      <span style={{ marginLeft: 'auto', opacity: 0.5 }}>
-                        {browserResult.title}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {browserResult.screenshot_path && (
-                  <div style={{
-                    marginBottom: '8px',
-                    cursor: 'pointer',
-                    borderRadius: '4px',
-                    overflow: 'hidden',
-                    border: '1px solid var(--border-color, #e0e0e0)',
-                  }}>
-                    <img
-                      src={convertFileSrc(browserResult.screenshot_path)}
-                      alt="Browser screenshot"
-                      style={{
-                        width: '100%',
-                        maxHeight: '200px',
-                        objectFit: 'contain',
-                        display: 'block',
-                      }}
-                      onClick={(e) => {
-                        const img = e.currentTarget;
-                        if (img.style.maxHeight === '200px') {
-                          img.style.maxHeight = 'none';
-                        } else {
-                          img.style.maxHeight = '200px';
-                        }
-                      }}
-                    />
-                  </div>
-                )}
-                {browserResult.snapshot && (
-                  <details open={!browserResult.screenshot_path}>
-                    <summary style={{
-                      fontSize: '11px',
-                      cursor: 'pointer',
-                      opacity: 0.7,
-                      marginBottom: '4px',
-                    }}>
-                      Accessibility Snapshot ({browserResult.elementCount} elements)
-                    </summary>
-                    <pre style={{
-                      fontSize: '11px',
-                      lineHeight: '1.4',
-                      padding: '8px',
-                      backgroundColor: 'var(--bg-tertiary, #f0f0f0)',
-                      borderRadius: '4px',
-                      maxHeight: '300px',
-                      overflow: 'auto',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                    }}>
-                      {browserResult.snapshot}
-                    </pre>
-                  </details>
-                )}
-              </div>
-            );
-          }
-        }
-        return (
-          <pre className={`tool-call-result ${status === "error" ? "tool-result-error" : ""}`}>
-            {result}
-          </pre>
-        );
-      })()}
+      {expanded && result && (
+        <ToolResultDetail
+          toolName={toolCall.name}
+          result={result}
+          isError={status === "error"}
+        />
+      )}
     </div>
   );
 }
