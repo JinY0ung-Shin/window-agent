@@ -191,10 +191,16 @@ impl BrowserManager {
             .await
             .map_err(|e| format!("sidecar request failed: {}", e))?;
 
-        let sidecar_resp: SidecarResponse = resp
-            .json()
+        let resp_text = resp
+            .text()
             .await
-            .map_err(|e| format!("invalid sidecar response: {}", e))?;
+            .map_err(|e| format!("failed to read sidecar response: {}", e))?;
+
+        let sidecar_resp: SidecarResponse = serde_json::from_str(&resp_text)
+            .map_err(|e| {
+                let preview: String = resp_text.chars().take(500).collect();
+                format!("invalid sidecar response: {} — preview: {}", e, preview)
+            })?;
 
         if !sidecar_resp.success {
             return Err(sidecar_resp

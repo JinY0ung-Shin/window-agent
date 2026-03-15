@@ -78,7 +78,17 @@ fn tool_list_directory(path: &str, allowed: &[PathBuf]) -> Result<serde_json::Va
     Ok(serde_json::json!({ "entries": entries }))
 }
 
-async fn tool_web_search(url: &str) -> Result<serde_json::Value, String> {
+async fn tool_web_search(input: &str) -> Result<serde_json::Value, String> {
+    // If input doesn't look like a URL, treat it as a search query
+    let url = if input.starts_with("http://") || input.starts_with("https://") {
+        input.to_string()
+    } else {
+        format!(
+            "https://html.duckduckgo.com/html/?q={}",
+            urlencoding::encode(input)
+        )
+    };
+
     let client = reqwest::Client::builder()
         .timeout(TOOL_TIMEOUT)
         .build()
@@ -87,7 +97,7 @@ async fn tool_web_search(url: &str) -> Result<serde_json::Value, String> {
     const MAX_BODY_BYTES: usize = 50_000;
 
     let resp = client
-        .get(url)
+        .get(&url)
         .header("User-Agent", "WindowAgent/1.0")
         .send()
         .await
