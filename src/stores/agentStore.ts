@@ -81,7 +81,13 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           const files = await readPersonaFiles(agent.folder_name);
           set({ personaFiles: files });
           const tc = await readToolConfig(agent.folder_name);
-          set({ toolConfig: tc });
+          if (tc) {
+            set({ toolConfig: tc });
+          } else {
+            // TOOL_CONFIG.json missing — fall back to defaults
+            const defaultConfig = await getDefaultToolConfig();
+            set({ toolConfig: defaultConfig });
+          }
         } else {
           set({ personaFiles: { ...EMPTY_PERSONA } });
         }
