@@ -5,7 +5,7 @@ import {
   DEFAULT_THINKING_BUDGET,
 } from "../constants";
 import { getEnvConfig, hasApiKey as checkApiKey, setApiConfig } from "../services/tauriCommands";
-import type { UITheme } from "../labels";
+import { getLabels, type UITheme } from "../labels";
 
 // ── localStorage key constants (non-secret settings only) ──
 const LS_BASE_URL = "openai_base_url";
@@ -133,7 +133,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to set API config:", e);
-      set({ settingsError: `설정 저장 실패: ${errorMsg}` });
+      set({ settingsError: getLabels(get().uiTheme).settingsSaveFailed(errorMsg) });
       return;
     }
 

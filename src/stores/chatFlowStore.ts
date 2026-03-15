@@ -99,17 +99,16 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
     const { isBootstrapping } = boot();
     if (!inputValue.trim()) return;
 
-    await useSettingsStore.getState().waitForEnv();
-
     const trimmed = inputValue.trim();
 
-    // Dispatch slash commands BEFORE API-key check so local commands work during setup
+    // Dispatch slash commands BEFORE env hydration so local commands work immediately
     const command = matchSlashCommand(trimmed);
     if (command) {
       await command.handler(trimmed);
       return;
     }
 
+    await useSettingsStore.getState().waitForEnv();
     const settings = useSettingsStore.getState();
     if (!settings.hasApiKey) {
       settings.setIsSettingsOpen(true);

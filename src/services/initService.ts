@@ -50,4 +50,15 @@ export async function initializeApp(): Promise<void> {
   } catch (e) {
     console.warn("loadConversations:", e);
   }
+
+  // Step 7: Auto-initialize branding for upgraded users.
+  // If agents exist but branding was never initialized, this is an existing install
+  // upgrading to the new version — skip onboarding and use defaults.
+  const settings = useSettingsStore.getState();
+  if (!settings.brandingInitialized) {
+    const agents = useAgentStore.getState().agents;
+    if (agents.length > 0) {
+      settings.initializeBranding(settings.companyName || "", settings.uiTheme || "org");
+    }
+  }
 }
