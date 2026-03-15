@@ -26,6 +26,7 @@ dist-ssr
 # Environment
 .env
 .env.*
+!.env.example
 
 # AutoFlow plan artifacts
 .ccb/
