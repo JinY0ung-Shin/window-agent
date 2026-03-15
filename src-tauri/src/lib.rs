@@ -1,6 +1,10 @@
 mod api;
 mod commands;
 mod db;
+mod error;
+mod models;
+mod services;
+mod utils;
 
 use api::{ApiState, RunRegistry};
 use db::Database;

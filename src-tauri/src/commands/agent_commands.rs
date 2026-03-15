@@ -1,19 +1,12 @@
 use crate::db::agent_operations;
 use crate::db::models::{Agent, CreateAgentRequest, UpdateAgentRequest};
 use crate::db::Database;
+use crate::utils::path_security::{validate_agent_filename, validate_no_traversal};
 use tauri::{AppHandle, Manager, State};
 
 /// Validate a folder name to prevent path traversal and invalid directory names.
 fn validate_folder_name(name: &str) -> Result<(), String> {
-    if name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains("..")
-        || name.starts_with('.')
-    {
-        return Err(format!("Invalid folder name: {name}"));
-    }
-    Ok(())
+    validate_no_traversal(name, "folder name")
 }
 
 #[tauri::command]
@@ -75,19 +68,10 @@ pub fn delete_agent(app: AppHandle, db: State<'_, Database>, id: String) -> Resu
     Ok(())
 }
 
-/// Allowed persona file names (whitelist).
-const ALLOWED_FILE_NAMES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md"];
-
 /// Validate agent file inputs (file name whitelist + folder name path traversal check).
-/// Extracted as a pure function for testability.
+/// Delegates to path_security::validate_agent_filename.
 fn validate_agent_file_inputs(folder_name: &str, file_name: &str) -> Result<(), String> {
-    if !ALLOWED_FILE_NAMES.contains(&file_name) {
-        return Err(format!("Invalid file name: {file_name}"));
-    }
-    if folder_name.contains('/') || folder_name.contains('\\') || folder_name.contains("..") {
-        return Err(format!("Invalid folder name: {folder_name}"));
-    }
-    Ok(())
+    validate_agent_filename(folder_name, file_name)
 }
 
 /// Validate and resolve an agent file path, preventing path traversal.

@@ -2,6 +2,7 @@ use crate::db::agent_operations;
 use crate::db::models::*;
 use crate::db::operations::*;
 use crate::db::Database;
+use crate::utils::path_security::validate_zip_entry;
 use serde::{Deserialize, Serialize};
 use std::io::{Cursor, Read as _, Write as _};
 use tauri::{AppHandle, Manager, State};
@@ -432,7 +433,7 @@ pub fn import_agent(
         let relative = zip_path.strip_prefix("skills/").unwrap_or(zip_path);
 
         // Security: reject path traversal attempts (absolute paths, ".." components)
-        if relative.contains("..") || relative.starts_with('/') || relative.starts_with('\\') {
+        if let Err(_) = validate_zip_entry(relative) {
             let _ = std::fs::remove_dir_all(&agents_dir);
             tx.rollback().map_err(|re| format!("Rollback failed: {re}"))?;
             return Err(format!("Invalid skill path in ZIP: {}", zip_path));

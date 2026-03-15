@@ -20,122 +20,127 @@ pub fn create_conversation_impl(
     title: Option<String>,
     agent_id: String,
 ) -> Result<ConversationListItem, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let now = Utc::now().to_rfc3339();
-    let conv = ConversationListItem {
-        id: Uuid::new_v4().to_string(),
-        title: title.unwrap_or_else(|| "새 대화".to_string()),
-        agent_id: agent_id.clone(),
-        created_at: now.clone(),
-        updated_at: now,
-    };
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
+        let conv = ConversationListItem {
+            id: Uuid::new_v4().to_string(),
+            title: title.unwrap_or_else(|| "새 대화".to_string()),
+            agent_id: agent_id.clone(),
+            created_at: now.clone(),
+            updated_at: now,
+        };
 
-    conn.execute(
-        "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-        rusqlite::params![conv.id, conv.title, conv.agent_id, conv.created_at, conv.updated_at],
-    )?;
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            rusqlite::params![conv.id, conv.title, conv.agent_id, conv.created_at, conv.updated_at],
+        )?;
 
-    Ok(conv)
+        Ok(conv)
+    })
 }
 
 pub fn get_conversations_impl(db: &Database) -> Result<Vec<ConversationListItem>, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let mut stmt = conn
-        .prepare("SELECT id, title, agent_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
+    db.with_conn(|conn| {
+        let mut stmt = conn
+            .prepare("SELECT id, title, agent_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
 
-    let rows = stmt.query_map([], |row| {
-        Ok(ConversationListItem {
-            id: row.get(0)?,
-            title: row.get(1)?,
-            agent_id: row.get(2)?,
-            created_at: row.get(3)?,
-            updated_at: row.get(4)?,
-        })
-    })?;
+        let rows = stmt.query_map([], |row| {
+            Ok(ConversationListItem {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                agent_id: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+            })
+        })?;
 
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    })
 }
 
 pub fn get_conversation_detail_impl(
     db: &Database,
     id: String,
 ) -> Result<ConversationDetail, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let detail = conn.query_row(
-        "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, created_at, updated_at FROM conversations WHERE id = ?1",
-        rusqlite::params![id],
-        |row| {
-            let active_skills_raw: Option<String> = row.get(5)?;
-            let active_skills: Option<Vec<String>> = active_skills_raw
-                .and_then(|s| serde_json::from_str(&s).ok());
-            Ok(ConversationDetail {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                agent_id: row.get(2)?,
-                summary: row.get(3)?,
-                summary_up_to_message_id: row.get(4)?,
-                active_skills,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-            })
-        },
-    )?;
-    Ok(detail)
+    db.with_conn(|conn| {
+        let detail = conn.query_row(
+            "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, created_at, updated_at FROM conversations WHERE id = ?1",
+            rusqlite::params![id],
+            |row| {
+                let active_skills_raw: Option<String> = row.get(5)?;
+                let active_skills: Option<Vec<String>> = active_skills_raw
+                    .and_then(|s| serde_json::from_str(&s).ok());
+                Ok(ConversationDetail {
+                    id: row.get(0)?,
+                    title: row.get(1)?,
+                    agent_id: row.get(2)?,
+                    summary: row.get(3)?,
+                    summary_up_to_message_id: row.get(4)?,
+                    active_skills,
+                    created_at: row.get(6)?,
+                    updated_at: row.get(7)?,
+                })
+            },
+        )?;
+        Ok(detail)
+    })
 }
 
 pub fn get_messages_impl(
     db: &Database,
     conversation_id: String,
 ) -> Result<Vec<Message>, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let mut stmt = conn.prepare(
-        "SELECT id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
-    )?;
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
+        )?;
 
-    let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
-        Ok(Message {
-            id: row.get(0)?,
-            conversation_id: row.get(1)?,
-            role: row.get(2)?,
-            content: row.get(3)?,
-            tool_call_id: row.get(4)?,
-            tool_name: row.get(5)?,
-            tool_input: row.get(6)?,
-            created_at: row.get(7)?,
-        })
-    })?;
+        let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
+            Ok(Message {
+                id: row.get(0)?,
+                conversation_id: row.get(1)?,
+                role: row.get(2)?,
+                content: row.get(3)?,
+                tool_call_id: row.get(4)?,
+                tool_name: row.get(5)?,
+                tool_input: row.get(6)?,
+                created_at: row.get(7)?,
+            })
+        })?;
 
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    })
 }
 
 pub fn save_message_impl(
     db: &Database,
     request: SaveMessageRequest,
 ) -> Result<Message, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let now = Utc::now().to_rfc3339();
-    let msg = Message {
-        id: Uuid::new_v4().to_string(),
-        conversation_id: request.conversation_id.clone(),
-        role: request.role,
-        content: request.content,
-        tool_call_id: request.tool_call_id,
-        tool_name: request.tool_name,
-        tool_input: request.tool_input,
-        created_at: now.clone(),
-    };
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
+        let msg = Message {
+            id: Uuid::new_v4().to_string(),
+            conversation_id: request.conversation_id.clone(),
+            role: request.role,
+            content: request.content,
+            tool_call_id: request.tool_call_id,
+            tool_name: request.tool_name,
+            tool_input: request.tool_input,
+            created_at: now.clone(),
+        };
 
-    conn.execute(
-        "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-        rusqlite::params![msg.id, msg.conversation_id, msg.role, msg.content, msg.tool_call_id, msg.tool_name, msg.tool_input, msg.created_at],
-    )?;
+        conn.execute(
+            "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            rusqlite::params![msg.id, msg.conversation_id, msg.role, msg.content, msg.tool_call_id, msg.tool_name, msg.tool_input, msg.created_at],
+        )?;
 
-    conn.execute(
-        "UPDATE conversations SET updated_at = ?1 WHERE id = ?2",
-        rusqlite::params![now, request.conversation_id],
-    )?;
+        conn.execute(
+            "UPDATE conversations SET updated_at = ?1 WHERE id = ?2",
+            rusqlite::params![now, request.conversation_id],
+        )?;
 
-    Ok(msg)
+        Ok(msg)
+    })
 }
 
 pub fn delete_messages_from_impl(
@@ -143,27 +148,29 @@ pub fn delete_messages_from_impl(
     conversation_id: String,
     message_id: String,
 ) -> Result<(), DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    conn.execute(
-        "DELETE FROM messages WHERE conversation_id = ?1 AND (
-            created_at > (SELECT created_at FROM messages WHERE id = ?2)
-            OR (created_at = (SELECT created_at FROM messages WHERE id = ?2) AND id >= ?2)
-        )",
-        rusqlite::params![conversation_id, message_id],
-    )?;
-    Ok(())
+    db.with_conn(|conn| {
+        conn.execute(
+            "DELETE FROM messages WHERE conversation_id = ?1 AND (
+                created_at > (SELECT created_at FROM messages WHERE id = ?2)
+                OR (created_at = (SELECT created_at FROM messages WHERE id = ?2) AND id >= ?2)
+            )",
+            rusqlite::params![conversation_id, message_id],
+        )?;
+        Ok(())
+    })
 }
 
 pub fn delete_conversation_impl(
     db: &Database,
     conversation_id: String,
 ) -> Result<(), DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    conn.execute(
-        "DELETE FROM conversations WHERE id = ?1",
-        rusqlite::params![conversation_id],
-    )?;
-    Ok(())
+    db.with_conn(|conn| {
+        conn.execute(
+            "DELETE FROM conversations WHERE id = ?1",
+            rusqlite::params![conversation_id],
+        )?;
+        Ok(())
+    })
 }
 
 pub fn update_conversation_title_impl(
@@ -176,20 +183,21 @@ pub fn update_conversation_title_impl(
     let clamped: String = trimmed.chars().take(50).collect();
     let final_title = if clamped.is_empty() { "새 대화".to_string() } else { clamped };
 
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let affected = if let Some(expected) = expected_current {
-        // Only update if title still matches expected (guard against overwrite)
-        conn.execute(
-            "UPDATE conversations SET title = ?1 WHERE id = ?2 AND title = ?3",
-            rusqlite::params![final_title, id, expected],
-        )?
-    } else {
-        conn.execute(
-            "UPDATE conversations SET title = ?1 WHERE id = ?2",
-            rusqlite::params![final_title, id],
-        )?
-    };
-    Ok(affected as i32)
+    db.with_conn(|conn| {
+        let affected = if let Some(expected) = expected_current {
+            // Only update if title still matches expected (guard against overwrite)
+            conn.execute(
+                "UPDATE conversations SET title = ?1 WHERE id = ?2 AND title = ?3",
+                rusqlite::params![final_title, id, expected],
+            )?
+        } else {
+            conn.execute(
+                "UPDATE conversations SET title = ?1 WHERE id = ?2",
+                rusqlite::params![final_title, id],
+            )?
+        };
+        Ok(affected as i32)
+    })
 }
 
 pub fn update_conversation_summary_impl(
@@ -199,12 +207,13 @@ pub fn update_conversation_summary_impl(
     up_to_message_id: Option<String>,
     expected_previous: Option<String>,
 ) -> Result<i32, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let affected = conn.execute(
-        "UPDATE conversations SET summary = ?1, summary_up_to_message_id = ?2 WHERE id = ?3 AND ((?4 IS NULL AND summary_up_to_message_id IS NULL) OR summary_up_to_message_id = ?4)",
-        rusqlite::params![summary, up_to_message_id, id, expected_previous],
-    )?;
-    Ok(affected as i32)
+    db.with_conn(|conn| {
+        let affected = conn.execute(
+            "UPDATE conversations SET summary = ?1, summary_up_to_message_id = ?2 WHERE id = ?3 AND ((?4 IS NULL AND summary_up_to_message_id IS NULL) OR summary_up_to_message_id = ?4)",
+            rusqlite::params![summary, up_to_message_id, id, expected_previous],
+        )?;
+        Ok(affected as i32)
+    })
 }
 
 pub fn delete_messages_and_maybe_reset_summary_impl(
@@ -267,12 +276,13 @@ pub fn update_conversation_skills_impl(
     id: String,
     skills_json: Option<String>,
 ) -> Result<(), DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    conn.execute(
-        "UPDATE conversations SET active_skills = ?1 WHERE id = ?2",
-        rusqlite::params![skills_json, id],
-    )?;
-    Ok(())
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE conversations SET active_skills = ?1 WHERE id = ?2",
+            rusqlite::params![skills_json, id],
+        )?;
+        Ok(())
+    })
 }
 
 // ── Memory Notes CRUD ──
@@ -283,62 +293,36 @@ pub fn create_memory_note_impl(
     title: String,
     content: String,
 ) -> Result<MemoryNote, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let now = Utc::now().to_rfc3339();
-    let note = MemoryNote {
-        id: Uuid::new_v4().to_string(),
-        agent_id,
-        title,
-        content,
-        created_at: now.clone(),
-        updated_at: now,
-    };
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
+        let note = MemoryNote {
+            id: Uuid::new_v4().to_string(),
+            agent_id,
+            title,
+            content,
+            created_at: now.clone(),
+            updated_at: now,
+        };
 
-    conn.execute(
-        "INSERT INTO memory_notes (id, agent_id, title, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        rusqlite::params![note.id, note.agent_id, note.title, note.content, note.created_at, note.updated_at],
-    )?;
+        conn.execute(
+            "INSERT INTO memory_notes (id, agent_id, title, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![note.id, note.agent_id, note.title, note.content, note.created_at, note.updated_at],
+        )?;
 
-    Ok(note)
+        Ok(note)
+    })
 }
 
 pub fn list_memory_notes_impl(
     db: &Database,
     agent_id: String,
 ) -> Result<Vec<MemoryNote>, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let mut stmt = conn.prepare(
-        "SELECT id, agent_id, title, content, created_at, updated_at FROM memory_notes WHERE agent_id = ?1 ORDER BY updated_at DESC",
-    )?;
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, agent_id, title, content, created_at, updated_at FROM memory_notes WHERE agent_id = ?1 ORDER BY updated_at DESC",
+        )?;
 
-    let rows = stmt.query_map(rusqlite::params![agent_id], |row| {
-        Ok(MemoryNote {
-            id: row.get(0)?,
-            agent_id: row.get(1)?,
-            title: row.get(2)?,
-            content: row.get(3)?,
-            created_at: row.get(4)?,
-            updated_at: row.get(5)?,
-        })
-    })?;
-
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
-}
-
-pub fn update_memory_note_impl(
-    db: &Database,
-    id: String,
-    title: Option<String>,
-    content: Option<String>,
-) -> Result<MemoryNote, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let now = Utc::now().to_rfc3339();
-
-    // Fetch existing note
-    let existing = conn.query_row(
-        "SELECT id, agent_id, title, content, created_at, updated_at FROM memory_notes WHERE id = ?1",
-        rusqlite::params![id],
-        |row| {
+        let rows = stmt.query_map(rusqlite::params![agent_id], |row| {
             Ok(MemoryNote {
                 id: row.get(0)?,
                 agent_id: row.get(1)?,
@@ -347,24 +331,53 @@ pub fn update_memory_note_impl(
                 created_at: row.get(4)?,
                 updated_at: row.get(5)?,
             })
-        },
-    )?;
+        })?;
 
-    let new_title = title.unwrap_or(existing.title);
-    let new_content = content.unwrap_or(existing.content);
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    })
+}
 
-    conn.execute(
-        "UPDATE memory_notes SET title = ?1, content = ?2, updated_at = ?3 WHERE id = ?4",
-        rusqlite::params![new_title, new_content, now, id],
-    )?;
+pub fn update_memory_note_impl(
+    db: &Database,
+    id: String,
+    title: Option<String>,
+    content: Option<String>,
+) -> Result<MemoryNote, DbError> {
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
 
-    Ok(MemoryNote {
-        id: existing.id,
-        agent_id: existing.agent_id,
-        title: new_title,
-        content: new_content,
-        created_at: existing.created_at,
-        updated_at: now,
+        // Fetch existing note
+        let existing = conn.query_row(
+            "SELECT id, agent_id, title, content, created_at, updated_at FROM memory_notes WHERE id = ?1",
+            rusqlite::params![id],
+            |row| {
+                Ok(MemoryNote {
+                    id: row.get(0)?,
+                    agent_id: row.get(1)?,
+                    title: row.get(2)?,
+                    content: row.get(3)?,
+                    created_at: row.get(4)?,
+                    updated_at: row.get(5)?,
+                })
+            },
+        )?;
+
+        let new_title = title.unwrap_or(existing.title);
+        let new_content = content.unwrap_or(existing.content);
+
+        conn.execute(
+            "UPDATE memory_notes SET title = ?1, content = ?2, updated_at = ?3 WHERE id = ?4",
+            rusqlite::params![new_title, new_content, now, id],
+        )?;
+
+        Ok(MemoryNote {
+            id: existing.id,
+            agent_id: existing.agent_id,
+            title: new_title,
+            content: new_content,
+            created_at: existing.created_at,
+            updated_at: now,
+        })
     })
 }
 
@@ -372,12 +385,13 @@ pub fn delete_memory_note_impl(
     db: &Database,
     id: String,
 ) -> Result<(), DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    conn.execute(
-        "DELETE FROM memory_notes WHERE id = ?1",
-        rusqlite::params![id],
-    )?;
-    Ok(())
+    db.with_conn(|conn| {
+        conn.execute(
+            "DELETE FROM memory_notes WHERE id = ?1",
+            rusqlite::params![id],
+        )?;
+        Ok(())
+    })
 }
 
 // ── Tool Call Logs CRUD ──
@@ -389,52 +403,54 @@ pub fn create_tool_call_log_impl(
     tool_name: String,
     tool_input: String,
 ) -> Result<ToolCallLog, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let now = Utc::now().to_rfc3339();
-    let log = ToolCallLog {
-        id: Uuid::new_v4().to_string(),
-        conversation_id,
-        message_id,
-        tool_name,
-        tool_input,
-        tool_output: None,
-        status: "pending".to_string(),
-        duration_ms: None,
-        created_at: now,
-    };
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
+        let log = ToolCallLog {
+            id: Uuid::new_v4().to_string(),
+            conversation_id,
+            message_id,
+            tool_name,
+            tool_input,
+            tool_output: None,
+            status: "pending".to_string(),
+            duration_ms: None,
+            created_at: now,
+        };
 
-    conn.execute(
-        "INSERT INTO tool_call_logs (id, conversation_id, message_id, tool_name, tool_input, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        rusqlite::params![log.id, log.conversation_id, log.message_id, log.tool_name, log.tool_input, log.status, log.created_at],
-    )?;
+        conn.execute(
+            "INSERT INTO tool_call_logs (id, conversation_id, message_id, tool_name, tool_input, status, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            rusqlite::params![log.id, log.conversation_id, log.message_id, log.tool_name, log.tool_input, log.status, log.created_at],
+        )?;
 
-    Ok(log)
+        Ok(log)
+    })
 }
 
 pub fn list_tool_call_logs_impl(
     db: &Database,
     conversation_id: String,
 ) -> Result<Vec<ToolCallLog>, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let mut stmt = conn.prepare(
-        "SELECT id, conversation_id, message_id, tool_name, tool_input, tool_output, status, duration_ms, created_at FROM tool_call_logs WHERE conversation_id = ?1 ORDER BY created_at ASC",
-    )?;
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT id, conversation_id, message_id, tool_name, tool_input, tool_output, status, duration_ms, created_at FROM tool_call_logs WHERE conversation_id = ?1 ORDER BY created_at ASC",
+        )?;
 
-    let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
-        Ok(ToolCallLog {
-            id: row.get(0)?,
-            conversation_id: row.get(1)?,
-            message_id: row.get(2)?,
-            tool_name: row.get(3)?,
-            tool_input: row.get(4)?,
-            tool_output: row.get(5)?,
-            status: row.get(6)?,
-            duration_ms: row.get(7)?,
-            created_at: row.get(8)?,
-        })
-    })?;
+        let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
+            Ok(ToolCallLog {
+                id: row.get(0)?,
+                conversation_id: row.get(1)?,
+                message_id: row.get(2)?,
+                tool_name: row.get(3)?,
+                tool_input: row.get(4)?,
+                tool_output: row.get(5)?,
+                status: row.get(6)?,
+                duration_ms: row.get(7)?,
+                created_at: row.get(8)?,
+            })
+        })?;
 
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    })
 }
 
 pub fn update_tool_call_log_status_impl(
@@ -444,12 +460,13 @@ pub fn update_tool_call_log_status_impl(
     tool_output: Option<String>,
     duration_ms: Option<i64>,
 ) -> Result<(), DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    conn.execute(
-        "UPDATE tool_call_logs SET status = ?1, tool_output = ?2, duration_ms = ?3 WHERE id = ?4",
-        rusqlite::params![status, tool_output, duration_ms, id],
-    )?;
-    Ok(())
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE tool_call_logs SET status = ?1, tool_output = ?2, duration_ms = ?3 WHERE id = ?4",
+            rusqlite::params![status, tool_output, duration_ms, id],
+        )?;
+        Ok(())
+    })
 }
 
 #[cfg(test)]

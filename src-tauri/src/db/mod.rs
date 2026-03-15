@@ -5,6 +5,7 @@ pub mod models;
 pub mod operations;
 pub mod schema;
 
+use error::DbError;
 use rusqlite::Connection;
 use std::sync::Mutex;
 
@@ -28,5 +29,14 @@ impl Database {
         Ok(Database {
             conn: Mutex::new(conn),
         })
+    }
+
+    /// Execute a closure with a borrowed connection, handling lock acquisition.
+    pub fn with_conn<F, T>(&self, f: F) -> Result<T, DbError>
+    where
+        F: FnOnce(&Connection) -> Result<T, DbError>,
+    {
+        let conn = self.conn.lock().map_err(|_| DbError::Lock)?;
+        f(&conn)
     }
 }

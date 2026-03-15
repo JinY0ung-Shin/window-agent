@@ -1,3 +1,5 @@
+use crate::services::skill_service;
+use crate::utils::path_security::{validate_no_traversal, validate_skill_path};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -25,18 +27,6 @@ pub struct SkillContent {
     pub resource_files: Vec<String>,
 }
 
-// ── YAML frontmatter types (internal) ──
-
-#[derive(Debug, Deserialize, Default)]
-struct SkillFrontmatter {
-    name: Option<String>,
-    description: Option<String>,
-    compatibility: Option<String>,
-    license: Option<String>,
-    #[serde(flatten)]
-    extra: HashMap<String, serde_yaml::Value>,
-}
-
 // ── Path helpers ──
 
 fn get_agents_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -61,89 +51,12 @@ fn get_global_skills_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Validate a folder/skill name to prevent path traversal.
 fn validate_name(name: &str) -> Result<(), String> {
-    if name.is_empty()
-        || name.contains('/')
-        || name.contains('\\')
-        || name.contains("..")
-        || name.starts_with('.')
-    {
-        return Err(format!("Invalid name: {}", name));
-    }
-    Ok(())
-}
-
-/// Validate a skill name: lowercase alphanumeric + hyphens, 1-64 chars.
-fn validate_skill_name(name: &str) -> Result<(), String> {
-    if name.is_empty() || name.len() > 64 {
-        return Err(format!(
-            "Skill name must be 1-64 characters, got {}",
-            name.len()
-        ));
-    }
-    if !name
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
-    {
-        return Err(format!(
-            "Skill name must contain only lowercase alphanumeric characters and hyphens: {}",
-            name
-        ));
-    }
-    Ok(())
+    validate_no_traversal(name, "name")
 }
 
 /// Validate that a resolved path is within an allowed root.
 fn validate_path_within(path: &Path, root: &Path) -> Result<PathBuf, String> {
-    let canonical = if path.exists() {
-        std::fs::canonicalize(path).map_err(|e| format!("Cannot resolve path '{}': {}", path.display(), e))?
-    } else {
-        let parent = path
-            .parent()
-            .ok_or_else(|| format!("Invalid path: {}", path.display()))?;
-        if !parent.exists() {
-            // Parent doesn't exist yet, do component-level check
-            return validate_path_components(path, root);
-        }
-        let canonical_parent = std::fs::canonicalize(parent)
-            .map_err(|e| format!("Cannot resolve parent of '{}': {}", path.display(), e))?;
-        canonical_parent.join(
-            path.file_name()
-                .ok_or_else(|| format!("Invalid file name in path: {}", path.display()))?,
-        )
-    };
-
-    let canonical_root = if root.exists() {
-        std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf())
-    } else {
-        root.to_path_buf()
-    };
-
-    if canonical.starts_with(&canonical_root) {
-        Ok(canonical)
-    } else {
-        Err(format!(
-            "Path '{}' is outside allowed directory",
-            path.display()
-        ))
-    }
-}
-
-/// Fallback path validation when parent doesn't exist yet.
-/// Checks that no component is ".." and the path starts with root.
-fn validate_path_components(path: &Path, root: &Path) -> Result<PathBuf, String> {
-    for component in path.components() {
-        if let std::path::Component::ParentDir = component {
-            return Err(format!("Path traversal detected in: {}", path.display()));
-        }
-    }
-    if path.starts_with(root) {
-        Ok(path.to_path_buf())
-    } else {
-        Err(format!(
-            "Path '{}' is outside allowed directory",
-            path.display()
-        ))
-    }
+    validate_skill_path(path, root)
 }
 
 /// Resolve a skill directory, checking agent dir first then global.
@@ -168,127 +81,38 @@ fn resolve_skill_dir(
     Err(format!("Skill '{}' not found", skill_name))
 }
 
-// ── Frontmatter parsing ──
+// ── Thin wrappers over skill_service ──
 
-/// Parse SKILL.md content into frontmatter + body.
-fn parse_skill_md(content: &str, dir_name: &str) -> (SkillFrontmatter, String, Vec<String>) {
-    let mut diagnostics = Vec::new();
-
-    // Try to split on --- delimiters
-    let parts: Vec<&str> = content.splitn(3, "---").collect();
-    if parts.len() >= 3 && parts[0].trim().is_empty() {
-        // Valid frontmatter structure: empty --- yaml --- body
-        let yaml_str = parts[1];
-        let body = parts[2].to_string();
-
-        match serde_yaml::from_str::<SkillFrontmatter>(yaml_str) {
-            Ok(fm) => (fm, body, diagnostics),
-            Err(e) => {
-                diagnostics.push(format!("YAML 파싱 실패: {}", e));
-                let fallback = SkillFrontmatter {
-                    name: Some(dir_name.to_string()),
-                    description: Some("(설명 없음)".to_string()),
-                    ..Default::default()
-                };
-                (fallback, body, diagnostics)
-            }
-        }
-    } else {
-        diagnostics.push("프론트매터를 찾을 수 없습니다".to_string());
-        let fallback = SkillFrontmatter {
-            name: Some(dir_name.to_string()),
-            description: Some("(설명 없음)".to_string()),
-            ..Default::default()
-        };
-        (fallback, content.to_string(), diagnostics)
-    }
+/// Parse SKILL.md and return (SkillFrontmatter-compatible, body, diagnostics).
+fn parse_skill_md(content: &str, dir_name: &str) -> (skill_service::SkillFrontmatter, String, Vec<String>) {
+    let result = skill_service::parse_frontmatter(content, dir_name);
+    (result.frontmatter, result.body, result.diagnostics)
 }
 
-/// Build SkillMetadata from parsed frontmatter.
+/// Build SkillMetadata from parsed frontmatter via the service.
 fn build_metadata(
-    fm: &SkillFrontmatter,
+    fm: &skill_service::SkillFrontmatter,
     dir_name: &str,
     source: &str,
     path: &str,
-    mut diagnostics: Vec<String>,
+    diagnostics: Vec<String>,
 ) -> SkillMetadata {
-    let raw_name = fm.name.clone().unwrap_or_else(|| {
-        diagnostics.push("이름 필드가 없어 디렉토리 이름을 사용합니다".to_string());
-        dir_name.to_string()
-    });
-
-    // Lenient name normalization
-    let normalized = raw_name.trim().to_lowercase();
-    if normalized != raw_name {
-        diagnostics.push(format!(
-            "이름이 정규화되었습니다: '{}' → '{}'",
-            raw_name, normalized
-        ));
-    }
-
-    let description = fm.description.clone().unwrap_or_else(|| {
-        diagnostics.push("설명 필드가 없습니다".to_string());
-        "(설명 없음)".to_string()
-    });
-
-    // Collect extra fields into metadata_map
-    let metadata_map = if fm.extra.is_empty() {
-        None
-    } else {
-        let map: HashMap<String, String> = fm
-            .extra
-            .iter()
-            .map(|(k, v)| {
-                let val = match v {
-                    serde_yaml::Value::String(s) => s.clone(),
-                    serde_yaml::Value::Number(n) => n.to_string(),
-                    serde_yaml::Value::Bool(b) => b.to_string(),
-                    serde_yaml::Value::Null => "null".to_string(),
-                    other => format!("{:?}", other),
-                };
-                (k.clone(), val)
-            })
-            .collect();
-        Some(map)
-    };
-
+    let built = skill_service::build_metadata(fm, dir_name, diagnostics);
     SkillMetadata {
-        name: normalized,
-        description,
+        name: built.name,
+        description: built.description,
         source: source.to_string(),
         path: path.to_string(),
-        compatibility: fm.compatibility.clone(),
-        license: fm.license.clone(),
-        metadata_map,
-        diagnostics,
+        compatibility: built.compatibility,
+        license: built.license,
+        metadata_map: built.metadata_map,
+        diagnostics: built.diagnostics,
     }
 }
 
-/// Enumerate resource files from scripts/, references/, assets/ subdirs.
+/// Enumerate resource files via the service.
 fn enumerate_resource_files(skill_dir: &Path) -> Vec<String> {
-    let subdirs = ["scripts", "references", "assets"];
-    let mut files = Vec::new();
-
-    for subdir in &subdirs {
-        let dir = skill_dir.join(subdir);
-        if dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&dir) {
-                for entry in entries.flatten() {
-                    if entry.file_type().map(|t| t.is_file()).unwrap_or(false) {
-                        let relative = format!(
-                            "{}/{}",
-                            subdir,
-                            entry.file_name().to_string_lossy()
-                        );
-                        files.push(relative);
-                    }
-                }
-            }
-        }
-    }
-
-    files.sort();
-    files
+    skill_service::enumerate_resource_files(skill_dir)
 }
 
 // ── Tauri commands ──
@@ -433,7 +257,7 @@ pub fn create_skill(
     skill_name: String,
 ) -> Result<SkillMetadata, String> {
     validate_name(&folder_name)?;
-    validate_skill_name(&skill_name)?;
+    skill_service::validate_skill_name(&skill_name)?;
 
     let skills_dir = get_agent_skills_dir(&app, &folder_name)?;
     let skill_dir = skills_dir.join(&skill_name);
@@ -641,39 +465,39 @@ mod tests {
 
     #[test]
     fn test_valid_skill_names() {
-        assert!(validate_skill_name("my-skill").is_ok());
-        assert!(validate_skill_name("skill123").is_ok());
-        assert!(validate_skill_name("a").is_ok());
-        assert!(validate_skill_name("web-search-v2").is_ok());
+        assert!(skill_service::validate_skill_name("my-skill").is_ok());
+        assert!(skill_service::validate_skill_name("skill123").is_ok());
+        assert!(skill_service::validate_skill_name("a").is_ok());
+        assert!(skill_service::validate_skill_name("web-search-v2").is_ok());
     }
 
     #[test]
     fn test_invalid_skill_name_uppercase() {
-        assert!(validate_skill_name("MySkill").is_err());
+        assert!(skill_service::validate_skill_name("MySkill").is_err());
     }
 
     #[test]
     fn test_invalid_skill_name_special_chars() {
-        assert!(validate_skill_name("my_skill").is_err());
-        assert!(validate_skill_name("my skill").is_err());
-        assert!(validate_skill_name("skill.md").is_err());
+        assert!(skill_service::validate_skill_name("my_skill").is_err());
+        assert!(skill_service::validate_skill_name("my skill").is_err());
+        assert!(skill_service::validate_skill_name("skill.md").is_err());
     }
 
     #[test]
     fn test_invalid_skill_name_empty() {
-        assert!(validate_skill_name("").is_err());
+        assert!(skill_service::validate_skill_name("").is_err());
     }
 
     #[test]
     fn test_invalid_skill_name_too_long() {
         let name = "a".repeat(65);
-        assert!(validate_skill_name(&name).is_err());
+        assert!(skill_service::validate_skill_name(&name).is_err());
     }
 
     #[test]
     fn test_valid_skill_name_max_length() {
         let name = "a".repeat(64);
-        assert!(validate_skill_name(&name).is_ok());
+        assert!(skill_service::validate_skill_name(&name).is_ok());
     }
 
     // ── Directory scanning tests ──

@@ -1,0 +1,954 @@
+import { create } from "zustand";
+import { listen } from "@tauri-apps/api/event";
+import type { ChatMessage, ActiveRun, ToolCall, ToolRunState } from "../services/types";
+import * as cmds from "../services/tauriCommands";
+import { useSettingsStore } from "./settingsStore";
+import { useAgentStore } from "./agentStore";
+import { useMemoryStore } from "./memoryStore";
+import { useDebugStore } from "./debugStore";
+import { useSkillStore } from "./skillStore";
+import { useSummaryStore } from "./summaryStore";
+import { useBootstrapStore } from "./bootstrapStore";
+import { useToolRunStore } from "./toolRunStore";
+import { buildConversationContext } from "../services/chatHelpers";
+import {
+  readPersonaFiles,
+  assembleSystemPrompt,
+  assembleManagerPrompt,
+  getEffectiveSettings,
+  invalidatePersonaCache,
+} from "../services/personaService";
+import {
+  executeBootstrapTurn,
+  parseAgentName,
+  isBootstrapComplete,
+} from "../services/bootstrapService";
+import { getToolsForAgent, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
+import { executeToolCalls } from "../services/toolService";
+import { generateTitle } from "../services/titleService";
+import {
+  CONVERSATION_TITLE_MAX_LENGTH,
+  DEFAULT_CONVERSATION_TITLE,
+  DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_AGENT_NAME,
+  LOADING_MESSAGE,
+  NO_RESPONSE_MESSAGE,
+  parseErrorMessage,
+  DEFAULT_TOOLS_MD,
+} from "../constants";
+// Circular import: chatStore → chatFlowStore → chatStore
+// Safe because useChatStore is only accessed inside functions (never at module evaluation time)
+import { useChatStore } from "./chatStore";
+
+// ── Stream event types ────────────────────────────────
+type StreamChunkEvent = { request_id: string; delta: string; reasoning_delta: string | null };
+type StreamDoneEvent = {
+  request_id: string;
+  full_content: string;
+  reasoning_content: string | null;
+  tool_calls: { id: string; type: string; function: { name: string; arguments: string } }[] | null;
+  error: string | null;
+};
+
+// ── Helpers ────────────────────────────────────────────
+
+function createPendingMessage(requestId?: string): { msgId: string; msg: ChatMessage } {
+  const msgId = `pending-${Date.now()}`;
+  return {
+    msgId,
+    msg: {
+      id: msgId,
+      type: "agent",
+      content: LOADING_MESSAGE,
+      status: "pending",
+      requestId,
+    },
+  };
+}
+
+function updateMessageInList(
+  messages: ChatMessage[],
+  targetId: string,
+  updates: Partial<ChatMessage>,
+): ChatMessage[] {
+  return messages.map((msg) =>
+    msg.id === targetId ? { ...msg, ...updates } : msg,
+  );
+}
+
+const TOOL_RESET = {
+  toolRunState: "idle" as ToolRunState,
+  pendingToolCalls: [] as ToolCall[],
+  toolIterationCount: 0,
+};
+
+const BOOTSTRAP_RESET = {
+  isBootstrapping: false,
+  bootstrapFolderName: null as string | null,
+  bootstrapApiHistory: [] as any[],
+  bootstrapFilesWritten: [] as string[],
+};
+
+const MAX_TOOL_ITERATIONS = 10;
+
+// ── ChatStore accessor ──
+
+function chatGet() {
+  return useChatStore.getState();
+}
+
+function chatSet(partial: Record<string, unknown>) {
+  useChatStore.setState(partial);
+}
+
+// ── ChatFlowStore ─────────────────────────────────────
+
+interface ChatFlowState {
+  sendMessage: () => Promise<void>;
+  regenerateMessage: (messageId: string) => Promise<void>;
+  prepareForAgent: (agentId: string) => void;
+}
+
+export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
+  sendMessage: async () => {
+    const { inputValue, isBootstrapping } = chatGet();
+    if (!inputValue.trim()) return;
+
+    await useSettingsStore.getState().waitForEnv();
+
+    const settings = useSettingsStore.getState();
+    if (!settings.hasApiKey) {
+      settings.setIsSettingsOpen(true);
+      return;
+    }
+
+    const trimmed = inputValue.trim();
+    if (trimmed.startsWith("/특기") || trimmed.startsWith("/skill")) {
+      await handleSkillCommand(trimmed);
+      return;
+    }
+
+    if (isBootstrapping) {
+      await sendBootstrapMessage();
+    } else {
+      await sendNormalMessage();
+    }
+  },
+
+  regenerateMessage: async (messageId: string) => {
+    const { messages, activeRun, currentConversationId } = chatGet();
+    if (!currentConversationId || activeRun) return;
+
+    const idx = messages.findIndex((m: ChatMessage) => m.id === messageId);
+    if (idx < 0) return;
+
+    const targetMsg = messages[idx];
+    const truncated = messages.slice(0, idx);
+
+    if (targetMsg.dbMessageId) {
+      const result = await cmds.deleteMessagesAndMaybeResetSummary(currentConversationId, targetMsg.dbMessageId);
+      if (result.summary_was_reset) {
+        chatSet({ currentSummary: null, summaryUpToMessageId: null });
+        useSummaryStore.getState().resetSummary();
+      }
+    }
+
+    chatSet({ messages: truncated });
+
+    const lastUserMsg = [...truncated].reverse().find((m: ChatMessage) => m.type === "user");
+    if (!lastUserMsg) return;
+
+    await regenerateStream(currentConversationId, truncated, lastUserMsg.content);
+  },
+
+  prepareForAgent: (agentId: string) => {
+    chatSet({
+      currentConversationId: null, messages: [], activeRun: null,
+      currentSummary: null, summaryUpToMessageId: null, summaryJobId: null,
+      ...TOOL_RESET, ...BOOTSTRAP_RESET,
+    });
+    useAgentStore.getState().selectAgent(agentId);
+    useSkillStore.getState().clear();
+    const agent = useAgentStore.getState().agents.find((a: any) => a.id === agentId);
+    if (agent) {
+      useSkillStore.getState().loadSkills(agent.folder_name);
+    }
+  },
+}));
+
+// ── Skill slash command handler ──────────────────────
+
+async function handleSkillCommand(command: string) {
+  const skillStore = useSkillStore.getState();
+  const { currentConversationId, conversations, messages } = chatGet();
+
+  const parts = command.split(/\s+/);
+  const subCommand = parts[1];
+  const skillName = parts.slice(2).join(" ");
+
+  let resultMessage = "";
+
+  if (!subCommand) {
+    const available = skillStore.availableSkills;
+    const active = skillStore.activeSkillNames;
+    resultMessage =
+      `**사용 가능한 특기:**\n${
+        available
+          .map(
+            (s: any) =>
+              `- ${active.includes(s.name) ? "\u2705" : "\u2B1C"} ${s.name}: ${s.description}`,
+          )
+          .join("\n") || "(없음)"
+      }\n\n활성: ${active.length}개 | 토큰: ~${skillStore.activeSkillTokens}/2000`;
+  } else if ((subCommand === "장착" || subCommand === "on") && skillName) {
+    const conv = conversations.find((c: any) => c.id === currentConversationId);
+    const agentId = conv?.agent_id ?? useAgentStore.getState().selectedAgentId;
+    const agent = agentId
+      ? useAgentStore.getState().agents.find((a: any) => a.id === agentId)
+      : null;
+    if (agent) {
+      const success = await skillStore.activateSkill(
+        agent.folder_name,
+        skillName,
+        currentConversationId ?? undefined,
+      );
+      resultMessage = success
+        ? `\u2705 특기 "${skillName}" 장착 완료 (~${skillStore.activeSkillTokens}/2000 토큰)`
+        : `\u274C 특기 "${skillName}" 장착 실패 (토큰 한도 초과 또는 존재하지 않음)`;
+    } else {
+      resultMessage = "\u274C 현재 에이전트를 찾을 수 없습니다";
+    }
+  } else if ((subCommand === "해제" || subCommand === "off") && skillName) {
+    await skillStore.deactivateSkill(
+      skillName,
+      currentConversationId ?? undefined,
+    );
+    resultMessage = `특기 "${skillName}" 해제 완료`;
+  } else {
+    resultMessage =
+      "사용법: /특기 [장착|해제] [이름]\n예: /특기 장착 code-review";
+  }
+
+  const sysMsg: ChatMessage = {
+    id: `skill-cmd-${Date.now()}`,
+    type: "agent",
+    content: resultMessage,
+    status: "complete",
+  };
+  chatSet({ messages: [...chatGet().messages, sysMsg], inputValue: "" });
+}
+
+// ── Stream one turn ─────────────────────────────────────
+
+async function streamOneTurn(
+  params: {
+    baseSystemPrompt: string;
+    effective: { model: string; temperature: number | null; thinkingEnabled: boolean; thinkingBudget: number | null };
+    requestId: string;
+    msgId: string;
+    tools?: object[];
+    skillsSection?: string;
+  },
+): Promise<StreamDoneEvent> {
+  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection } = params;
+
+  const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
+    messages: chatGet().messages,
+    summary: chatGet().currentSummary,
+    baseSystemPrompt,
+    skillsSection,
+    memoryNotes: useMemoryStore.getState().notes,
+  });
+
+  let pendingDelta = "";
+  let pendingReasoning = "";
+  let rafId: number | null = null;
+
+  const flushDelta = () => {
+    if (!pendingDelta && !pendingReasoning) return;
+    const delta = pendingDelta;
+    pendingDelta = "";
+    pendingReasoning = "";
+
+    chatSet({
+      messages: chatGet().messages.map((m: ChatMessage) =>
+        m.id === msgId
+          ? {
+              ...m,
+              content: m.content === LOADING_MESSAGE ? delta : m.content + delta,
+              status: "streaming" as const,
+            }
+          : m,
+      ),
+      activeRun: chatGet().activeRun ? { ...chatGet().activeRun!, status: "streaming" } : null,
+    });
+  };
+
+  let doneResolve: (v: StreamDoneEvent) => void;
+  const donePromise = new Promise<StreamDoneEvent>((r) => { doneResolve = r; });
+
+  const unlistenChunk = await listen<StreamChunkEvent>(
+    "chat-stream-chunk",
+    (event) => {
+      if (event.payload.request_id !== requestId) return;
+      pendingDelta += event.payload.delta;
+      if (event.payload.reasoning_delta) {
+        pendingReasoning += event.payload.reasoning_delta;
+      }
+      if (rafId === null) {
+        rafId = requestAnimationFrame(() => {
+          flushDelta();
+          rafId = null;
+        });
+      }
+    },
+  );
+
+  const unlistenDone = await listen<StreamDoneEvent>(
+    "chat-stream-done",
+    (event) => {
+      if (event.payload.request_id !== requestId) return;
+      doneResolve(event.payload);
+    },
+  );
+
+  try {
+    await cmds.chatCompletionStream({
+      messages: chatMessages as Record<string, unknown>[],
+      system_prompt: systemPrompt,
+      model: effective.model,
+      temperature: effective.temperature,
+      thinking_enabled: effective.thinkingEnabled,
+      thinking_budget: effective.thinkingBudget,
+      request_id: requestId,
+      tools: tools && tools.length > 0 ? tools : null,
+    });
+
+    const done = await donePromise;
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    flushDelta();
+    return done;
+  } finally {
+    unlistenChunk();
+    unlistenDone();
+    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  }
+}
+
+// ── Normal message flow ────────────────────────────────
+
+async function sendNormalMessage() {
+  const { inputValue, currentConversationId, messages, conversations } = chatGet();
+  const settings = useSettingsStore.getState();
+
+  const agentStore = useAgentStore.getState();
+  let agentId: string | null = null;
+  let agent = null;
+
+  if (currentConversationId) {
+    const conv = conversations.find((c: any) => c.id === currentConversationId);
+    agentId = conv?.agent_id ?? null;
+  } else {
+    agentId = agentStore.selectedAgentId;
+  }
+
+  if (agentId) {
+    agent = agentStore.agents.find((a: any) => a.id === agentId) ?? null;
+  }
+
+  if (agent && useSkillStore.getState().availableSkills.length === 0) {
+    await useSkillStore.getState().loadSkills(agent.folder_name);
+  }
+
+  let convId = currentConversationId;
+  let initialTitle: string | null = null;
+  if (!convId) {
+    if (!agentId) {
+      console.error("No agent selected for new conversation");
+      return;
+    }
+    initialTitle =
+      inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) ||
+      DEFAULT_CONVERSATION_TITLE;
+    const conv = await cmds.createConversation(agentId, initialTitle);
+    convId = conv.id;
+    chatSet({ currentConversationId: convId });
+
+    const skillNames = useSkillStore.getState().activeSkillNames;
+    if (skillNames.length > 0) {
+      await cmds.updateConversationSkills(convId, skillNames);
+    }
+  }
+
+  const savedUser = await cmds.saveMessage({
+    conversation_id: convId,
+    role: "user",
+    content: inputValue,
+  });
+
+  const userMsg: ChatMessage = {
+    id: savedUser.id,
+    dbMessageId: savedUser.id,
+    type: "user",
+    content: inputValue,
+    status: "complete",
+  };
+
+  let currentRequestId = `req-${Date.now()}`;
+  const { msgId: firstMsgId, msg: pendingMsg } = createPendingMessage(currentRequestId);
+  let currentMsgId = firstMsgId;
+
+  chatSet({
+    messages: [...messages, userMsg, pendingMsg],
+    inputValue: "",
+    activeRun: {
+      requestId: currentRequestId,
+      conversationId: convId,
+      targetMessageId: currentMsgId,
+      status: "pending",
+    },
+  });
+
+  try {
+    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+    if (agent) {
+      try {
+        const files = await readPersonaFiles(agent.folder_name);
+        baseSystemPrompt = agent.is_default
+          ? assembleManagerPrompt(files, agentStore.agents)
+          : assembleSystemPrompt(files);
+      } catch {
+        // Fallback to default
+      }
+    }
+
+    const effective = agent
+      ? getEffectiveSettings(agent)
+      : {
+          model: settings.modelName,
+          temperature: null as number | null,
+          thinkingEnabled: settings.thinkingEnabled,
+          thinkingBudget: settings.thinkingBudget,
+        };
+
+    let toolDefinitions: ToolDefinition[] = [];
+    if (agent && !agent.is_default) {
+      try {
+        toolDefinitions = await getToolsForAgent(agent.folder_name);
+      } catch { /* no tools */ }
+    }
+    const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
+
+    const skillsSection = useSkillStore.getState().getSkillsPromptSection();
+
+    let iterationCount = 0;
+
+    while (iterationCount <= MAX_TOOL_ITERATIONS) {
+      const done = await streamOneTurn({
+        baseSystemPrompt,
+        effective,
+        requestId: currentRequestId,
+        msgId: currentMsgId,
+        tools: openAITools,
+        skillsSection,
+      });
+
+      if (done.error) {
+        if (done.error === "aborted") {
+          chatSet({
+            messages: updateMessageInList(chatGet().messages, currentMsgId, { status: "aborted" }),
+            activeRun: null,
+            ...TOOL_RESET,
+          });
+          break;
+        }
+        throw new Error(done.error);
+      }
+
+      const replyContent = done.full_content || "";
+      const reasoningContent = done.reasoning_content ?? undefined;
+      const toolCalls = done.tool_calls;
+
+      if (!toolCalls || toolCalls.length === 0) {
+        const finalContent = replyContent || NO_RESPONSE_MESSAGE;
+        const savedAssistant = await cmds.saveMessage({
+          conversation_id: convId,
+          role: "assistant",
+          content: finalContent,
+        });
+
+        chatSet({
+          messages: updateMessageInList(chatGet().messages, currentMsgId, {
+            dbMessageId: savedAssistant.id,
+            content: finalContent,
+            reasoningContent,
+            status: "complete",
+          }),
+          activeRun: null,
+          ...TOOL_RESET,
+        });
+
+        const completedAgentMsgs = chatGet().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
+        if (completedAgentMsgs.length === 1) {
+          const expectedTitle = initialTitle ?? chatGet().conversations.find((c: any) => c.id === convId)?.title ?? null;
+          generateTitle(convId, inputValue, finalContent, expectedTitle, () => chatGet().loadConversations());
+        }
+
+        useSummaryStore.getState().maybeGenerateSummary(
+          convId, baseSystemPrompt, chatGet().messages, () => chatGet().loadConversations(),
+        );
+        break;
+      }
+
+      iterationCount++;
+      if (iterationCount > MAX_TOOL_ITERATIONS) {
+        chatSet({
+          messages: updateMessageInList(chatGet().messages, currentMsgId, {
+            content: replyContent || "최대 도구 호출 반복 횟수에 도달했습니다.",
+            status: "failed",
+          }),
+          activeRun: null,
+          ...TOOL_RESET,
+        });
+        break;
+      }
+
+      const parsedToolCalls: ToolCall[] = toolCalls.map((tc) => ({
+        id: tc.id,
+        name: tc.function.name,
+        arguments: tc.function.arguments,
+      }));
+
+      const savedAssistant = await cmds.saveMessage({
+        conversation_id: convId,
+        role: "assistant",
+        content: replyContent,
+        tool_name: "tool_calls",
+        tool_input: JSON.stringify(parsedToolCalls),
+      });
+
+      chatSet({
+        messages: updateMessageInList(chatGet().messages, currentMsgId, {
+          dbMessageId: savedAssistant.id,
+          content: replyContent,
+          reasoningContent,
+          tool_calls: parsedToolCalls,
+          status: "complete",
+        }),
+        toolRunState: "tool_pending",
+        pendingToolCalls: parsedToolCalls,
+        toolIterationCount: iterationCount,
+      });
+
+      let savedToolMsgs: ChatMessage[] = [];
+      const autoTools: ToolCall[] = [];
+      const confirmTools: ToolCall[] = [];
+      const denyTools: ToolCall[] = [];
+
+      for (const tc of parsedToolCalls) {
+        const tier = getToolTier(toolDefinitions, tc.name);
+        if (tier === "deny") denyTools.push(tc);
+        else if (tier === "confirm") confirmTools.push(tc);
+        else autoTools.push(tc);
+      }
+
+      for (const tc of denyTools) {
+        const saved = await cmds.saveMessage({
+          conversation_id: convId,
+          role: "tool",
+          content: "Tool denied by policy.",
+          tool_call_id: tc.id,
+          tool_name: tc.name,
+        });
+        savedToolMsgs.push({
+          id: saved.id,
+          type: "tool" as const,
+          content: "Tool denied by policy.",
+          status: "complete" as const,
+          tool_call_id: tc.id,
+          tool_name: tc.name,
+        });
+      }
+
+      if (autoTools.length > 0) {
+        chatSet({ toolRunState: "tool_running" });
+        const autoResults = await executeToolCalls(autoTools, convId);
+        for (const toolMsg of autoResults) {
+          const saved = await cmds.saveMessage({
+            conversation_id: convId,
+            role: "tool",
+            content: toolMsg.content,
+            tool_call_id: toolMsg.tool_call_id,
+            tool_name: toolMsg.tool_name,
+          });
+          savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
+        }
+      }
+
+      if (confirmTools.length > 0) {
+        chatSet({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
+        const confirmApproved = await useToolRunStore.getState().waitForToolApproval();
+        if (confirmApproved) {
+          chatSet({ toolRunState: "tool_running" });
+          const confirmResults = await executeToolCalls(confirmTools, convId);
+          for (const toolMsg of confirmResults) {
+            const saved = await cmds.saveMessage({
+              conversation_id: convId,
+              role: "tool",
+              content: toolMsg.content,
+              tool_call_id: toolMsg.tool_call_id,
+              tool_name: toolMsg.tool_name,
+            });
+            savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
+          }
+        } else {
+          for (const tc of confirmTools) {
+            const saved = await cmds.saveMessage({
+              conversation_id: convId,
+              role: "tool",
+              content: "Tool call rejected by user.",
+              tool_call_id: tc.id,
+              tool_name: tc.name,
+            });
+            savedToolMsgs.push({
+              id: saved.id,
+              type: "tool" as const,
+              content: "Tool call rejected by user.",
+              status: "complete" as const,
+              tool_call_id: tc.id,
+              tool_name: tc.name,
+            });
+          }
+        }
+      }
+
+      currentRequestId = `req-${Date.now()}`;
+      const { msgId: nextMsgId, msg: nextPending } = createPendingMessage(currentRequestId);
+      currentMsgId = nextMsgId;
+
+      chatSet({
+        messages: [...chatGet().messages, ...savedToolMsgs, nextPending],
+        toolRunState: "continuing",
+        activeRun: {
+          requestId: currentRequestId,
+          conversationId: convId,
+          targetMessageId: currentMsgId,
+          status: "pending",
+        },
+      });
+    }
+  } catch (error) {
+    console.error("API Error:", error);
+    chatSet({
+      messages: updateMessageInList(chatGet().messages, currentMsgId, {
+        content: parseErrorMessage(error),
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+      activeRun: null,
+      ...TOOL_RESET,
+    });
+  }
+
+  await chatGet().loadConversations();
+}
+
+// ── Regenerate stream flow ──────────────────────────────
+
+async function regenerateStream(
+  convId: string,
+  truncated: ChatMessage[],
+  lastUserContent: string,
+) {
+  const settings = useSettingsStore.getState();
+  const agentStore = useAgentStore.getState();
+  const conversations = chatGet().conversations;
+
+  const conv = conversations.find((c: any) => c.id === convId);
+  const agentId = conv?.agent_id ?? null;
+  const agent = agentId
+    ? agentStore.agents.find((a: any) => a.id === agentId) ?? null
+    : null;
+
+  const requestId = `req-${Date.now()}`;
+  const { msgId, msg: pendingMsg } = createPendingMessage(requestId);
+
+  chatSet({
+    messages: [...truncated, pendingMsg],
+    activeRun: {
+      requestId,
+      conversationId: convId,
+      targetMessageId: msgId,
+      status: "pending",
+    },
+  });
+
+  try {
+    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+    if (agent) {
+      try {
+        const files = await readPersonaFiles(agent.folder_name);
+        baseSystemPrompt = agent.is_default
+          ? assembleManagerPrompt(files, agentStore.agents)
+          : assembleSystemPrompt(files);
+      } catch {
+        // Fallback to default
+      }
+    }
+
+    const effective = agent
+      ? getEffectiveSettings(agent)
+      : {
+          model: settings.modelName,
+          temperature: null as number | null,
+          thinkingEnabled: settings.thinkingEnabled,
+          thinkingBudget: settings.thinkingBudget,
+        };
+
+    const skillsSection = useSkillStore.getState().getSkillsPromptSection();
+    const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
+      messages: chatGet().messages,
+      summary: chatGet().currentSummary,
+      baseSystemPrompt,
+      skillsSection,
+      memoryNotes: useMemoryStore.getState().notes,
+    });
+
+    let pendingDelta = "";
+    let pendingReasoning = "";
+    let rafId: number | null = null;
+
+    const flushDelta = () => {
+      if (!pendingDelta && !pendingReasoning) return;
+      const delta = pendingDelta;
+      pendingDelta = "";
+      pendingReasoning = "";
+
+      chatSet({
+        messages: chatGet().messages.map((m: ChatMessage) =>
+          m.id === msgId
+            ? {
+                ...m,
+                content: m.content === LOADING_MESSAGE ? delta : m.content + delta,
+                status: "streaming" as const,
+              }
+            : m,
+        ),
+        activeRun: chatGet().activeRun ? { ...chatGet().activeRun!, status: "streaming" } : null,
+      });
+    };
+
+    let doneResolve: (v: StreamDoneEvent) => void;
+    const donePromise = new Promise<StreamDoneEvent>((r) => { doneResolve = r; });
+
+    const unlistenChunk = await listen<StreamChunkEvent>(
+      "chat-stream-chunk",
+      (event) => {
+        if (event.payload.request_id !== requestId) return;
+        pendingDelta += event.payload.delta;
+        if (event.payload.reasoning_delta) {
+          pendingReasoning += event.payload.reasoning_delta;
+        }
+        if (rafId === null) {
+          rafId = requestAnimationFrame(() => {
+            flushDelta();
+            rafId = null;
+          });
+        }
+      },
+    );
+
+    const unlistenDone = await listen<StreamDoneEvent>(
+      "chat-stream-done",
+      (event) => {
+        if (event.payload.request_id !== requestId) return;
+        doneResolve(event.payload);
+      },
+    );
+
+    try {
+      await cmds.chatCompletionStream({
+        messages: chatMessages,
+        system_prompt: systemPrompt,
+        model: effective.model,
+        temperature: effective.temperature,
+        thinking_enabled: effective.thinkingEnabled,
+        thinking_budget: effective.thinkingBudget,
+        request_id: requestId,
+      });
+
+      const done = await donePromise;
+
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+      flushDelta();
+
+      if (done.error) {
+        if (done.error === "aborted") {
+          chatSet({
+            messages: updateMessageInList(chatGet().messages, msgId, { status: "aborted" }),
+            activeRun: null,
+          });
+        } else {
+          throw new Error(done.error);
+        }
+      } else {
+        const replyContent = done.full_content || NO_RESPONSE_MESSAGE;
+        const reasoningContent = done.reasoning_content ?? undefined;
+
+        const savedAssistant = await cmds.saveMessage({
+          conversation_id: convId,
+          role: "assistant",
+          content: replyContent,
+        });
+
+        chatSet({
+          messages: updateMessageInList(chatGet().messages, msgId, {
+            dbMessageId: savedAssistant.id,
+            content: replyContent,
+            reasoningContent,
+            status: "complete",
+          }),
+          activeRun: null,
+        });
+
+        const completedAgentMsgs = chatGet().messages.filter((m: ChatMessage) => m.type === "agent" && m.status === "complete");
+        if (completedAgentMsgs.length === 1) {
+          const currentTitle = chatGet().conversations.find((c: any) => c.id === convId)?.title;
+          generateTitle(convId, lastUserContent, replyContent, currentTitle ?? null, () => chatGet().loadConversations());
+        }
+
+        useSummaryStore.getState().maybeGenerateSummary(
+          convId, baseSystemPrompt, chatGet().messages, () => chatGet().loadConversations(),
+        );
+      }
+    } finally {
+      unlistenChunk();
+      unlistenDone();
+      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    }
+  } catch (error) {
+    console.error("Regenerate Error:", error);
+    chatSet({
+      messages: updateMessageInList(chatGet().messages, msgId, {
+        content: parseErrorMessage(error),
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+      activeRun: null,
+    });
+  }
+
+  await chatGet().loadConversations();
+}
+
+// ── Bootstrap message flow ─────────────────────────────
+
+async function sendBootstrapMessage() {
+  const {
+    inputValue,
+    messages,
+    bootstrapApiHistory,
+    bootstrapFolderName,
+    bootstrapFilesWritten,
+  } = chatGet();
+
+  const settings = useSettingsStore.getState();
+  if (!bootstrapFolderName) return;
+
+  const userMsg: ChatMessage = {
+    id: `user-${Date.now()}`,
+    type: "user",
+    content: inputValue,
+    status: "complete",
+  };
+
+  const { msgId, msg: pendingMsg } = createPendingMessage();
+  chatSet({ messages: [...messages, userMsg, pendingMsg], inputValue: "" });
+
+  try {
+    const result = await executeBootstrapTurn(
+      bootstrapApiHistory,
+      inputValue,
+      bootstrapFolderName,
+      settings.modelName,
+    );
+
+    const allFilesWritten = [...bootstrapFilesWritten];
+    for (const f of result.filesWritten) {
+      if (!allFilesWritten.includes(f)) allFilesWritten.push(f);
+    }
+
+    chatSet({
+      bootstrapApiHistory: result.apiMessages,
+      bootstrapFilesWritten: allFilesWritten,
+      messages: updateMessageInList(chatGet().messages, msgId, {
+        id: `resp-${Date.now()}`,
+        content: result.responseText,
+        status: "complete",
+      }),
+    });
+
+    if (isBootstrapComplete(allFilesWritten)) {
+      await completeBootstrap();
+    }
+  } catch (error) {
+    console.error("Bootstrap API Error:", error);
+    chatSet({
+      messages: updateMessageInList(chatGet().messages, msgId, {
+        content: parseErrorMessage(error),
+        status: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    });
+  }
+}
+
+async function completeBootstrap() {
+  const { bootstrapFolderName } = chatGet();
+  if (!bootstrapFolderName) return;
+
+  invalidatePersonaCache(bootstrapFolderName);
+
+  try {
+    await cmds.readAgentFile(bootstrapFolderName, "TOOLS.md");
+  } catch {
+    try {
+      await cmds.writeAgentFile(bootstrapFolderName, "TOOLS.md", DEFAULT_TOOLS_MD);
+    } catch (e) {
+      console.warn("Failed to write default TOOLS.md:", e);
+    }
+  }
+
+  let agentName: string;
+  try {
+    const identity = await cmds.readAgentFile(bootstrapFolderName, "IDENTITY.md");
+    agentName = parseAgentName(identity);
+  } catch {
+    agentName = DEFAULT_AGENT_NAME;
+  }
+
+  try {
+    const agent = await cmds.createAgent({
+      folder_name: bootstrapFolderName,
+      name: agentName,
+    });
+
+    chatSet({
+      ...BOOTSTRAP_RESET, messages: [],
+      currentSummary: null, summaryUpToMessageId: null, summaryJobId: null,
+    });
+
+    const agentStore = useAgentStore.getState();
+    await agentStore.loadAgents();
+    agentStore.selectAgent(agent.id);
+  } catch (error) {
+    console.error("Failed to complete bootstrap:", error);
+    const errorMsg: ChatMessage = {
+      id: `error-${Date.now()}`,
+      type: "agent",
+      content: `에이전트 생성에 실패했습니다: ${error}. 다시 시도하거나 취소 버튼을 눌러주세요.`,
+      status: "failed",
+    };
+    chatSet({ messages: [...chatGet().messages, errorMsg] });
+  }
+}

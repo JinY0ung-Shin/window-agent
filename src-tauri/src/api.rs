@@ -125,8 +125,6 @@ impl ApiState {
 
 pub struct RunEntry {
     pub abort_handle: tokio::task::AbortHandle,
-    #[allow(dead_code)]
-    pub started_at: chrono::DateTime<chrono::Utc>,
 }
 
 #[derive(Clone)]
@@ -147,7 +145,6 @@ impl RunRegistry {
             request_id,
             RunEntry {
                 abort_handle,
-                started_at: chrono::Utc::now(),
             },
         );
     }
@@ -169,13 +166,6 @@ impl RunRegistry {
 }
 
 // ── Request/Response types for Tauri commands ──
-
-#[derive(Deserialize)]
-#[allow(dead_code)]
-pub struct ChatMessage {
-    pub role: String,
-    pub content: String,
-}
 
 #[derive(Deserialize)]
 pub struct ChatCompletionRequest {

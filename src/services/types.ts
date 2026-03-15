@@ -118,11 +118,6 @@ export interface ToolCall {
   arguments: string;
 }
 
-export interface ToolResult {
-  tool_call_id: string;
-  content: string;
-}
-
 export type ToolPermissionTier = "auto" | "confirm" | "deny";
 export type ToolRunState = "idle" | "streaming" | "tool_pending" | "tool_waiting" | "tool_running" | "continuing";
 

@@ -1,7 +1,8 @@
 use crate::db::operations;
 use crate::db::Database;
+use crate::utils::path_security::validate_tool_roots;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 use tauri::{AppHandle, Manager, State};
 use tokio::time::{timeout, Duration};
@@ -20,42 +21,9 @@ pub struct ToolExecutionResult {
 // ── Path security ──
 
 /// Resolve and validate a path against allowed roots.
-/// Returns the canonicalized path if it falls within an allowed root.
+/// Delegates to utils::path_security::validate_tool_roots.
 fn validate_path(raw_path: &str, allowed_roots: &[PathBuf]) -> Result<PathBuf, String> {
-    let path = Path::new(raw_path);
-
-    // Resolve to absolute, canonicalizing symlinks
-    let canonical = if path.exists() {
-        std::fs::canonicalize(path)
-            .map_err(|e| format!("Cannot resolve path '{}': {}", raw_path, e))?
-    } else {
-        // For write targets that don't exist yet, canonicalize the parent
-        let parent = path
-            .parent()
-            .ok_or_else(|| format!("Invalid path: {}", raw_path))?;
-        let canonical_parent = std::fs::canonicalize(parent)
-            .map_err(|e| format!("Cannot resolve parent of '{}': {}", raw_path, e))?;
-        canonical_parent.join(
-            path.file_name()
-                .ok_or_else(|| format!("Invalid file name in path: {}", raw_path))?,
-        )
-    };
-
-    for root in allowed_roots {
-        let canonical_root = if root.exists() {
-            std::fs::canonicalize(root).unwrap_or_else(|_| root.clone())
-        } else {
-            root.clone()
-        };
-        if canonical.starts_with(&canonical_root) {
-            return Ok(canonical);
-        }
-    }
-
-    Err(format!(
-        "Path '{}' is outside allowed directories",
-        raw_path
-    ))
+    validate_tool_roots(raw_path, allowed_roots)
 }
 
 /// Build the list of allowed root directories from the Tauri app handle.
@@ -333,6 +301,7 @@ async fn execute_tool_inner(
 mod tests {
     use super::*;
     use std::fs;
+    use std::path::Path;
     use tempfile::TempDir;
 
     fn make_allowed(dir: &Path) -> Vec<PathBuf> {

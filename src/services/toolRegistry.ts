@@ -196,3 +196,76 @@ export function canRoundTrip(rawContent: string): boolean {
   const serialized = serializeToolsMd(parsed);
   return normalizeToolsMd(trimmed) === normalizeToolsMd(serialized);
 }
+
+// ── UI helper types & functions (used by ToolManagementPanel sub-components) ──
+
+export interface ParamDraft {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+export interface ToolDraft {
+  name: string;
+  description: string;
+  tier: ToolPermissionTier;
+  params: ParamDraft[];
+}
+
+export function toolToOpenParams(tool: ToolDefinition): ParamDraft[] {
+  const props = tool.parameters?.properties ?? {};
+  const req: string[] = tool.parameters?.required ?? [];
+  return (Object.entries(props) as [string, { type?: string; description?: string }][]).map(([name, def]) => ({
+    name,
+    type: def.type ?? "string",
+    required: req.includes(name),
+    description: def.description ?? "",
+  }));
+}
+
+export function draftsToToolDef(draft: ToolDraft): ToolDefinition {
+  const properties: Record<string, any> = {};
+  const required: string[] = [];
+  for (const p of draft.params) {
+    if (!p.name.trim()) continue;
+    properties[p.name.trim()] = {
+      type: p.type,
+      description: p.description,
+    };
+    if (p.required) required.push(p.name.trim());
+  }
+  return {
+    name: draft.name.trim(),
+    description: draft.description,
+    tier: draft.tier,
+    parameters: {
+      type: "object",
+      properties,
+      required: required.length > 0 ? required : undefined,
+    },
+  };
+}
+
+export function validateDraft(draft: ToolDraft, tools: ToolDefinition[], editingIndex: number | null): string | null {
+  const name = draft.name.trim();
+  if (!name) return "도구 이름을 입력하세요";
+  if (!VALID_TOOL_NAME_RE.test(name)) return "도구 이름은 영문, 숫자, _ 만 사용 가능합니다";
+  const isDuplicate = tools.some((t, i) => i !== editingIndex && t.name === name);
+  if (isDuplicate) return `"${name}" 이름이 이미 존재합니다`;
+  const paramNames = draft.params.map((p) => p.name.trim()).filter(Boolean);
+  for (const pn of paramNames) {
+    if (!VALID_TOOL_NAME_RE.test(pn)) return `매개변수 "${pn}": 영문, 숫자, _ 만 사용 가능합니다`;
+  }
+  const uniqueParams = new Set(paramNames);
+  if (uniqueParams.size !== paramNames.length) return "매개변수 이름이 중복됩니다";
+  return null;
+}
+
+export function emptyDraft(): ToolDraft {
+  return { name: "", description: "", tier: "confirm", params: [] };
+}
+
+export function emptyParam(): ParamDraft {
+  return { name: "", type: "string", required: true, description: "" };
+}

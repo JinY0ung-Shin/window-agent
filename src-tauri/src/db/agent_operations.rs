@@ -10,79 +10,83 @@ pub fn create_agent_impl(
     db: &Database,
     request: CreateAgentRequest,
 ) -> Result<Agent, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let now = Utc::now().to_rfc3339();
-    let agent = Agent {
-        id: Uuid::new_v4().to_string(),
-        folder_name: request.folder_name,
-        name: request.name,
-        avatar: request.avatar,
-        description: request.description.unwrap_or_default(),
-        model: request.model,
-        temperature: request.temperature,
-        thinking_enabled: request.thinking_enabled,
-        thinking_budget: request.thinking_budget,
-        is_default: request.is_default.unwrap_or(false),
-        sort_order: request.sort_order.unwrap_or(0),
-        created_at: now.clone(),
-        updated_at: now,
-    };
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
+        let agent = Agent {
+            id: Uuid::new_v4().to_string(),
+            folder_name: request.folder_name,
+            name: request.name,
+            avatar: request.avatar,
+            description: request.description.unwrap_or_default(),
+            model: request.model,
+            temperature: request.temperature,
+            thinking_enabled: request.thinking_enabled,
+            thinking_budget: request.thinking_budget,
+            is_default: request.is_default.unwrap_or(false),
+            sort_order: request.sort_order.unwrap_or(0),
+            created_at: now.clone(),
+            updated_at: now,
+        };
 
-    conn.execute(
-        "INSERT INTO agents (id, folder_name, name, avatar, description, model, temperature, thinking_enabled, thinking_budget, is_default, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-        rusqlite::params![
-            agent.id,
-            agent.folder_name,
-            agent.name,
-            agent.avatar,
-            agent.description,
-            agent.model,
-            agent.temperature,
-            agent.thinking_enabled.map(|b| b as i64),
-            agent.thinking_budget,
-            agent.is_default as i64,
-            agent.sort_order,
-            agent.created_at,
-            agent.updated_at,
-        ],
-    )?;
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, avatar, description, model, temperature, thinking_enabled, thinking_budget, is_default, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            rusqlite::params![
+                agent.id,
+                agent.folder_name,
+                agent.name,
+                agent.avatar,
+                agent.description,
+                agent.model,
+                agent.temperature,
+                agent.thinking_enabled.map(|b| b as i64),
+                agent.thinking_budget,
+                agent.is_default as i64,
+                agent.sort_order,
+                agent.created_at,
+                agent.updated_at,
+            ],
+        )?;
 
-    Ok(agent)
+        Ok(agent)
+    })
 }
 
 pub fn get_agent_impl(db: &Database, id: String) -> Result<Agent, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let agent = conn.query_row(
-        &format!("{AGENT_COLUMNS} WHERE id = ?1"),
-        rusqlite::params![id],
-        |row| row_to_agent(row),
-    )?;
-    Ok(agent)
+    db.with_conn(|conn| {
+        let agent = conn.query_row(
+            &format!("{AGENT_COLUMNS} WHERE id = ?1"),
+            rusqlite::params![id],
+            |row| row_to_agent(row),
+        )?;
+        Ok(agent)
+    })
 }
 
 pub fn get_agent_by_folder_impl(
     db: &Database,
     folder_name: String,
 ) -> Result<Option<Agent>, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let mut stmt = conn.prepare(
-        &format!("{AGENT_COLUMNS} WHERE folder_name = ?1"),
-    )?;
-    let mut rows = stmt.query(rusqlite::params![folder_name])?;
-    match rows.next()? {
-        Some(row) => Ok(Some(row_to_agent(row)?)),
-        None => Ok(None),
-    }
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            &format!("{AGENT_COLUMNS} WHERE folder_name = ?1"),
+        )?;
+        let mut rows = stmt.query(rusqlite::params![folder_name])?;
+        match rows.next()? {
+            Some(row) => Ok(Some(row_to_agent(row)?)),
+            None => Ok(None),
+        }
+    })
 }
 
 pub fn list_agents_impl(db: &Database) -> Result<Vec<Agent>, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let mut stmt = conn.prepare(
-        &format!("{AGENT_COLUMNS} ORDER BY sort_order ASC, created_at ASC"),
-    )?;
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            &format!("{AGENT_COLUMNS} ORDER BY sort_order ASC, created_at ASC"),
+        )?;
 
-    let rows = stmt.query_map([], |row| row_to_agent(row))?;
-    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+        let rows = stmt.query_map([], |row| row_to_agent(row))?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    })
 }
 
 pub fn update_agent_impl(
@@ -90,70 +94,71 @@ pub fn update_agent_impl(
     id: String,
     request: UpdateAgentRequest,
 ) -> Result<Agent, DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
-    let now = Utc::now().to_rfc3339();
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
 
-    let current = conn.query_row(
-        &format!("{AGENT_COLUMNS} WHERE id = ?1"),
-        rusqlite::params![id],
-        |row| row_to_agent(row),
-    )?;
+        let current = conn.query_row(
+            &format!("{AGENT_COLUMNS} WHERE id = ?1"),
+            rusqlite::params![id],
+            |row| row_to_agent(row),
+        )?;
 
-    let name = request.name.unwrap_or(current.name);
-    let avatar = request.avatar.unwrap_or(current.avatar);
-    let description = request.description.unwrap_or(current.description);
-    let model = request.model.unwrap_or(current.model);
-    let temperature = request.temperature.unwrap_or(current.temperature);
-    let thinking_enabled = request.thinking_enabled.unwrap_or(current.thinking_enabled);
-    let thinking_budget = request.thinking_budget.unwrap_or(current.thinking_budget);
-    let sort_order = request.sort_order.unwrap_or(current.sort_order);
+        let name = request.name.unwrap_or(current.name);
+        let avatar = request.avatar.unwrap_or(current.avatar);
+        let description = request.description.unwrap_or(current.description);
+        let model = request.model.unwrap_or(current.model);
+        let temperature = request.temperature.unwrap_or(current.temperature);
+        let thinking_enabled = request.thinking_enabled.unwrap_or(current.thinking_enabled);
+        let thinking_budget = request.thinking_budget.unwrap_or(current.thinking_budget);
+        let sort_order = request.sort_order.unwrap_or(current.sort_order);
 
-    conn.execute(
-        "UPDATE agents SET name = ?1, avatar = ?2, description = ?3, model = ?4, temperature = ?5, thinking_enabled = ?6, thinking_budget = ?7, sort_order = ?8, updated_at = ?9 WHERE id = ?10",
-        rusqlite::params![
-            name,
-            avatar,
-            description,
-            model,
-            temperature,
-            thinking_enabled.map(|b| b as i64),
-            thinking_budget,
-            sort_order,
-            now,
-            id,
-        ],
-    )?;
+        conn.execute(
+            "UPDATE agents SET name = ?1, avatar = ?2, description = ?3, model = ?4, temperature = ?5, thinking_enabled = ?6, thinking_budget = ?7, sort_order = ?8, updated_at = ?9 WHERE id = ?10",
+            rusqlite::params![
+                name,
+                avatar,
+                description,
+                model,
+                temperature,
+                thinking_enabled.map(|b| b as i64),
+                thinking_budget,
+                sort_order,
+                now,
+                id,
+            ],
+        )?;
 
-    // Re-read updated agent
-    let updated = conn.query_row(
-        &format!("{AGENT_COLUMNS} WHERE id = ?1"),
-        rusqlite::params![id],
-        |row| row_to_agent(row),
-    )?;
-    Ok(updated)
+        // Re-read updated agent
+        let updated = conn.query_row(
+            &format!("{AGENT_COLUMNS} WHERE id = ?1"),
+            rusqlite::params![id],
+            |row| row_to_agent(row),
+        )?;
+        Ok(updated)
+    })
 }
 
 pub fn delete_agent_impl(db: &Database, id: String) -> Result<(), DbError> {
-    let conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    db.with_conn(|conn| {
+        // Prevent deleting the default (manager) agent
+        let is_default: bool = conn.query_row(
+            "SELECT is_default FROM agents WHERE id = ?1",
+            rusqlite::params![id],
+            |row| {
+                let val: i64 = row.get(0)?;
+                Ok(val != 0)
+            },
+        )?;
 
-    // Prevent deleting the default (manager) agent
-    let is_default: bool = conn.query_row(
-        "SELECT is_default FROM agents WHERE id = ?1",
-        rusqlite::params![id],
-        |row| {
-            let val: i64 = row.get(0)?;
-            Ok(val != 0)
-        },
-    )?;
+        if is_default {
+            return Err(DbError::Sqlite(
+                "Cannot delete the default (manager) agent".to_string(),
+            ));
+        }
 
-    if is_default {
-        return Err(DbError::Sqlite(
-            "Cannot delete the default (manager) agent".to_string(),
-        ));
-    }
-
-    conn.execute("DELETE FROM agents WHERE id = ?1", rusqlite::params![id])?;
-    Ok(())
+        conn.execute("DELETE FROM agents WHERE id = ?1", rusqlite::params![id])?;
+        Ok(())
+    })
 }
 
 fn row_to_agent(row: &rusqlite::Row) -> Result<Agent, rusqlite::Error> {
