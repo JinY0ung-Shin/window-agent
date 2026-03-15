@@ -8,10 +8,17 @@ import "./App.css";
 
 function App() {
   const brandingInitialized = useSettingsStore((s) => s.brandingInitialized);
+  const appReady = useSettingsStore((s) => s.appReady);
 
   useEffect(() => {
     initializeApp();
   }, []);
+
+  // Wait for initialization to finish before deciding onboarding vs main UI.
+  // Prevents a brief onboarding flash for upgraded users.
+  if (!appReady) {
+    return null;
+  }
 
   if (!brandingInitialized) {
     return <OnboardingScreen />;

@@ -29,6 +29,7 @@ interface SettingsState {
   uiTheme: UITheme;
   companyName: string;
   brandingInitialized: boolean;
+  appReady: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   loadSettings: () => void;
   loadEnvDefaults: () => Promise<void>;
@@ -78,6 +79,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   isSettingsOpen: false,
   envLoaded: false,
   settingsError: null,
+  appReady: false,
 
   setIsSettingsOpen: (open) => set({ isSettingsOpen: open, ...(open ? { settingsError: null } : {}) }),
 

@@ -54,11 +54,17 @@ export async function initializeApp(): Promise<void> {
   // Step 7: Auto-initialize branding for upgraded users.
   // Fresh installs have 0 conversations (only the seeded default agent).
   // Existing installs have conversations from prior use — skip onboarding for them.
+  // Also check for existing localStorage settings as a secondary signal.
   const settings = useSettingsStore.getState();
   if (!settings.brandingInitialized) {
     const conversations = useConversationStore.getState().conversations;
-    if (conversations.length > 0) {
+    const hasExistingSettings = localStorage.getItem("openai_base_url") !== null
+      || localStorage.getItem("openai_model_name") !== null;
+    if (conversations.length > 0 || hasExistingSettings) {
       settings.initializeBranding(settings.companyName || "", settings.uiTheme || "org");
     }
   }
+
+  // Step 8: Mark app as ready (onboarding gate can now make an informed decision).
+  useSettingsStore.setState({ appReady: true });
 }
