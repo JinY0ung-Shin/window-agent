@@ -6,6 +6,10 @@ import { useMemoryStore } from "./memoryStore";
 import { useDebugStore } from "./debugStore";
 import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
+import { useMessageStore } from "./messageStore";
+import { useStreamStore } from "./streamStore";
+import { useToolRunStore } from "./toolRunStore";
+import { useBootstrapStore } from "./bootstrapStore";
 
 interface ConversationState {
   conversations: Conversation[];
@@ -31,6 +35,14 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   selectConversation: async (id) => {
     set({ currentConversationId: id });
+
+    // Reset transient state on conversation switch
+    useMessageStore.setState({ messages: [], inputValue: "" });
+    useStreamStore.setState({ activeRun: null });
+    useToolRunStore.getState().resetToolState();
+    useBootstrapStore.getState().resetBootstrap();
+    useSummaryStore.getState().resetSummary();
+
     const [detail, dbMessages] = await Promise.all([
       cmds.getConversationDetail(id),
       cmds.getMessages(id),
@@ -56,6 +68,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       return chatMsg;
     });
 
+    // Sync messages to messageStore
+    useMessageStore.setState({ messages });
+
     useSummaryStore.getState().loadSummary(detail.summary, detail.summary_up_to_message_id);
 
     // Sync agent selection and load memory/skills/debug
@@ -78,6 +93,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   createNewConversation: () => {
     set({ currentConversationId: null });
+    useMessageStore.setState({ messages: [], inputValue: "" });
+    useStreamStore.setState({ activeRun: null });
+    useToolRunStore.getState().resetToolState();
+    useBootstrapStore.getState().resetBootstrap();
+    useSummaryStore.getState().resetSummary();
     useAgentStore.getState().selectAgent(null);
     useDebugStore.getState().clear();
     useSkillStore.getState().clear();
@@ -88,6 +108,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const { currentConversationId } = get();
     if (currentConversationId === id) {
       set({ currentConversationId: null });
+      useMessageStore.setState({ messages: [], inputValue: "" });
+      useStreamStore.setState({ activeRun: null });
+      useSummaryStore.getState().resetSummary();
       useAgentStore.getState().selectAgent(null);
     }
     await get().loadConversations();
