@@ -1,9 +1,11 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import { X } from "lucide-react";
 import { useMessageStore } from "../../stores/messageStore";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useToolRunStore } from "../../stores/toolRunStore";
+import { useStreamStore } from "../../stores/streamStore";
 import { useLabels, useCompanyName } from "../../hooks/useLabels";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
@@ -24,22 +26,36 @@ export default function ChatWindow() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  const isNearBottom = () => {
+  const toolRunState = useToolRunStore((s) => s.toolRunState);
+  const activeRun = useStreamStore((s) => s.activeRun);
+
+  const wasNearBottomRef = useRef(true);
+
+  const isNearBottom = useCallback(() => {
     const el = messagesContainerRef.current;
     if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 100;
-  };
+    return el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+  }, []);
 
-  // Derive a scroll trigger key from message count + last message content/status
-  // so scroll fires on new messages, streaming updates, and tool status changes
-  const lastMsg = messages[messages.length - 1];
-  const scrollTrigger = `${messages.length}:${lastMsg?.content?.length ?? 0}:${lastMsg?.status ?? ""}`;
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+  }, []);
 
+  // Track scroll position — remember if user was near bottom
   useEffect(() => {
-    if (isNearBottom()) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const onScroll = () => { wasNearBottomRef.current = isNearBottom(); };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [isNearBottom]);
+
+  // Auto-scroll on any relevant state change
+  useEffect(() => {
+    if (wasNearBottomRef.current) {
+      scrollToBottom();
     }
-  }, [scrollTrigger]);
+  }, [messages, toolRunState, activeRun?.status, scrollToBottom]);
 
   const selectedAgent = selectedAgentId
     ? agents.find((a) => a.id === selectedAgentId)
