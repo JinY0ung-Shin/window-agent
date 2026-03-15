@@ -1,6 +1,6 @@
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSelector, selectorCounts, INTERACTIVE_ROLES, STRUCTURAL_ROLES } = require('../server');
+const { buildSelector, buildResponse, selectorCounts, INTERACTIVE_ROLES, STRUCTURAL_ROLES } = require('../server');
 
 describe('buildSelector', () => {
   beforeEach(() => {
@@ -245,5 +245,61 @@ describe('snapshot generation (unit)', () => {
     assert.ok(result.snapshotText.includes('[1] navigation "Main Nav"'));
     assert.ok(result.snapshotText.includes('[2] link "Home"'));
     assert.ok(result.snapshotText.includes('[3] link "About"'));
+  });
+});
+
+describe('buildResponse', () => {
+  function mockPage(tree, screenshotResult = Buffer.from('fake-png')) {
+    return {
+      accessibility: {
+        snapshot: async () => tree,
+      },
+      url: () => 'https://example.com',
+      title: async () => 'Example',
+      screenshot: async () => screenshotResult,
+    };
+  }
+
+  it('includes screenshot as base64 string', async () => {
+    const tree = {
+      role: 'WebArea',
+      name: '',
+      children: [{ role: 'button', name: 'OK' }],
+    };
+    const page = mockPage(tree);
+    const result = await buildResponse(page);
+
+    assert.equal(result.success, true);
+    assert.equal(result.url, 'https://example.com');
+    assert.equal(result.title, 'Example');
+    assert.equal(typeof result.screenshot, 'string');
+    assert.equal(result.screenshot, Buffer.from('fake-png').toString('base64'));
+    assert.equal(result.element_count, 1);
+  });
+
+  it('returns null screenshot when capture fails', async () => {
+    const tree = {
+      role: 'WebArea',
+      name: '',
+      children: [{ role: 'link', name: 'Home' }],
+    };
+    const page = mockPage(tree);
+    page.screenshot = async () => { throw new Error('GPU error'); };
+    const result = await buildResponse(page);
+
+    assert.equal(result.success, true);
+    assert.equal(result.screenshot, null);
+    // Other fields should still be populated
+    assert.equal(result.url, 'https://example.com');
+    assert.equal(result.element_count, 1);
+  });
+
+  it('passes extra fields through', async () => {
+    const tree = { role: 'WebArea', name: '', children: [] };
+    const page = mockPage(tree);
+    const result = await buildResponse(page, { custom: 'value' });
+
+    assert.equal(result.custom, 'value');
+    assert.equal(result.success, true);
   });
 });

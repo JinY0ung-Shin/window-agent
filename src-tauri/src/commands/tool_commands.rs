@@ -1,3 +1,4 @@
+use crate::db::models::BrowserArtifact;
 use crate::db::operations;
 use crate::db::Database;
 use crate::error::AppError;
@@ -9,7 +10,7 @@ use tauri::{AppHandle, Manager, State};
 use tokio::time::{timeout, Duration};
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(30);
-const BROWSER_TOOL_TIMEOUT: Duration = Duration::from_secs(90);
+const BROWSER_TOOL_TIMEOUT: Duration = Duration::from_secs(360); // 6 min: allows for Chromium install on first run
 
 /// Result returned by execute_tool to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -311,47 +312,73 @@ async fn execute_tool_inner(
         "memory_note" => tool_memory_note(db, input),
 
         // ── Browser automation tools ──
-        "browser_navigate" => {
-            let url = input["url"]
-                .as_str()
-                .ok_or("browser_navigate: missing 'url' parameter")?;
+        "browser_navigate" | "browser_snapshot" | "browser_click" | "browser_type"
+        | "browser_wait" | "browser_back" => {
             let browser = app.state::<crate::browser::BrowserManager>();
-            let result = browser.navigate(conversation_id, url).await?;
-            Ok(serde_json::to_value(result).unwrap())
-        }
-        "browser_snapshot" => {
-            let browser = app.state::<crate::browser::BrowserManager>();
-            let result = browser.snapshot(conversation_id).await?;
-            Ok(serde_json::to_value(result).unwrap())
-        }
-        "browser_click" => {
-            let ref_num = input["ref"]
-                .as_u64()
-                .ok_or("browser_click: missing 'ref' parameter (u32)")? as u32;
-            let browser = app.state::<crate::browser::BrowserManager>();
-            let result = browser.click(conversation_id, ref_num).await?;
-            Ok(serde_json::to_value(result).unwrap())
-        }
-        "browser_type" => {
-            let ref_num = input["ref"]
-                .as_u64()
-                .ok_or("browser_type: missing 'ref' parameter (u32)")? as u32;
-            let text = input["text"]
-                .as_str()
-                .ok_or("browser_type: missing 'text' parameter")?;
-            let browser = app.state::<crate::browser::BrowserManager>();
-            let result = browser.type_text(conversation_id, ref_num, text).await?;
-            Ok(serde_json::to_value(result).unwrap())
-        }
-        "browser_wait" => {
-            let seconds = input["seconds"].as_f64().unwrap_or(2.0);
-            let browser = app.state::<crate::browser::BrowserManager>();
-            let result = browser.wait(conversation_id, seconds).await?;
-            Ok(serde_json::to_value(result).unwrap())
-        }
-        "browser_back" => {
-            let browser = app.state::<crate::browser::BrowserManager>();
-            let result = browser.back(conversation_id).await?;
+            let result = match tool_name {
+                "browser_navigate" => {
+                    let url = input["url"]
+                        .as_str()
+                        .ok_or("browser_navigate: missing 'url' parameter")?;
+                    browser.navigate(conversation_id, url).await?
+                }
+                "browser_snapshot" => browser.snapshot(conversation_id).await?,
+                "browser_click" => {
+                    let ref_num = input["ref"]
+                        .as_u64()
+                        .ok_or("browser_click: missing 'ref' parameter (u32)")?
+                        as u32;
+                    browser.click(conversation_id, ref_num).await?
+                }
+                "browser_type" => {
+                    let ref_num = input["ref"]
+                        .as_u64()
+                        .ok_or("browser_type: missing 'ref' parameter (u32)")?
+                        as u32;
+                    let text = input["text"]
+                        .as_str()
+                        .ok_or("browser_type: missing 'text' parameter")?;
+                    browser.type_text(conversation_id, ref_num, text).await?
+                }
+                "browser_wait" => {
+                    let seconds = input["seconds"].as_f64().unwrap_or(2.0);
+                    browser.wait(conversation_id, seconds).await?
+                }
+                "browser_back" => browser.back(conversation_id).await?,
+                _ => unreachable!(),
+            };
+
+            // Get session_id for artifact
+            let session_id = {
+                let sessions = browser.sessions.lock().await;
+                sessions
+                    .get(conversation_id)
+                    .map(|s| s.session_id.clone())
+                    .unwrap_or_default()
+            };
+
+            // Save browser artifact to DB
+            let ref_map_json = serde_json::to_string(
+                &browser.sessions.lock().await
+                    .get(conversation_id)
+                    .map(|s| &s.last_ref_map)
+            )
+            .unwrap_or_else(|_| "{}".to_string());
+
+            let artifact = BrowserArtifact {
+                id: result.artifact_id.clone(),
+                session_id,
+                conversation_id: conversation_id.to_string(),
+                snapshot_full: result.snapshot_full.clone(),
+                ref_map_json,
+                url: result.url.clone(),
+                title: result.title.clone(),
+                screenshot_path: result.screenshot_path.clone(),
+                created_at: chrono::Utc::now().to_rfc3339(),
+            };
+            // Non-fatal: don't fail the tool if artifact save fails
+            let _ = operations::create_browser_artifact(db, &artifact);
+
             Ok(serde_json::to_value(result).unwrap())
         }
         "browser_close" => {
@@ -377,6 +404,15 @@ pub async fn approve_browser_domain(
         .approve_domain(&conversation_id, &domain)
         .await
         .map_err(AppError::Validation)
+}
+
+/// Retrieve a stored browser artifact by ID.
+#[tauri::command]
+pub async fn get_browser_artifact(
+    db: State<'_, Database>,
+    id: String,
+) -> Result<BrowserArtifact, AppError> {
+    operations::get_browser_artifact(&db, &id).map_err(|e| AppError::Database(e.to_string()))
 }
 
 #[cfg(test)]

@@ -108,7 +108,7 @@ async function generateSnapshot(page) {
 }
 
 // Exported for testing
-module.exports = { generateSnapshot, buildSelector, selectorCounts, INTERACTIVE_ROLES, STRUCTURAL_ROLES, MAX_ELEMENTS };
+module.exports = { generateSnapshot, buildResponse, buildSelector, selectorCounts, INTERACTIVE_ROLES, STRUCTURAL_ROLES, MAX_ELEMENTS };
 
 // --- Browser Management ---
 
@@ -131,6 +131,17 @@ function getSession(sessionId) {
 
 async function buildResponse(page, extra = {}) {
   const { snapshotText, refMap, elementCount } = await generateSnapshot(page);
+
+  // Capture viewport screenshot as base64 PNG
+  let screenshot = null;
+  try {
+    const buffer = await page.screenshot({ type: 'png' });
+    screenshot = buffer.toString('base64');
+  } catch (err) {
+    // Screenshot failure is non-fatal
+    log(`Screenshot failed: ${err.message}`);
+  }
+
   return {
     success: true,
     url: page.url(),
@@ -138,6 +149,7 @@ async function buildResponse(page, extra = {}) {
     snapshot: snapshotText,
     ref_map: refMap,
     element_count: elementCount,
+    screenshot,
     ...extra,
   };
 }
@@ -337,13 +349,45 @@ const server = http.createServer(async (req, res) => {
 
 // Only start server when run directly (not when required for tests)
 if (require.main === module) {
-  server.listen(0, '127.0.0.1', () => {
-    const port = server.address().port;
-    process.stdout.write(`SIDECAR_PORT=${port}\n`);
-    log(`Listening on 127.0.0.1:${port}`);
-  });
+  (async () => {
+    // Check if Chromium is installed
+    const fs = require('node:fs');
+    try {
+      const browserPath = chromium.executablePath();
+      if (!fs.existsSync(browserPath)) {
+        throw new Error('Browser binary not found');
+      }
+    } catch {
+      // Chromium not found, install it
+      process.stdout.write('CHROMIUM_INSTALL_START\n');
+      log('Chromium not found, installing...');
 
-  // Graceful shutdown
+      try {
+        const { execSync } = require('node:child_process');
+        execSync('npx playwright install chromium', {
+          cwd: __dirname, // Ensure npx resolves playwright from sidecar's node_modules
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env },
+          timeout: 300000, // 5 min timeout
+        });
+        process.stdout.write('CHROMIUM_INSTALL_DONE\n');
+        log('Chromium installed successfully');
+      } catch (installErr) {
+        const reason = installErr.message || 'unknown error';
+        process.stdout.write(`CHROMIUM_INSTALL_FAILED=${reason}\n`);
+        log(`Chromium install failed: ${reason}`);
+        process.exit(1);
+      }
+    }
+
+    server.listen(0, '127.0.0.1', () => {
+      const port = server.address().port;
+      process.stdout.write(`SIDECAR_PORT=${port}\n`);
+      log(`Listening on 127.0.0.1:${port}`);
+    });
+  })();
+
+  // Graceful shutdown (outside async IIFE)
   process.on('SIGTERM', async () => {
     log('SIGTERM received, shutting down');
     try {

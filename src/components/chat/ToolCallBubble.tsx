@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { Wrench, Check, X, Loader, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import type { ToolCall } from "../../services/types";
 
@@ -30,7 +31,14 @@ function isBrowserTool(toolName: string): boolean {
   return toolName.startsWith("browser_");
 }
 
-function parseBrowserResult(output: string): { url?: string; title?: string; snapshot?: string; elementCount?: number } | null {
+function parseBrowserResult(output: string): {
+  url?: string;
+  title?: string;
+  snapshot?: string;
+  elementCount?: number;
+  artifact_id?: string;
+  screenshot_path?: string;
+} | null {
   try {
     const parsed = JSON.parse(output);
     if (parsed.success !== undefined) {
@@ -39,6 +47,8 @@ function parseBrowserResult(output: string): { url?: string; title?: string; sna
         title: parsed.title,
         snapshot: parsed.snapshot,
         elementCount: parsed.element_count,
+        artifact_id: parsed.artifact_id,
+        screenshot_path: parsed.screenshot_path,
       };
     }
   } catch {
@@ -147,25 +157,58 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
                     )}
                   </div>
                 )}
-                {browserResult.snapshot && (
-                  <pre style={{
-                    fontSize: '11px',
-                    lineHeight: '1.4',
-                    padding: '8px',
-                    backgroundColor: 'var(--bg-tertiary, #f0f0f0)',
+                {browserResult.screenshot_path && (
+                  <div style={{
+                    marginBottom: '8px',
+                    cursor: 'pointer',
                     borderRadius: '4px',
-                    maxHeight: '300px',
-                    overflow: 'auto',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word',
+                    overflow: 'hidden',
+                    border: '1px solid var(--border-color, #e0e0e0)',
                   }}>
-                    {browserResult.snapshot}
-                  </pre>
-                )}
-                {browserResult.elementCount !== undefined && (
-                  <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '4px' }}>
-                    {browserResult.elementCount} interactive elements
+                    <img
+                      src={convertFileSrc(browserResult.screenshot_path)}
+                      alt="Browser screenshot"
+                      style={{
+                        width: '100%',
+                        maxHeight: '200px',
+                        objectFit: 'contain',
+                        display: 'block',
+                      }}
+                      onClick={(e) => {
+                        const img = e.currentTarget;
+                        if (img.style.maxHeight === '200px') {
+                          img.style.maxHeight = 'none';
+                        } else {
+                          img.style.maxHeight = '200px';
+                        }
+                      }}
+                    />
                   </div>
+                )}
+                {browserResult.snapshot && (
+                  <details open={!browserResult.screenshot_path}>
+                    <summary style={{
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      opacity: 0.7,
+                      marginBottom: '4px',
+                    }}>
+                      Accessibility Snapshot ({browserResult.elementCount} elements)
+                    </summary>
+                    <pre style={{
+                      fontSize: '11px',
+                      lineHeight: '1.4',
+                      padding: '8px',
+                      backgroundColor: 'var(--bg-tertiary, #f0f0f0)',
+                      borderRadius: '4px',
+                      maxHeight: '300px',
+                      overflow: 'auto',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}>
+                      {browserResult.snapshot}
+                    </pre>
+                  </details>
                 )}
               </div>
             );

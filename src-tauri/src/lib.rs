@@ -37,7 +37,14 @@ pub fn run() {
             app.manage(database);
             app.manage(ApiState::load(app.handle()));
             app.manage(RunRegistry::new());
-            app.manage(browser::BrowserManager::new());
+
+            let browser_manager = browser::BrowserManager::new(app_dir.clone(), Some(app.handle().clone()));
+            let bm_clone = browser_manager.clone();
+            app.manage(browser_manager);
+            tauri::async_runtime::spawn(async move {
+                browser::BrowserManager::start_idle_cleanup(bm_clone).await;
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -89,6 +96,7 @@ pub fn run() {
             commands::update_skill,
             commands::delete_skill,
             commands::approve_browser_domain,
+            commands::get_browser_artifact,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

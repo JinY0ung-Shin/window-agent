@@ -2,7 +2,7 @@ use crate::db::models::{ConversationDetail, ConversationListItem, DeleteMessages
 use crate::db::operations;
 use crate::db::Database;
 use crate::error::AppError;
-use tauri::State;
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub fn create_conversation(
@@ -52,10 +52,23 @@ pub fn delete_messages_from(
 }
 
 #[tauri::command]
-pub fn delete_conversation(
+pub async fn delete_conversation(
+    app: AppHandle,
     db: State<'_, Database>,
     conversation_id: String,
 ) -> Result<(), AppError> {
+    // Clean up browser session
+    let browser = app.state::<crate::browser::BrowserManager>();
+    let _ = browser.close_session(&conversation_id).await;
+
+    // Clean up screenshot files before DB cascade deletes the rows
+    if let Ok(paths) = operations::delete_browser_artifacts_for_conversation(&db, &conversation_id) {
+        for path in paths {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
+    // Delete conversation (cascades browser_artifacts rows via FK)
     Ok(operations::delete_conversation_impl(&db, conversation_id)?)
 }
 

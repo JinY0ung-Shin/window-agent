@@ -102,6 +102,11 @@ fn all_migrations() -> &'static [Migration] {
             description: "Browser automation: browser_artifacts table + tool_call_logs.artifact_id",
             sql: "",  // handled by custom migration function
         },
+        Migration {
+            version: 8,
+            description: "Add FK + screenshot_path to browser_artifacts",
+            sql: "",  // handled by custom migration function
+        },
     ]
 }
 
@@ -230,6 +235,30 @@ fn migrate_v6_to_v7(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Migration v8: recreate browser_artifacts with FK + screenshot_path.
+fn migrate_v7_to_v8(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS browser_artifacts_new (
+            id              TEXT PRIMARY KEY,
+            session_id      TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            snapshot_full   TEXT NOT NULL,
+            ref_map_json    TEXT NOT NULL,
+            url             TEXT NOT NULL,
+            title           TEXT NOT NULL,
+            screenshot_path TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        );
+        INSERT OR IGNORE INTO browser_artifacts_new (id, session_id, conversation_id, snapshot_full, ref_map_json, url, title, created_at)
+            SELECT id, session_id, conversation_id, snapshot_full, ref_map_json, url, title, created_at FROM browser_artifacts;
+        DROP TABLE IF EXISTS browser_artifacts;
+        ALTER TABLE browser_artifacts_new RENAME TO browser_artifacts;
+        CREATE INDEX IF NOT EXISTS idx_browser_artifacts_conversation ON browser_artifacts(conversation_id);",
+    )?;
+    Ok(())
+}
+
 /// Ensure the _migrations tracking table exists.
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
@@ -267,6 +296,8 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
                 migrate_v5_to_v6(&tx)?;
             } else if migration.version == 7 {
                 migrate_v6_to_v7(&tx)?;
+            } else if migration.version == 8 {
+                migrate_v7_to_v8(&tx)?;
             } else {
                 tx.execute_batch(migration.sql)?;
             }
@@ -317,7 +348,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
     }
 
     #[test]
@@ -326,7 +357,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 7);
+        assert_eq!(version, 8);
 
         let desc: String = conn
             .query_row(
@@ -434,7 +465,7 @@ mod tests {
 
         // Run remaining migrations (v3 + v4 + v5 + v6)
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 7);
+        assert_eq!(current_version(&conn).unwrap(), 8);
 
         // Verify existing data is preserved
         let title: String = conn
@@ -496,7 +527,7 @@ mod tests {
     fn test_v4_migration_creates_tables_and_columns() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 7);
+        assert_eq!(current_version(&conn).unwrap(), 8);
 
         // Verify new tables exist
         let tables: Vec<String> = conn
@@ -565,7 +596,7 @@ mod tests {
 
         // Run v4 + v5 + v6
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 7);
+        assert_eq!(current_version(&conn).unwrap(), 8);
 
         // Verify existing data preserved, new columns are NULL
         let content: String = conn
@@ -583,7 +614,7 @@ mod tests {
     fn test_v5_migration_adds_active_skills_column() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 7);
+        assert_eq!(current_version(&conn).unwrap(), 8);
 
         // Verify active_skills column exists
         conn.execute(

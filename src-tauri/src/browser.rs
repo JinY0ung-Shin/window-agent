@@ -1,20 +1,25 @@
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::io::BufRead;
+use tauri::Emitter;
 
 // === Types ===
 
 #[derive(Clone)]
 pub struct BrowserManager {
-    sessions: Arc<Mutex<HashMap<String, BrowserSession>>>,
+    pub(crate) sessions: Arc<Mutex<HashMap<String, BrowserSession>>>,
     sidecar: Arc<Mutex<Option<SidecarProcess>>>,
     /// Pending domain approvals for conversations that don't have a session yet.
     /// Applied when the session is created.
     pending_approvals: Arc<Mutex<HashMap<String, HashSet<String>>>>,
+    idle_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    app_data_dir: PathBuf,
+    app_handle: Option<tauri::AppHandle>,
     client: Client,
 }
 
@@ -59,17 +64,30 @@ struct SidecarResponse {
     ref_map: Option<HashMap<String, ElementRef>>,
     element_count: Option<usize>,
     error: Option<String>,
+    screenshot: Option<String>, // base64 PNG
 }
 
 // === Implementation ===
 
 impl BrowserManager {
-    pub fn new() -> Self {
+    pub fn new(app_data_dir: PathBuf, app_handle: Option<tauri::AppHandle>) -> Self {
+        let screenshots_dir = app_data_dir.join("browser_screenshots");
+        std::fs::create_dir_all(&screenshots_dir).ok();
+
         Self {
             sessions: Arc::new(Mutex::new(HashMap::new())),
             sidecar: Arc::new(Mutex::new(None)),
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
+            idle_task: Arc::new(Mutex::new(None)),
+            app_data_dir,
+            app_handle,
             client: Client::new(),
+        }
+    }
+
+    fn emit_event(&self, event: &str, payload: &str) {
+        if let Some(ref handle) = self.app_handle {
+            let _ = handle.emit(event, payload);
         }
     }
 
@@ -93,6 +111,7 @@ impl BrowserManager {
 
         let mut child = Command::new("node")
             .arg(&script_path)
+            .env("PLAYWRIGHT_BROWSERS_PATH", self.app_data_dir.join("playwright-browsers"))
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
@@ -108,6 +127,17 @@ impl BrowserManager {
         let mut port: Option<u16> = None;
         for line in reader.lines() {
             let line = line.map_err(|e| format!("failed to read sidecar output: {}", e))?;
+            if line.starts_with("CHROMIUM_INSTALL_START") {
+                self.emit_event("browser:chromium-installing", "");
+                continue;
+            }
+            if line.starts_with("CHROMIUM_INSTALL_DONE") {
+                self.emit_event("browser:chromium-installed", "");
+                continue;
+            }
+            if let Some(reason) = line.strip_prefix("CHROMIUM_INSTALL_FAILED=") {
+                return Err(format!("Chromium installation failed: {}", reason));
+            }
             if let Some(p) = line.strip_prefix("SIDECAR_PORT=") {
                 port = Some(
                     p.parse::<u16>()
@@ -296,7 +326,7 @@ impl BrowserManager {
             .await?;
         self.update_session_from_response(conversation_id, &resp)
             .await?;
-        Self::build_tool_result(&resp)
+        self.build_tool_result(&resp)
     }
 
     /// Take snapshot of current page
@@ -310,7 +340,7 @@ impl BrowserManager {
             .await?;
         self.update_session_from_response(conversation_id, &resp)
             .await?;
-        Self::build_tool_result(&resp)
+        self.build_tool_result(&resp)
     }
 
     /// Click element by ref number
@@ -325,7 +355,7 @@ impl BrowserManager {
             .await?;
         self.update_session_from_response(conversation_id, &resp)
             .await?;
-        Self::build_tool_result(&resp)
+        self.build_tool_result(&resp)
     }
 
     /// Type text into element by ref number
@@ -359,7 +389,7 @@ impl BrowserManager {
             .await?;
         self.update_session_from_response(conversation_id, &resp)
             .await?;
-        Self::build_tool_result(&resp)
+        self.build_tool_result(&resp)
     }
 
     /// Wait for specified seconds (clamped to 0.5..10.0)
@@ -379,7 +409,7 @@ impl BrowserManager {
             .await?;
         self.update_session_from_response(conversation_id, &resp)
             .await?;
-        Self::build_tool_result(&resp)
+        self.build_tool_result(&resp)
     }
 
     /// Go back in history
@@ -393,7 +423,7 @@ impl BrowserManager {
             .await?;
         self.update_session_from_response(conversation_id, &resp)
             .await?;
-        Self::build_tool_result(&resp)
+        self.build_tool_result(&resp)
     }
 
     /// Close browser session for a conversation
@@ -411,6 +441,13 @@ impl BrowserManager {
 
     /// Shutdown everything
     pub async fn shutdown(&self) {
+        // Abort idle cleanup task
+        let mut idle = self.idle_task.lock().await;
+        if let Some(handle) = idle.take() {
+            handle.abort();
+        }
+        drop(idle);
+
         // Close all sessions
         let conversation_ids: Vec<String> = {
             let sessions = self.sessions.lock().await;
@@ -425,6 +462,37 @@ impl BrowserManager {
         if let Some(mut s) = sidecar.take() {
             let _ = s.child.kill();
         }
+    }
+
+    /// Start background task that closes sessions idle for >= 10 minutes.
+    pub async fn start_idle_cleanup(manager: BrowserManager) {
+        let handle = tokio::spawn({
+            let manager = manager.clone();
+            async move {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+                loop {
+                    interval.tick().await;
+                    let idle_convs: Vec<String> = {
+                        let sessions = manager.sessions.lock().await;
+                        sessions
+                            .iter()
+                            .filter(|(_, s)| {
+                                chrono::Utc::now()
+                                    .signed_duration_since(s.last_active)
+                                    .num_minutes()
+                                    >= 10
+                            })
+                            .map(|(k, _)| k.clone())
+                            .collect()
+                    };
+                    for conv_id in idle_convs {
+                        let _ = manager.close_session(&conv_id).await;
+                    }
+                }
+            }
+        });
+        let mut idle = manager.idle_task.lock().await;
+        *idle = Some(handle);
     }
 
     /// Approve a domain for a conversation's session (called from frontend via Tauri command).
@@ -489,32 +557,60 @@ impl BrowserManager {
         Ok(())
     }
 
-    fn build_tool_result(resp: &SidecarResponse) -> Result<BrowserToolResult, String> {
-        let snapshot = resp.snapshot.clone().unwrap_or_default();
+    fn build_tool_result(&self, resp: &SidecarResponse) -> Result<BrowserToolResult, String> {
+        let snapshot_full = resp.snapshot.clone().unwrap_or_default();
         // Truncate snapshot for model context (4KB max, UTF-8 safe)
-        let truncated = if snapshot.len() > 4000 {
-            // Find the last char boundary at or before byte 4000
+        let snapshot = if snapshot_full.len() > 4000 {
             let mut end = 4000;
-            while end > 0 && !snapshot.is_char_boundary(end) {
+            while end > 0 && !snapshot_full.is_char_boundary(end) {
                 end -= 1;
             }
-            let truncated_text = &snapshot[..end];
             format!(
                 "{}...\n--- truncated ({} total elements) ---",
-                truncated_text,
+                &snapshot_full[..end],
                 resp.element_count.unwrap_or(0)
             )
         } else {
-            snapshot
+            snapshot_full.clone()
+        };
+
+        let artifact_id = uuid::Uuid::new_v4().to_string();
+
+        // Save screenshot if present
+        let screenshot_path = if let Some(ref b64) = resp.screenshot {
+            match self.save_screenshot(&artifact_id, b64) {
+                Ok(path) => Some(path),
+                Err(_) => None,
+            }
+        } else {
+            None
         };
 
         Ok(BrowserToolResult {
             success: true,
             url: resp.url.clone().unwrap_or_default(),
             title: resp.title.clone().unwrap_or_default(),
-            snapshot: truncated,
+            snapshot,
+            snapshot_full,
             element_count: resp.element_count.unwrap_or(0),
+            artifact_id,
+            screenshot_path,
         })
+    }
+
+    /// Decode base64 screenshot and save to disk.
+    /// Returns the absolute file path on success.
+    pub fn save_screenshot(&self, artifact_id: &str, screenshot_base64: &str) -> Result<String, String> {
+        use base64::Engine;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(screenshot_base64)
+            .map_err(|e| format!("base64 decode failed: {}", e))?;
+        let path = self.app_data_dir
+            .join("browser_screenshots")
+            .join(format!("{}.png", artifact_id));
+        std::fs::write(&path, &bytes)
+            .map_err(|e| format!("failed to write screenshot: {}", e))?;
+        Ok(path.to_string_lossy().to_string())
     }
 }
 
@@ -534,7 +630,11 @@ pub struct BrowserToolResult {
     pub url: String,
     pub title: String,
     pub snapshot: String,
+    #[serde(skip_serializing)] // Not sent to LLM — only used for artifact storage
+    pub snapshot_full: String,
     pub element_count: usize,
+    pub artifact_id: String,
+    pub screenshot_path: Option<String>,
 }
 
 /// Resolve the path to browser-sidecar/server.js.
@@ -701,8 +801,13 @@ mod tests {
         assert!(result.unwrap_err().contains("invalid URL"));
     }
 
+    fn test_manager() -> BrowserManager {
+        BrowserManager::new(std::env::temp_dir().join("window-agent-test"), None)
+    }
+
     #[test]
     fn test_build_tool_result_truncates_large_snapshot() {
+        let manager = test_manager();
         let resp = SidecarResponse {
             success: true,
             url: Some("https://example.com".to_string()),
@@ -711,8 +816,9 @@ mod tests {
             ref_map: None,
             element_count: Some(100),
             error: None,
+            screenshot: None,
         };
-        let result = BrowserManager::build_tool_result(&resp).unwrap();
+        let result = manager.build_tool_result(&resp).unwrap();
         assert!(result.snapshot.len() < 5000);
         assert!(result.snapshot.contains("truncated"));
         assert!(result.snapshot.contains("100"));
@@ -720,6 +826,7 @@ mod tests {
 
     #[test]
     fn test_build_tool_result_small_snapshot_not_truncated() {
+        let manager = test_manager();
         let resp = SidecarResponse {
             success: true,
             url: Some("https://example.com".to_string()),
@@ -728,14 +835,16 @@ mod tests {
             ref_map: None,
             element_count: Some(5),
             error: None,
+            screenshot: None,
         };
-        let result = BrowserManager::build_tool_result(&resp).unwrap();
+        let result = manager.build_tool_result(&resp).unwrap();
         assert_eq!(result.snapshot, "small content");
         assert!(!result.snapshot.contains("truncated"));
     }
 
     #[test]
     fn test_build_tool_result_utf8_safe_truncation() {
+        let manager = test_manager();
         // Create a string with multi-byte characters that crosses the 4000 byte boundary
         // Korean characters are 3 bytes each in UTF-8
         let korean = "가".repeat(1500); // 4500 bytes
@@ -747,8 +856,9 @@ mod tests {
             ref_map: None,
             element_count: Some(50),
             error: None,
+            screenshot: None,
         };
-        let result = BrowserManager::build_tool_result(&resp).unwrap();
+        let result = manager.build_tool_result(&resp).unwrap();
         assert!(result.snapshot.contains("truncated"));
         // Should not panic and should be valid UTF-8
         assert!(result.snapshot.is_char_boundary(0));
@@ -764,8 +874,40 @@ mod tests {
 
     #[test]
     fn test_browser_manager_new() {
-        let manager = BrowserManager::new();
+        let manager = test_manager();
         // Just verify it constructs without panic
         drop(manager);
+    }
+
+    #[test]
+    fn test_save_screenshot() {
+        let tmp = std::env::temp_dir().join("window-agent-test-screenshot");
+        let manager = BrowserManager::new(tmp.clone(), None);
+        // A minimal valid base64 payload
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b"fake-png-data");
+        let path = manager.save_screenshot("test-artifact-id", &b64).unwrap();
+        assert!(std::path::Path::new(&path).exists());
+        let content = std::fs::read(&path).unwrap();
+        assert_eq!(content, b"fake-png-data");
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn test_build_tool_result_includes_artifact_id() {
+        let manager = test_manager();
+        let resp = SidecarResponse {
+            success: true,
+            url: Some("https://example.com".to_string()),
+            title: Some("Example".to_string()),
+            snapshot: Some("content".to_string()),
+            ref_map: None,
+            element_count: Some(1),
+            error: None,
+            screenshot: None,
+        };
+        let result = manager.build_tool_result(&resp).unwrap();
+        assert!(!result.artifact_id.is_empty());
+        assert!(result.screenshot_path.is_none());
     }
 }

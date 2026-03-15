@@ -112,6 +112,19 @@ pub struct MemoryNote {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BrowserArtifact {
+    pub id: String,
+    pub session_id: String,
+    pub conversation_id: String,
+    pub snapshot_full: String,
+    pub ref_map_json: String,
+    pub url: String,
+    pub title: String,
+    pub screenshot_path: Option<String>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolCallLog {
     pub id: String,
     pub conversation_id: String,

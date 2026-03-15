@@ -1,5 +1,5 @@
 use super::error::DbError;
-use super::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, MemoryNote, Message, SaveMessageRequest, ToolCallLog};
+use super::models::{BrowserArtifact, ConversationDetail, ConversationListItem, DeleteMessagesResult, MemoryNote, Message, SaveMessageRequest, ToolCallLog};
 use super::Database;
 use chrono::Utc;
 use uuid::Uuid;
@@ -466,6 +466,80 @@ pub fn update_tool_call_log_status_impl(
             rusqlite::params![status, tool_output, duration_ms, id],
         )?;
         Ok(())
+    })
+}
+
+// ── Browser Artifacts CRUD ──
+
+pub fn create_browser_artifact(
+    db: &Database,
+    artifact: &BrowserArtifact,
+) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "INSERT INTO browser_artifacts (id, session_id, conversation_id, snapshot_full, ref_map_json, url, title, screenshot_path, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            rusqlite::params![
+                artifact.id,
+                artifact.session_id,
+                artifact.conversation_id,
+                artifact.snapshot_full,
+                artifact.ref_map_json,
+                artifact.url,
+                artifact.title,
+                artifact.screenshot_path,
+                artifact.created_at,
+            ],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn get_browser_artifact(
+    db: &Database,
+    id: &str,
+) -> Result<BrowserArtifact, DbError> {
+    db.with_conn(|conn| {
+        let artifact = conn.query_row(
+            "SELECT id, session_id, conversation_id, snapshot_full, ref_map_json, url, title, screenshot_path, created_at FROM browser_artifacts WHERE id = ?1",
+            rusqlite::params![id],
+            |row| {
+                Ok(BrowserArtifact {
+                    id: row.get(0)?,
+                    session_id: row.get(1)?,
+                    conversation_id: row.get(2)?,
+                    snapshot_full: row.get(3)?,
+                    ref_map_json: row.get(4)?,
+                    url: row.get(5)?,
+                    title: row.get(6)?,
+                    screenshot_path: row.get(7)?,
+                    created_at: row.get(8)?,
+                })
+            },
+        )?;
+        Ok(artifact)
+    })
+}
+
+/// Delete all browser artifacts for a conversation and return their screenshot paths for file cleanup.
+pub fn delete_browser_artifacts_for_conversation(
+    db: &Database,
+    conversation_id: &str,
+) -> Result<Vec<String>, DbError> {
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT screenshot_path FROM browser_artifacts WHERE conversation_id = ?1 AND screenshot_path IS NOT NULL",
+        )?;
+        let paths: Vec<String> = stmt
+            .query_map(rusqlite::params![conversation_id], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        conn.execute(
+            "DELETE FROM browser_artifacts WHERE conversation_id = ?1",
+            rusqlite::params![conversation_id],
+        )?;
+
+        Ok(paths)
     })
 }
 
@@ -1044,5 +1118,106 @@ mod tests {
         assert_eq!(msgs[0].id, "msg-a");
         assert_eq!(msgs[1].id, "msg-b");
         assert_eq!(msgs[2].id, "msg-c");
+    }
+
+    // ── Browser Artifact CRUD tests ──
+
+    fn create_test_conversation(db: &Database) -> (crate::db::models::Agent, ConversationListItem) {
+        let agent = create_test_agent(db);
+        let conv = create_conversation_impl(db, Some("Test".into()), agent.id.clone()).unwrap();
+        (agent, conv)
+    }
+
+    fn make_test_artifact(conversation_id: &str) -> BrowserArtifact {
+        BrowserArtifact {
+            id: Uuid::new_v4().to_string(),
+            session_id: "session_abc123".to_string(),
+            conversation_id: conversation_id.to_string(),
+            snapshot_full: "<snapshot>".to_string(),
+            ref_map_json: "{}".to_string(),
+            url: "https://example.com".to_string(),
+            title: "Example".to_string(),
+            screenshot_path: None,
+            created_at: Utc::now().to_rfc3339(),
+        }
+    }
+
+    #[test]
+    fn test_create_and_get_browser_artifact() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+        let artifact = make_test_artifact(&conv.id);
+
+        create_browser_artifact(&db, &artifact).unwrap();
+
+        let fetched = get_browser_artifact(&db, &artifact.id).unwrap();
+        assert_eq!(fetched.id, artifact.id);
+        assert_eq!(fetched.url, "https://example.com");
+        assert_eq!(fetched.session_id, "session_abc123");
+        assert!(fetched.screenshot_path.is_none());
+    }
+
+    #[test]
+    fn test_create_browser_artifact_with_screenshot() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+        let mut artifact = make_test_artifact(&conv.id);
+        artifact.screenshot_path = Some("/tmp/screenshots/test.png".to_string());
+
+        create_browser_artifact(&db, &artifact).unwrap();
+
+        let fetched = get_browser_artifact(&db, &artifact.id).unwrap();
+        assert_eq!(fetched.screenshot_path.as_deref(), Some("/tmp/screenshots/test.png"));
+    }
+
+    #[test]
+    fn test_get_browser_artifact_not_found() {
+        let db = setup_db();
+        let result = get_browser_artifact(&db, "nonexistent");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_browser_artifacts_for_conversation() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let mut a1 = make_test_artifact(&conv.id);
+        a1.screenshot_path = Some("/tmp/s1.png".to_string());
+        let a2 = make_test_artifact(&conv.id);
+        let mut a3 = make_test_artifact(&conv.id);
+        a3.screenshot_path = Some("/tmp/s3.png".to_string());
+
+        create_browser_artifact(&db, &a1).unwrap();
+        create_browser_artifact(&db, &a2).unwrap();
+        create_browser_artifact(&db, &a3).unwrap();
+
+        let paths = delete_browser_artifacts_for_conversation(&db, &conv.id).unwrap();
+        assert_eq!(paths.len(), 2);
+        assert!(paths.contains(&"/tmp/s1.png".to_string()));
+        assert!(paths.contains(&"/tmp/s3.png".to_string()));
+
+        // Verify artifacts are gone
+        assert!(get_browser_artifact(&db, &a1.id).is_err());
+    }
+
+    #[test]
+    fn test_delete_browser_artifacts_empty_conversation() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+        let paths = delete_browser_artifacts_for_conversation(&db, &conv.id).unwrap();
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_browser_artifacts_cascade_on_conversation_delete() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+        let artifact = make_test_artifact(&conv.id);
+        create_browser_artifact(&db, &artifact).unwrap();
+
+        // Delete conversation — FK cascade should remove artifacts
+        delete_conversation_impl(&db, conv.id).unwrap();
+        assert!(get_browser_artifact(&db, &artifact.id).is_err());
     }
 }
