@@ -9,6 +9,9 @@ import { useSummaryStore } from "../summaryStore";
 import { useChatFlowStore } from "../chatFlowStore";
 import { useSettingsStore } from "../settingsStore";
 import { useAgentStore } from "../agentStore";
+import { useMemoryStore } from "../memoryStore";
+import { useDebugStore } from "../debugStore";
+import { useSkillStore } from "../skillStore";
 import * as cmds from "../../services/tauriCommands";
 
 vi.mock("../../services/tauriCommands");
@@ -245,5 +248,128 @@ describe("chat stores (integrated)", () => {
 
     expect(cmds.createConversation).not.toHaveBeenCalled();
     expect(useMessageStore.getState().inputValue).toBe("");
+  });
+
+  it("openAgentChat selects existing conversation for agent", async () => {
+    vi.mocked(cmds.getConversationDetail).mockResolvedValue({
+      id: "c1", title: "Test", agent_id: "a1", created_at: "", updated_at: "",
+      summary: undefined, summary_up_to_message_id: undefined,
+    });
+    vi.mocked(cmds.getMessages).mockResolvedValue([]);
+
+    useConversationStore.setState({
+      conversations: [
+        { id: "c1", title: "Conv 1", agent_id: "a1", created_at: "", updated_at: "2024-01-02" },
+        { id: "c2", title: "Conv 2", agent_id: "a1", created_at: "", updated_at: "2024-01-01" },
+      ],
+    });
+
+    await useConversationStore.getState().openAgentChat("a1");
+
+    // Should select the first (most recent) conversation
+    expect(useConversationStore.getState().currentConversationId).toBe("c1");
+  });
+
+  it("openAgentChat prepares empty DM when agent has no conversation", async () => {
+    useAgentStore.setState({
+      agents: [{ id: "a1", folder_name: "test", name: "Test", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" }],
+    });
+    useConversationStore.setState({ conversations: [], currentConversationId: "old-conv" });
+    useMessageStore.setState({ messages: [{ id: "m1", type: "user", content: "old msg" }] });
+
+    await useConversationStore.getState().openAgentChat("a1");
+
+    expect(useConversationStore.getState().currentConversationId).toBeNull();
+    expect(useMessageStore.getState().messages).toEqual([]);
+    expect(useAgentStore.getState().selectedAgentId).toBe("a1");
+  });
+
+  it("clearAgentChat deletes all conversations for agent and keeps agent selected", async () => {
+    vi.mocked(cmds.deleteConversation).mockResolvedValue(undefined);
+    vi.mocked(cmds.getConversations).mockResolvedValue([]);
+
+    useAgentStore.setState({
+      agents: [{ id: "a1", folder_name: "test", name: "Test", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" }],
+    });
+    useConversationStore.setState({
+      currentConversationId: "c1",
+      conversations: [
+        { id: "c1", title: "Conv 1", agent_id: "a1", created_at: "", updated_at: "" },
+        { id: "c2", title: "Conv 2", agent_id: "a1", created_at: "", updated_at: "" },
+      ],
+    });
+
+    await useConversationStore.getState().clearAgentChat("a1");
+
+    // Both conversations should be deleted
+    expect(cmds.deleteConversation).toHaveBeenCalledTimes(2);
+    expect(cmds.deleteConversation).toHaveBeenCalledWith("c1");
+    expect(cmds.deleteConversation).toHaveBeenCalledWith("c2");
+
+    // Current conversation should be cleared
+    expect(useConversationStore.getState().currentConversationId).toBeNull();
+
+    // Agent should stay selected
+    expect(useAgentStore.getState().selectedAgentId).toBe("a1");
+
+    // Messages should be cleared
+    expect(useMessageStore.getState().messages).toEqual([]);
+  });
+
+  it("clearAgentChat on non-active agent preserves current view", async () => {
+    vi.mocked(cmds.deleteConversation).mockResolvedValue(undefined);
+    vi.mocked(cmds.getConversations).mockResolvedValue([
+      { id: "c1", title: "Active Conv", agent_id: "a1", created_at: "", updated_at: "" },
+    ]);
+    vi.mocked(cmds.getConversationDetail).mockResolvedValue({
+      id: "c1", title: "Active Conv", agent_id: "a1", created_at: "", updated_at: "",
+    });
+    vi.mocked(cmds.getMessages).mockResolvedValue([]);
+
+    useAgentStore.setState({
+      selectedAgentId: "a1",
+      agents: [
+        { id: "a1", folder_name: "test1", name: "Agent 1", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" },
+        { id: "a2", folder_name: "test2", name: "Agent 2", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 1, created_at: "", updated_at: "" },
+      ],
+    });
+    useConversationStore.setState({
+      currentConversationId: "c1",
+      conversations: [
+        { id: "c1", title: "Active Conv", agent_id: "a1", created_at: "", updated_at: "" },
+        { id: "c2", title: "Other Conv", agent_id: "a2", created_at: "", updated_at: "" },
+      ],
+    });
+
+    await useConversationStore.getState().clearAgentChat("a2");
+
+    // Active conversation for a1 should be preserved
+    expect(useConversationStore.getState().currentConversationId).toBe("c1");
+
+    // Agent selection should NOT change to a2
+    expect(useAgentStore.getState().selectedAgentId).toBe("a1");
+  });
+});
+
+describe("resetHelper integration", () => {
+  it("prepareForAgent clears all transient state", () => {
+    // Set up dirty state
+    useConversationStore.setState({ currentConversationId: "c1" });
+    useMessageStore.setState({ messages: [{ id: "1", type: "user", content: "old" }], inputValue: "draft" });
+    useStreamStore.setState({ activeRun: { requestId: "r1", conversationId: "c1", targetMessageId: "m1", status: "streaming" } });
+    useBootstrapStore.setState({ isBootstrapping: true });
+    useSummaryStore.setState({ currentSummary: "old summary", summaryUpToMessageId: "m1" });
+
+    useChatFlowStore.getState().prepareForAgent("a1");
+
+    expect(useConversationStore.getState().currentConversationId).toBeNull();
+    expect(useMessageStore.getState().messages).toEqual([]);
+    expect(useMessageStore.getState().inputValue).toBe("");
+    expect(useStreamStore.getState().activeRun).toBeNull();
+    expect(useBootstrapStore.getState().isBootstrapping).toBe(false);
+    expect(useSummaryStore.getState().currentSummary).toBeNull();
+    expect(useAgentStore.getState().selectedAgentId).toBe("a1");
+    expect(useMemoryStore.getState().notes).toEqual([]);
+    expect(useDebugStore.getState().logs).toEqual([]);
   });
 });

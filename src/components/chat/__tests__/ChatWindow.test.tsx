@@ -26,12 +26,20 @@ beforeEach(() => {
 });
 
 describe("ChatWindow", () => {
-  it("shows agent selector when no conversation and no agent selected", () => {
+  it("shows welcome message when no conversation and no agent selected", () => {
     useMessageStore.setState({ messages: [] });
     useConversationStore.setState({ currentConversationId: null });
     useAgentStore.setState({ selectedAgentId: null, agents: [] });
     render(<ChatWindow />);
-    expect(screen.getByText("에이전트 선택")).toBeInTheDocument();
+    expect(screen.getByText(/사이드바에서 에이전트를 선택/)).toBeInTheDocument();
+  });
+
+  it("does not show AgentSelector component", () => {
+    useMessageStore.setState({ messages: [] });
+    useConversationStore.setState({ currentConversationId: null });
+    useAgentStore.setState({ selectedAgentId: null, agents: [] });
+    render(<ChatWindow />);
+    expect(screen.queryByText("에이전트 선택")).not.toBeInTheDocument();
   });
 
   it("renders messages when present", async () => {
@@ -47,12 +55,17 @@ describe("ChatWindow", () => {
     expect(screen.getByText("답변입니다")).toBeInTheDocument();
   });
 
-  it("shows default title when no conversation and no agent selected", () => {
+  it("shows agent name as header when agent is selected but no conversation", () => {
     useConversationStore.setState({ currentConversationId: null });
     useMessageStore.setState({ messages: [] });
-    useAgentStore.setState({ selectedAgentId: null, agents: [] });
+    useAgentStore.setState({
+      selectedAgentId: "a1",
+      agents: [{ id: "a1", folder_name: "test", name: "MyAgent", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" }],
+    });
     render(<ChatWindow />);
-    expect(screen.getByText("에이전트 선택")).toBeInTheDocument();
+    // header-title and header-agent-btn both show agent name
+    const elements = screen.getAllByText("MyAgent");
+    expect(elements.length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows conversation title from current conversation", () => {
@@ -62,5 +75,24 @@ describe("ChatWindow", () => {
     });
     render(<ChatWindow />);
     expect(screen.getByText("내 대화")).toBeInTheDocument();
+  });
+
+  it("shows ChatInput when agent is selected (even without conversation)", () => {
+    useConversationStore.setState({ currentConversationId: null });
+    useMessageStore.setState({ messages: [] });
+    useAgentStore.setState({
+      selectedAgentId: "a1",
+      agents: [{ id: "a1", folder_name: "test", name: "MyAgent", avatar: null, description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" }],
+    });
+    render(<ChatWindow />);
+    // ChatInput should be rendered (not hidden by showSelector)
+    expect(screen.queryByText(/사이드바에서 에이전트를 선택/)).not.toBeInTheDocument();
+  });
+
+  it("shows bootstrap UI when bootstrapping", async () => {
+    useBootstrapStore.setState({ isBootstrapping: true, bootstrapFolderName: "agent-123" });
+    useMessageStore.setState({ messages: [] });
+    await act(async () => { render(<ChatWindow />); });
+    expect(screen.getByText("새 에이전트 만들기")).toBeInTheDocument();
   });
 });

@@ -12,6 +12,7 @@ import { useToolRunStore } from "./toolRunStore";
 import { useConversationStore } from "./conversationStore";
 import { useMessageStore } from "./messageStore";
 import { useStreamStore } from "./streamStore";
+import { resetChatContext } from "./resetHelper";
 import { buildConversationContext } from "../services/chatHelpers";
 import {
   readPersonaFiles,
@@ -148,14 +149,8 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
   },
 
   prepareForAgent: (agentId: string) => {
-    useConversationStore.setState({ currentConversationId: null });
-    useMessageStore.setState({ messages: [], inputValue: "" });
-    useStreamStore.setState({ activeRun: null });
-    useSummaryStore.setState({ currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
-    useToolRunStore.getState().resetToolState();
-    useBootstrapStore.getState().resetBootstrap();
+    resetChatContext();
     useAgentStore.getState().selectAgent(agentId);
-    useSkillStore.getState().clear();
     const agent = useAgentStore.getState().agents.find((a: any) => a.id === agentId);
     if (agent) {
       useSkillStore.getState().loadSkills(agent.folder_name);

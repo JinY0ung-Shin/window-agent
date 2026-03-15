@@ -6,7 +6,6 @@ import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useAgentStore } from "../../stores/agentStore";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
-import AgentSelector from "../agent/AgentSelector";
 import AgentEditor from "../agent/AgentEditor";
 import MemoryBar from "../memory/MemoryBar";
 import SkillBar from "../skill/SkillBar";
@@ -95,7 +94,12 @@ export default function ChatWindow() {
 
       <div className="chat-container" ref={messagesContainerRef}>
         {showSelector ? (
-          <AgentSelector />
+          <div className="agent-selector">
+            <div className="agent-selector-header">
+              <h2>Agent Workspace</h2>
+              <p>사이드바에서 에이전트를 선택하거나 새 에이전트를 만들어보세요</p>
+            </div>
+          </div>
         ) : (
           <>
             {!isBootstrapping && (() => {

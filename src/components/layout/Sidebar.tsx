@@ -1,31 +1,83 @@
 import { useMemo } from "react";
-import { Bot, MessageSquare, Plus, Settings, Trash2, Users } from "lucide-react";
+import { Bot, Eraser, Plus, Settings, Users } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { DEFAULT_CONVERSATION_TITLE } from "../../constants";
+import { useBootstrapStore } from "../../stores/bootstrapStore";
+import { resetChatContext } from "../../stores/resetHelper";
 
 export default function Sidebar() {
   const conversations = useConversationStore((s) => s.conversations);
   const currentConversationId = useConversationStore((s) => s.currentConversationId);
-  const selectConversation = useConversationStore((s) => s.selectConversation);
-  const createNewConversation = useConversationStore((s) => s.createNewConversation);
-  const deleteConversation = useConversationStore((s) => s.deleteConversation);
+  const openAgentChat = useConversationStore((s) => s.openAgentChat);
+  const clearAgentChat = useConversationStore((s) => s.clearAgentChat);
   const setIsSettingsOpen = useSettingsStore((s) => s.setIsSettingsOpen);
   const agents = useAgentStore((s) => s.agents);
-  const openEditor = useAgentStore((s) => s.openEditor);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
+  const openEditor = useAgentStore((s) => s.openEditor);
+  const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
+  const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
 
-  const agentMap = useMemo(
-    () => new Map(agents.map((a) => [a.id, a])),
-    [agents],
-  );
+  // Build a map: agentId → most recent conversation's updated_at
+  const agentLastActivity = useMemo(() => {
+    const map = new Map<string, string>();
+    // conversations are sorted by updated_at DESC, so first match is the latest
+    for (const conv of conversations) {
+      if (!map.has(conv.agent_id)) {
+        map.set(conv.agent_id, conv.updated_at);
+      }
+    }
+    return map;
+  }, [conversations]);
+
+  // Build a map: agentId → has conversation
+  const agentHasConv = useMemo(() => {
+    const set = new Set<string>();
+    for (const conv of conversations) {
+      set.add(conv.agent_id);
+    }
+    return set;
+  }, [conversations]);
+
+  // Sort agents: those with recent conversations first, then by sort_order
+  const sortedAgents = useMemo(() => {
+    return [...agents].sort((a, b) => {
+      const aTime = agentLastActivity.get(a.id);
+      const bTime = agentLastActivity.get(b.id);
+      if (aTime && bTime) return bTime.localeCompare(aTime);
+      if (aTime && !bTime) return -1;
+      if (!aTime && bTime) return 1;
+      return (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    });
+  }, [agents, agentLastActivity]);
+
+  const isActive = (agentId: string) => {
+    if (isBootstrapping) return false;
+    if (currentConversationId) {
+      const conv = conversations.find((c) => c.id === currentConversationId);
+      return conv?.agent_id === agentId;
+    }
+    return selectedAgentId === agentId;
+  };
 
   const handleOpenAgentEditor = () => {
-    // Open current conversation's agent, or selected agent, or default agent
-    const conv = conversations.find((c) => c.id === currentConversationId);
-    const agentId = conv?.agent_id ?? selectedAgentId ?? agents.find((a) => a.is_default)?.id ?? null;
+    const activeAgentId = (() => {
+      if (currentConversationId) {
+        const conv = conversations.find((c) => c.id === currentConversationId);
+        return conv?.agent_id ?? null;
+      }
+      return selectedAgentId;
+    })();
+    const agentId = activeAgentId ?? agents.find((a) => a.is_default)?.id ?? null;
     openEditor(agentId);
+  };
+
+  const handleNewAgent = async () => {
+    // Reset first, then start bootstrap. If bootstrap fails, we stay in empty state
+    // which is better than losing context silently. Bootstrap failure is rare (only if
+    // getBootstrapPrompt() fails) and the user can click any agent to recover.
+    resetChatContext();
+    await startBootstrap();
   };
 
   return (
@@ -39,49 +91,49 @@ export default function Sidebar() {
 
       <div className="sidebar-content">
         <div
-          className={`menu-item new-chat-btn ${currentConversationId === null ? "active" : ""}`}
-          onClick={createNewConversation}
+          className={`menu-item new-chat-btn ${isBootstrapping ? "active" : ""}`}
+          onClick={handleNewAgent}
         >
           <Plus size={20} />
-          <span>{DEFAULT_CONVERSATION_TITLE}</span>
+          <span>새 에이전트</span>
         </div>
 
         <div className="conversation-list">
-          {conversations.map((conv) => {
-            const agent = agentMap.get(conv.agent_id);
-            return (
-              <div
-                key={conv.id}
-                className={`menu-item conversation-item ${conv.id === currentConversationId ? "active" : ""}`}
-                onClick={() => selectConversation(conv.id)}
-              >
-                {agent?.avatar ? (
-                  <img
-                    src={agent.avatar}
-                    alt={agent.name}
-                    className="conversation-agent-avatar"
-                  />
-                ) : (
-                  <MessageSquare size={18} />
+          {sortedAgents.map((agent) => (
+            <div
+              key={agent.id}
+              className={`menu-item conversation-item ${isActive(agent.id) ? "active" : ""}`}
+              onClick={() => openAgentChat(agent.id)}
+            >
+              {agent.avatar ? (
+                <img
+                  src={agent.avatar}
+                  alt={agent.name}
+                  className="conversation-agent-avatar"
+                />
+              ) : (
+                <Bot size={22} />
+              )}
+              <div className="conversation-text">
+                <span className="conversation-title">{agent.name}</span>
+                {agent.description && (
+                  <span className="conversation-agent-name">{agent.description}</span>
                 )}
-                <div className="conversation-text">
-                  <span className="conversation-title">{conv.title}</span>
-                  {agent && (
-                    <span className="conversation-agent-name">{agent.name}</span>
-                  )}
-                </div>
+              </div>
+              {agentHasConv.has(agent.id) && (
                 <button
                   className="delete-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    deleteConversation(conv.id);
+                    clearAgentChat(agent.id);
                   }}
+                  title="대화 초기화"
                 >
-                  <Trash2 size={14} />
+                  <Eraser size={14} />
                 </button>
-              </div>
-            );
-          })}
+              )}
+            </div>
+          ))}
         </div>
 
         <div

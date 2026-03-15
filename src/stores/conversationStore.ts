@@ -7,9 +7,7 @@ import { useDebugStore } from "./debugStore";
 import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
 import { useMessageStore } from "./messageStore";
-import { useStreamStore } from "./streamStore";
-import { useToolRunStore } from "./toolRunStore";
-import { useBootstrapStore } from "./bootstrapStore";
+import { resetTransientChatState, resetChatContext } from "./resetHelper";
 
 interface ConversationState {
   conversations: Conversation[];
@@ -20,6 +18,8 @@ interface ConversationState {
   createNewConversation: () => void;
   deleteConversation: (id: string) => Promise<void>;
   setCurrentConversationId: (id: string | null) => void;
+  openAgentChat: (agentId: string) => Promise<void>;
+  clearAgentChat: (agentId: string) => Promise<void>;
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -35,13 +35,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   selectConversation: async (id) => {
     set({ currentConversationId: id });
-
-    // Reset transient state on conversation switch
-    useMessageStore.setState({ messages: [], inputValue: "" });
-    useStreamStore.setState({ activeRun: null });
-    useToolRunStore.getState().resetToolState();
-    useBootstrapStore.getState().resetBootstrap();
-    useSummaryStore.getState().resetSummary();
+    resetTransientChatState();
 
     const [detail, dbMessages] = await Promise.all([
       cmds.getConversationDetail(id),
@@ -74,7 +68,6 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     useSummaryStore.getState().loadSummary(detail.summary, detail.summary_up_to_message_id);
 
     // Sync agent selection and load memory/skills/debug
-    useSkillStore.getState().clear();
     if (detail.agent_id) {
       useAgentStore.getState().selectAgent(detail.agent_id);
       useMemoryStore.getState().loadNotes(detail.agent_id);
@@ -92,27 +85,58 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   createNewConversation: () => {
-    set({ currentConversationId: null });
-    useMessageStore.setState({ messages: [], inputValue: "" });
-    useStreamStore.setState({ activeRun: null });
-    useToolRunStore.getState().resetToolState();
-    useBootstrapStore.getState().resetBootstrap();
-    useSummaryStore.getState().resetSummary();
-    useAgentStore.getState().selectAgent(null);
-    useDebugStore.getState().clear();
-    useSkillStore.getState().clear();
+    resetChatContext();
   },
 
   deleteConversation: async (id) => {
     await cmds.deleteConversation(id);
     const { currentConversationId } = get();
     if (currentConversationId === id) {
-      set({ currentConversationId: null });
-      useMessageStore.setState({ messages: [], inputValue: "" });
-      useStreamStore.setState({ activeRun: null });
-      useSummaryStore.getState().resetSummary();
-      useAgentStore.getState().selectAgent(null);
+      resetChatContext();
     }
     await get().loadConversations();
+  },
+
+  openAgentChat: async (agentId) => {
+    const { conversations } = get();
+    // Find the most recent conversation for this agent (conversations are sorted by updated_at DESC)
+    const agentConv = conversations.find((c) => c.agent_id === agentId);
+
+    if (agentConv) {
+      await get().selectConversation(agentConv.id);
+    } else {
+      // No conversation exists — prepare empty DM for this agent
+      resetChatContext();
+      useAgentStore.getState().selectAgent(agentId);
+      const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
+      if (agent) {
+        useMemoryStore.getState().loadNotes(agentId);
+        await useSkillStore.getState().loadSkills(agent.folder_name);
+      }
+    }
+  },
+
+  clearAgentChat: async (agentId) => {
+    const { conversations, currentConversationId } = get();
+    // Delete ALL conversations for this agent
+    const agentConvs = conversations.filter((c) => c.agent_id === agentId);
+    await Promise.all(agentConvs.map((c) => cmds.deleteConversation(c.id)));
+
+    const wasActive = agentConvs.some((c) => c.id === currentConversationId);
+
+    await get().loadConversations();
+
+    if (wasActive) {
+      // Reset transient state and re-select the cleared agent for empty DM
+      set({ currentConversationId: null });
+      resetTransientChatState();
+      useAgentStore.getState().selectAgent(agentId);
+      const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
+      if (agent) {
+        useMemoryStore.getState().loadNotes(agentId);
+        await useSkillStore.getState().loadSkills(agent.folder_name);
+      }
+    }
+    // If clearing a non-active agent, don't touch global state at all
   },
 }));
