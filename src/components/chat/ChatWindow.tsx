@@ -12,6 +12,7 @@ import ChatInput from "./ChatInput";
 import AgentEditor from "../agent/AgentEditor";
 import SkillBar from "../skill/SkillBar";
 import ToolRunBlock from "./ToolRunBlock";
+import ConversationSwitcher from "./ConversationSwitcher";
 import { buildChatRenderBlocks } from "./chatRenderBlocks";
 
 export default function ChatWindow() {
@@ -118,18 +119,6 @@ export default function ChatWindow() {
     }
   }, [messages, toolRunState, activeRun?.status, scrollToBottom]);
 
-  const selectedAgent = selectedAgentId
-    ? agents.find((a) => a.id === selectedAgentId)
-    : null;
-
-  const currentTitle = isBootstrapping
-    ? labels.bootstrapTitle
-    : currentConversationId
-      ? conversations.find((c) => c.id === currentConversationId)?.title ?? "대화"
-      : selectedAgent
-        ? selectedAgent.name
-        : labels.appTitle(companyName);
-
   // Show agent selector when no conversation, no agent selected, and not bootstrapping
   const showSelector =
     !currentConversationId &&
@@ -137,11 +126,13 @@ export default function ChatWindow() {
     !selectedAgentId &&
     !isBootstrapping;
 
-  // Resolve the agent for the current context (conversation or selected)
+  // Resolve the agent for the current context (conversation or selected).
+  // Falls through to selectedAgentId when the conversation is not yet in the list
+  // (e.g. optimistic new conversation before loadConversations()).
   const currentAgentId = (() => {
     if (currentConversationId) {
       const conv = conversations.find((c) => c.id === currentConversationId);
-      return conv?.agent_id ?? null;
+      if (conv) return conv.agent_id;
     }
     return selectedAgentId;
   })();
@@ -153,7 +144,7 @@ export default function ChatWindow() {
   return (
     <main className="main-area">
       <header className="chat-header">
-        <div className="header-title">{currentTitle}</div>
+        <ConversationSwitcher />
         {currentAgent && (
           <button
             className="header-agent-btn"

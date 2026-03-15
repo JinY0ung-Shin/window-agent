@@ -20,6 +20,7 @@ interface ConversationState {
   setCurrentConversationId: (id: string | null) => void;
   openAgentChat: (agentId: string) => Promise<void>;
   clearAgentChat: (agentId: string) => Promise<void>;
+  startNewAgentConversation: (agentId: string) => Promise<void>;
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -138,5 +139,18 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       }
     }
     // If clearing a non-active agent, don't touch global state at all
+  },
+
+  startNewAgentConversation: async (agentId) => {
+    // Prepare empty DM for the agent — reuses the same path as openAgentChat's "no conversation" branch
+    // so memory, skills, and agent selection are correctly loaded.
+    set({ currentConversationId: null });
+    resetTransientChatState();
+    useAgentStore.getState().selectAgent(agentId);
+    const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
+    if (agent) {
+      useMemoryStore.getState().loadNotes(agentId);
+      await useSkillStore.getState().loadSkills(agent.folder_name);
+    }
   },
 }));
