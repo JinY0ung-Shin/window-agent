@@ -13,6 +13,8 @@ import AgentEditor from "../agent/AgentEditor";
 import SkillBar from "../skill/SkillBar";
 import ToolRunBlock from "./ToolRunBlock";
 import ConversationSwitcher from "./ConversationSwitcher";
+import WindowControls from "../layout/WindowControls";
+import { useDragRegion } from "../../hooks/useDragRegion";
 import { buildChatRenderBlocks } from "./chatRenderBlocks";
 
 export default function ChatWindow() {
@@ -139,11 +141,12 @@ export default function ChatWindow() {
   const currentAgent = currentAgentId
     ? agents.find((a) => a.id === currentAgentId) ?? null
     : null;
+  const onDrag = useDragRegion();
   const renderBlocks = buildChatRenderBlocks(messages, toolRunState, pendingToolCalls);
 
   return (
     <main className="main-area">
-      <header className="chat-header">
+      <header className="chat-header" onMouseDown={onDrag}>
         <ConversationSwitcher />
         {currentAgent && (
           <button
@@ -166,6 +169,7 @@ export default function ChatWindow() {
             <X size={18} />
           </button>
         )}
+        <WindowControls />
       </header>
 
       <div className="chat-container" ref={messagesContainerRef}>

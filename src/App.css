@@ -51,11 +51,13 @@ body {
 }
 
 .sidebar-header {
-  padding: 20px;
+  height: 48px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .sidebar-header h1 {
@@ -191,17 +193,50 @@ body {
 }
 
 .chat-header {
-  height: 64px;
+  height: 48px;
   background-color: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 24px;
+  padding: 0 16px;
   position: absolute;
   top: 0;
   width: 100%;
   z-index: 10;
+}
+
+/* ── Window Controls ── */
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.window-control-btn:hover {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+}
+
+.window-control-close:hover {
+  background-color: #ef4444;
+  color: white;
 }
 
 .header-title {

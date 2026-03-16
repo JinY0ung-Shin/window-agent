@@ -6,6 +6,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { resetChatContext } from "../../stores/resetHelper";
 import { useLabels, useCompanyName } from "../../hooks/useLabels";
+import { useDragRegion } from "../../hooks/useDragRegion";
 
 export default function Sidebar() {
   const conversations = useConversationStore((s) => s.conversations);
@@ -20,6 +21,7 @@ export default function Sidebar() {
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
   const labels = useLabels();
   const companyName = useCompanyName();
+  const onDrag = useDragRegion();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Build a map: agentId → most recent conversation's updated_at
@@ -86,7 +88,7 @@ export default function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header">
+      <div className="sidebar-header" onMouseDown={onDrag}>
         <div className="logo-icon">
           <Bot size={24} />
         </div>
