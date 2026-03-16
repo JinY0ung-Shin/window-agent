@@ -28,5 +28,8 @@ dist-ssr
 .env.*
 !.env.example
 
+# Bundled Node.js binary
+browser-sidecar/node.exe
+
 # AutoFlow plan artifacts
 .ccb/

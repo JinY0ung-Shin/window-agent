@@ -431,8 +431,9 @@ if (require.main === module) {
 
       try {
         const { execSync } = require('node:child_process');
-        execSync('npx playwright install chromium', {
-          cwd: __dirname, // Ensure npx resolves playwright from sidecar's node_modules
+        const playwrightCli = require.resolve('playwright/cli');
+        execSync(`"${process.execPath}" "${playwrightCli}" install chromium`, {
+          cwd: __dirname,
           stdio: ['ignore', 'pipe', 'pipe'],
           env: { ...process.env },
           timeout: 300000, // 5 min timeout

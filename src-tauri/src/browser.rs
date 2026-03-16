@@ -113,7 +113,7 @@ impl BrowserManager {
         let script_path = resolve_sidecar_script(self.app_handle.as_ref())
             .ok_or_else(|| "browser-sidecar server.js not found".to_string())?;
 
-        let node_path = resolve_node_executable()?;
+        let node_path = resolve_node_executable(self.app_handle.as_ref())?;
 
         let mut cmd = Command::new(&node_path);
         cmd.arg(&script_path)
@@ -668,11 +668,26 @@ pub struct BrowserToolResult {
 }
 
 /// Resolve the Node.js executable path.
-/// Uses the `which` crate for cross-platform PATH resolution (handles PATHEXT on Windows).
-fn resolve_node_executable() -> Result<PathBuf, String> {
+/// In release: uses the bundled node.exe from Tauri resources (alongside sidecar files).
+/// Fallback: uses the `which` crate for system PATH resolution.
+fn resolve_node_executable(app_handle: Option<&tauri::AppHandle>) -> Result<PathBuf, String> {
+    // 1. Release: resolve bundled node.exe via Tauri resource resolver.
+    //    The path must match the bundle.resources entry in tauri.conf.json.
+    if let Some(handle) = app_handle {
+        if let Ok(path) = handle
+            .path()
+            .resolve("../browser-sidecar/node.exe", tauri::path::BaseDirectory::Resource)
+        {
+            if path.exists() {
+                return Ok(path);
+            }
+        }
+    }
+
+    // 2. Fallback: system PATH
     which::which("node").map_err(|_| {
-        "Node.js is required but not found in PATH. \
-         Install from https://nodejs.org (v18+ recommended)"
+        "Node.js is required but not found. \
+         The bundled node.exe may be missing from the installation."
             .to_string()
     })
 }
@@ -999,7 +1014,7 @@ mod tests {
 
     #[test]
     fn test_resolve_node_executable_returns_valid_path_or_clear_error() {
-        match resolve_node_executable() {
+        match resolve_node_executable(None) {
             Ok(path) => {
                 // When node is available, path must exist and be a file
                 assert!(path.exists(), "resolved node path should exist");
