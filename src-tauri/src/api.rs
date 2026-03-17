@@ -22,7 +22,21 @@ struct ApiConfig {
     base_url: String,
 }
 
-const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
+pub const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
+
+/// Check if a URL is effectively the default OpenAI endpoint.
+/// Normalizes trailing slashes for comparison.
+pub fn is_default_url(url: &str) -> bool {
+    let normalized = url.trim_end_matches('/');
+    let default_normalized = DEFAULT_BASE_URL.trim_end_matches('/');
+    normalized == default_normalized
+}
+
+/// Returns true if the request requires an API key.
+/// Custom/proxy URLs (LiteLLM, vLLM, etc.) can work keyless.
+pub fn requires_api_key(api_key: &str, base_url: &str) -> bool {
+    api_key.is_empty() && is_default_url(base_url)
+}
 const STORE_FILE: &str = "api-config.json";
 const STORE_KEY_API_KEY: &str = "api_key";
 const STORE_KEY_BASE_URL: &str = "base_url";
@@ -75,7 +89,7 @@ impl ApiState {
     /// (for keyless proxies like LiteLLM, vLLM, local servers).
     pub fn has_api_key(&self) -> bool {
         let cfg = self.inner.lock().unwrap();
-        !cfg.api_key.is_empty() || cfg.base_url != DEFAULT_BASE_URL
+        !cfg.api_key.is_empty() || !is_default_url(&cfg.base_url)
     }
 
     /// Update API configuration and persist to store.

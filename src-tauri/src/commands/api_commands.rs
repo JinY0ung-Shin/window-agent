@@ -28,7 +28,7 @@ pub async fn chat_completion(
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
-    if api_key.is_empty() {
+    if crate::api::requires_api_key(&api_key, &base_url) {
         return Err(AppError::Validation("API key not configured".into()));
     }
 
@@ -93,7 +93,7 @@ pub async fn bootstrap_completion(
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
-    if api_key.is_empty() {
+    if crate::api::requires_api_key(&api_key, &base_url) {
         return Err(AppError::Validation("API key not configured".into()));
     }
 
@@ -135,7 +135,7 @@ pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, AppErr
     let client = api.client();
 
     // Allow keyless access for local/proxy servers (LiteLLM, vLLM etc.)
-    if api_key.is_empty() && base_url == crate::api::DEFAULT_BASE_URL {
+    if crate::api::requires_api_key(&api_key, &base_url) {
         return Err(AppError::Validation("API key not configured".into()));
     }
 
@@ -175,7 +175,7 @@ pub async fn chat_completion_stream(
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
-    if api_key.is_empty() {
+    if crate::api::requires_api_key(&api_key, &base_url) {
         let _ = app.emit(
             "chat-stream-done",
             StreamDonePayload {

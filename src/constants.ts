@@ -39,8 +39,14 @@ export const ERROR_MESSAGES: Record<string, string> = {
 
 export function parseErrorMessage(error: unknown): string {
   const msg = error instanceof Error ? error.message : String(error);
-  const prefix = msg.match(/(HTTP_\d{3}|PARSE_ERROR|EMPTY_RESPONSE):/)?.[1];
-  if (prefix && ERROR_MESSAGES[prefix]) return ERROR_MESSAGES[prefix];
+  const match = msg.match(/(HTTP_\d{3}|PARSE_ERROR|EMPTY_RESPONSE):(.*)/s);
+  const prefix = match?.[1];
+  const serverDetail = match?.[2]?.trim();
+  if (prefix && ERROR_MESSAGES[prefix]) {
+    // Include server response detail for debugging (especially useful for proxy servers)
+    const friendly = ERROR_MESSAGES[prefix];
+    return serverDetail ? `${friendly}\n\n서버 응답: ${serverDetail.slice(0, 300)}` : friendly;
+  }
   if (msg.includes("HTTP error") || msg.includes("fetch")) return ERROR_MESSAGES.NETWORK;
   // Show actual error instead of generic message for debugging
   if (msg && msg !== "[object Object]") return msg;
