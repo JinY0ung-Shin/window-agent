@@ -261,7 +261,7 @@ export default function SettingsModal() {
                     </p>
                     <p>Base URL: {healthResult.base_url}</p>
                     <p>모델: {healthResult.model}</p>
-                    <p>Authorization 헤더: {healthResult.authorization_header_sent ? "전송됨" : "전송 안 함"}</p>
+                    <p>Authorization 헤더: {healthResult.authorization_header_sent ? "전송됨" : "전송 안 함"} (키: {healthResult.api_key_preview})</p>
                     <p>Thinking: {healthResult.thinking_enabled ? "켜짐" : "꺼짐"}</p>
                     <p>/models: {healthResult.models_check.ok ? "성공" : "실패"} - {healthResult.models_check.detail}</p>
                     <p>/chat/completions: {healthResult.completion_check.ok ? "성공" : "실패"} - {healthResult.completion_check.detail}</p>

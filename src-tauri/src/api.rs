@@ -234,6 +234,7 @@ pub struct ApiHealthCheckResponse {
     pub completions_url: String,
     pub model: String,
     pub authorization_header_sent: bool,
+    pub api_key_preview: String,    // e.g., "sk-ab...xyz" (first 4 + last 3 chars)
     pub thinking_enabled: bool,
     pub models_check: ApiHealthCheckStep,
     pub completion_check: ApiHealthCheckStep,

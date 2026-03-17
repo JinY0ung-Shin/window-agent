@@ -302,6 +302,15 @@ pub async fn check_api_health(
         }
     };
 
+    // Build a safe preview of the API key for debugging (first 4 + last 3 chars)
+    let api_key_preview = if api_key.len() > 8 {
+        format!("{}...{}", &api_key[..4], &api_key[api_key.len()-3..])
+    } else if api_key.is_empty() {
+        "(없음)".to_string()
+    } else {
+        format!("{}...", &api_key[..api_key.len().min(4)])
+    };
+
     Ok(ApiHealthCheckResponse {
         ok: completion_check.ok,
         base_url,
@@ -309,6 +318,7 @@ pub async fn check_api_health(
         completions_url,
         model,
         authorization_header_sent: !api_key.is_empty(),
+        api_key_preview,
         thinking_enabled,
         models_check,
         completion_check,

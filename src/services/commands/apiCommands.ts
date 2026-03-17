@@ -49,6 +49,7 @@ export interface ApiHealthCheckResponse {
   completions_url: string;
   model: string;
   authorization_header_sent: boolean;
+  api_key_preview: string;
   thinking_enabled: boolean;
   models_check: ApiHealthCheckStep;
   completion_check: ApiHealthCheckStep;
