@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Settings, X, RefreshCw } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { listModels } from "../../services/tauriCommands";
@@ -21,6 +21,7 @@ export default function SettingsModal() {
   const [tempThinkingBudget, setTempThinkingBudget] = useState(DEFAULT_THINKING_BUDGET);
   const [tempCompanyName, setTempCompanyName] = useState("");
   const [tempUITheme, setTempUITheme] = useState<UITheme>("org");
+  const isCompanyNameComposing = useRef(false);
 
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -240,6 +241,11 @@ export default function SettingsModal() {
                   placeholder="예: 우리 회사"
                   value={tempCompanyName}
                   onChange={(e) => setTempCompanyName(e.target.value)}
+                  onCompositionStart={() => { isCompanyNameComposing.current = true; }}
+                  onCompositionEnd={(e) => {
+                    isCompanyNameComposing.current = false;
+                    setTempCompanyName(e.currentTarget.value);
+                  }}
                 />
                 <p className="form-text">
                   사이드바 헤더와 환영 화면에 표시됩니다.
