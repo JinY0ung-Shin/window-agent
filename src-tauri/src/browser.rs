@@ -673,12 +673,13 @@ pub struct BrowserToolResult {
 fn resolve_node_executable(app_handle: Option<&tauri::AppHandle>) -> Result<PathBuf, String> {
     // 1. Release: resolve bundled node.exe via Tauri resource resolver.
     //    The path must match the bundle.resources entry in tauri.conf.json.
+    //    Skip zero-byte placeholders created by build.rs for dev builds.
     if let Some(handle) = app_handle {
         if let Ok(path) = handle
             .path()
             .resolve("../browser-sidecar/node.exe", tauri::path::BaseDirectory::Resource)
         {
-            if path.exists() {
+            if path.exists() && std::fs::metadata(&path).map(|m| m.len() > 0).unwrap_or(false) {
                 return Ok(path);
             }
         }
