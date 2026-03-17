@@ -47,6 +47,12 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $version = $tag -replace '^v', ''
+
+          # Validate semver format (x.y.z with optional pre-release)
+          if ($version -notmatch '^\d+\.\d+\.\d+') {
+            Write-Error "Invalid semver tag: $tag (expected vX.Y.Z format)"
+            exit 1
+          }
           Write-Host "Setting version to: $version"
 
           # Update tauri.conf.json
@@ -54,8 +60,12 @@ jobs:
           $tauri.version = $version
           $tauri | ConvertTo-Json -Depth 10 | Set-Content src-tauri/tauri.conf.json
 
-          # Update Cargo.toml
-          (Get-Content src-tauri/Cargo.toml -Raw) -replace 'version = "0\.\d+\.\d+"', "version = `"$version`"" | Set-Content src-tauri/Cargo.toml
+          # Update Cargo.toml — only replace [package] version (first occurrence)
+          $cargo = Get-Content src-tauri/Cargo.toml -Raw
+          $pattern = '(?m)^(version\s*=\s*")[^"]*(")'
+          $replacement = "`${1}$version`${2}"
+          $cargo = [regex]::Replace($cargo, $pattern, $replacement, 1)
+          Set-Content src-tauri/Cargo.toml $cargo
 
           # Update package.json
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
