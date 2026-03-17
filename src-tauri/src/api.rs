@@ -70,9 +70,12 @@ impl ApiState {
         }
     }
 
+    /// Returns true if the user has configured API access.
+    /// Either an API key is set, or a custom base URL is configured
+    /// (for keyless proxies like LiteLLM, vLLM, local servers).
     pub fn has_api_key(&self) -> bool {
         let cfg = self.inner.lock().unwrap();
-        !cfg.api_key.is_empty()
+        !cfg.api_key.is_empty() || cfg.base_url != DEFAULT_BASE_URL
     }
 
     /// Update API configuration and persist to store.

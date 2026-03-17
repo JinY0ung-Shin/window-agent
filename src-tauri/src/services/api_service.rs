@@ -64,13 +64,13 @@ pub async fn do_completion(
 ) -> Result<ChatCompletionResponse, AppError> {
     let url = completions_url(base_url);
 
-    let resp = client
+    let mut req = client
         .post(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(body)
-        .send()
-        .await?;
+        .header("Content-Type", "application/json");
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", api_key));
+    }
+    let resp = req.json(body).send().await?;
 
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
@@ -120,13 +120,13 @@ pub async fn stream_completion(
 ) -> Result<(), AppError> {
     let url = completions_url(base_url);
 
-    let resp = client
+    let mut req = client
         .post(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(body)
-        .send()
-        .await?;
+        .header("Content-Type", "application/json");
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", api_key));
+    }
+    let resp = req.json(body).send().await?;
 
     // Check HTTP status before attempting to stream
     if !resp.status().is_success() {

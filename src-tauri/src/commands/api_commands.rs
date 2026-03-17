@@ -105,13 +105,13 @@ pub async fn bootstrap_completion(
 
     let url = api_service::completions_url(&base_url);
 
-    let resp = client
+    let mut req = client
         .post(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await?;
+        .header("Content-Type", "application/json");
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", api_key));
+    }
+    let resp = req.json(&body).send().await?;
 
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
@@ -134,17 +134,18 @@ pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, AppErr
     let (api_key, base_url) = api.effective();
     let client = api.client();
 
-    if api_key.is_empty() {
+    // Allow keyless access for local/proxy servers (LiteLLM, vLLM etc.)
+    if api_key.is_empty() && base_url == crate::api::DEFAULT_BASE_URL {
         return Err(AppError::Validation("API key not configured".into()));
     }
 
     let url = api_service::models_url(&base_url);
 
-    let resp = client
-        .get(&url)
-        .header("Authorization", format!("Bearer {}", api_key))
-        .send()
-        .await?;
+    let mut req = client.get(&url);
+    if !api_key.is_empty() {
+        req = req.header("Authorization", format!("Bearer {}", api_key));
+    }
+    let resp = req.send().await?;
 
     if !resp.status().is_success() {
         let status = resp.status().as_u16();
