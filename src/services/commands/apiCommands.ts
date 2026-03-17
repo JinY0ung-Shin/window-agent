@@ -32,27 +32,14 @@ export async function setApiConfig(request: SetApiConfigRequest): Promise<void> 
 export interface ApiHealthCheckRequest {
   api_key?: string | null;
   base_url?: string | null;
-  model?: string | null;
-  thinking_enabled?: boolean | null;
-  thinking_budget?: number | null;
-}
-
-export interface ApiHealthCheckStep {
-  ok: boolean;
-  detail: string;
 }
 
 export interface ApiHealthCheckResponse {
   ok: boolean;
   base_url: string;
-  models_url: string;
-  completions_url: string;
-  model: string;
   authorization_header_sent: boolean;
   api_key_preview: string;
-  thinking_enabled: boolean;
-  models_check: ApiHealthCheckStep;
-  completion_check: ApiHealthCheckStep;
+  detail: string;
 }
 
 export async function checkApiHealth(

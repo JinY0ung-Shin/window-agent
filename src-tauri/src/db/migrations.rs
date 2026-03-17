@@ -107,6 +107,11 @@ fn all_migrations() -> &'static [Migration] {
             description: "Add FK + screenshot_path to browser_artifacts",
             sql: "",  // handled by custom migration function
         },
+        Migration {
+            version: 9,
+            description: "P2P network: contacts, peer_threads, peer_messages, outbox",
+            sql: "",  // handled by custom migration function
+        },
     ]
 }
 
@@ -259,6 +264,70 @@ fn migrate_v7_to_v8(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Migration v9: P2P network tables — contacts, peer_threads, peer_messages, outbox.
+fn migrate_v8_to_v9(conn: &Connection) -> Result<(), rusqlite::Error> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS contacts (
+            id                TEXT PRIMARY KEY,
+            peer_id           TEXT NOT NULL UNIQUE,
+            public_key        TEXT NOT NULL,
+            display_name      TEXT NOT NULL,
+            agent_name        TEXT NOT NULL DEFAULT '',
+            agent_description TEXT NOT NULL DEFAULT '',
+            local_agent_id    TEXT REFERENCES agents(id) ON DELETE SET NULL,
+            mode              TEXT NOT NULL DEFAULT 'secretary',
+            capabilities_json TEXT NOT NULL DEFAULT '{\"can_send_messages\":true,\"can_read_agent_info\":true,\"can_request_tasks\":false,\"can_access_tools\":false,\"can_write_vault\":false}',
+            status            TEXT NOT NULL DEFAULT 'pending',
+            invite_card_raw   TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_contacts_peer_id ON contacts(peer_id);
+        CREATE INDEX IF NOT EXISTS idx_contacts_local_agent ON contacts(local_agent_id);
+
+        CREATE TABLE IF NOT EXISTS peer_threads (
+            id              TEXT PRIMARY KEY,
+            contact_id      TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+            local_agent_id  TEXT REFERENCES agents(id) ON DELETE SET NULL,
+            title           TEXT NOT NULL DEFAULT '',
+            summary         TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_peer_threads_contact ON peer_threads(contact_id);
+
+        CREATE TABLE IF NOT EXISTS peer_messages (
+            id                TEXT PRIMARY KEY,
+            thread_id         TEXT NOT NULL REFERENCES peer_threads(id) ON DELETE CASCADE,
+            message_id_unique TEXT NOT NULL UNIQUE,
+            correlation_id    TEXT,
+            direction         TEXT NOT NULL,
+            sender_agent      TEXT NOT NULL DEFAULT '',
+            content           TEXT NOT NULL,
+            approval_state    TEXT NOT NULL DEFAULT 'none',
+            delivery_state    TEXT NOT NULL DEFAULT 'pending',
+            retry_count       INTEGER NOT NULL DEFAULT 0,
+            raw_envelope      TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_peer_messages_thread ON peer_messages(thread_id);
+        CREATE INDEX IF NOT EXISTS idx_peer_messages_unique ON peer_messages(message_id_unique);
+
+        CREATE TABLE IF NOT EXISTS outbox (
+            id              TEXT PRIMARY KEY,
+            peer_message_id TEXT NOT NULL REFERENCES peer_messages(id) ON DELETE CASCADE,
+            target_peer_id  TEXT NOT NULL,
+            attempts        INTEGER NOT NULL DEFAULT 0,
+            next_retry_at   TEXT,
+            status          TEXT NOT NULL DEFAULT 'pending',
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status);
+        CREATE INDEX IF NOT EXISTS idx_outbox_target ON outbox(target_peer_id);",
+    )?;
+    Ok(())
+}
+
 /// Ensure the _migrations tracking table exists.
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
@@ -298,6 +367,8 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
                 migrate_v6_to_v7(&tx)?;
             } else if migration.version == 8 {
                 migrate_v7_to_v8(&tx)?;
+            } else if migration.version == 9 {
+                migrate_v8_to_v9(&tx)?;
             } else {
                 tx.execute_batch(migration.sql)?;
             }
@@ -348,7 +419,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
     }
 
     #[test]
@@ -357,7 +428,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
 
         let desc: String = conn
             .query_row(
@@ -465,7 +536,7 @@ mod tests {
 
         // Run remaining migrations (v3 + v4 + v5 + v6)
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 8);
+        assert_eq!(current_version(&conn).unwrap(), 9);
 
         // Verify existing data is preserved
         let title: String = conn
@@ -527,7 +598,7 @@ mod tests {
     fn test_v4_migration_creates_tables_and_columns() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 8);
+        assert_eq!(current_version(&conn).unwrap(), 9);
 
         // Verify new tables exist
         let tables: Vec<String> = conn
@@ -596,7 +667,7 @@ mod tests {
 
         // Run v4 + v5 + v6
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 8);
+        assert_eq!(current_version(&conn).unwrap(), 9);
 
         // Verify existing data preserved, new columns are NULL
         let content: String = conn
@@ -614,7 +685,7 @@ mod tests {
     fn test_v5_migration_adds_active_skills_column() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 8);
+        assert_eq!(current_version(&conn).unwrap(), 9);
 
         // Verify active_skills column exists
         conn.execute(
@@ -642,5 +713,152 @@ mod tests {
             .query_row("SELECT active_skills FROM conversations WHERE id = 'c1'", [], |row| row.get(0))
             .unwrap();
         assert_eq!(skills.as_deref(), Some("[\"web-search\",\"code-gen\"]"));
+    }
+
+    #[test]
+    fn test_v9_migration_creates_p2p_tables() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+        assert_eq!(current_version(&conn).unwrap(), 9);
+
+        let tables: Vec<String> = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            .unwrap()
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+
+        assert!(tables.contains(&"contacts".to_string()));
+        assert!(tables.contains(&"peer_threads".to_string()));
+        assert!(tables.contains(&"peer_messages".to_string()));
+        assert!(tables.contains(&"outbox".to_string()));
+    }
+
+    #[test]
+    fn test_v9_contacts_crud() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+
+        // Insert an agent for local_agent_id FK
+        conn.execute(
+            "INSERT INTO agents (id, folder_name, name, description, created_at, updated_at) VALUES ('a1', 'test', 'Test', '', '2024-01-01', '2024-01-01')",
+            [],
+        ).unwrap();
+
+        // Insert a contact
+        conn.execute(
+            "INSERT INTO contacts (id, peer_id, public_key, display_name, local_agent_id) VALUES ('c1', 'peer123', 'pk_abc', 'Alice', 'a1')",
+            [],
+        ).unwrap();
+
+        let display_name: String = conn
+            .query_row("SELECT display_name FROM contacts WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(display_name, "Alice");
+
+        // peer_id UNIQUE constraint
+        let result = conn.execute(
+            "INSERT INTO contacts (id, peer_id, public_key, display_name) VALUES ('c2', 'peer123', 'pk_def', 'Bob')",
+            [],
+        );
+        assert!(result.is_err(), "peer_id should be unique");
+
+        // ON DELETE SET NULL for local_agent_id
+        conn.execute("DELETE FROM agents WHERE id = 'a1'", []).unwrap();
+        let local_agent: Option<String> = conn
+            .query_row("SELECT local_agent_id FROM contacts WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert!(local_agent.is_none(), "local_agent_id should be set to NULL on agent delete");
+    }
+
+    #[test]
+    fn test_v9_peer_threads_cascade() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO contacts (id, peer_id, public_key, display_name) VALUES ('c1', 'peer1', 'pk1', 'Alice')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO peer_threads (id, contact_id, title) VALUES ('t1', 'c1', 'Thread 1')",
+            [],
+        ).unwrap();
+
+        // Cascade delete threads when contact is deleted
+        conn.execute("DELETE FROM contacts WHERE id = 'c1'", []).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM peer_threads WHERE id = 't1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0, "peer_threads should cascade on contact delete");
+    }
+
+    #[test]
+    fn test_v9_peer_messages_duplicate_handling() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO contacts (id, peer_id, public_key, display_name) VALUES ('c1', 'peer1', 'pk1', 'Alice')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO peer_threads (id, contact_id) VALUES ('t1', 'c1')",
+            [],
+        ).unwrap();
+
+        // Insert a message
+        conn.execute(
+            "INSERT INTO peer_messages (id, thread_id, message_id_unique, direction, content) VALUES ('m1', 't1', 'unique-123', 'inbound', 'hello')",
+            [],
+        ).unwrap();
+
+        // Duplicate message_id_unique should be rejected (UNIQUE constraint)
+        let result = conn.execute(
+            "INSERT INTO peer_messages (id, thread_id, message_id_unique, direction, content) VALUES ('m2', 't1', 'unique-123', 'inbound', 'hello again')",
+            [],
+        );
+        assert!(result.is_err(), "message_id_unique should enforce uniqueness");
+
+        // INSERT OR IGNORE should silently skip duplicates
+        conn.execute(
+            "INSERT OR IGNORE INTO peer_messages (id, thread_id, message_id_unique, direction, content) VALUES ('m2', 't1', 'unique-123', 'inbound', 'hello again')",
+            [],
+        ).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM peer_messages", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1, "duplicate should be ignored");
+    }
+
+    #[test]
+    fn test_v9_outbox_fk_cascade() {
+        let conn = setup_conn();
+        run_migrations(&conn).unwrap();
+
+        conn.execute(
+            "INSERT INTO contacts (id, peer_id, public_key, display_name) VALUES ('c1', 'peer1', 'pk1', 'Alice')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO peer_threads (id, contact_id) VALUES ('t1', 'c1')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO peer_messages (id, thread_id, message_id_unique, direction, content) VALUES ('m1', 't1', 'u1', 'outbound', 'hi')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO outbox (id, peer_message_id, target_peer_id) VALUES ('o1', 'm1', 'peer1')",
+            [],
+        ).unwrap();
+
+        // Cascade: delete contact → thread → message → outbox
+        conn.execute("DELETE FROM contacts WHERE id = 'c1'", []).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM outbox", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0, "outbox should cascade through peer_messages → peer_threads → contacts");
     }
 }

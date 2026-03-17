@@ -4,6 +4,7 @@ mod commands;
 mod db;
 mod error;
 mod models;
+mod p2p;
 mod services;
 mod utils;
 pub mod vault;
@@ -53,6 +54,13 @@ pub fn run() {
                 Ok(w) => { app.manage(w); } // keep watcher alive via managed state
                 Err(e) => { eprintln!("Warning: vault watcher failed to start: {e}"); }
             }
+
+            // Initialize P2P identity and manager (dormant until user opts in)
+            let p2p_identity = p2p::identity::NodeIdentity::load_or_create(app.handle())
+                .expect("failed to initialize P2P identity");
+            let p2p_manager = p2p::manager::P2PManager::new(&p2p_identity);
+            app.manage(p2p_identity);
+            app.manage(p2p_manager);
 
             let browser_manager = browser::BrowserManager::new(app_dir.clone(), Some(app.handle().clone()));
             let bm_clone = browser_manager.clone();
@@ -136,6 +144,25 @@ pub fn run() {
             commands::vault_rebuild_index,
             commands::vault_migrate_preview,
             commands::vault_migrate_execute,
+            commands::p2p_start,
+            commands::p2p_stop,
+            commands::p2p_status,
+            commands::p2p_generate_invite,
+            commands::p2p_accept_invite,
+            commands::p2p_list_contacts,
+            commands::p2p_update_contact,
+            commands::p2p_remove_contact,
+            commands::p2p_bind_agent,
+            commands::p2p_send_message,
+            commands::p2p_approve_message,
+            commands::p2p_reject_message,
+            commands::p2p_request_draft,
+            commands::p2p_list_threads,
+            commands::p2p_get_thread,
+            commands::p2p_get_thread_messages,
+            commands::p2p_get_peer_id,
+            commands::p2p_get_network_enabled,
+            commands::p2p_set_network_enabled,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

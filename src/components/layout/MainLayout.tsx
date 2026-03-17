@@ -4,16 +4,32 @@ import { Bug } from "lucide-react";
 import Sidebar from "./Sidebar";
 import ChatWindow from "../chat/ChatWindow";
 import DebugPanel from "../debug/DebugPanel";
+import NetworkPanel from "../network/NetworkPanel";
+
 import { useDebugStore } from "../../stores/debugStore";
 import { useMemoryStore } from "../../stores/memoryStore";
 import { useVaultStore } from "../../stores/vaultStore";
+import { useNetworkStore } from "../../stores/networkStore";
 
 export default function MainLayout() {
   const isDebugOpen = useDebugStore((s) => s.isOpen);
   const setDebugOpen = useDebugStore((s) => s.setOpen);
+  const networkViewActive = useNetworkStore((s) => s.networkViewActive);
+
+  const initializeNetwork = useNetworkStore((s) => s.initialize);
+  const setupEventListeners = useNetworkStore((s) => s.setupEventListeners);
   const [chromiumInstalling, setChromiumInstalling] = useState(false);
 
   const [chromiumError, setChromiumError] = useState<string | null>(null);
+
+  // Initialize P2P network store and event listeners
+  useEffect(() => {
+    initializeNetwork();
+    let cleanup: (() => void) | undefined;
+    setupEventListeners().then((fn) => { cleanup = fn; });
+    return () => { cleanup?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Listen for vault file changes (external Obsidian edits) and refresh stores
   useEffect(() => {
@@ -54,7 +70,11 @@ export default function MainLayout() {
   return (
     <div className="app-container">
       <Sidebar />
-      <ChatWindow />
+      {networkViewActive ? (
+        <NetworkPanel />
+      ) : (
+        <ChatWindow />
+      )}
       <button
         className="debug-toggle-btn"
         onClick={() => setDebugOpen(!isDebugOpen)}

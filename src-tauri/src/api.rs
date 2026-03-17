@@ -215,29 +215,15 @@ pub struct SetApiConfigRequest {
 pub struct ApiHealthCheckRequest {
     pub api_key: Option<String>,
     pub base_url: Option<String>,
-    pub model: Option<String>,
-    pub thinking_enabled: Option<bool>,
-    pub thinking_budget: Option<u32>,
-}
-
-#[derive(Serialize)]
-pub struct ApiHealthCheckStep {
-    pub ok: bool,
-    pub detail: String,
 }
 
 #[derive(Serialize)]
 pub struct ApiHealthCheckResponse {
     pub ok: bool,
     pub base_url: String,
-    pub models_url: String,
-    pub completions_url: String,
-    pub model: String,
     pub authorization_header_sent: bool,
-    pub api_key_preview: String,    // e.g., "sk-ab...xyz" (first 4 + last 3 chars)
-    pub thinking_enabled: bool,
-    pub models_check: ApiHealthCheckStep,
-    pub completion_check: ApiHealthCheckStep,
+    pub api_key_preview: String,
+    pub detail: String,
 }
 
 #[derive(Deserialize)]

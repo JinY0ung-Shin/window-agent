@@ -195,21 +195,14 @@ pub async fn check_api_health(
         Some(url) => url.trim().to_string(),
         None => stored_base_url,
     };
-    let model = request
-        .model
-        .filter(|m| !m.trim().is_empty())
-        .unwrap_or_else(|| "gpt-5.3-codex".to_string());
-    let thinking_enabled = request.thinking_enabled.unwrap_or(false);
-    let thinking_budget = request.thinking_budget;
 
     if crate::api::requires_api_key(&api_key, &base_url) {
         return Err(AppError::Validation("API key not configured".into()));
     }
 
     let models_url = api_service::models_url(&base_url);
-    let completions_url = api_service::completions_url(&base_url);
 
-    let models_check = {
+    let (ok, detail) = {
         let mut req = client.get(&models_url);
         if !api_key.is_empty() {
             req = req.header("Authorization", format!("Bearer {}", api_key));
@@ -230,79 +223,23 @@ pub async fn check_api_health(
                                 .collect::<Vec<_>>()
                                 .join(", ");
                             let detail = if sample.is_empty() {
-                                format!("모델 목록 조회 성공 ({count}개)")
+                                format!("연결 성공 — 모델 {count}개")
                             } else {
-                                format!("모델 목록 조회 성공 ({count}개, 예: {sample})")
+                                format!("연결 성공 — 모델 {count}개 (예: {sample})")
                             };
-                            ApiHealthCheckStep { ok: true, detail }
+                            (true, detail)
                         }
-                        Err(e) => ApiHealthCheckStep {
-                            ok: false,
-                            detail: format!("모델 목록 파싱 실패: {e}"),
-                        },
+                        Err(e) => (false, format!("응답 파싱 실패: {e}")),
                     }
                 } else {
                     let text = resp.text().await.unwrap_or_default();
-                    ApiHealthCheckStep {
-                        ok: false,
-                        detail: format_http_detail(status, text),
-                    }
+                    (false, format_http_detail(status, text))
                 }
             }
-            Err(e) => ApiHealthCheckStep {
-                ok: false,
-                detail: format!("요청 실패: {e}"),
-            },
+            Err(e) => (false, format!("요청 실패: {e}")),
         }
     };
 
-    let completion_check = {
-        let mut body = serde_json::json!({
-            "model": model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are an API health checker. Reply briefly."
-                },
-                {
-                    "role": "user",
-                    "content": "Reply with OK"
-                }
-            ],
-            "temperature": 0,
-        });
-
-        if thinking_enabled {
-            if let Some(budget) = thinking_budget {
-                body["thinking"] = serde_json::json!({
-                    "type": "enabled",
-                    "budget_tokens": budget,
-                });
-            }
-        }
-
-        match api_service::do_completion(&client, &api_key, &base_url, &body).await {
-            Ok(resp) => {
-                let preview = resp.content.chars().take(80).collect::<String>();
-                let detail = if preview.is_empty() {
-                    "채팅 completions 호출 성공".to_string()
-                } else {
-                    format!("채팅 completions 호출 성공: {}", preview.replace('\n', " "))
-                };
-                ApiHealthCheckStep { ok: true, detail }
-            }
-            Err(AppError::Api(msg)) => ApiHealthCheckStep {
-                ok: false,
-                detail: msg,
-            },
-            Err(e) => ApiHealthCheckStep {
-                ok: false,
-                detail: e.to_string(),
-            },
-        }
-    };
-
-    // Build a safe preview of the API key for debugging (first 4 + last 3 chars)
     let api_key_preview = if api_key.len() > 8 {
         format!("{}...{}", &api_key[..4], &api_key[api_key.len()-3..])
     } else if api_key.is_empty() {
@@ -312,16 +249,11 @@ pub async fn check_api_health(
     };
 
     Ok(ApiHealthCheckResponse {
-        ok: completion_check.ok,
+        ok,
         base_url,
-        models_url,
-        completions_url,
-        model,
         authorization_header_sent: !api_key.is_empty(),
         api_key_preview,
-        thinking_enabled,
-        models_check,
-        completion_check,
+        detail,
     })
 }
 

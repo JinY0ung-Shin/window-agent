@@ -11,13 +11,9 @@ vi.mock("../../../services/tauriCommands", async (importOriginal) => {
     checkApiHealth: vi.fn().mockResolvedValue({
       ok: true,
       base_url: "http://localhost:4000/v1",
-      models_url: "http://localhost:4000/v1/models",
-      completions_url: "http://localhost:4000/v1/chat/completions",
-      model: "model-a",
       authorization_header_sent: true,
-      thinking_enabled: true,
-      models_check: { ok: true, detail: "ok" },
-      completion_check: { ok: true, detail: "ok" },
+      api_key_preview: "sk-a...xyz",
+      detail: "연결 성공 — 모델 2개 (예: model-a, model-b)",
     }),
   };
 });
@@ -83,9 +79,8 @@ describe("SettingsModal", () => {
     });
 
     await act(async () => { render(<SettingsModal />); });
-    await act(async () => { fireEvent.click(screen.getByText("API Health Check")); });
+    await act(async () => { fireEvent.click(screen.getByText("연결 확인")); });
 
-    expect(await screen.findByText("API 연결 정상")).toBeInTheDocument();
-    expect(screen.getByText(/Authorization 헤더: 전송됨/)).toBeInTheDocument();
+    expect(await screen.findByText("연결 성공")).toBeInTheDocument();
   });
 });
