@@ -109,11 +109,11 @@ impl ApiState {
         app: &tauri::AppHandle,
     ) -> Result<(), String> {
         let cfg = self.inner.lock().unwrap();
-        // Compute new values without mutating yet
-        let new_key = key.unwrap_or_else(|| cfg.api_key.clone());
+        // Compute new values without mutating yet (trim whitespace from key/URL)
+        let new_key = key.map(|k| k.trim().to_string()).unwrap_or_else(|| cfg.api_key.clone());
         let new_url = match url {
-            Some(u) if u.is_empty() => DEFAULT_BASE_URL.to_string(),
-            Some(u) => u,
+            Some(u) if u.trim().is_empty() => DEFAULT_BASE_URL.to_string(),
+            Some(u) => u.trim().to_string(),
             None => cfg.base_url.clone(),
         };
         drop(cfg); // release lock before I/O

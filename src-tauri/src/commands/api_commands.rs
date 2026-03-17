@@ -189,10 +189,10 @@ pub async fn check_api_health(
     let (stored_api_key, stored_base_url) = api.effective();
     let client = api.client();
 
-    let api_key = request.api_key.unwrap_or(stored_api_key);
+    let api_key = request.api_key.map(|k| k.trim().to_string()).unwrap_or(stored_api_key);
     let base_url = match request.base_url {
-        Some(url) if url.is_empty() => crate::api::DEFAULT_BASE_URL.to_string(),
-        Some(url) => url,
+        Some(url) if url.trim().is_empty() => crate::api::DEFAULT_BASE_URL.to_string(),
+        Some(url) => url.trim().to_string(),
         None => stored_base_url,
     };
     let model = request
