@@ -820,11 +820,14 @@ body {
   background-color: var(--surface);
   width: 100%;
   max-width: 480px;
+  max-height: calc(100vh - 32px);
   border-radius: 24px;
   padding: 32px;
   box-shadow: var(--shadow-lg);
   position: relative;
   animation: scaleIn 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes scaleIn {
@@ -847,6 +850,7 @@ body {
   border-radius: 12px;
   padding: 4px;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .settings-tab {
@@ -926,6 +930,7 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -958,6 +963,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .form-group {
@@ -1108,6 +1116,7 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 /* ── Export/Import Section ──────────────────────────── */
