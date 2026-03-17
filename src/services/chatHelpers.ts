@@ -1,6 +1,8 @@
 import type { ChatMessage, MemoryNote } from "./types";
+import type { VaultNoteSummary } from "./vaultTypes";
 import { MAX_HISTORY_MESSAGES, MAX_CONTEXT_TOKENS } from "../constants";
 import { estimateTokens, estimateMessageTokens } from "./tokenEstimator";
+import { buildPromptReadySlice } from "./memoryAdapter";
 
 const MAX_MEMORY_TOKENS = 500;
 
@@ -135,6 +137,14 @@ export function buildMemorySection(notes: MemoryNote[]): string {
 }
 
 /**
+ * Build the [MEMORY NOTES] section from vault notes, capped at MAX_MEMORY_TOKENS.
+ * Uses the same format as buildMemorySection for backward compatibility.
+ */
+export function buildVaultMemorySection(notes: VaultNoteSummary[]): string {
+  return buildPromptReadySlice(notes);
+}
+
+/**
  * Build the full conversation context: system prompt (with optional summary
  * and memory notes) and token-budgeted message list.
  */
@@ -144,6 +154,7 @@ export function buildConversationContext(params: {
   baseSystemPrompt: string;
   skillsSection?: string;
   memoryNotes?: MemoryNote[];
+  vaultNotes?: VaultNoteSummary[];
 }): { systemPrompt: string; apiMessages: OpenAIMessage[] } {
   let systemPrompt = params.baseSystemPrompt;
 
@@ -152,7 +163,10 @@ export function buildConversationContext(params: {
     systemPrompt += `\n\n${params.skillsSection}`;
   }
 
-  const memorySection = buildMemorySection(params.memoryNotes ?? []);
+  // Vault notes take priority; fall back to legacy memory notes
+  const memorySection = params.vaultNotes && params.vaultNotes.length > 0
+    ? buildVaultMemorySection(params.vaultNotes)
+    : buildMemorySection(params.memoryNotes ?? []);
   if (memorySection) {
     systemPrompt += `\n\n${memorySection}`;
   }

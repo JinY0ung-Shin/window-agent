@@ -5,6 +5,8 @@ import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
+// useVaultStore is loaded in conversationStore; prompt injection uses
+// memoryStore which is already vault-backed via chat_commands.rs.
 import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
 import { useBootstrapStore } from "./bootstrapStore";
@@ -310,6 +312,9 @@ async function streamOneTurn(
 ): Promise<StreamDoneEvent> {
   const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection } = params;
 
+  // memoryStore is already vault-backed (chat_commands.rs → VaultManager),
+  // so memoryNotes provides full content with shared notes excluded.
+  // No need for a separate vaultNotes path.
   const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
     messages: msg().messages,
     summary: summary().currentSummary,
@@ -718,6 +723,13 @@ async function sendNormalMessage() {
             });
           }
         }
+      }
+
+      // Refresh memory store after tool execution so the next turn's prompt
+      // includes any notes the agent just created/updated/deleted via memory_note tool.
+      const memAgentId = useAgentStore.getState().selectedAgentId;
+      if (memAgentId) {
+        await useMemoryStore.getState().loadNotes(memAgentId);
       }
 
       currentRequestId = `req-${Date.now()}`;

@@ -6,10 +6,13 @@ mod error;
 mod models;
 mod services;
 mod utils;
+pub mod vault;
 
 use api::{ApiState, RunRegistry};
+use commands::vault_commands::VaultState;
 use db::Database;
 use tauri::Manager;
+use vault::VaultManager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -37,6 +40,19 @@ pub fn run() {
             app.manage(database);
             app.manage(ApiState::load(app.handle()));
             app.manage(RunRegistry::new());
+
+            // Initialize VaultManager
+            let vault_path = app_dir.join("vault");
+            let vault_manager = VaultManager::new(vault_path.clone())
+                .expect("failed to initialize vault manager");
+            app.manage(std::sync::Mutex::new(vault_manager) as VaultState);
+
+            // Start VaultWatcher for external edit sync (Obsidian etc.)
+            let watcher = vault::watcher::VaultWatcher::new(vault_path, 300);
+            match watcher.start(app.handle().clone()) {
+                Ok(w) => { app.manage(w); } // keep watcher alive via managed state
+                Err(e) => { eprintln!("Warning: vault watcher failed to start: {e}"); }
+            }
 
             let browser_manager = browser::BrowserManager::new(app_dir.clone(), Some(app.handle().clone()));
             let bm_clone = browser_manager.clone();
@@ -105,6 +121,19 @@ pub fn run() {
             commands::add_credential,
             commands::update_credential,
             commands::remove_credential,
+            commands::vault_create_note,
+            commands::vault_read_note,
+            commands::vault_update_note,
+            commands::vault_delete_note,
+            commands::vault_list_notes,
+            commands::vault_search,
+            commands::vault_get_graph,
+            commands::vault_get_backlinks,
+            commands::vault_get_path,
+            commands::vault_open_in_obsidian,
+            commands::vault_rebuild_index,
+            commands::vault_migrate_preview,
+            commands::vault_migrate_execute,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

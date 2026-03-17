@@ -1,9 +1,11 @@
+use crate::commands::vault_commands::VaultState;
 use crate::db::models::BrowserArtifact;
 use crate::db::{agent_operations, operations};
 use crate::db::Database;
 use crate::error::AppError;
 use crate::services::credential_service;
 use crate::utils::path_security::{validate_no_traversal, validate_tool_roots};
+use crate::vault::strip_title_heading;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -353,7 +355,7 @@ async fn tool_web_search(input: &str) -> Result<serde_json::Value, String> {
 }
 
 fn tool_memory_note(
-    db: &Database,
+    vault: &VaultState,
     input: &serde_json::Value,
     auto_agent_id: &str,
 ) -> Result<serde_json::Value, String> {
@@ -374,37 +376,127 @@ fn tool_memory_note(
             let content = input["content"]
                 .as_str()
                 .ok_or("memory_note create: missing 'content'")?;
-            let note = operations::create_memory_note_impl(
-                db,
-                agent_id.to_string(),
-                title.to_string(),
-                content.to_string(),
-            )
-            .map_err(|e| format!("memory_note create failed: {}", e))?;
-            Ok(serde_json::to_value(note).unwrap())
+            let scope = input.get("scope").and_then(|v| v.as_str());
+            let category = input.get("category")
+                .and_then(|v| v.as_str())
+                .unwrap_or("knowledge");
+            let tags: Vec<String> = input.get("tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+            let related_ids: Vec<String> = input.get("related_ids")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+
+            let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+            let note = vm.create_note(
+                agent_id,
+                scope,
+                category,
+                title,
+                content,
+                tags,
+                related_ids,
+            ).map_err(|e| format!("memory_note create failed: {}", e))?;
+
+            // Return legacy-compatible JSON: { id, agent_id, title, content, created_at, updated_at }
+            Ok(serde_json::json!({
+                "id": note.id,
+                "agent_id": note.agent,
+                "title": note.title,
+                "content": strip_title_heading(&note.content),
+                "created_at": note.created,
+                "updated_at": note.updated,
+            }))
         }
         "read" => {
-            let notes = operations::list_memory_notes_impl(db, agent_id.to_string())
-                .map_err(|e| format!("memory_note read failed: {}", e))?;
-            Ok(serde_json::to_value(notes).unwrap())
+            let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+
+            if let Some(id) = input.get("id").and_then(|v| v.as_str()) {
+                // Single note read
+                let note = vm.read_note(id)
+                    .map_err(|e| format!("memory_note read failed: {}", e))?;
+                Ok(serde_json::json!({
+                    "id": note.id,
+                    "agent_id": note.agent,
+                    "title": note.title,
+                    "content": strip_title_heading(&note.content),
+                    "created_at": note.created,
+                    "updated_at": note.updated,
+                }))
+            } else {
+                // List all notes for agent (legacy behavior)
+                let legacy = vm.to_legacy_json(agent_id);
+                Ok(serde_json::Value::Array(legacy))
+            }
         }
         "update" => {
             let id = input["id"]
                 .as_str()
                 .ok_or("memory_note update: missing 'id'")?;
-            let title = input["title"].as_str().map(|s| s.to_string());
-            let content = input["content"].as_str().map(|s| s.to_string());
-            let note = operations::update_memory_note_impl(db, id.to_string(), title, content)
-                .map_err(|e| format!("memory_note update failed: {}", e))?;
-            Ok(serde_json::to_value(note).unwrap())
+            let title = input.get("title").and_then(|v| v.as_str());
+            let content = input["content"].as_str();
+            let tags: Option<Vec<String>> = input.get("tags")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+            let confidence = input.get("confidence").and_then(|v| v.as_f64());
+            let add_links: Option<Vec<String>> = input.get("add_links")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
+
+            let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+            let note = vm.update_note(
+                id,
+                agent_id,
+                title,
+                content,
+                tags,
+                confidence,
+                add_links,
+            ).map_err(|e| format!("memory_note update failed: {}", e))?;
+
+            Ok(serde_json::json!({
+                "id": note.id,
+                "agent_id": note.agent,
+                "title": note.title,
+                "content": strip_title_heading(&note.content),
+                "created_at": note.created,
+                "updated_at": note.updated,
+            }))
         }
         "delete" => {
             let id = input["id"]
                 .as_str()
                 .ok_or("memory_note delete: missing 'id'")?;
-            operations::delete_memory_note_impl(db, id.to_string())
+            // Agents cannot delete shared notes — pass agent_id as caller
+            let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+            vm.delete_note(id, agent_id)
                 .map_err(|e| format!("memory_note delete failed: {}", e))?;
             Ok(serde_json::json!({ "success": true }))
+        }
+        "search" => {
+            let query = input["query"]
+                .as_str()
+                .ok_or("memory_note search: missing 'query'")?;
+            let scope = input.get("scope").and_then(|v| v.as_str());
+            let limit = input.get("limit").and_then(|v| v.as_u64()).map(|v| v as usize);
+
+            let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+            let mut results = vm.search(query, Some(agent_id), scope);
+            if let Some(max) = limit {
+                results.truncate(max);
+            }
+            Ok(serde_json::to_value(results).unwrap_or(serde_json::json!([])))
+        }
+        "recall" => {
+            let limit = input.get("limit")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(10) as usize;
+
+            let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+            let notes = vm.recall(agent_id, limit);
+            Ok(serde_json::to_value(notes).unwrap_or(serde_json::json!([])))
         }
         _ => Err(format!("memory_note: unknown action '{}'", action)),
     }
@@ -538,7 +630,8 @@ async fn execute_tool_inner(
             let agent_id = operations::get_conversation_detail_impl(db, conversation_id.to_string())
                 .map(|c| c.agent_id)
                 .unwrap_or_default();
-            tool_memory_note(db, input, &agent_id)
+            let vault = app.state::<VaultState>();
+            tool_memory_note(&vault, input, &agent_id)
         }
 
         // ── Browser automation tools ──
@@ -1186,46 +1279,33 @@ mod tests {
         assert!(result.is_err());
     }
 
+    fn make_test_vault() -> (TempDir, VaultState) {
+        let tmp = TempDir::new().unwrap();
+        let vm = crate::vault::VaultManager::new(tmp.path().to_path_buf()).unwrap();
+        (tmp, std::sync::Mutex::new(vm))
+    }
+
     #[test]
     fn test_memory_note_unknown_action() {
-        let db = crate::db::Database::new_in_memory().unwrap();
+        let (_tmp, vault) = make_test_vault();
         let input = serde_json::json!({ "action": "fly" });
-        let result = tool_memory_note(&db, &input, "test-agent-id");
+        let result = tool_memory_note(&vault, &input, "test-agent-id");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unknown action"));
     }
 
     #[test]
     fn test_memory_note_create_missing_fields() {
-        let db = crate::db::Database::new_in_memory().unwrap();
+        let (_tmp, vault) = make_test_vault();
         let input = serde_json::json!({ "action": "create" });
-        let result = tool_memory_note(&db, &input, "test-agent-id");
+        let result = tool_memory_note(&vault, &input, "test-agent-id");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_memory_note_crud_lifecycle() {
-        let db = crate::db::Database::new_in_memory().unwrap();
-
-        // We need an agent for FK constraints
-        use crate::db::agent_operations;
-        use crate::db::models::CreateAgentRequest;
-        let agent = agent_operations::create_agent_impl(
-            &db,
-            CreateAgentRequest {
-                folder_name: "test-agent".into(),
-                name: "Test Agent".into(),
-                avatar: None,
-                description: None,
-                model: None,
-                temperature: None,
-                thinking_enabled: None,
-                thinking_budget: None,
-                is_default: None,
-                sort_order: None,
-            },
-        )
-        .unwrap();
+        let (_tmp, vault) = make_test_vault();
+        let agent_id = "test-agent";
 
         // Create — agent_id auto-injected via auto_agent_id param
         let create_input = serde_json::json!({
@@ -1233,8 +1313,9 @@ mod tests {
             "title": "Test Note",
             "content": "Note body"
         });
-        let created = tool_memory_note(&db, &create_input, &agent.id).unwrap();
+        let created = tool_memory_note(&vault, &create_input, agent_id).unwrap();
         assert_eq!(created["title"], "Test Note");
+        assert_eq!(created["agent_id"], agent_id);
 
         let note_id = created["id"].as_str().unwrap();
 
@@ -1242,7 +1323,7 @@ mod tests {
         let read_input = serde_json::json!({
             "action": "read"
         });
-        let notes = tool_memory_note(&db, &read_input, &agent.id).unwrap();
+        let notes = tool_memory_note(&vault, &read_input, agent_id).unwrap();
         let arr = notes.as_array().unwrap();
         assert_eq!(arr.len(), 1);
 
@@ -1250,21 +1331,67 @@ mod tests {
         let update_input = serde_json::json!({
             "action": "update",
             "id": note_id,
-            "title": "Updated Title"
+            "content": "Updated body"
         });
-        let updated = tool_memory_note(&db, &update_input, &agent.id).unwrap();
-        assert_eq!(updated["title"], "Updated Title");
+        let updated = tool_memory_note(&vault, &update_input, agent_id).unwrap();
+        assert!(updated["content"].as_str().unwrap().contains("Updated body"));
 
         // Delete
         let delete_input = serde_json::json!({
             "action": "delete",
             "id": note_id
         });
-        let deleted = tool_memory_note(&db, &delete_input, &agent.id).unwrap();
+        let deleted = tool_memory_note(&vault, &delete_input, agent_id).unwrap();
         assert_eq!(deleted["success"], true);
 
         // Verify empty
-        let notes_after = tool_memory_note(&db, &read_input, &agent.id).unwrap();
+        let notes_after = tool_memory_note(&vault, &read_input, agent_id).unwrap();
         assert_eq!(notes_after.as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_memory_note_search() {
+        let (_tmp, vault) = make_test_vault();
+        let agent_id = "test-agent";
+
+        // Create a note
+        let create_input = serde_json::json!({
+            "action": "create",
+            "title": "Rust Programming",
+            "content": "Rust is a systems language"
+        });
+        tool_memory_note(&vault, &create_input, agent_id).unwrap();
+
+        // Search
+        let search_input = serde_json::json!({
+            "action": "search",
+            "query": "Rust"
+        });
+        let results = tool_memory_note(&vault, &search_input, agent_id).unwrap();
+        assert!(!results.as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_memory_note_recall() {
+        let (_tmp, vault) = make_test_vault();
+        let agent_id = "test-agent";
+
+        // Create a few notes
+        for i in 0..3 {
+            let input = serde_json::json!({
+                "action": "create",
+                "title": format!("Note {i}"),
+                "content": format!("Content {i}")
+            });
+            tool_memory_note(&vault, &input, agent_id).unwrap();
+        }
+
+        // Recall
+        let recall_input = serde_json::json!({
+            "action": "recall",
+            "limit": 2
+        });
+        let results = tool_memory_note(&vault, &recall_input, agent_id).unwrap();
+        assert_eq!(results.as_array().unwrap().len(), 2);
     }
 }

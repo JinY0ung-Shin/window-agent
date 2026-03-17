@@ -6,6 +6,7 @@ pub mod credential_commands;
 pub mod export_commands;
 pub mod skill_commands;
 pub mod tool_commands;
+pub mod vault_commands;
 
 pub use agent_commands::*;
 pub use api_commands::*;
@@ -15,3 +16,4 @@ pub use credential_commands::*;
 pub use export_commands::*;
 pub use skill_commands::*;
 pub use tool_commands::*;
+pub use vault_commands::*;

@@ -3,6 +3,7 @@ import type { Conversation, ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
+import { useVaultStore } from "./vaultStore";
 import { useDebugStore } from "./debugStore";
 import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
@@ -72,6 +73,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (detail.agent_id) {
       useAgentStore.getState().selectAgent(detail.agent_id);
       useMemoryStore.getState().loadNotes(detail.agent_id);
+      useVaultStore.getState().loadNotes(detail.agent_id);
       const agent = useAgentStore.getState().agents.find((a) => a.id === detail.agent_id);
       if (agent) {
         await useSkillStore.getState().loadSkills(agent.folder_name);
@@ -112,6 +114,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
       if (agent) {
         useMemoryStore.getState().loadNotes(agentId);
+        useVaultStore.getState().loadNotes(agentId);
         await useSkillStore.getState().loadSkills(agent.folder_name);
       }
     }
@@ -135,6 +138,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
       if (agent) {
         useMemoryStore.getState().loadNotes(agentId);
+        useVaultStore.getState().loadNotes(agentId);
         await useSkillStore.getState().loadSkills(agent.folder_name);
       }
     }
@@ -150,6 +154,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
     if (agent) {
       useMemoryStore.getState().loadNotes(agentId);
+      useVaultStore.getState().loadNotes(agentId);
       await useSkillStore.getState().loadSkills(agent.folder_name);
     }
   },

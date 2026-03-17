@@ -1,7 +1,9 @@
-use crate::db::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, MemoryNote, Message, SaveMessageRequest, ToolCallLog};
+use crate::commands::vault_commands::VaultState;
+use crate::db::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, Message, SaveMessageRequest, ToolCallLog};
 use crate::db::operations;
 use crate::db::Database;
 use crate::error::AppError;
+use crate::vault::strip_title_heading;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -117,42 +119,70 @@ pub fn update_conversation_skills(
     Ok(operations::update_conversation_skills_impl(&db, id, skills_json)?)
 }
 
-// ── Memory Notes ──
+// ── Memory Notes (backed by Vault) ──
 
 #[tauri::command]
 pub fn create_memory_note(
-    db: State<'_, Database>,
+    vault: State<'_, VaultState>,
     agent_id: String,
     title: String,
     content: String,
-) -> Result<MemoryNote, AppError> {
-    Ok(operations::create_memory_note_impl(&db, agent_id, title, content)?)
+) -> Result<serde_json::Value, String> {
+    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    let note = vm.create_note(&agent_id, None, "knowledge", &title, &content, vec![], vec![])?;
+    Ok(serde_json::json!({
+        "id": note.id,
+        "agent_id": note.agent,
+        "title": note.title,
+        "content": strip_title_heading(&note.content),
+        "created_at": note.created,
+        "updated_at": note.updated,
+    }))
 }
 
 #[tauri::command]
 pub fn list_memory_notes(
-    db: State<'_, Database>,
+    vault: State<'_, VaultState>,
     agent_id: String,
-) -> Result<Vec<MemoryNote>, AppError> {
-    Ok(operations::list_memory_notes_impl(&db, agent_id)?)
+) -> Result<Vec<serde_json::Value>, String> {
+    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    Ok(vm.to_legacy_json(&agent_id))
 }
 
 #[tauri::command]
 pub fn update_memory_note(
-    db: State<'_, Database>,
+    vault: State<'_, VaultState>,
     id: String,
     title: Option<String>,
     content: Option<String>,
-) -> Result<MemoryNote, AppError> {
-    Ok(operations::update_memory_note_impl(&db, id, title, content)?)
+) -> Result<serde_json::Value, String> {
+    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    let note = vm.update_note(
+        &id,
+        "user",
+        title.as_deref(),
+        content.as_deref(),
+        None,
+        None,
+        None,
+    )?;
+    Ok(serde_json::json!({
+        "id": note.id,
+        "agent_id": note.agent,
+        "title": note.title,
+        "content": strip_title_heading(&note.content),
+        "created_at": note.created,
+        "updated_at": note.updated,
+    }))
 }
 
 #[tauri::command]
 pub fn delete_memory_note(
-    db: State<'_, Database>,
+    vault: State<'_, VaultState>,
     id: String,
-) -> Result<(), AppError> {
-    Ok(operations::delete_memory_note_impl(&db, id)?)
+) -> Result<(), String> {
+    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    vm.delete_note(&id, "user")
 }
 
 // ── Tool Call Logs ──

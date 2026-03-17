@@ -5,6 +5,8 @@ import Sidebar from "./Sidebar";
 import ChatWindow from "../chat/ChatWindow";
 import DebugPanel from "../debug/DebugPanel";
 import { useDebugStore } from "../../stores/debugStore";
+import { useMemoryStore } from "../../stores/memoryStore";
+import { useVaultStore } from "../../stores/vaultStore";
 
 export default function MainLayout() {
   const isDebugOpen = useDebugStore((s) => s.isOpen);
@@ -12,6 +14,25 @@ export default function MainLayout() {
   const [chromiumInstalling, setChromiumInstalling] = useState(false);
 
   const [chromiumError, setChromiumError] = useState<string | null>(null);
+
+  // Listen for vault file changes (external Obsidian edits) and refresh stores
+  useEffect(() => {
+    const refreshStores = () => {
+      const agentId = useMemoryStore.getState().currentAgentId;
+      if (agentId) {
+        useMemoryStore.getState().loadNotes(agentId);
+        useVaultStore.getState().loadNotes(agentId);
+      }
+    };
+    const u1 = listen("vault:note-changed", refreshStores);
+    const u2 = listen("vault:note-removed", refreshStores);
+    const u3 = listen("vault:note-moved", refreshStores);
+    return () => {
+      u1.then(f => f());
+      u2.then(f => f());
+      u3.then(f => f());
+    };
+  }, []);
 
   useEffect(() => {
     const unlisten1 = listen("browser:chromium-installing", () => {

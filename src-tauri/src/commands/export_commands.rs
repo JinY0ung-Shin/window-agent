@@ -1,3 +1,4 @@
+use crate::commands::vault_commands::VaultState;
 use crate::db::agent_operations;
 use crate::db::models::*;
 use crate::db::operations::*;
@@ -5,7 +6,9 @@ use crate::db::Database;
 use crate::error::AppError;
 use crate::utils::path_security::validate_zip_entry;
 use crate::utils::tool_migration::ensure_tool_config;
+use crate::vault::note::parse_frontmatter;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::io::{Cursor, Read as _, Write as _};
 use tauri::{AppHandle, Manager, State};
 use uuid::Uuid;
@@ -148,15 +151,58 @@ pub fn export_agent(
             walk_dir_recursive(&skills_dir, &skills_dir, &mut zip, &options)?;
         }
 
-        // memory notes
-        let notes = list_memory_notes_impl(&db, agent_id.clone())?;
-        if !notes.is_empty() {
-            let notes_json = serde_json::to_string_pretty(&notes)
-                .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
-            zip.start_file("memory_notes.json", options.clone())
-                .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
-            zip.write_all(notes_json.as_bytes())
-                .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
+        // memory: vault files + backward-compat memory_notes.json
+        let vault_state = app.try_state::<VaultState>();
+        if let Some(vault_state) = vault_state {
+            if let Ok(vm) = vault_state.lock() {
+                // Export agent's vault files under memory/
+                let agent_vault_dir = vm.get_vault_path().join("agents").join(&agent_id);
+                if agent_vault_dir.is_dir() {
+                    export_dir_recursive(&agent_vault_dir, &agent_vault_dir, "memory", &mut zip, &options)?;
+                }
+
+                // Export referenced shared notes under shared_refs/
+                let shared_ids = collect_shared_references(&agent_id, &vm);
+                for shared_id in &shared_ids {
+                    if vm.read_note(shared_id).is_ok() {
+                        if let Some(path) = vm.registry.id_to_path.get(shared_id) {
+                            if let Ok(content) = std::fs::read_to_string(path) {
+                                // Derive relative path from shared/ root
+                                let shared_root = vm.get_vault_path().join("shared");
+                                if let Ok(relative) = path.strip_prefix(&shared_root) {
+                                    let zip_path = format!("shared_refs/{}", relative.to_string_lossy().replace('\\', "/"));
+                                    zip.start_file(zip_path, options.clone())
+                                        .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
+                                    zip.write_all(content.as_bytes())
+                                        .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Backward-compat: generate flat memory_notes.json from vault
+                let legacy = vm.to_legacy_json(&agent_id);
+                if !legacy.is_empty() {
+                    let notes_json = serde_json::to_string_pretty(&legacy)
+                        .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
+                    zip.start_file("memory_notes.json", options.clone())
+                        .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
+                    zip.write_all(notes_json.as_bytes())
+                        .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
+                }
+            }
+        } else {
+            // Fallback: export from DB if vault not available
+            let notes = list_memory_notes_impl(&db, agent_id.clone())?;
+            if !notes.is_empty() {
+                let notes_json = serde_json::to_string_pretty(&notes)
+                    .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
+                zip.start_file("memory_notes.json", options.clone())
+                    .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
+                zip.write_all(notes_json.as_bytes())
+                    .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
+            }
         }
 
         // conversations
@@ -261,11 +307,49 @@ pub fn import_agent(
         }
     }
 
-    // 4. Read memory notes
-    let memory_notes: Vec<MemoryNote> = if let Ok(mut file) = archive.by_name("memory_notes.json") {
-        let mut content = String::new();
-        if file.read_to_string(&mut content).is_ok() {
-            serde_json::from_str(&content).unwrap_or_default()
+    // 4. Read memory notes (check for vault format first, then legacy)
+    let has_vault_memory = (0..archive.len())
+        .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+        .any(|name| name.starts_with("memory/") && name.ends_with(".md"));
+
+    let has_shared_refs = (0..archive.len())
+        .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+        .any(|name| name.starts_with("shared_refs/") && name.ends_with(".md"));
+
+    // Collect vault memory files from ZIP
+    let mut vault_memory_files: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut vault_shared_files: Vec<(String, Vec<u8>)> = Vec::new();
+    if has_vault_memory || has_shared_refs {
+        let vault_file_names: Vec<String> = (0..archive.len())
+            .filter_map(|i| archive.by_index(i).ok().map(|f| f.name().to_string()))
+            .filter(|name| {
+                (name.starts_with("memory/") || name.starts_with("shared_refs/"))
+                    && !name.ends_with('/')
+            })
+            .collect();
+        for name in &vault_file_names {
+            if let Ok(mut file) = archive.by_name(name) {
+                let mut buf = Vec::new();
+                if std::io::Read::read_to_end(&mut file, &mut buf).is_ok() {
+                    if name.starts_with("memory/") {
+                        vault_memory_files.push((name.clone(), buf));
+                    } else {
+                        vault_shared_files.push((name.clone(), buf));
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: legacy memory_notes.json (only if no vault format)
+    let memory_notes: Vec<MemoryNote> = if !has_vault_memory {
+        if let Ok(mut file) = archive.by_name("memory_notes.json") {
+            let mut content = String::new();
+            if file.read_to_string(&mut content).is_ok() {
+                serde_json::from_str(&content).unwrap_or_default()
+            } else {
+                Vec::new()
+            }
         } else {
             Vec::new()
         }
@@ -384,22 +468,169 @@ pub fn import_agent(
         }
     }
 
-    // Insert memory notes
+    // Import memory notes — vault format or legacy
     let mut memory_notes_imported = 0usize;
-    for note in &memory_notes {
-        let new_note_id = Uuid::new_v4().to_string();
-        tx.execute(
-            "INSERT INTO memory_notes (id, agent_id, title, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![
-                new_note_id,
-                new_agent_id,
-                note.title,
-                note.content,
-                note.created_at,
-                note.updated_at,
-            ],
-        ).map_err(|e| AppError::Database(format!("Failed to insert memory note: {e}")))?;
-        memory_notes_imported += 1;
+
+    // Track ALL vault files written for cleanup on failure (memory + shared + legacy)
+    let mut imported_vault_paths: Vec<std::path::PathBuf> = Vec::new();
+
+    if has_vault_memory {
+        // Vault format: 2-phase import with UUID dedup + body link rewriting
+        let vault_state = app.try_state::<VaultState>();
+        if let Some(vault_state) = &vault_state {
+            if let Ok(vm) = vault_state.lock() {
+                let agent_vault_dir = vm.get_vault_path().join("agents").join(&new_agent_id);
+
+                // Phase 1: Build UUID remap table for vault-colliding IDs.
+                // Each unique original ID that collides with existing vault gets ONE new UUID.
+                // Intra-archive duplicates (same ID appearing multiple times) are skipped.
+                let mut id_remap: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+                let mut seen_ids: HashSet<String> = HashSet::new();
+
+                for (_zip_path, content) in &vault_memory_files {
+                    let content_str = String::from_utf8_lossy(content);
+                    if let Ok((fm, _)) = parse_frontmatter(&content_str) {
+                        if seen_ids.contains(&fm.id) {
+                            // Intra-archive duplicate — will be skipped in Phase 2
+                            continue;
+                        }
+                        seen_ids.insert(fm.id.clone());
+                        if vm.registry.id_to_path.contains_key(&fm.id) {
+                            // Vault collision — assign a new UUID
+                            id_remap.insert(fm.id.clone(), Uuid::new_v4().to_string());
+                        }
+                    }
+                }
+
+                // Phase 2: Write files with rewritten frontmatter + body links.
+                // Skip intra-archive duplicate IDs (malformed archive).
+                let mut written_ids: HashSet<String> = HashSet::new();
+
+                for (zip_path, content) in &vault_memory_files {
+                    let relative = zip_path.strip_prefix("memory/").unwrap_or(zip_path);
+                    if validate_zip_entry(relative).is_err() {
+                        warnings.push(format!("Skipping invalid vault path: {zip_path}"));
+                        continue;
+                    }
+
+                    let content_str = String::from_utf8_lossy(content);
+                    let rewritten = match parse_frontmatter(&content_str) {
+                        Ok((mut fm, mut body)) => {
+                            // Skip intra-archive duplicate UUIDs
+                            if written_ids.contains(&fm.id) {
+                                warnings.push(format!("Skipping duplicate note ID in archive: {}", fm.id));
+                                continue;
+                            }
+                            written_ids.insert(fm.id.clone());
+
+                            fm.agent = new_agent_id.clone();
+
+                            // Remap this note's own ID if it collides with existing vault
+                            if let Some(new_id) = id_remap.get(&fm.id) {
+                                fm.legacy_id = Some(fm.id.clone());
+                                fm.id = new_id.clone();
+                            }
+
+                            // Rewrite UUID-based wikilinks in body to use remapped IDs
+                            for (old_id, new_id) in &id_remap {
+                                body = body.replace(
+                                    &format!("[[{old_id}]]"),
+                                    &format!("[[{new_id}]]"),
+                                );
+                                let old_prefix = format!("[[{old_id}|");
+                                let new_prefix = format!("[[{new_id}|");
+                                body = body.replace(&old_prefix, &new_prefix);
+                            }
+
+                            crate::vault::note::serialize_note(&fm, &body)
+                        }
+                        Err(_) => content_str.to_string(),
+                    };
+
+                    let target_path = agent_vault_dir.join(relative);
+                    if let Some(parent) = target_path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    if let Err(e) = std::fs::write(&target_path, &rewritten) {
+                        warnings.push(format!("Failed to write vault file '{}': {e}", zip_path));
+                    } else {
+                        imported_vault_paths.push(target_path);
+                        memory_notes_imported += 1;
+                    }
+                }
+
+                // Import shared_refs: id-based dedup
+                for (zip_path, content) in &vault_shared_files {
+                    let relative = zip_path.strip_prefix("shared_refs/").unwrap_or(zip_path);
+                    if validate_zip_entry(relative).is_err() {
+                        warnings.push(format!("Skipping invalid shared ref path: {zip_path}"));
+                        continue;
+                    }
+
+                    let content_str = String::from_utf8_lossy(content);
+                    if let Ok((fm, _)) = parse_frontmatter(&content_str) {
+                        if vm.registry.id_to_path.contains_key(&fm.id) {
+                            continue; // already exists in vault
+                        }
+                    }
+
+                    let target_path = vm.get_vault_path().join("shared").join(relative);
+                    if target_path.exists() { continue; }
+                    if let Some(parent) = target_path.parent() {
+                        let _ = std::fs::create_dir_all(parent);
+                    }
+                    if let Err(e) = std::fs::write(&target_path, content) {
+                        warnings.push(format!("Failed to write shared ref '{}': {e}", zip_path));
+                    } else {
+                        imported_vault_paths.push(target_path); // track for cleanup
+                    }
+                }
+            }
+        }
+    } else {
+        // Legacy format: convert memory_notes.json to vault files, preserving original IDs
+        let vault_state = app.try_state::<VaultState>();
+        if let Some(vault_state) = &vault_state {
+            if let Ok(mut vm) = vault_state.lock() {
+                for note in &memory_notes {
+                    match vm.create_note_preserving_id(
+                        &new_agent_id,
+                        None,
+                        "knowledge",
+                        &note.title,
+                        &note.content,
+                        Vec::new(),
+                        Vec::new(),
+                        Some(&note.id),
+                        Some(&note.created_at),
+                        Some(&note.updated_at),
+                    ) {
+                        Ok(vault_note) => {
+                            imported_vault_paths.push(std::path::PathBuf::from(&vault_note.path));
+                            memory_notes_imported += 1;
+                        }
+                        Err(e) => warnings.push(format!("Failed to import memory note '{}': {e}", note.title)),
+                    }
+                }
+            }
+        } else {
+            // Vault not available: fall back to DB insert
+            for note in &memory_notes {
+                let new_note_id = Uuid::new_v4().to_string();
+                tx.execute(
+                    "INSERT INTO memory_notes (id, agent_id, title, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                    rusqlite::params![
+                        new_note_id,
+                        new_agent_id,
+                        note.title,
+                        note.content,
+                        note.created_at,
+                        note.updated_at,
+                    ],
+                ).map_err(|e| AppError::Database(format!("Failed to insert memory note: {e}")))?;
+                memory_notes_imported += 1;
+            }
+        }
     }
 
     // 7. Write persona files to disk BEFORE DB commit (atomic import)
@@ -410,13 +641,16 @@ pub fn import_agent(
         .join("agents")
         .join(&new_folder);
 
-    std::fs::create_dir_all(&agents_dir)
-        .map_err(|e| AppError::Io(format!("Failed to create agent directory: {e}")))?;
+    if let Err(e) = std::fs::create_dir_all(&agents_dir) {
+        for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
+        tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
+        return Err(AppError::Io(format!("Failed to create agent directory: {e}")));
+    }
 
     for (fname, content) in &persona_contents {
         let path = agents_dir.join(fname);
         if let Err(e) = std::fs::write(&path, content) {
-            // Filesystem write failed — clean up and rollback DB
+            for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
             let _ = std::fs::remove_dir_all(&agents_dir);
             tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
             return Err(AppError::Io(format!("Failed to write {fname}: {e}")));
@@ -429,6 +663,7 @@ pub fn import_agent(
 
         // Security: reject path traversal attempts (absolute paths, ".." components)
         if validate_zip_entry(relative).is_err() {
+            for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
             let _ = std::fs::remove_dir_all(&agents_dir);
             tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
             return Err(AppError::Validation(format!("Invalid skill path in ZIP: {}", zip_path)));
@@ -447,6 +682,7 @@ pub fn import_agent(
         }) {
             let canonical_skills = skills_dir.canonicalize().unwrap_or(skills_dir.clone());
             if !canonical_target.starts_with(&canonical_skills) {
+                for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
                 let _ = std::fs::remove_dir_all(&agents_dir);
                 tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
                 return Err(AppError::Validation(format!("Skill path escapes agent directory: {}", zip_path)));
@@ -454,12 +690,14 @@ pub fn import_agent(
         }
         if let Some(parent) = target_path.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
+                for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
                 let _ = std::fs::remove_dir_all(&agents_dir);
                 tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
                 return Err(AppError::Io(format!("Failed to create skill dir: {e}")));
             }
         }
         if let Err(e) = std::fs::write(&target_path, content) {
+            for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
             let _ = std::fs::remove_dir_all(&agents_dir);
             tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
             return Err(AppError::Io(format!("Failed to write skill file '{}': {e}", zip_path)));
@@ -473,11 +711,21 @@ pub fn import_agent(
 
     // Only commit DB after all filesystem writes succeed
     if let Err(e) = tx.commit() {
-        // DB commit failed — clean up filesystem
+        // DB commit failed — clean up vault files and filesystem
+        for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
         let _ = std::fs::remove_dir_all(&agents_dir);
         return Err(AppError::Database(format!("Transaction commit failed: {e}")));
     }
     drop(conn);
+
+    // Rebuild vault index after import to pick up new files
+    if has_vault_memory || !memory_notes.is_empty() {
+        if let Some(vault_state) = app.try_state::<VaultState>() {
+            if let Ok(mut vm) = vault_state.lock() {
+                let _ = vm.rebuild_index();
+            }
+        }
+    }
 
     Ok(ImportResult {
         agents_imported: 1,
@@ -486,4 +734,73 @@ pub fn import_agent(
         memory_notes_imported,
         warnings,
     })
+}
+
+// ── Vault export helpers ──
+
+/// Recursively add a directory's files into a ZIP under a given prefix.
+fn export_dir_recursive(
+    dir: &std::path::Path,
+    base: &std::path::Path,
+    prefix: &str,
+    zip: &mut zip::ZipWriter<&mut Cursor<Vec<u8>>>,
+    options: &FileOptions<()>,
+) -> Result<(), AppError> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    let entries = std::fs::read_dir(dir)
+        .map_err(|e| AppError::Io(format!("Failed to read dir '{}': {e}", dir.display())))?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let relative = path
+            .strip_prefix(base)
+            .map_err(|e| AppError::Io(format!("Path strip error: {e}")))?;
+        let zip_path = format!("{}/{}", prefix, relative.to_string_lossy().replace('\\', "/"));
+        if path.is_dir() {
+            export_dir_recursive(&path, base, prefix, zip, options)?;
+        } else if path.is_file() {
+            let content = std::fs::read(&path)
+                .map_err(|e| AppError::Io(format!("Failed to read file: {e}")))?;
+            zip.start_file(zip_path, options.clone())
+                .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
+            zip.write_all(&content)
+                .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
+        }
+    }
+    Ok(())
+}
+
+/// Collect shared note IDs referenced by an agent's notes (depth 1).
+fn collect_shared_references(
+    agent_id: &str,
+    vm: &crate::vault::VaultManager,
+) -> Vec<String> {
+    let all_notes = vm.list_notes(Some(agent_id), None, None);
+    // Only start from agent-owned notes, not shared notes included by the filter
+    let agent_notes: Vec<_> = all_notes.into_iter()
+        .filter(|n| n.scope.as_deref() != Some("shared"))
+        .collect();
+    let mut shared_ids = HashSet::new();
+
+    // Step 1: direct references from agent-owned notes to shared notes
+    for note in &agent_notes {
+        for link in vm.get_outgoing_links(&note.id) {
+            if link.resolved && vm.is_shared_note(&link.target_id) {
+                shared_ids.insert(link.target_id.clone());
+            }
+        }
+    }
+
+    // Step 2: shared notes referencing other shared notes (depth 1)
+    let direct_shared: Vec<String> = shared_ids.iter().cloned().collect();
+    for shared_id in &direct_shared {
+        for link in vm.get_outgoing_links(shared_id) {
+            if link.resolved && vm.is_shared_note(&link.target_id) {
+                shared_ids.insert(link.target_id.clone());
+            }
+        }
+    }
+
+    shared_ids.into_iter().collect()
 }
