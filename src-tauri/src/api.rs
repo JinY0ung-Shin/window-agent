@@ -87,9 +87,16 @@ impl ApiState {
     /// Returns true if the user has configured API access.
     /// Either an API key is set, or a custom base URL is configured
     /// (for keyless proxies like LiteLLM, vLLM, local servers).
-    pub fn has_api_key(&self) -> bool {
+    pub fn has_api_access(&self) -> bool {
         let cfg = self.inner.lock().unwrap();
         !cfg.api_key.is_empty() || !is_default_url(&cfg.base_url)
+    }
+
+    /// Returns true only if an actual API key string is stored (non-empty).
+    /// Use this when the UI needs to distinguish "key exists" from "proxy-only access".
+    pub fn has_stored_key(&self) -> bool {
+        let cfg = self.inner.lock().unwrap();
+        !cfg.api_key.is_empty()
     }
 
     /// Update API configuration and persist to store.
@@ -112,11 +119,13 @@ impl ApiState {
         drop(cfg); // release lock before I/O
 
         // Persist FIRST — if this fails, in-memory state stays unchanged
-        let store = app.store(STORE_FILE)
+        let store = app
+            .store(STORE_FILE)
             .map_err(|e| format!("Failed to open config store: {e}"))?;
         store.set(STORE_KEY_API_KEY, serde_json::json!(&new_key));
         store.set(STORE_KEY_BASE_URL, serde_json::json!(&new_url));
-        store.save()
+        store
+            .save()
             .map_err(|e| format!("Failed to persist config: {e}"))?;
 
         // Persistence succeeded — now update in-memory state
@@ -158,12 +167,7 @@ impl RunRegistry {
 
     pub async fn register(&self, request_id: String, abort_handle: tokio::task::AbortHandle) {
         let mut entries = self.entries.lock().await;
-        entries.insert(
-            request_id,
-            RunEntry {
-                abort_handle,
-            },
-        );
+        entries.insert(request_id, RunEntry { abort_handle });
     }
 
     pub async fn abort(&self, request_id: &str) -> bool {
@@ -205,6 +209,34 @@ pub struct ChatCompletionResponse {
 pub struct SetApiConfigRequest {
     pub api_key: Option<String>,
     pub base_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ApiHealthCheckRequest {
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+    pub model: Option<String>,
+    pub thinking_enabled: Option<bool>,
+    pub thinking_budget: Option<u32>,
+}
+
+#[derive(Serialize)]
+pub struct ApiHealthCheckStep {
+    pub ok: bool,
+    pub detail: String,
+}
+
+#[derive(Serialize)]
+pub struct ApiHealthCheckResponse {
+    pub ok: bool,
+    pub base_url: String,
+    pub models_url: String,
+    pub completions_url: String,
+    pub model: String,
+    pub authorization_header_sent: bool,
+    pub thinking_enabled: bool,
+    pub models_check: ApiHealthCheckStep,
+    pub completion_check: ApiHealthCheckStep,
 }
 
 #[derive(Deserialize)]

@@ -1020,6 +1020,79 @@ body {
   color: var(--text-muted);
 }
 
+.settings-inline-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-inline-action-row .form-text {
+  margin: 0;
+}
+
+.settings-inline-action {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-inline-action:hover {
+  text-decoration: underline;
+}
+
+.settings-inline-action.danger {
+  color: #dc2626;
+}
+
+.settings-health-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.settings-health-row .form-text {
+  margin: 0;
+}
+
+.settings-health-btn {
+  white-space: nowrap;
+}
+
+.settings-health-result {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-color);
+  font-size: 0.82rem;
+}
+
+.settings-health-result.success {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.settings-health-result.error {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.settings-health-result p {
+  margin: 4px 0;
+}
+
+.settings-health-title {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
 .modal-error {
   margin-top: 12px;
   padding: 10px 14px;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Settings, X, RefreshCw } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { listModels } from "../../services/tauriCommands";
+import { checkApiHealth, listModels, type ApiHealthCheckResponse } from "../../services/tauriCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
 import type { UITheme } from "../../labels";
 import ExportSection from "./ExportSection";
@@ -15,6 +15,7 @@ export default function SettingsModal() {
 
   const [tab, setTab] = useState<Tab>("general");
   const [tempApiKey, setTempApiKey] = useState("");
+  const [clearStoredApiKey, setClearStoredApiKey] = useState(false);
   const [tempBaseUrl, setTempBaseUrl] = useState("");
   const [tempModelName, setTempModelName] = useState("");
   const [tempThinkingEnabled, setTempThinkingEnabled] = useState(true);
@@ -26,6 +27,9 @@ export default function SettingsModal() {
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
+  const [healthLoading, setHealthLoading] = useState(false);
+  const [healthResult, setHealthResult] = useState<ApiHealthCheckResponse | null>(null);
+  const [healthError, setHealthError] = useState("");
 
   const fetchModels = async () => {
     setModelsLoading(true);
@@ -44,12 +48,15 @@ export default function SettingsModal() {
   useEffect(() => {
     if (isSettingsOpen) {
       setTempApiKey("");
+      setClearStoredApiKey(false);
       setTempBaseUrl(store.baseUrl);
       setTempModelName(store.modelName);
       setTempThinkingEnabled(store.thinkingEnabled);
       setTempThinkingBudget(store.thinkingBudget);
       setTempCompanyName(store.companyName);
       setTempUITheme(store.uiTheme);
+      setHealthResult(null);
+      setHealthError("");
       setTab("general");
       fetchModels();
     }
@@ -64,11 +71,33 @@ export default function SettingsModal() {
     store.setUITheme(tempUITheme);
     saveSettings({
       apiKey: tempApiKey,
+      clearApiKey: clearStoredApiKey,
       baseUrl: tempBaseUrl,
       modelName: tempModelName,
       thinkingEnabled: tempThinkingEnabled,
       thinkingBudget: tempThinkingBudget,
     });
+  };
+
+  const handleHealthCheck = async () => {
+    setHealthLoading(true);
+    setHealthError("");
+    setHealthResult(null);
+
+    try {
+      const result = await checkApiHealth({
+        api_key: clearStoredApiKey ? "" : (tempApiKey || null),
+        base_url: tempBaseUrl,
+        model: tempModelName || DEFAULT_MODEL,
+        thinking_enabled: tempThinkingEnabled,
+        thinking_budget: tempThinkingEnabled ? tempThinkingBudget : null,
+      });
+      setHealthResult(result);
+    } catch (e) {
+      setHealthError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setHealthLoading(false);
+    }
   };
 
   return (
@@ -125,10 +154,42 @@ export default function SettingsModal() {
                 <input
                   id="apiKey"
                   type="password"
-                  placeholder={store.hasApiKey ? "••••••••(설정됨, 변경하려면 입력)" : "sk-..."}
+                  placeholder={
+                    clearStoredApiKey
+                      ? "저장 시 기존 API 키가 삭제됩니다"
+                      : store.hasStoredKey
+                        ? "••••••••(설정됨, 변경하려면 입력)"
+                        : tempBaseUrl && tempBaseUrl !== DEFAULT_BASE_URL
+                          ? "프록시 서버는 비워둬도 됩니다"
+                          : "sk-..."
+                  }
                   value={tempApiKey}
-                  onChange={(e) => setTempApiKey(e.target.value)}
+                  onChange={(e) => {
+                    setTempApiKey(e.target.value);
+                    if (e.target.value) {
+                      setClearStoredApiKey(false);
+                    }
+                  }}
                 />
+                {store.hasStoredKey && (
+                  <div className="settings-inline-action-row">
+                    <p className="form-text">
+                      {clearStoredApiKey
+                        ? "저장하면 백엔드에 저장된 API 키가 삭제됩니다."
+                        : "필드를 비워두면 기존 API 키가 유지됩니다."}
+                    </p>
+                    <button
+                      type="button"
+                      className={`settings-inline-action ${clearStoredApiKey ? "danger" : ""}`}
+                      onClick={() => {
+                        setClearStoredApiKey((prev) => !prev);
+                        setTempApiKey("");
+                      }}
+                    >
+                      {clearStoredApiKey ? "키 유지" : "저장된 키 삭제"}
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="form-group">
@@ -180,6 +241,38 @@ export default function SettingsModal() {
                 <p className="form-text">
                   API 키는 백엔드에서만 관리되며 브라우저에 저장되지 않습니다.
                 </p>
+                <div className="settings-health-row">
+                  <button
+                    type="button"
+                    className="btn-secondary settings-health-btn"
+                    onClick={handleHealthCheck}
+                    disabled={healthLoading}
+                  >
+                    {healthLoading ? "체크 중..." : "API Health Check"}
+                  </button>
+                  <p className="form-text">
+                    기본 연결 확인 (모델 목록 조회 + 단일 completions 호출). 실제 스트리밍 경로와 다를 수 있습니다.
+                  </p>
+                </div>
+                {healthResult && (
+                  <div className={`settings-health-result ${healthResult.ok ? "success" : "error"}`}>
+                    <p className="settings-health-title">
+                      {healthResult.ok ? "API 연결 정상" : "API 호출 실패"}
+                    </p>
+                    <p>Base URL: {healthResult.base_url}</p>
+                    <p>모델: {healthResult.model}</p>
+                    <p>Authorization 헤더: {healthResult.authorization_header_sent ? "전송됨" : "전송 안 함"}</p>
+                    <p>Thinking: {healthResult.thinking_enabled ? "켜짐" : "꺼짐"}</p>
+                    <p>/models: {healthResult.models_check.ok ? "성공" : "실패"} - {healthResult.models_check.detail}</p>
+                    <p>/chat/completions: {healthResult.completion_check.ok ? "성공" : "실패"} - {healthResult.completion_check.detail}</p>
+                  </div>
+                )}
+                {healthError && (
+                  <div className="settings-health-result error">
+                    <p className="settings-health-title">Health Check 실행 실패</p>
+                    <p>{healthError}</p>
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -15,6 +15,11 @@ export async function hasApiKey(): Promise<boolean> {
   return invoke("has_api_key");
 }
 
+/** Returns true only if an actual API key string is stored (not just proxy URL). */
+export async function hasStoredKey(): Promise<boolean> {
+  return invoke("has_stored_key");
+}
+
 export interface SetApiConfigRequest {
   api_key?: string | null;
   base_url?: string | null;
@@ -22,6 +27,37 @@ export interface SetApiConfigRequest {
 
 export async function setApiConfig(request: SetApiConfigRequest): Promise<void> {
   return invoke("set_api_config", { request });
+}
+
+export interface ApiHealthCheckRequest {
+  api_key?: string | null;
+  base_url?: string | null;
+  model?: string | null;
+  thinking_enabled?: boolean | null;
+  thinking_budget?: number | null;
+}
+
+export interface ApiHealthCheckStep {
+  ok: boolean;
+  detail: string;
+}
+
+export interface ApiHealthCheckResponse {
+  ok: boolean;
+  base_url: string;
+  models_url: string;
+  completions_url: string;
+  model: string;
+  authorization_header_sent: boolean;
+  thinking_enabled: boolean;
+  models_check: ApiHealthCheckStep;
+  completion_check: ApiHealthCheckStep;
+}
+
+export async function checkApiHealth(
+  request: ApiHealthCheckRequest,
+): Promise<ApiHealthCheckResponse> {
+  return invoke("check_api_health", { request });
 }
 
 // ── Chat completion ──

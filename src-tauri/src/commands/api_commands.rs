@@ -4,9 +4,16 @@ use crate::models::api_types::ModelsResponse;
 use crate::services::{api_service, credential_service};
 use tauri::{Emitter, State};
 
+/// Returns true if API access is configured (key set OR custom URL).
 #[tauri::command]
 pub fn has_api_key(api: State<'_, ApiState>) -> bool {
-    api.has_api_key()
+    api.has_api_access()
+}
+
+/// Returns true only if an actual API key string is stored.
+#[tauri::command]
+pub fn has_stored_key(api: State<'_, ApiState>) -> bool {
+    api.has_stored_key()
 }
 
 #[tauri::command]
@@ -105,9 +112,7 @@ pub async fn bootstrap_completion(
 
     let url = api_service::completions_url(&base_url);
 
-    let mut req = client
-        .post(&url)
-        .header("Content-Type", "application/json");
+    let mut req = client.post(&url).header("Content-Type", "application/json");
     if !api_key.is_empty() {
         req = req.header("Authorization", format!("Bearer {}", api_key));
     }
@@ -162,6 +167,152 @@ pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, AppErr
 
     models.sort();
     Ok(models)
+}
+
+fn format_http_detail(status: u16, text: String) -> String {
+    let detail = text.trim();
+    if detail.is_empty() {
+        format!("HTTP {status}")
+    } else {
+        format!(
+            "HTTP {status}: {}",
+            detail.chars().take(300).collect::<String>()
+        )
+    }
+}
+
+#[tauri::command]
+pub async fn check_api_health(
+    api: State<'_, ApiState>,
+    request: ApiHealthCheckRequest,
+) -> Result<ApiHealthCheckResponse, AppError> {
+    let (stored_api_key, stored_base_url) = api.effective();
+    let client = api.client();
+
+    let api_key = request.api_key.unwrap_or(stored_api_key);
+    let base_url = match request.base_url {
+        Some(url) if url.is_empty() => crate::api::DEFAULT_BASE_URL.to_string(),
+        Some(url) => url,
+        None => stored_base_url,
+    };
+    let model = request
+        .model
+        .filter(|m| !m.trim().is_empty())
+        .unwrap_or_else(|| "gpt-5.3-codex".to_string());
+    let thinking_enabled = request.thinking_enabled.unwrap_or(false);
+    let thinking_budget = request.thinking_budget;
+
+    if crate::api::requires_api_key(&api_key, &base_url) {
+        return Err(AppError::Validation("API key not configured".into()));
+    }
+
+    let models_url = api_service::models_url(&base_url);
+    let completions_url = api_service::completions_url(&base_url);
+
+    let models_check = {
+        let mut req = client.get(&models_url);
+        if !api_key.is_empty() {
+            req = req.header("Authorization", format!("Bearer {}", api_key));
+        }
+
+        match req.send().await {
+            Ok(resp) => {
+                let status = resp.status().as_u16();
+                if resp.status().is_success() {
+                    match resp.json::<ModelsResponse>().await {
+                        Ok(parsed) => {
+                            let count = parsed.data.len();
+                            let sample = parsed
+                                .data
+                                .iter()
+                                .take(3)
+                                .map(|m| m.id.clone())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            let detail = if sample.is_empty() {
+                                format!("모델 목록 조회 성공 ({count}개)")
+                            } else {
+                                format!("모델 목록 조회 성공 ({count}개, 예: {sample})")
+                            };
+                            ApiHealthCheckStep { ok: true, detail }
+                        }
+                        Err(e) => ApiHealthCheckStep {
+                            ok: false,
+                            detail: format!("모델 목록 파싱 실패: {e}"),
+                        },
+                    }
+                } else {
+                    let text = resp.text().await.unwrap_or_default();
+                    ApiHealthCheckStep {
+                        ok: false,
+                        detail: format_http_detail(status, text),
+                    }
+                }
+            }
+            Err(e) => ApiHealthCheckStep {
+                ok: false,
+                detail: format!("요청 실패: {e}"),
+            },
+        }
+    };
+
+    let completion_check = {
+        let mut body = serde_json::json!({
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are an API health checker. Reply briefly."
+                },
+                {
+                    "role": "user",
+                    "content": "Reply with OK"
+                }
+            ],
+            "temperature": 0,
+        });
+
+        if thinking_enabled {
+            if let Some(budget) = thinking_budget {
+                body["thinking"] = serde_json::json!({
+                    "type": "enabled",
+                    "budget_tokens": budget,
+                });
+            }
+        }
+
+        match api_service::do_completion(&client, &api_key, &base_url, &body).await {
+            Ok(resp) => {
+                let preview = resp.content.chars().take(80).collect::<String>();
+                let detail = if preview.is_empty() {
+                    "채팅 completions 호출 성공".to_string()
+                } else {
+                    format!("채팅 completions 호출 성공: {}", preview.replace('\n', " "))
+                };
+                ApiHealthCheckStep { ok: true, detail }
+            }
+            Err(AppError::Api(msg)) => ApiHealthCheckStep {
+                ok: false,
+                detail: msg,
+            },
+            Err(e) => ApiHealthCheckStep {
+                ok: false,
+                detail: e.to_string(),
+            },
+        }
+    };
+
+    Ok(ApiHealthCheckResponse {
+        ok: completion_check.ok,
+        base_url,
+        models_url,
+        completions_url,
+        model,
+        authorization_header_sent: !api_key.is_empty(),
+        thinking_enabled,
+        models_check,
+        completion_check,
+    })
 }
 
 #[tauri::command]
@@ -240,7 +391,11 @@ pub async fn chat_completion_stream(
     let task = tokio::spawn(async move {
         // Thinking-enabled path with fallback
         if thinking_enabled {
-            match api_service::stream_completion(&app_clone, &client, &api_key, &base_url, &body, &rid).await {
+            match api_service::stream_completion(
+                &app_clone, &client, &api_key, &base_url, &body, &rid,
+            )
+            .await
+            {
                 Ok(()) => {
                     reg.remove(&rid).await;
                     return;
@@ -252,8 +407,10 @@ pub async fn chat_completion_stream(
                         if let Some(obj) = body.as_object_mut() {
                             obj.remove("thinking");
                         }
-                        if let Err(e2) =
-                            api_service::stream_completion(&app_clone, &client, &api_key, &base_url, &body, &rid).await
+                        if let Err(e2) = api_service::stream_completion(
+                            &app_clone, &client, &api_key, &base_url, &body, &rid,
+                        )
+                        .await
                         {
                             let _ = app_clone.emit(
                                 "chat-stream-done",
@@ -287,7 +444,10 @@ pub async fn chat_completion_stream(
         }
 
         // Non-thinking path
-        if let Err(e) = api_service::stream_completion(&app_clone, &client, &api_key, &base_url, &body, &rid).await {
+        if let Err(e) =
+            api_service::stream_completion(&app_clone, &client, &api_key, &base_url, &body, &rid)
+                .await
+        {
             let _ = app_clone.emit(
                 "chat-stream-done",
                 StreamDonePayload {

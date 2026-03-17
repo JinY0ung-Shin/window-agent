@@ -4,7 +4,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_THINKING_BUDGET,
 } from "../constants";
-import { getEnvConfig, hasApiKey as checkApiKey, setApiConfig } from "../services/tauriCommands";
+import { getEnvConfig, hasApiKey as checkApiKey, hasStoredKey as checkStoredKey, setApiConfig } from "../services/tauriCommands";
 import { getLabels, type UITheme } from "../labels";
 
 // ── localStorage key constants (non-secret settings only) ──
@@ -17,7 +17,8 @@ const LS_COMPANY_NAME = "company_name";
 const LS_BRANDING_INITIALIZED = "branding_initialized";
 
 interface SettingsState {
-  hasApiKey: boolean;
+  hasApiKey: boolean;      // API access configured (key OR custom URL)
+  hasStoredKey: boolean;   // Actual API key string stored
   baseUrl: string;
   modelName: string;
   thinkingEnabled: boolean;
@@ -43,6 +44,7 @@ interface SettingsState {
 
 export interface SettingValues {
   apiKey: string;
+  clearApiKey?: boolean;
   baseUrl: string;
   modelName: string;
   thinkingEnabled: boolean;
@@ -76,6 +78,7 @@ const envReadyPromise = new Promise<void>((r) => { envReadyResolve = r; });
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...initial,
   hasApiKey: false,
+  hasStoredKey: false,
   isSettingsOpen: false,
   envLoaded: false,
   settingsError: null,
@@ -99,10 +102,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         updates.modelName = env.model;
       }
 
-      // Check if backend has an API key (from .env or previous set_api_config)
+      // Check if backend has API access configured + actual key stored
       const apiKeyExists = await checkApiKey();
+      const storedKeyExists = await checkStoredKey();
 
-      set({ ...updates, hasApiKey: apiKeyExists, envLoaded: true });
+      set({ ...updates, hasApiKey: apiKeyExists, hasStoredKey: storedKeyExists, envLoaded: true });
     } catch {
       // Tauri not available (e.g. tests) — silently ignore
       set({ envLoaded: true });
@@ -120,18 +124,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const model = s.modelName || DEFAULT_MODEL;
 
     // Sync API config to backend first, then update frontend state.
-    // api_key is only sent when non-empty (user actively typed a new key).
-    // Empty field = "no change" to avoid accidental key clearing.
+    // Empty field = "no change" unless the user explicitly requested clearing it.
     const apiUpdate: { api_key?: string; base_url: string } = {
       base_url: s.baseUrl,
     };
-    if (s.apiKey) {
+    if (s.clearApiKey) {
+      apiUpdate.api_key = "";
+    } else if (s.apiKey) {
       apiUpdate.api_key = s.apiKey;
     }
     try {
       await setApiConfig(apiUpdate);
       const keyExists = await checkApiKey();
-      set({ hasApiKey: keyExists });
+      const storedExists = await checkStoredKey();
+      set({ hasApiKey: keyExists, hasStoredKey: storedExists });
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to set API config:", e);

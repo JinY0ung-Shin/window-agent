@@ -94,6 +94,43 @@ describe("settingsStore", () => {
     expect(useSettingsStore.getState().modelName).toBe(DEFAULT_MODEL);
   });
 
+  it("saveSettings keeps existing key when apiKey is blank", async () => {
+    mockedInvoke
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(true);
+
+    await useSettingsStore.getState().saveSettings({
+      apiKey: "",
+      baseUrl: "http://proxy.local/v1",
+      modelName: "gpt-4o",
+      thinkingEnabled: true,
+      thinkingBudget: DEFAULT_THINKING_BUDGET,
+    });
+
+    expect(mockedInvoke).toHaveBeenNthCalledWith(1, "set_api_config", {
+      request: { base_url: "http://proxy.local/v1" },
+    });
+  });
+
+  it("saveSettings clears the stored key when requested", async () => {
+    mockedInvoke
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(true);
+
+    await useSettingsStore.getState().saveSettings({
+      apiKey: "",
+      clearApiKey: true,
+      baseUrl: "http://proxy.local/v1",
+      modelName: "gpt-4o",
+      thinkingEnabled: true,
+      thinkingBudget: DEFAULT_THINKING_BUDGET,
+    });
+
+    expect(mockedInvoke).toHaveBeenNthCalledWith(1, "set_api_config", {
+      request: { api_key: "", base_url: "http://proxy.local/v1" },
+    });
+  });
+
   it("setIsSettingsOpen toggles modal state", () => {
     useSettingsStore.getState().setIsSettingsOpen(true);
     expect(useSettingsStore.getState().isSettingsOpen).toBe(true);

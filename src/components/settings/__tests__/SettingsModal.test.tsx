@@ -8,6 +8,17 @@ vi.mock("../../../services/tauriCommands", async (importOriginal) => {
   return {
     ...actual,
     listModels: vi.fn().mockResolvedValue(["model-a", "model-b"]),
+    checkApiHealth: vi.fn().mockResolvedValue({
+      ok: true,
+      base_url: "http://localhost:4000/v1",
+      models_url: "http://localhost:4000/v1/models",
+      completions_url: "http://localhost:4000/v1/chat/completions",
+      model: "model-a",
+      authorization_header_sent: true,
+      thinking_enabled: true,
+      models_check: { ok: true, detail: "ok" },
+      completion_check: { ok: true, detail: "ok" },
+    }),
   };
 });
 
@@ -59,5 +70,22 @@ describe("SettingsModal", () => {
     await vi.waitFor(() => {
       expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
     });
+  });
+
+  it("runs API health check and shows result", async () => {
+    useSettingsStore.setState({
+      isSettingsOpen: true,
+      hasApiKey: true,
+      baseUrl: "http://localhost:4000/v1",
+      modelName: "model-a",
+      thinkingEnabled: true,
+      thinkingBudget: 4096,
+    });
+
+    await act(async () => { render(<SettingsModal />); });
+    await act(async () => { fireEvent.click(screen.getByText("API Health Check")); });
+
+    expect(await screen.findByText("API 연결 정상")).toBeInTheDocument();
+    expect(screen.getByText(/Authorization 헤더: 전송됨/)).toBeInTheDocument();
   });
 });
