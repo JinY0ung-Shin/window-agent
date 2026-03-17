@@ -104,7 +104,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
 
   search: async (query, scope) => {
     try {
-      const searchResults = await vault.vaultSearch(query, scope);
+      const agentId = scope === "self" ? get().activeAgent : null;
+      const searchResults = await vault.vaultSearch(query, scope, agentId);
       set({ searchResults });
     } catch {
       set({ searchResults: [] });

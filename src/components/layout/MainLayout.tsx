@@ -5,16 +5,18 @@ import Sidebar from "./Sidebar";
 import ChatWindow from "../chat/ChatWindow";
 import DebugPanel from "../debug/DebugPanel";
 import NetworkPanel from "../network/NetworkPanel";
+import VaultPanel from "../vault/VaultPanel";
 
 import { useDebugStore } from "../../stores/debugStore";
 import { useMemoryStore } from "../../stores/memoryStore";
 import { useVaultStore } from "../../stores/vaultStore";
 import { useNetworkStore } from "../../stores/networkStore";
+import { useNavigationStore } from "../../stores/navigationStore";
 
 export default function MainLayout() {
   const isDebugOpen = useDebugStore((s) => s.isOpen);
   const setDebugOpen = useDebugStore((s) => s.setOpen);
-  const networkViewActive = useNetworkStore((s) => s.networkViewActive);
+  const mainView = useNavigationStore((s) => s.mainView);
 
   const initializeNetwork = useNetworkStore((s) => s.initialize);
   const setupEventListeners = useNetworkStore((s) => s.setupEventListeners);
@@ -70,7 +72,9 @@ export default function MainLayout() {
   return (
     <div className="app-container">
       <Sidebar />
-      {networkViewActive ? (
+      {mainView === "vault" ? (
+        <VaultPanel />
+      ) : mainView === "network" ? (
         <NetworkPanel />
       ) : (
         <ChatWindow />

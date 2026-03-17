@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
-import { Bot, Check, Eraser, Network, Plus, Settings, Users, X } from "lucide-react";
+import { BookOpen, Bot, Check, Eraser, Network, Plus, Settings, Users, X } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
-import { useNetworkStore } from "../../stores/networkStore";
+import { useNavigationStore } from "../../stores/navigationStore";
 import { resetChatContext } from "../../stores/resetHelper";
 import { useLabels, useCompanyName } from "../../hooks/useLabels";
 import { useDragRegion } from "../../hooks/useDragRegion";
@@ -20,8 +20,7 @@ export default function Sidebar() {
   const openEditor = useAgentStore((s) => s.openEditor);
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
-  const networkViewActive = useNetworkStore((s) => s.networkViewActive);
-  const setNetworkViewActive = useNetworkStore((s) => s.setNetworkViewActive);
+  const { mainView, toggleView } = useNavigationStore();
   const labels = useLabels();
   const companyName = useCompanyName();
   const onDrag = useDragRegion();
@@ -174,11 +173,18 @@ export default function Sidebar() {
           <span>{labels.editAgent}</span>
         </div>
         <div
-          className={`menu-item ${networkViewActive ? "active" : ""}`}
-          onClick={() => setNetworkViewActive(!networkViewActive)}
+          className={`menu-item ${mainView === "network" ? "active" : ""}`}
+          onClick={() => toggleView("network")}
         >
           <Network size={20} />
           <span>네트워크</span>
+        </div>
+        <div
+          className={`menu-item ${mainView === "vault" ? "active" : ""}`}
+          onClick={() => toggleView("vault")}
+        >
+          <BookOpen size={20} />
+          <span>볼트</span>
         </div>
         <div
           className="menu-item settings-btn"

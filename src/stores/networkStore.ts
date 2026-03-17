@@ -53,7 +53,6 @@ interface NetworkState {
   status: NetworkStatus;
   peerId: string | null;
   networkEnabled: boolean;
-  networkViewActive: boolean;
   contacts: ContactRow[];
   selectedContactId: string | null;
   selectedThreadId: string | null;
@@ -79,7 +78,6 @@ interface NetworkState {
   sendMessage: (contactId: string, content: string) => Promise<void>;
   approveMessage: (messageId: string, responseContent?: string) => Promise<void>;
   rejectMessage: (messageId: string) => Promise<void>;
-  setNetworkViewActive: (active: boolean) => void;
   setupEventListeners: () => Promise<() => void>;
 }
 
@@ -87,7 +85,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   status: "dormant",
   peerId: null,
   networkEnabled: localStorage.getItem(STORAGE_KEY) === "true",
-  networkViewActive: false,
   contacts: [],
   selectedContactId: null,
   selectedThreadId: null,
@@ -261,8 +258,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     }
     set({ pendingApprovals: Math.max(0, pendingApprovals - 1) });
   },
-
-  setNetworkViewActive: (active) => set({ networkViewActive: active }),
 
   setupEventListeners: async () => {
     const unlisteners: UnlistenFn[] = [];

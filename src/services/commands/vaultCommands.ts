@@ -59,8 +59,9 @@ export async function vaultListNotes(agentId?: string | null): Promise<VaultNote
 export async function vaultSearch(
   query: string,
   scope?: "self" | "shared" | "all" | null,
+  agentId?: string | null,
 ): Promise<SearchResult[]> {
-  return invoke("vault_search", { query, scope: scope ?? "all" });
+  return invoke("vault_search", { query, scope: scope ?? "all", agentId: agentId ?? null });
 }
 
 export async function vaultGetGraph(
