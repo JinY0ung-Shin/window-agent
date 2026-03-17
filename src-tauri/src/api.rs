@@ -80,10 +80,7 @@ impl ApiState {
 
         Self {
             inner: Mutex::new(ApiConfig { api_key, base_url }),
-            client: reqwest::Client::builder()
-                .user_agent("curl/8.0")
-                .build()
-                .unwrap_or_else(|_| reqwest::Client::new()),
+            client: reqwest::Client::new(),
         }
     }
 
