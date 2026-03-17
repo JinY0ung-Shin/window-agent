@@ -287,32 +287,6 @@ pub fn update_conversation_skills_impl(
 
 // ── Memory Notes CRUD ──
 
-pub fn create_memory_note_impl(
-    db: &Database,
-    agent_id: String,
-    title: String,
-    content: String,
-) -> Result<MemoryNote, DbError> {
-    db.with_conn(|conn| {
-        let now = Utc::now().to_rfc3339();
-        let note = MemoryNote {
-            id: Uuid::new_v4().to_string(),
-            agent_id,
-            title,
-            content,
-            created_at: now.clone(),
-            updated_at: now,
-        };
-
-        conn.execute(
-            "INSERT INTO memory_notes (id, agent_id, title, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            rusqlite::params![note.id, note.agent_id, note.title, note.content, note.created_at, note.updated_at],
-        )?;
-
-        Ok(note)
-    })
-}
-
 pub fn list_memory_notes_impl(
     db: &Database,
     agent_id: String,
@@ -334,63 +308,6 @@ pub fn list_memory_notes_impl(
         })?;
 
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
-    })
-}
-
-pub fn update_memory_note_impl(
-    db: &Database,
-    id: String,
-    title: Option<String>,
-    content: Option<String>,
-) -> Result<MemoryNote, DbError> {
-    db.with_conn(|conn| {
-        let now = Utc::now().to_rfc3339();
-
-        // Fetch existing note
-        let existing = conn.query_row(
-            "SELECT id, agent_id, title, content, created_at, updated_at FROM memory_notes WHERE id = ?1",
-            rusqlite::params![id],
-            |row| {
-                Ok(MemoryNote {
-                    id: row.get(0)?,
-                    agent_id: row.get(1)?,
-                    title: row.get(2)?,
-                    content: row.get(3)?,
-                    created_at: row.get(4)?,
-                    updated_at: row.get(5)?,
-                })
-            },
-        )?;
-
-        let new_title = title.unwrap_or(existing.title);
-        let new_content = content.unwrap_or(existing.content);
-
-        conn.execute(
-            "UPDATE memory_notes SET title = ?1, content = ?2, updated_at = ?3 WHERE id = ?4",
-            rusqlite::params![new_title, new_content, now, id],
-        )?;
-
-        Ok(MemoryNote {
-            id: existing.id,
-            agent_id: existing.agent_id,
-            title: new_title,
-            content: new_content,
-            created_at: existing.created_at,
-            updated_at: now,
-        })
-    })
-}
-
-pub fn delete_memory_note_impl(
-    db: &Database,
-    id: String,
-) -> Result<(), DbError> {
-    db.with_conn(|conn| {
-        conn.execute(
-            "DELETE FROM memory_notes WHERE id = ?1",
-            rusqlite::params![id],
-        )?;
-        Ok(())
     })
 }
 

@@ -328,7 +328,7 @@ impl LinkIndex {
         &mut self,
         new_filename: &str,
         new_note_id: &str,
-        registry: &super::NoteRegistry,
+        _registry: &super::NoteRegistry,
     ) {
         // Scan all outgoing links for broken ones matching the new filename
         let mut to_update: Vec<(String, usize)> = Vec::new(); // (source_id, link_index)
