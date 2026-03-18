@@ -79,7 +79,7 @@ impl ApiState {
         }
 
         let client = reqwest::Client::builder()
-            .user_agent("WindowAgent/0.5.0")
+            .user_agent("WindowAgent/0.5.1")
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
