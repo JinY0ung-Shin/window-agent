@@ -11,9 +11,12 @@ import type {
 } from "../services/vaultTypes";
 import * as vault from "../services/commands/vaultCommands";
 
+type NotesStatus = "idle" | "loading" | "loaded" | "error";
+
 interface VaultState {
   // 상태
   notes: VaultNoteSummary[];
+  notesStatus: NotesStatus;
   graph: GraphData | null;
   selectedNote: VaultNote | null;
   searchResults: SearchResult[];
@@ -48,8 +51,11 @@ interface VaultState {
   clear: () => void;
 }
 
+let _loadVersion = 0;
+
 export const useVaultStore = create<VaultState>((set, get) => ({
   notes: [],
+  notesStatus: "idle",
   graph: null,
   selectedNote: null,
   searchResults: [],
@@ -60,11 +66,17 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   activeTags: [],
 
   loadNotes: async (agentId) => {
+    const version = ++_loadVersion;
+    set({ notes: [], notesStatus: "loading", activeAgent: agentId ?? null });
     try {
       const notes = await vault.vaultListNotes(agentId);
-      set({ notes, activeAgent: agentId ?? null });
+      if (version === _loadVersion) {
+        set({ notes, notesStatus: "loaded" });
+      }
     } catch {
-      set({ notes: [], activeAgent: agentId ?? null });
+      if (version === _loadVersion) {
+        set({ notes: [], notesStatus: "error" });
+      }
     }
   },
 
@@ -81,7 +93,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     const note = await vault.vaultCreateNote(params);
     // Reload notes to get updated summary list
     const notes = await vault.vaultListNotes(get().activeAgent);
-    set({ notes });
+    set({ notes, notesStatus: "loaded" });
     return note;
   },
 
@@ -89,7 +101,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     const agentId = get().activeAgent ?? "user";
     const note = await vault.vaultUpdateNote(noteId, agentId, updates);
     const notes = await vault.vaultListNotes(get().activeAgent);
-    set({ notes, selectedNote: note });
+    set({ notes, notesStatus: "loaded", selectedNote: note });
     return note;
   },
 
@@ -98,6 +110,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     const { selectedNote } = get();
     set({
       notes: get().notes.filter((n) => n.id !== noteId),
+      notesStatus: "loaded",
       selectedNote: selectedNote?.id === noteId ? null : selectedNote,
     });
   },
@@ -155,9 +168,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     return notes.filter((n) => n.agent === agentId);
   },
 
-  clear: () =>
+  clear: () => {
+    ++_loadVersion;
     set({
       notes: [],
+      notesStatus: "idle",
       graph: null,
       selectedNote: null,
       searchResults: [],
@@ -165,5 +180,6 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       activeAgent: null,
       activeCategory: null,
       activeTags: [],
-    }),
+    });
+  },
 }));

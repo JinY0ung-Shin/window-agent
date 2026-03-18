@@ -8,6 +8,7 @@ import NoteListItem from "./NoteListItem";
 export default function NoteListPane() {
   const {
     notes,
+    notesStatus,
     searchResults,
     selectedNote,
     activeCategory,
@@ -96,7 +97,7 @@ export default function NoteListPane() {
         onTagsChange={setActiveTags}
       />
       <div className="vault-note-list">
-        {notes.length === 0 && !searchQuery.trim() ? (
+        {notesStatus === "idle" || notesStatus === "loading" ? (
           <div className="vault-note-list-skeleton">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="vault-note-skeleton-item">
@@ -105,6 +106,15 @@ export default function NoteListPane() {
                 <div className="skeleton-line skeleton-meta" />
               </div>
             ))}
+          </div>
+        ) : notesStatus === "error" ? (
+          <div className="vault-note-list-empty">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>노트를 불러오지 못했습니다</span>
           </div>
         ) : displayNotes.length === 0 ? (
           <div className="vault-note-list-empty">
