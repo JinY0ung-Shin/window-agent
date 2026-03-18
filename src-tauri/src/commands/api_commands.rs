@@ -244,7 +244,9 @@ pub async fn check_api_health(
                     .unwrap_or("")
                     .to_string();
                 if resp.status().is_success() {
-                    match resp.json::<ModelsResponse>().await {
+                    // Read raw body first for parse-failure logging
+                    let raw_body = resp.text().await.unwrap_or_default();
+                    match serde_json::from_str::<ModelsResponse>(&raw_body) {
                         Ok(parsed) => {
                             let count = parsed.data.len();
                             let sample = parsed
@@ -274,7 +276,26 @@ pub async fn check_api_health(
                             });
                             (true, detail)
                         }
-                        Err(e) => (false, format!("응답 파싱 실패: {e}")),
+                        Err(e) => {
+                            api_service::emit_http_log_entry(&app, api_service::HttpLogEntry {
+                                id: log_id.clone(),
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                method: "GET".into(),
+                                url: models_url.clone(),
+                                status: Some(status),
+                                duration_ms: Some(start.elapsed().as_millis() as u64),
+                                request_headers: format!("Authorization: {auth_preview}"),
+                                response_headers: resp_headers.clone(),
+                                response_body_preview: api_service::truncate_text(&raw_body, 500),
+                                error: Some(format!("PARSE_ERROR: {e}")),
+                            });
+                            let mut detail = format!("응답 파싱 실패: {e}");
+                            if !server_header.is_empty() {
+                                detail.push_str(&format!(" [서버: {server_header}]"));
+                            }
+                            detail.push_str(&format!(" [URL: {models_url}]"));
+                            (false, detail)
+                        },
                     }
                 } else {
                     let text = resp.text().await.unwrap_or_default();

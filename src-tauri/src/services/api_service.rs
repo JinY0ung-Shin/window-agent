@@ -35,9 +35,14 @@ pub fn format_resp_headers(headers: &reqwest::header::HeaderMap) -> String {
         .join("\n")
 }
 
-/// Truncate text for preview.
+/// Truncate text for preview (safe for multibyte UTF-8).
 pub fn truncate_text(s: &str, max: usize) -> String {
-    if s.len() <= max { s.to_string() } else { format!("{}...", &s[..max]) }
+    if s.chars().count() <= max {
+        s.to_string()
+    } else {
+        let truncated: String = s.chars().take(max).collect();
+        format!("{truncated}...")
+    }
 }
 
 // ── URL builders ──
@@ -157,10 +162,30 @@ pub async fn do_completion(
         return Err(AppError::Api(format!("HTTP_{}: {}", status, text)));
     }
 
-    let parsed: CompletionResponse = resp
-        .json()
-        .await
-        .map_err(|e| AppError::Api(format!("PARSE_ERROR: JSON parse error: {}", e)))?;
+    // Read raw body first so we can log even on parse failure
+    let raw_body = resp.text().await
+        .map_err(|e| AppError::Api(format!("BODY_READ_ERROR: {}", e)))?;
+
+    let parsed: CompletionResponse = match serde_json::from_str(&raw_body) {
+        Ok(p) => p,
+        Err(e) => {
+            if let Some(app) = app {
+                emit_http_log_entry(app, HttpLogEntry {
+                    id: log_id,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    method: "POST".into(),
+                    url,
+                    status: Some(status),
+                    duration_ms: Some(start.elapsed().as_millis() as u64),
+                    request_headers: format!("Authorization: {auth_header}"),
+                    response_headers: resp_headers,
+                    response_body_preview: truncate_text(&raw_body, 500),
+                    error: Some(format!("PARSE_ERROR: {e}")),
+                });
+            }
+            return Err(AppError::Api(format!("PARSE_ERROR: JSON parse error: {}", e)));
+        }
+    };
 
     if let Some(app) = app {
         emit_http_log_entry(app, HttpLogEntry {
