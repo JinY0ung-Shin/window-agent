@@ -90,26 +90,35 @@ export function assembleSystemPrompt(files: PersonaFiles): string {
 
 /**
  * For the manager agent: inject the dynamic agent list into the assembled prompt.
+ * Also replaces {{company_name}} placeholders and appends [SYSTEM CONTEXT] with enabled tools.
  */
 export function assembleManagerPrompt(
   files: PersonaFiles,
   allAgents: Agent[],
+  companyName: string = "",
+  enabledToolNames: string[] = [],
 ): string {
-  const basePrompt = assembleSystemPrompt(files);
+  const effectiveCompanyName = companyName.trim() || "우리 회사";
+  let basePrompt = assembleSystemPrompt(files).replace(
+    /\{\{company_name\}\}/g,
+    effectiveCompanyName,
+  );
 
   const otherAgents = allAgents.filter((a) => !a.is_default);
   if (otherAgents.length === 0) {
-    return basePrompt + "\n\n---\n\n[REGISTERED AGENTS]\nNo registered agents.";
+    basePrompt += "\n\n---\n\n[REGISTERED AGENTS]\nNo registered agents.";
+  } else {
+    const agentList = otherAgents
+      .map((a) => `- **${a.name}**: ${a.description || "(no description)"}`)
+      .join("\n");
+    basePrompt += `\n\n---\n\n[REGISTERED AGENTS]\n${agentList}`;
   }
 
-  const agentList = otherAgents
-    .map((a) => `- **${a.name}**: ${a.description || "(no description)"}`)
-    .join("\n");
+  if (enabledToolNames.length > 0) {
+    basePrompt += `\n\n---\n\n[SYSTEM CONTEXT]\n사용 가능한 도구: ${enabledToolNames.join(", ")}`;
+  }
 
-  return (
-    basePrompt +
-    `\n\n---\n\n[REGISTERED AGENTS]\n${agentList}`
-  );
+  return basePrompt;
 }
 
 /**

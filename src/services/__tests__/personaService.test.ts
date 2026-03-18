@@ -207,6 +207,90 @@ describe("assembleManagerPrompt", () => {
     expect(result).not.toContain("**Default**");
     expect(result).toContain("**Custom**: Custom agent");
   });
+
+  it("replaces {{company_name}} with provided companyName", () => {
+    const files: PersonaFiles = {
+      identity: "{{company_name}}의 매니저입니다. {{company_name}}을 위해 일합니다.",
+      soul: "",
+      user: "",
+      agents: "",
+    };
+    const agents: Agent[] = [
+      makeAgent({ id: "1", name: "Default", is_default: true }),
+    ];
+
+    const result = assembleManagerPrompt(files, agents, "Acme Corp");
+
+    expect(result).toContain("Acme Corp의 매니저입니다.");
+    expect(result).toContain("Acme Corp을 위해 일합니다.");
+    expect(result).not.toContain("{{company_name}}");
+  });
+
+  it("falls back to '우리 회사' when companyName is empty string", () => {
+    const files: PersonaFiles = {
+      identity: "{{company_name}}의 매니저입니다.",
+      soul: "",
+      user: "",
+      agents: "",
+    };
+    const agents: Agent[] = [
+      makeAgent({ id: "1", name: "Default", is_default: true }),
+    ];
+
+    const result = assembleManagerPrompt(files, agents, "");
+
+    expect(result).toContain("우리 회사의 매니저입니다.");
+    expect(result).not.toContain("{{company_name}}");
+  });
+
+  it("falls back to '우리 회사' when companyName is not provided", () => {
+    const files: PersonaFiles = {
+      identity: "{{company_name}}의 매니저입니다.",
+      soul: "",
+      user: "",
+      agents: "",
+    };
+    const agents: Agent[] = [
+      makeAgent({ id: "1", name: "Default", is_default: true }),
+    ];
+
+    const result = assembleManagerPrompt(files, agents);
+
+    expect(result).toContain("우리 회사의 매니저입니다.");
+    expect(result).not.toContain("{{company_name}}");
+  });
+
+  it("appends [SYSTEM CONTEXT] with enabled tool names", () => {
+    const agents: Agent[] = [
+      makeAgent({ id: "1", name: "Default", is_default: true }),
+    ];
+    const toolNames = ["웹 검색", "파일 읽기", "코드 실행"];
+
+    const result = assembleManagerPrompt(baseFiles, agents, "", toolNames);
+
+    expect(result).toContain("[SYSTEM CONTEXT]");
+    expect(result).toContain("사용 가능한 도구: 웹 검색, 파일 읽기, 코드 실행");
+  });
+
+  it("omits [SYSTEM CONTEXT] when enabledToolNames is empty", () => {
+    const agents: Agent[] = [
+      makeAgent({ id: "1", name: "Default", is_default: true }),
+    ];
+
+    const result = assembleManagerPrompt(baseFiles, agents, "", []);
+
+    expect(result).not.toContain("[SYSTEM CONTEXT]");
+  });
+
+  it("omits [SYSTEM CONTEXT] when enabledToolNames is not provided", () => {
+    const agents: Agent[] = [
+      makeAgent({ id: "1", name: "Default", is_default: true }),
+    ];
+
+    const result = assembleManagerPrompt(baseFiles, agents);
+
+    expect(result).not.toContain("[SYSTEM CONTEXT]");
+  });
 });
 
 describe("getEffectiveSettings", () => {

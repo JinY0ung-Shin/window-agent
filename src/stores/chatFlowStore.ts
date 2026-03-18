@@ -501,18 +501,6 @@ async function sendNormalMessage() {
   });
 
   try {
-    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
-    if (agent) {
-      try {
-        const files = await readPersonaFiles(agent.folder_name);
-        baseSystemPrompt = agent.is_default
-          ? assembleManagerPrompt(files, agentStore.agents)
-          : assembleSystemPrompt(files);
-      } catch {
-        // Fallback to default
-      }
-    }
-
     const effective = agent
       ? getEffectiveSettings(agent)
       : {
@@ -534,6 +522,26 @@ async function sendNormalMessage() {
       } catch { /* default false */ }
     }
     const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
+
+    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+    if (agent) {
+      try {
+        const files = await readPersonaFiles(agent.folder_name);
+        if (agent.is_default) {
+          const enabledToolNames = toolDefinitions.map((t) => t.name);
+          baseSystemPrompt = assembleManagerPrompt(
+            files,
+            agentStore.agents,
+            settings.companyName,
+            enabledToolNames,
+          );
+        } else {
+          baseSystemPrompt = assembleSystemPrompt(files);
+        }
+      } catch {
+        // Fallback to default
+      }
+    }
 
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
 
@@ -825,18 +833,6 @@ async function regenerateStream(
   });
 
   try {
-    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
-    if (agent) {
-      try {
-        const files = await readPersonaFiles(agent.folder_name);
-        baseSystemPrompt = agent.is_default
-          ? assembleManagerPrompt(files, agentStore.agents)
-          : assembleSystemPrompt(files);
-      } catch {
-        // Fallback to default
-      }
-    }
-
     const effective = agent
       ? getEffectiveSettings(agent)
       : {
@@ -845,6 +841,30 @@ async function regenerateStream(
           thinkingEnabled: settings.thinkingEnabled,
           thinkingBudget: settings.thinkingBudget,
         };
+
+    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+    if (agent) {
+      try {
+        const files = await readPersonaFiles(agent.folder_name);
+        if (agent.is_default) {
+          let enabledToolNames: string[] = [];
+          try {
+            const toolDefs = await getEffectiveTools(agent.folder_name);
+            enabledToolNames = toolDefs.map((t) => t.name);
+          } catch { /* no tools */ }
+          baseSystemPrompt = assembleManagerPrompt(
+            files,
+            agentStore.agents,
+            settings.companyName,
+            enabledToolNames,
+          );
+        } else {
+          baseSystemPrompt = assembleSystemPrompt(files);
+        }
+      } catch {
+        // Fallback to default
+      }
+    }
 
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
 
