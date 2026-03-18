@@ -2922,6 +2922,62 @@ body {
   color: var(--text);
 }
 
+.debug-tab-bar {
+  display: flex;
+  gap: 2px;
+}
+
+.debug-tab {
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.debug-tab.active {
+  color: var(--text-main);
+  border-bottom-color: var(--primary);
+}
+
+.debug-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 9px;
+  background: var(--primary);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.debug-clear-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.debug-clear-btn:hover:not(:disabled) {
+  background: var(--bg-color);
+}
+
+.debug-clear-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .debug-panel-close {
   background: none;
   border: none;

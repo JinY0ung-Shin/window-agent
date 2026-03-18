@@ -2,7 +2,43 @@ use crate::api::*;
 use crate::error::AppError;
 use crate::models::api_types::{CompletionChunk, CompletionResponse};
 use futures::StreamExt;
+use serde::Serialize;
 use tauri::Emitter;
+
+// ── HTTP Debug Logging ──
+
+#[derive(Debug, Clone, Serialize)]
+pub struct HttpLogEntry {
+    pub id: String,
+    pub timestamp: String,
+    pub method: String,
+    pub url: String,
+    pub status: Option<u16>,
+    pub duration_ms: Option<u64>,
+    pub request_headers: String,
+    pub response_headers: String,
+    pub response_body_preview: String,
+    pub error: Option<String>,
+}
+
+/// Emit an HTTP log entry to the frontend via Tauri event.
+fn emit_http_log(app: &tauri::AppHandle, entry: HttpLogEntry) {
+    let _ = app.emit("debug:http-log", entry);
+}
+
+/// Format response headers for display.
+fn format_headers(headers: &reqwest::header::HeaderMap) -> String {
+    headers
+        .iter()
+        .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap_or("<binary>")))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Truncate text for preview.
+fn truncate(s: &str, max: usize) -> String {
+    if s.len() <= max { s.to_string() } else { format!("{}...", &s[..max]) }
+}
 
 // ── URL builders ──
 
@@ -61,20 +97,63 @@ pub async fn do_completion(
     api_key: &str,
     base_url: &str,
     body: &serde_json::Value,
+    app: Option<&tauri::AppHandle>,
 ) -> Result<ChatCompletionResponse, AppError> {
     let url = completions_url(base_url);
+    let start = std::time::Instant::now();
+    let log_id = uuid::Uuid::new_v4().to_string();
 
     let mut req = client
         .post(&url)
         .header("Content-Type", "application/json");
-    if !api_key.is_empty() {
+    let auth_header = if !api_key.is_empty() {
+        let h = format!("Bearer {}...{}", &api_key[..4.min(api_key.len())], &api_key[api_key.len().saturating_sub(3)..]);
         req = req.header("Authorization", format!("Bearer {}", api_key));
-    }
-    let resp = req.json(body).send().await?;
+        h
+    } else {
+        "(none)".to_string()
+    };
+
+    let resp = match req.json(body).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            if let Some(app) = app {
+                emit_http_log(app, HttpLogEntry {
+                    id: log_id,
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    method: "POST".into(),
+                    url: url.clone(),
+                    status: None,
+                    duration_ms: Some(start.elapsed().as_millis() as u64),
+                    request_headers: format!("Authorization: {auth_header}"),
+                    response_headers: String::new(),
+                    response_body_preview: String::new(),
+                    error: Some(e.to_string()),
+                });
+            }
+            return Err(e.into());
+        }
+    };
+
+    let status = resp.status().as_u16();
+    let resp_headers = format_headers(resp.headers());
 
     if !resp.status().is_success() {
-        let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
+        if let Some(app) = app {
+            emit_http_log(app, HttpLogEntry {
+                id: log_id,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                method: "POST".into(),
+                url: url.clone(),
+                status: Some(status),
+                duration_ms: Some(start.elapsed().as_millis() as u64),
+                request_headers: format!("Authorization: {auth_header}"),
+                response_headers: resp_headers,
+                response_body_preview: truncate(&text, 500),
+                error: Some(format!("HTTP {status}")),
+            });
+        }
         return Err(AppError::Api(format!("HTTP_{}: {}", status, text)));
     }
 
@@ -82,6 +161,21 @@ pub async fn do_completion(
         .json()
         .await
         .map_err(|e| AppError::Api(format!("PARSE_ERROR: JSON parse error: {}", e)))?;
+
+    if let Some(app) = app {
+        emit_http_log(app, HttpLogEntry {
+            id: log_id,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            method: "POST".into(),
+            url,
+            status: Some(status),
+            duration_ms: Some(start.elapsed().as_millis() as u64),
+            request_headers: format!("Authorization: {auth_header}"),
+            response_headers: resp_headers,
+            response_body_preview: format!("choices={}", parsed.choices.len()),
+            error: None,
+        });
+    }
 
     let msg = parsed
         .choices
@@ -119,6 +213,14 @@ pub async fn stream_completion(
     request_id: &str,
 ) -> Result<(), AppError> {
     let url = completions_url(base_url);
+    let start = std::time::Instant::now();
+    let log_id = uuid::Uuid::new_v4().to_string();
+
+    let auth_preview = if !api_key.is_empty() {
+        format!("Bearer {}...{}", &api_key[..4.min(api_key.len())], &api_key[api_key.len().saturating_sub(3)..])
+    } else {
+        "(none)".to_string()
+    };
 
     let mut req = client
         .post(&url)
@@ -126,14 +228,59 @@ pub async fn stream_completion(
     if !api_key.is_empty() {
         req = req.header("Authorization", format!("Bearer {}", api_key));
     }
-    let resp = req.json(body).send().await?;
+    let resp = match req.json(body).send().await {
+        Ok(r) => r,
+        Err(e) => {
+            emit_http_log(app, HttpLogEntry {
+                id: log_id,
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                method: "POST".into(),
+                url: url.clone(),
+                status: None,
+                duration_ms: Some(start.elapsed().as_millis() as u64),
+                request_headers: format!("Authorization: {auth_preview}"),
+                response_headers: String::new(),
+                response_body_preview: String::new(),
+                error: Some(e.to_string()),
+            });
+            return Err(e.into());
+        }
+    };
+
+    let status_code = resp.status().as_u16();
+    let resp_headers = format_headers(resp.headers());
 
     // Check HTTP status before attempting to stream
     if !resp.status().is_success() {
-        let status = resp.status().as_u16();
         let text = resp.text().await.unwrap_or_default();
-        return Err(AppError::Api(format!("HTTP_{}: {}", status, text)));
+        emit_http_log(app, HttpLogEntry {
+            id: log_id,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            method: "POST".into(),
+            url: url.clone(),
+            status: Some(status_code),
+            duration_ms: Some(start.elapsed().as_millis() as u64),
+            request_headers: format!("Authorization: {auth_preview}"),
+            response_headers: resp_headers,
+            response_body_preview: truncate(&text, 500),
+            error: Some(format!("HTTP {status_code}")),
+        });
+        return Err(AppError::Api(format!("HTTP_{}: {}", status_code, text)));
     }
+
+    // Log successful stream start
+    emit_http_log(app, HttpLogEntry {
+        id: log_id,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        method: "POST (stream)".into(),
+        url,
+        status: Some(status_code),
+        duration_ms: Some(start.elapsed().as_millis() as u64),
+        request_headers: format!("Authorization: {auth_preview}"),
+        response_headers: resp_headers,
+        response_body_preview: "SSE stream started".into(),
+        error: None,
+    });
 
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
-import { useDebugStore } from "../../stores/debugStore";
+import { useDebugStore, type HttpLogEntry } from "../../stores/debugStore";
 import { useConversationStore } from "../../stores/conversationStore";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -32,26 +32,105 @@ function formatJson(text: string) {
   }
 }
 
+function httpStatusColor(status: number | null): string {
+  if (!status) return "var(--error, #ef4444)";
+  if (status < 300) return "var(--success, #22c55e)";
+  if (status < 400) return "var(--warning, #e6a817)";
+  return "var(--error, #ef4444)";
+}
+
+function HttpLogItem({ log }: { log: HttpLogEntry }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="debug-log-item">
+      <div
+        className="debug-log-summary"
+        onClick={() => setExpanded(!expanded)}
+      >
+        <span className="debug-log-expand">
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </span>
+        <span className="debug-log-time">{formatTime(log.timestamp)}</span>
+        <span className="debug-log-tool" style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+          {log.method}
+        </span>
+        <span
+          className="debug-status-badge"
+          style={{ background: httpStatusColor(log.status) }}
+        >
+          {log.status ?? "ERR"}
+        </span>
+        {log.duration_ms != null && (
+          <span className="debug-log-duration">{log.duration_ms}ms</span>
+        )}
+        {log.error && (
+          <span style={{ color: "var(--error, #ef4444)", fontSize: "0.75rem", marginLeft: 4 }}>
+            {log.error}
+          </span>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="debug-log-detail">
+          <div className="debug-log-section">
+            <span className="debug-log-label">URL</span>
+            <pre className="debug-code-block" style={{ wordBreak: "break-all" }}>{log.url}</pre>
+          </div>
+          <div className="debug-log-section">
+            <span className="debug-log-label">요청 헤더</span>
+            <pre className="debug-code-block">{log.request_headers || "(없음)"}</pre>
+          </div>
+          {log.response_headers && (
+            <div className="debug-log-section">
+              <span className="debug-log-label">응답 헤더</span>
+              <pre className="debug-code-block">{log.response_headers}</pre>
+            </div>
+          )}
+          {log.response_body_preview && (
+            <div className="debug-log-section">
+              <span className="debug-log-label">응답 미리보기</span>
+              <pre className="debug-code-block">{formatJson(log.response_body_preview)}</pre>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DebugPanel() {
   const isOpen = useDebugStore((s) => s.isOpen);
   const setOpen = useDebugStore((s) => s.setOpen);
   const logs = useDebugStore((s) => s.logs);
+  const httpLogs = useDebugStore((s) => s.httpLogs);
+  const activeTab = useDebugStore((s) => s.activeTab);
+  const setActiveTab = useDebugStore((s) => s.setActiveTab);
   const filterByTool = useDebugStore((s) => s.filterByTool);
   const filterByStatus = useDebugStore((s) => s.filterByStatus);
   const setFilterByTool = useDebugStore((s) => s.setFilterByTool);
   const setFilterByStatus = useDebugStore((s) => s.setFilterByStatus);
   const loadLogs = useDebugStore((s) => s.loadLogs);
   const getFilteredLogs = useDebugStore((s) => s.getFilteredLogs);
+  const clearHttpLogs = useDebugStore((s) => s.clearHttpLogs);
+  const setupHttpLogListener = useDebugStore((s) => s.setupHttpLogListener);
 
   const currentConversationId = useConversationStore((s) => s.currentConversationId);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Setup HTTP log listener
   useEffect(() => {
-    if (isOpen && currentConversationId) {
+    let cleanup: (() => void) | undefined;
+    setupHttpLogListener().then((fn) => { cleanup = fn; });
+    return () => { cleanup?.(); };
+  }, [setupHttpLogListener]);
+
+  useEffect(() => {
+    if (isOpen && currentConversationId && activeTab === "tools") {
       loadLogs(currentConversationId);
     }
-  }, [isOpen, currentConversationId, loadLogs]);
+  }, [isOpen, currentConversationId, loadLogs, activeTab]);
 
   const toolNames = useMemo(() => {
     const names = new Set(logs.map((l) => l.tool_name));
@@ -76,89 +155,127 @@ export default function DebugPanel() {
   return (
     <div className={`debug-panel ${isOpen ? "open" : ""}`}>
       <div className="debug-panel-header">
-        <h3>도구 로그</h3>
+        <div className="debug-tab-bar">
+          <button
+            className={`debug-tab ${activeTab === "tools" ? "active" : ""}`}
+            onClick={() => setActiveTab("tools")}
+          >
+            도구 로그
+          </button>
+          <button
+            className={`debug-tab ${activeTab === "http" ? "active" : ""}`}
+            onClick={() => setActiveTab("http")}
+          >
+            HTTP {httpLogs.length > 0 && <span className="debug-tab-count">{httpLogs.length}</span>}
+          </button>
+        </div>
         <button className="debug-panel-close" onClick={() => setOpen(false)}>
           <X size={18} />
         </button>
       </div>
 
-      <div className="debug-panel-filters">
-        <select
-          className="debug-filter-select"
-          value={filterByTool ?? ""}
-          onChange={(e) => setFilterByTool(e.target.value || null)}
-        >
-          <option value="">모든 도구</option>
-          {toolNames.map((name) => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
+      {activeTab === "tools" ? (
+        <>
+          <div className="debug-panel-filters">
+            <select
+              className="debug-filter-select"
+              value={filterByTool ?? ""}
+              onChange={(e) => setFilterByTool(e.target.value || null)}
+            >
+              <option value="">모든 도구</option>
+              {toolNames.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
 
-        <div className="debug-filter-statuses">
-          {allStatuses.map((status) => (
-            <label key={status} className="debug-status-checkbox">
-              <input
-                type="checkbox"
-                checked={filterByStatus.length === 0 || filterByStatus.includes(status)}
-                onChange={() => toggleStatus(status)}
-              />
-              <span
-                className="debug-status-dot"
-                style={{ background: STATUS_COLORS[status] ?? "var(--text-muted)" }}
-              />
-              {statusLabel(status)}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className="debug-panel-logs">
-        {filteredLogs.length === 0 ? (
-          <div className="debug-empty">도구 호출 기록이 없습니다</div>
-        ) : (
-          filteredLogs.map((log) => {
-            const isExpanded = expandedId === log.id;
-            return (
-              <div key={log.id} className="debug-log-item">
-                <div
-                  className="debug-log-summary"
-                  onClick={() => setExpandedId(isExpanded ? null : log.id)}
-                >
-                  <span className="debug-log-expand">
-                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                  </span>
-                  <span className="debug-log-time">{formatTime(log.created_at)}</span>
-                  <span className="debug-log-tool">{log.tool_name}</span>
+            <div className="debug-filter-statuses">
+              {allStatuses.map((status) => (
+                <label key={status} className="debug-status-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={filterByStatus.length === 0 || filterByStatus.includes(status)}
+                    onChange={() => toggleStatus(status)}
+                  />
                   <span
-                    className="debug-status-badge"
-                    style={{ background: STATUS_COLORS[log.status] ?? "var(--text-muted)" }}
-                  >
-                    {statusLabel(log.status)}
-                  </span>
-                  {log.duration_ms != null && (
-                    <span className="debug-log-duration">{log.duration_ms}ms</span>
-                  )}
-                </div>
+                    className="debug-status-dot"
+                    style={{ background: STATUS_COLORS[status] ?? "var(--text-muted)" }}
+                  />
+                  {statusLabel(status)}
+                </label>
+              ))}
+            </div>
+          </div>
 
-                {isExpanded && (
-                  <div className="debug-log-detail">
-                    <div className="debug-log-section">
-                      <span className="debug-log-label">Input</span>
-                      <pre className="debug-code-block">{formatJson(log.tool_input)}</pre>
+          <div className="debug-panel-logs">
+            {filteredLogs.length === 0 ? (
+              <div className="debug-empty">도구 호출 기록이 없습니다</div>
+            ) : (
+              filteredLogs.map((log) => {
+                const isExpanded = expandedId === log.id;
+                return (
+                  <div key={log.id} className="debug-log-item">
+                    <div
+                      className="debug-log-summary"
+                      onClick={() => setExpandedId(isExpanded ? null : log.id)}
+                    >
+                      <span className="debug-log-expand">
+                        {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </span>
+                      <span className="debug-log-time">{formatTime(log.created_at)}</span>
+                      <span className="debug-log-tool">{log.tool_name}</span>
+                      <span
+                        className="debug-status-badge"
+                        style={{ background: STATUS_COLORS[log.status] ?? "var(--text-muted)" }}
+                      >
+                        {statusLabel(log.status)}
+                      </span>
+                      {log.duration_ms != null && (
+                        <span className="debug-log-duration">{log.duration_ms}ms</span>
+                      )}
                     </div>
-                    {log.tool_output && (
-                      <div className="debug-log-section">
-                        <span className="debug-log-label">Output</span>
-                        <pre className="debug-code-block">{formatJson(log.tool_output)}</pre>
+
+                    {isExpanded && (
+                      <div className="debug-log-detail">
+                        <div className="debug-log-section">
+                          <span className="debug-log-label">Input</span>
+                          <pre className="debug-code-block">{formatJson(log.tool_input)}</pre>
+                        </div>
+                        {log.tool_output && (
+                          <div className="debug-log-section">
+                            <span className="debug-log-label">Output</span>
+                            <pre className="debug-code-block">{formatJson(log.tool_output)}</pre>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })
-        )}
-      </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="debug-panel-filters">
+            <button
+              className="debug-clear-btn"
+              onClick={clearHttpLogs}
+              disabled={httpLogs.length === 0}
+            >
+              로그 지우기
+            </button>
+          </div>
+          <div className="debug-panel-logs">
+            {httpLogs.length === 0 ? (
+              <div className="debug-empty">HTTP 요청 기록이 없습니다</div>
+            ) : (
+              [...httpLogs].reverse().map((log) => (
+                <HttpLogItem key={log.id} log={log} />
+              ))
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

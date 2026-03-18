@@ -75,7 +75,7 @@ pub async fn chat_completion(
             });
         }
 
-        match api_service::do_completion(&client, &api_key, &base_url, &body).await {
+        match api_service::do_completion(&client, &api_key, &base_url, &body, Some(&app)).await {
             Ok(resp) => return Ok(resp),
             Err(e) => {
                 if api_service::is_thinking_specific_error(&e) {
@@ -89,7 +89,7 @@ pub async fn chat_completion(
         }
     }
 
-    api_service::do_completion(&client, &api_key, &base_url, &body).await
+    api_service::do_completion(&client, &api_key, &base_url, &body, Some(&app)).await
 }
 
 #[tauri::command]
