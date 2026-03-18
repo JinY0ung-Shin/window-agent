@@ -245,6 +245,7 @@ fn validate_path(raw_path: &str, allowed_roots: &[PathBuf]) -> Result<PathBuf, S
 }
 
 /// Build the list of allowed root directories from the Tauri app handle.
+#[allow(dead_code)]
 fn allowed_roots(app: &AppHandle) -> Vec<PathBuf> {
     let mut roots = Vec::new();
     if let Ok(app_dir) = app.path().app_data_dir() {

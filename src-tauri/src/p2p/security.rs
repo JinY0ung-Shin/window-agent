@@ -240,6 +240,7 @@ impl HandshakeState {
     }
 
     /// Current phase of the handshake.
+    #[allow(dead_code)]
     pub fn phase(&self) -> &HandshakePhase {
         &self.phase
     }

@@ -23,6 +23,7 @@ impl CapabilitySet {
     }
 
     /// Maximum restriction — block everything.
+    #[allow(dead_code)]
     pub fn deny_all() -> Self {
         Self {
             can_send_messages: false,
@@ -34,6 +35,7 @@ impl CapabilitySet {
     }
 
     /// Check if a specific action is allowed.
+    #[allow(dead_code)]
     pub fn is_allowed(&self, action: &CapabilityAction) -> bool {
         match action {
             CapabilityAction::SendMessage => self.can_send_messages,
@@ -46,6 +48,7 @@ impl CapabilitySet {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum CapabilityAction {
     SendMessage,
     ReadAgentInfo,

@@ -480,6 +480,7 @@ pub fn update_outbox_retry(
     })
 }
 
+#[allow(dead_code)]
 pub fn delete_outbox_entry(db: &Database, id: &str) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute("DELETE FROM outbox WHERE id = ?1", rusqlite::params![id])?;
