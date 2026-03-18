@@ -95,7 +95,7 @@ impl ApiState {
 
     fn build_client(no_proxy: bool) -> reqwest::Client {
         let mut builder = reqwest::Client::builder()
-            .user_agent("WindowAgent/0.5.2");
+            .user_agent("WindowAgent/0.5.3");
         if no_proxy {
             builder = builder.no_proxy();
         }
