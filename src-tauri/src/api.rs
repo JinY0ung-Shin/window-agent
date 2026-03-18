@@ -11,15 +11,15 @@ use tokio::sync::Mutex as TokioMutex;
 /// For stronger at-rest protection, migrate to OS keychain in the future.
 pub struct ApiState {
     inner: Mutex<ApiConfig>,
-    /// Shared HTTP client – reqwest::Client is already Arc-wrapped and Clone,
-    /// so it lives outside the Mutex for lock-free reuse.
-    client: reqwest::Client,
+    /// HTTP client — wrapped in Mutex so it can be rebuilt when proxy settings change.
+    client: Mutex<reqwest::Client>,
 }
 
 #[derive(Clone)]
 struct ApiConfig {
     api_key: String,
     base_url: String,
+    no_proxy: bool,
 }
 
 pub const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
@@ -40,6 +40,7 @@ pub fn requires_api_key(api_key: &str, base_url: &str) -> bool {
 const STORE_FILE: &str = "api-config.json";
 const STORE_KEY_API_KEY: &str = "api_key";
 const STORE_KEY_BASE_URL: &str = "base_url";
+const STORE_KEY_NO_PROXY: &str = "no_proxy";
 
 impl ApiState {
     /// Create from stored config, with environment variable override.
@@ -47,6 +48,7 @@ impl ApiState {
     pub fn load(app: &tauri::AppHandle) -> Self {
         let mut api_key = String::new();
         let mut base_url = DEFAULT_BASE_URL.to_string();
+        let mut no_proxy = false;
 
         // Try loading from persistent store
         if let Ok(store) = app.store(STORE_FILE) {
@@ -64,6 +66,11 @@ impl ApiState {
                     }
                 }
             }
+            if let Some(val) = store.get(STORE_KEY_NO_PROXY) {
+                if let Some(b) = val.as_bool() {
+                    no_proxy = b;
+                }
+            }
         }
 
         // Env vars override store (dev convenience)
@@ -78,15 +85,43 @@ impl ApiState {
             }
         }
 
-        let client = reqwest::Client::builder()
-            .user_agent("WindowAgent/0.5.1")
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let client = Self::build_client(no_proxy);
 
         Self {
-            inner: Mutex::new(ApiConfig { api_key, base_url }),
-            client,
+            inner: Mutex::new(ApiConfig { api_key, base_url, no_proxy }),
+            client: Mutex::new(client),
         }
+    }
+
+    fn build_client(no_proxy: bool) -> reqwest::Client {
+        let mut builder = reqwest::Client::builder()
+            .user_agent("WindowAgent/0.5.2");
+        if no_proxy {
+            builder = builder.no_proxy();
+        }
+        builder.build().unwrap_or_else(|_| reqwest::Client::new())
+    }
+
+    /// Toggle proxy bypass and rebuild the HTTP client.
+    pub fn set_no_proxy(&self, enabled: bool, app: &tauri::AppHandle) -> Result<(), String> {
+        // Persist
+        let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
+        store.set(STORE_KEY_NO_PROXY, serde_json::json!(enabled));
+        store.save().map_err(|e| e.to_string())?;
+
+        // Update in-memory
+        let mut cfg = self.inner.lock().unwrap();
+        cfg.no_proxy = enabled;
+        drop(cfg);
+
+        // Rebuild client with new proxy setting
+        *self.client.lock().unwrap() = Self::build_client(enabled);
+        Ok(())
+    }
+
+    /// Get current no_proxy setting.
+    pub fn get_no_proxy(&self) -> bool {
+        self.inner.lock().unwrap().no_proxy
     }
 
     /// Returns true if the user has configured API access.
@@ -142,7 +177,7 @@ impl ApiState {
 
     /// Return a clone of the shared reqwest::Client (cheap – internally Arc'd).
     pub fn client(&self) -> reqwest::Client {
-        self.client.clone()
+        self.client.lock().unwrap().clone()
     }
 
     /// Get the API key and base URL from backend state only.

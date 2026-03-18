@@ -29,6 +29,14 @@ export async function setApiConfig(request: SetApiConfigRequest): Promise<void> 
   return invoke("set_api_config", { request });
 }
 
+export async function getNoProxy(): Promise<boolean> {
+  return invoke("get_no_proxy");
+}
+
+export async function setNoProxy(enabled: boolean): Promise<void> {
+  return invoke("set_no_proxy", { enabled });
+}
+
 export interface ApiHealthCheckRequest {
   api_key?: string | null;
   base_url?: string | null;

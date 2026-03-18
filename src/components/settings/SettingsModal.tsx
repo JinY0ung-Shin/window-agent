@@ -3,6 +3,7 @@ import { Settings, X, RefreshCw, Wifi } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNetworkStore } from "../../stores/networkStore";
 import { checkApiHealth, listModels, type ApiHealthCheckResponse } from "../../services/tauriCommands";
+import { getNoProxy, setNoProxy } from "../../services/commands/apiCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
 import type { UITheme } from "../../labels";
 import ExportSection from "./ExportSection";
@@ -31,6 +32,7 @@ export default function SettingsModal() {
   const [healthLoading, setHealthLoading] = useState(false);
   const [healthResult, setHealthResult] = useState<ApiHealthCheckResponse | null>(null);
   const [healthError, setHealthError] = useState("");
+  const [noProxyEnabled, setNoProxyEnabled] = useState(false);
 
   const network = useNetworkStore();
   const [networkToggleLoading, setNetworkToggleLoading] = useState(false);
@@ -66,6 +68,7 @@ export default function SettingsModal() {
       setHealthError("");
       setTab("general");
       fetchModels();
+      getNoProxy().then(setNoProxyEnabled).catch(() => {});
     }
   }, [isSettingsOpen]);
 
@@ -220,6 +223,22 @@ export default function SettingsModal() {
                     setHealthError("");
                   }}
                 />
+                <div className="settings-proxy-row" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, marginBottom: 8 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={noProxyEnabled}
+                      onChange={async (e) => {
+                        const val = e.target.checked;
+                        setNoProxyEnabled(val);
+                        try {
+                          await setNoProxy(val);
+                        } catch { /* ignore */ }
+                      }}
+                    />
+                    프록시 우회 (Squid 등 프록시가 API 요청을 차단하는 경우)
+                  </label>
+                </div>
                 <div className="settings-health-row">
                   <button
                     type="button"

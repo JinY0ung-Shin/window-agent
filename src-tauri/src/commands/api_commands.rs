@@ -17,6 +17,20 @@ pub fn has_stored_key(api: State<'_, ApiState>) -> bool {
 }
 
 #[tauri::command]
+pub fn get_no_proxy(api: State<'_, ApiState>) -> bool {
+    api.get_no_proxy()
+}
+
+#[tauri::command]
+pub fn set_no_proxy(
+    app: tauri::AppHandle,
+    api: State<'_, ApiState>,
+    enabled: bool,
+) -> Result<(), String> {
+    api.set_no_proxy(enabled, &app)
+}
+
+#[tauri::command]
 pub fn set_api_config(
     app: tauri::AppHandle,
     api: State<'_, ApiState>,

@@ -96,6 +96,8 @@ pub fn run() {
             commands::get_env_config,
             commands::has_api_key,
             commands::has_stored_key,
+            commands::get_no_proxy,
+            commands::set_no_proxy,
             commands::set_api_config,
             commands::check_api_health,
             commands::chat_completion,
