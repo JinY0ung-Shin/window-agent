@@ -20,7 +20,7 @@ export default function Sidebar() {
   const openEditor = useAgentStore((s) => s.openEditor);
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
-  const { mainView, toggleView } = useNavigationStore();
+  const { mainView, toggleView, setMainView } = useNavigationStore();
   const labels = useLabels();
   const companyName = useCompanyName();
   const onDrag = useDragRegion();
@@ -100,7 +100,7 @@ export default function Sidebar() {
       <div className="sidebar-content">
         <div
           className={`menu-item new-chat-btn ${isBootstrapping ? "active" : ""}`}
-          onClick={handleNewAgent}
+          onClick={() => { setMainView("chat"); handleNewAgent(); }}
         >
           <Plus size={20} />
           <span>{labels.sidebarNewButton}</span>
@@ -111,7 +111,7 @@ export default function Sidebar() {
             <div
               key={agent.id}
               className={`menu-item conversation-item ${isActive(agent.id) ? "active" : ""}`}
-              onClick={() => openAgentChat(agent.id)}
+              onClick={() => { setMainView("chat"); openAgentChat(agent.id); }}
             >
               {agent.avatar ? (
                 <img
@@ -167,7 +167,7 @@ export default function Sidebar() {
 
         <div
           className="menu-item"
-          onClick={handleOpenAgentEditor}
+          onClick={() => { setMainView("chat"); handleOpenAgentEditor(); }}
         >
           <Users size={20} />
           <span>{labels.editAgent}</span>

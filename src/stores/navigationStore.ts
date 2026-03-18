@@ -10,8 +10,18 @@ interface NavigationState {
   toggleView: (view: MainView) => void;
 }
 
+const VALID_VIEWS: MainView[] = ["chat", "network", "vault"];
+
+function loadMainView(): MainView {
+  const stored = localStorage.getItem(LS_KEY);
+  if (stored && VALID_VIEWS.includes(stored as MainView)) {
+    return stored as MainView;
+  }
+  return "chat";
+}
+
 export const useNavigationStore = create<NavigationState>((set, get) => ({
-  mainView: (localStorage.getItem(LS_KEY) as MainView) || "chat",
+  mainView: loadMainView(),
 
   setMainView: (view) => {
     localStorage.setItem(LS_KEY, view);
