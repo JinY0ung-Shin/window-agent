@@ -134,10 +134,70 @@ fn native_tool_definitions() -> Vec<NativeToolDef> {
         },
         NativeToolDef {
             name: "memory_note".into(),
-            description: "에이전트의 메모리 노트를 관리합니다".into(),
+            description: "에이전트의 메모리 노트를 관리합니다. 중요: 새 노트를 만들기 전에 반드시 search로 관련 노트가 있는지 확인하세요. 같은 주제의 노트가 이미 있으면 create 대신 update를 사용하세요.".into(),
             category: "memory".into(),
             default_tier: "auto".into(),
-            parameters: serde_json::json!({"type":"object","properties":{"action":{"type":"string","description":"create | read | update | delete"},"id":{"type":"string","description":"노트 ID (update/delete 시 필요)"},"title":{"type":"string","description":"노트 제목"},"content":{"type":"string","description":"노트 내용"}},"required":["action","title"]}),
+            parameters: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["search", "read", "create", "update", "delete", "recall"],
+                        "description": "수행할 작업: search(기존 노트 검색) | read(노트 조회, id 없으면 전체 목록) | create(새 노트 생성) | update(기존 노트 수정) | delete(노트 삭제) | recall(최근 노트 가져오기)"
+                    },
+                    "id": {
+                        "type": "string",
+                        "description": "노트 ID (read/update/delete 시 사용)"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "노트 제목 (create 시 필수, update 시 선택)"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "노트 내용 (create 시 필수, update 시 선택)"
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "검색어 (search 시 필수)"
+                    },
+                    "category": {
+                        "type": "string",
+                        "enum": ["knowledge", "decision", "conversation", "reflection"],
+                        "description": "노트 분류 (기본값: knowledge)"
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "범위: shared(공유 노트) | 미지정(개인 노트). search 시 self | shared | all"
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "태그 목록"
+                    },
+                    "related_ids": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "관련 노트 ID 목록 (create 시 WikiLink 생성)"
+                    },
+                    "confidence": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                        "description": "신뢰도 0.0~1.0 (update 시 선택)"
+                    },
+                    "add_links": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "추가할 관련 노트 ID (update 시 선택)"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "결과 수 제한 (search/recall 시 선택)"
+                    }
+                },
+                "required": ["action"]
+            }),
         },
         NativeToolDef {
             name: "browser_navigate".into(),
