@@ -335,6 +335,22 @@ fn migrate_v8_to_v9(conn: &Connection) -> Result<(), rusqlite::Error> {
 
 /// Migration v10: Add addresses_json column to contacts table for direct P2P connection.
 fn migrate_v9_to_v10(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Check if contacts table exists first (v9 may have been recorded but table creation failed)
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='contacts'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap_or(0)
+        > 0;
+
+    if !table_exists {
+        // Re-create the P2P tables from v9 with addresses_json included
+        migrate_v8_to_v9(conn)?;
+        // Now add the addresses_json column that wasn't in v9's original schema
+    }
+
     let has_column = |table: &str, col: &str| -> bool {
         let mut stmt = conn
             .prepare(&format!("PRAGMA table_info({})", table))
