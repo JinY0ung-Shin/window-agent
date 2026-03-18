@@ -13,7 +13,7 @@ import AgentEditor from "../agent/AgentEditor";
 import SkillBar from "../skill/SkillBar";
 import ToolRunBlock from "./ToolRunBlock";
 import ConversationSwitcher from "./ConversationSwitcher";
-import WindowControls from "../layout/WindowControls";
+
 import { useDragRegion } from "../../hooks/useDragRegion";
 import { buildChatRenderBlocks } from "./chatRenderBlocks";
 
@@ -169,7 +169,6 @@ export default function ChatWindow() {
             <X size={18} />
           </button>
         )}
-        <WindowControls />
       </header>
 
       <div className="chat-container" ref={messagesContainerRef}>

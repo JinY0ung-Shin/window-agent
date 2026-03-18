@@ -12,6 +12,7 @@ import { useMemoryStore } from "../../stores/memoryStore";
 import { useVaultStore } from "../../stores/vaultStore";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useNavigationStore } from "../../stores/navigationStore";
+import WindowControls from "./WindowControls";
 
 export default function MainLayout() {
   const isDebugOpen = useDebugStore((s) => s.isOpen);
@@ -72,6 +73,7 @@ export default function MainLayout() {
   return (
     <div className="app-container">
       <Sidebar />
+      <WindowControls />
       {mainView === "vault" ? (
         <VaultPanel />
       ) : mainView === "network" ? (

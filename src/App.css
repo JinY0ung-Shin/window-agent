@@ -206,7 +206,7 @@ body {
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
-  padding: 0 16px;
+  padding: 0 120px 0 16px;
   position: absolute;
   top: 0;
   width: 100%;
@@ -215,10 +215,13 @@ body {
 
 /* ── Window Controls ── */
 .window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-left: auto;
+  z-index: 40;
   -webkit-app-region: no-drag;
 }
 
@@ -4170,7 +4173,7 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 20px;
+  padding: 16px 120px 16px 20px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -4562,7 +4565,7 @@ body {
 
 .vault-header {
   height: 48px;
-  padding: 0 16px;
+  padding: 0 120px 0 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
