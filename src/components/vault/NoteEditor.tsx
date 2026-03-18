@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { VaultNote, NoteUpdates } from "../../services/vaultTypes";
@@ -17,6 +18,9 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
   const [confidence, setConfidence] = useState(note.confidence);
   const [showPreview, setShowPreview] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const titleComposition = useCompositionInput(setTitle);
+  const contentComposition = useCompositionInput(setContent);
+  const tagsComposition = useCompositionInput(setTags);
 
   const isDirty =
     title !== note.title ||
@@ -93,8 +97,8 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
       <input
         className="vault-editor-title"
         value={title}
-        onChange={(e) => setTitle(e.target.value)}
         placeholder="노트 제목"
+        {...titleComposition.compositionProps}
       />
 
       {/* Toolbar */}
@@ -114,8 +118,8 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
             ref={textareaRef}
             className="vault-editor-textarea"
             value={content}
-            onChange={(e) => setContent(e.target.value)}
             placeholder="내용을 입력하세요…"
+            {...contentComposition.compositionProps}
           />
         </div>
         {showPreview && (
@@ -133,8 +137,8 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
             <input
               type="text"
               value={tags}
-              onChange={(e) => setTags(e.target.value)}
               placeholder="쉼표로 구분"
+              {...tagsComposition.compositionProps}
             />
           </label>
           <label className="vault-confidence-label">

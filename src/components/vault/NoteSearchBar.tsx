@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 
 interface NoteSearchBarProps {
   value: string;
@@ -24,13 +25,7 @@ export default function NoteSearchBar({
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const showScope = focused || value.length > 0;
-
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      onValueChange(e.target.value);
-    },
-    [onValueChange],
-  );
+  const { compositionProps } = useCompositionInput(onValueChange);
 
   return (
     <div className="vault-search-bar">
@@ -45,9 +40,9 @@ export default function NoteSearchBar({
           className="vault-search-input"
           placeholder="노트 검색..."
           value={value}
-          onChange={handleChange}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
+          {...compositionProps}
         />
         {value && (
           <button className="vault-search-clear" onClick={onClear} title="지우기">

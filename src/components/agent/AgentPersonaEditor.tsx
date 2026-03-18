@@ -1,3 +1,4 @@
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import type { PersonaTab } from "../../stores/agentStore";
 import type { PersonaFiles } from "../../services/types";
 import { useLabels } from "../../hooks/useLabels";
@@ -20,6 +21,7 @@ interface Props {
 
 export default function AgentPersonaEditor({ personaFiles, personaTab, onFileChange }: Props) {
   const labels = useLabels();
+  const { compositionProps } = useCompositionInput((v) => onFileChange(personaTab, v));
   const placeholders: Record<string, string> = {
     identity: labels.personaIdentityPlaceholder,
     soul: labels.personaSoulPlaceholder,
@@ -31,9 +33,9 @@ export default function AgentPersonaEditor({ personaFiles, personaTab, onFileCha
     <textarea
       className="persona-editor"
       value={personaFiles?.[personaTab] ?? ""}
-      onChange={(e) => onFileChange(personaTab, e.target.value)}
       placeholder={placeholders[personaTab] ?? ""}
       spellCheck={false}
+      {...compositionProps}
     />
   );
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { X, Trash2, Plus, AlertTriangle, Pencil, Check } from "lucide-react";
 import { listSkills, createSkill, readSkill, updateSkill, deleteSkill } from "../../services/tauriCommands";
 import type { SkillMetadata } from "../../services/types";
@@ -21,6 +22,8 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
   const [newSkillName, setNewSkillName] = useState("");
   const [showNewSkill, setShowNewSkill] = useState(false);
   const [skillError, setSkillError] = useState("");
+  const skillContentComposition = useCompositionInput(setEditingSkillContent);
+  const skillNameComposition = useCompositionInput(setNewSkillName);
 
   const loadAgentSkills = useCallback(async () => {
     if (!agent) return;
@@ -119,9 +122,9 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
               <textarea
                 className="persona-editor"
                 value={editingSkillContent}
-                onChange={(e) => setEditingSkillContent(e.target.value)}
                 placeholder="SKILL.md 내용을 입력하세요"
                 spellCheck={false}
+                {...skillContentComposition.compositionProps}
               />
             </div>
           ) : (
@@ -144,13 +147,14 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                     <input
                       type="text"
                       value={newSkillName}
-                      onChange={(e) => setNewSkillName(e.target.value)}
                       placeholder={labels.skillNamePlaceholder}
                       onKeyDown={(e) => {
+                        if (skillNameComposition.isComposing.current) return;
                         if (e.key === "Enter") handleCreateSkill();
                         if (e.key === "Escape") setShowNewSkill(false);
                       }}
                       autoFocus
+                      {...skillNameComposition.compositionProps}
                     />
                     <button className="btn-primary" onClick={handleCreateSkill}>생성</button>
                     <button className="btn-secondary" onClick={() => setShowNewSkill(false)}>취소</button>

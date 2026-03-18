@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import type { NoteType, NoteScope } from "../../services/vaultTypes";
 import { useVaultStore } from "../../stores/vaultStore";
 
@@ -29,6 +30,9 @@ export default function CreateNoteDialog({
   const [content, setContent] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const titleComposition = useCompositionInput(useCallback((v: string) => setTitle(v), []));
+  const tagsComposition = useCompositionInput(useCallback((v: string) => setTags(v), []));
+  const contentComposition = useCompositionInput(useCallback((v: string) => setContent(v), []));
 
   if (!isOpen) return null;
 
@@ -76,9 +80,9 @@ export default function CreateNoteDialog({
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
               placeholder="노트 제목"
               autoFocus
+              {...titleComposition.compositionProps}
             />
           </div>
 
@@ -134,8 +138,8 @@ export default function CreateNoteDialog({
             <input
               type="text"
               value={tags}
-              onChange={(e) => setTags(e.target.value)}
               placeholder="쉼표로 구분"
+              {...tagsComposition.compositionProps}
             />
           </div>
 
@@ -145,8 +149,8 @@ export default function CreateNoteDialog({
             <textarea
               rows={4}
               value={content}
-              onChange={(e) => setContent(e.target.value)}
               placeholder="노트 내용"
+              {...contentComposition.compositionProps}
             />
           </div>
 

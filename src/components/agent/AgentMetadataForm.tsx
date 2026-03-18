@@ -1,4 +1,5 @@
 import { Trash2 } from "lucide-react";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import AvatarUploader from "./AvatarUploader";
 import { useLabels } from "../../hooks/useLabels";
 
@@ -33,6 +34,8 @@ export default function AgentMetadataForm({
   canDelete, onDelete,
 }: Props) {
   const labels = useLabels();
+  const nameComposition = useCompositionInput(onNameChange);
+  const descComposition = useCompositionInput(onDescriptionChange);
 
   return (
     <div className="agent-editor-left">
@@ -43,8 +46,8 @@ export default function AgentMetadataForm({
         <input
           type="text"
           value={name}
-          onChange={(e) => onNameChange(e.target.value)}
           placeholder={labels.agentNamePlaceholder}
+          {...nameComposition.compositionProps}
         />
       </div>
 
@@ -53,8 +56,8 @@ export default function AgentMetadataForm({
         <input
           type="text"
           value={description}
-          onChange={(e) => onDescriptionChange(e.target.value)}
           placeholder={labels.agentDescPlaceholder}
+          {...descComposition.compositionProps}
         />
       </div>
 

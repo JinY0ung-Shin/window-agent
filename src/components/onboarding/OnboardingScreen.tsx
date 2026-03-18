@@ -1,26 +1,14 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import { Building2, Bot, Sparkles } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import type { UITheme } from "../../labels";
 
 export default function OnboardingScreen() {
   const initializeBranding = useSettingsStore((s) => s.initializeBranding);
   const [companyName, setCompanyName] = useState("");
   const [selectedTheme, setSelectedTheme] = useState<UITheme>("org");
-  const isComposing = useRef(false);
-
-  const handleNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setCompanyName(e.target.value);
-  }, []);
-
-  const handleCompositionStart = useCallback(() => {
-    isComposing.current = true;
-  }, []);
-
-  const handleCompositionEnd = useCallback((e: React.CompositionEvent<HTMLInputElement>) => {
-    isComposing.current = false;
-    setCompanyName(e.currentTarget.value);
-  }, []);
+  const { compositionProps } = useCompositionInput(setCompanyName);
 
   const handleStart = () => {
     initializeBranding(companyName.trim(), selectedTheme);
@@ -44,10 +32,8 @@ export default function OnboardingScreen() {
             type="text"
             placeholder="예: 스타트업 AI"
             value={companyName}
-            onChange={handleNameChange}
-            onCompositionStart={handleCompositionStart}
-            onCompositionEnd={handleCompositionEnd}
             autoFocus
+            {...compositionProps}
           />
         </div>
 

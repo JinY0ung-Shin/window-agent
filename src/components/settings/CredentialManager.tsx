@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { useLabels } from "../../hooks/useLabels";
 import type { CredentialMeta } from "../../services/types";
@@ -80,19 +81,24 @@ export default function CredentialManager() {
     setError(null);
   };
 
-  const handleNameChange = (name: string) => {
-    if (!form) return;
-    setForm({
-      ...form,
-      name,
-      id: form.idEdited ? form.id : toSlug(name),
+  const handleNameChange = useCallback((name: string) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      return { ...prev, name, id: prev.idEdited ? prev.id : toSlug(name) };
     });
-  };
+  }, []);
 
   const handleIdChange = (id: string) => {
     if (!form) return;
     setForm({ ...form, id, idEdited: true });
   };
+
+  const handleHostInputChange = useCallback((v: string) => {
+    setForm((prev) => prev ? { ...prev, hostInput: v } : prev);
+  }, []);
+
+  const nameComposition = useCompositionInput(handleNameChange);
+  const hostComposition = useCompositionInput(handleHostInputChange);
 
   const addHost = () => {
     if (!form || !form.hostInput.trim()) return;
@@ -117,6 +123,7 @@ export default function CredentialManager() {
   };
 
   const handleHostKeyDown = (e: React.KeyboardEvent) => {
+    if (hostComposition.isComposing.current) return;
     if (e.key === "Enter") {
       e.preventDefault();
       addHost();
@@ -230,8 +237,8 @@ export default function CredentialManager() {
             <input
               type="text"
               value={form.name}
-              onChange={(e) => handleNameChange(e.target.value)}
               placeholder="예: GitHub Token"
+              {...nameComposition.compositionProps}
             />
           </div>
 
@@ -264,9 +271,9 @@ export default function CredentialManager() {
               <input
                 type="text"
                 value={form.hostInput}
-                onChange={(e) => setForm({ ...form, hostInput: e.target.value })}
                 onKeyDown={handleHostKeyDown}
                 placeholder={labels.credentialHostPlaceholder}
+                {...hostComposition.compositionProps}
               />
             </div>
             {form.allowedHosts.length > 0 && (

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { Settings, X, RefreshCw, Wifi } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNetworkStore } from "../../stores/networkStore";
@@ -25,7 +26,7 @@ export default function SettingsModal() {
   const [tempThinkingBudget, setTempThinkingBudget] = useState(DEFAULT_THINKING_BUDGET);
   const [tempCompanyName, setTempCompanyName] = useState("");
   const [tempUITheme, setTempUITheme] = useState<UITheme>("org");
-  const isCompanyNameComposing = useRef(false);
+  const companyNameComposition = useCompositionInput(setTempCompanyName);
 
   const [models, setModels] = useState<string[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
@@ -376,12 +377,7 @@ export default function SettingsModal() {
                   type="text"
                   placeholder="예: 우리 회사"
                   value={tempCompanyName}
-                  onChange={(e) => setTempCompanyName(e.target.value)}
-                  onCompositionStart={() => { isCompanyNameComposing.current = true; }}
-                  onCompositionEnd={(e) => {
-                    isCompanyNameComposing.current = false;
-                    setTempCompanyName(e.currentTarget.value);
-                  }}
+                  {...companyNameComposition.compositionProps}
                 />
                 <p className="form-text">
                   사이드바 헤더와 환영 화면에 표시됩니다.
