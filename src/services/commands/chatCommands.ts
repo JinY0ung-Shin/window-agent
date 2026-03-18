@@ -47,10 +47,6 @@ export async function saveMessage(request: SaveMessageRequest): Promise<DbMessag
   return invoke("save_message", { request });
 }
 
-export async function deleteMessagesFrom(conversationId: string, messageId: string): Promise<void> {
-  return invoke("delete_messages_from", { conversationId, messageId });
-}
-
 export async function deleteMessagesAndMaybeResetSummary(
   conversationId: string,
   messageId: string,
@@ -97,10 +93,4 @@ export async function executeTool(
   conversationId: string,
 ): Promise<ToolExecutionResult> {
   return invoke("execute_tool", { toolName, toolInput, conversationId });
-}
-
-// ── Export / Import ──
-
-export async function exportConversation(conversationId: string): Promise<string> {
-  return invoke("export_conversation", { conversationId });
 }

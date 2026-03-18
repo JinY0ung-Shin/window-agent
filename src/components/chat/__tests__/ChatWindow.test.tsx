@@ -50,7 +50,7 @@ describe("ChatWindow", () => {
     expect(screen.getByText(/직원을 선택하거나 새로 채용하세요/)).toBeInTheDocument();
   });
 
-  it("does not show AgentSelector component", () => {
+  it("does not show agent selection UI in welcome state", () => {
     useMessageStore.setState({ messages: [] });
     useConversationStore.setState({ currentConversationId: null });
     useAgentStore.setState({ selectedAgentId: null, agents: [] });

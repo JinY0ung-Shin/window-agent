@@ -45,15 +45,6 @@ pub fn save_message(
 }
 
 #[tauri::command]
-pub fn delete_messages_from(
-    db: State<'_, Database>,
-    conversation_id: String,
-    message_id: String,
-) -> Result<(), AppError> {
-    Ok(operations::delete_messages_from_impl(&db, conversation_id, message_id)?)
-}
-
-#[tauri::command]
 pub async fn delete_conversation(
     app: AppHandle,
     db: State<'_, Database>,

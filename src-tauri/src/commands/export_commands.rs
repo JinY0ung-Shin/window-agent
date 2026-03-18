@@ -44,28 +44,6 @@ pub struct ImportResult {
     pub warnings: Vec<String>,
 }
 
-// ── Export conversation ──
-
-#[tauri::command]
-pub fn export_conversation(
-    db: State<'_, Database>,
-    conversation_id: String,
-) -> Result<String, AppError> {
-    let detail = get_conversation_detail_impl(&db, conversation_id.clone())?;
-    let messages = get_messages_impl(&db, conversation_id)?;
-
-    let export = ConversationExport {
-        version: "1.0".to_string(),
-        export_type: "conversation".to_string(),
-        exported_at: chrono::Utc::now().to_rfc3339(),
-        conversation: detail,
-        messages,
-    };
-
-    serde_json::to_string_pretty(&export)
-        .map_err(|e| AppError::Io(format!("JSON serialization failed: {e}")))
-}
-
 // ── Export agent ──
 
 #[tauri::command]

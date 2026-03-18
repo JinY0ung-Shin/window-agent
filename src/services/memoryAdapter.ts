@@ -1,23 +1,7 @@
-import type { MemoryNote } from "./types";
 import type { VaultNoteSummary } from "./vaultTypes";
 import { estimateTokens } from "./tokenEstimator";
 
 const MAX_MEMORY_TOKENS = 500;
-
-/**
- * Vault 노트를 기존 MemoryNote 형태로 변환하는 어댑터.
- * 기존 UI/프롬프트 빌더가 수정 없이 작동하도록 보장한다.
- */
-export function vaultNoteToLegacy(note: VaultNoteSummary): MemoryNote {
-  return {
-    id: note.id,
-    agent_id: note.agent,
-    title: note.title,
-    content: note.bodyPreview,
-    created_at: note.created,
-    updated_at: note.updated,
-  };
-}
 
 /**
  * 기존 buildMemorySection() (chatHelpers.ts:112-135) 의 정확한 재구현.

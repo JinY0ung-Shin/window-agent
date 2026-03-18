@@ -3,7 +3,6 @@ import type { SkillMetadata } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { estimateTokens } from "../services/tokenEstimator";
 
-export const SKILL_TOKEN_SOFT_CAP = 2000;
 export const SKILL_TOKEN_HARD_CAP = 3000;
 
 interface SkillState {
