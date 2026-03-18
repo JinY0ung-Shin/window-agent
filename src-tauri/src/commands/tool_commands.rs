@@ -560,9 +560,24 @@ fn tool_memory_note(
                     "updated_at": note.updated,
                 }))
             } else {
-                // List all notes for agent (legacy behavior)
-                let legacy = vm.to_legacy_json(agent_id);
-                Ok(serde_json::Value::Array(legacy))
+                // List all notes for agent
+                let summaries = vm.list_notes(Some(agent_id), None, None);
+                let items: Vec<serde_json::Value> = summaries
+                    .into_iter()
+                    .filter(|n| n.scope.as_deref() != Some("shared"))
+                    .filter_map(|n| {
+                        let full = vm.read_note(&n.id).ok()?;
+                        Some(serde_json::json!({
+                            "id": full.id,
+                            "agent_id": full.agent,
+                            "title": full.title,
+                            "content": strip_title_heading(&full.content),
+                            "created_at": full.created,
+                            "updated_at": full.updated,
+                        }))
+                    })
+                    .collect();
+                Ok(serde_json::Value::Array(items))
             }
         }
         "update" => {

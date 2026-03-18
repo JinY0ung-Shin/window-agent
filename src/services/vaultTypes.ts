@@ -107,20 +107,6 @@ export interface NoteUpdates {
   addLinks?: string[];
 }
 
-// ── Migration types ──────────────────────────────────
-
-export interface MigrationPreview {
-  noteCount: number;
-  estimatedFiles: number;
-  agentBreakdown: Record<string, number>;
-}
-
-export interface MigrationResult {
-  migrated: number;
-  skipped: number;
-  errors: string[];
-}
-
 export interface IndexStats {
   totalNotes: number;
   totalLinks: number;

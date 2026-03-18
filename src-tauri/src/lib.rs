@@ -143,8 +143,6 @@ pub fn run() {
             commands::vault_get_path,
             commands::vault_open_in_obsidian,
             commands::vault_rebuild_index,
-            commands::vault_migrate_preview,
-            commands::vault_migrate_execute,
             commands::p2p_start,
             commands::p2p_stop,
             commands::p2p_status,

@@ -5,7 +5,6 @@ use crate::db::operations::*;
 use crate::db::Database;
 use crate::error::AppError;
 use crate::utils::path_security::validate_zip_entry;
-use crate::utils::tool_migration::ensure_tool_config;
 use crate::vault::note::parse_frontmatter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -40,7 +39,6 @@ pub struct ImportResult {
     pub agents_imported: usize,
     pub conversations_imported: usize,
     pub messages_imported: usize,
-    pub memory_notes_imported: usize,
     pub warnings: Vec<String>,
 }
 
@@ -83,7 +81,7 @@ pub fn export_agent(
             .join("agents")
             .join(&agent.folder_name);
 
-        let persona_files = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json", "TOOLS.md", "TOOLS_LEGACY.md"];
+        let persona_files = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json"];
         for fname in &persona_files {
             let path = agents_dir.join(fname);
             if path.exists() {
@@ -129,7 +127,7 @@ pub fn export_agent(
             walk_dir_recursive(&skills_dir, &skills_dir, &mut zip, &options)?;
         }
 
-        // memory: vault files + backward-compat memory_notes.json
+        // memory: vault files
         let vault_state = app.try_state::<VaultState>();
         if let Some(vault_state) = vault_state {
             if let Ok(vm) = vault_state.lock() {
@@ -159,27 +157,6 @@ pub fn export_agent(
                     }
                 }
 
-                // Backward-compat: generate flat memory_notes.json from vault
-                let legacy = vm.to_legacy_json(&agent_id);
-                if !legacy.is_empty() {
-                    let notes_json = serde_json::to_string_pretty(&legacy)
-                        .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
-                    zip.start_file("memory_notes.json", options.clone())
-                        .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
-                    zip.write_all(notes_json.as_bytes())
-                        .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
-                }
-            }
-        } else {
-            // Fallback: export from DB if vault not available
-            let notes = list_memory_notes_impl(&db, agent_id.clone())?;
-            if !notes.is_empty() {
-                let notes_json = serde_json::to_string_pretty(&notes)
-                    .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
-                zip.start_file("memory_notes.json", options.clone())
-                    .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
-                zip.write_all(notes_json.as_bytes())
-                    .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
             }
         }
 
@@ -273,7 +250,7 @@ pub fn import_agent(
     }
 
     // 3. Read persona files from ZIP
-    let persona_files_list = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json", "TOOLS.md", "TOOLS_LEGACY.md"];
+    let persona_files_list = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json"];
     let mut persona_contents: Vec<(String, String)> = Vec::new();
     for fname in &persona_files_list {
         let zip_path = format!("persona/{fname}");
@@ -318,22 +295,6 @@ pub fn import_agent(
             }
         }
     }
-
-    // Fallback: legacy memory_notes.json (only if no vault format)
-    let memory_notes: Vec<MemoryNote> = if !has_vault_memory {
-        if let Ok(mut file) = archive.by_name("memory_notes.json") {
-            let mut content = String::new();
-            if file.read_to_string(&mut content).is_ok() {
-                serde_json::from_str(&content).unwrap_or_default()
-            } else {
-                Vec::new()
-            }
-        } else {
-            Vec::new()
-        }
-    } else {
-        Vec::new()
-    };
 
     // 4b. Collect skills file entries from ZIP
     let mut skill_files: Vec<(String, Vec<u8>)> = Vec::new();
@@ -447,9 +408,7 @@ pub fn import_agent(
     }
 
     // Import memory notes — vault format or legacy
-    let mut memory_notes_imported = 0usize;
-
-    // Track ALL vault files written for cleanup on failure (memory + shared + legacy)
+    // Track ALL vault files written for cleanup on failure
     let mut imported_vault_paths: Vec<std::path::PathBuf> = Vec::new();
 
     if has_vault_memory {
@@ -533,7 +492,6 @@ pub fn import_agent(
                         warnings.push(format!("Failed to write vault file '{}': {e}", zip_path));
                     } else {
                         imported_vault_paths.push(target_path);
-                        memory_notes_imported += 1;
                     }
                 }
 
@@ -563,50 +521,6 @@ pub fn import_agent(
                         imported_vault_paths.push(target_path); // track for cleanup
                     }
                 }
-            }
-        }
-    } else {
-        // Legacy format: convert memory_notes.json to vault files, preserving original IDs
-        let vault_state = app.try_state::<VaultState>();
-        if let Some(vault_state) = &vault_state {
-            if let Ok(mut vm) = vault_state.lock() {
-                for note in &memory_notes {
-                    match vm.create_note_preserving_id(
-                        &new_agent_id,
-                        None,
-                        "knowledge",
-                        &note.title,
-                        &note.content,
-                        Vec::new(),
-                        Vec::new(),
-                        Some(&note.id),
-                        Some(&note.created_at),
-                        Some(&note.updated_at),
-                    ) {
-                        Ok(vault_note) => {
-                            imported_vault_paths.push(std::path::PathBuf::from(&vault_note.path));
-                            memory_notes_imported += 1;
-                        }
-                        Err(e) => warnings.push(format!("Failed to import memory note '{}': {e}", note.title)),
-                    }
-                }
-            }
-        } else {
-            // Vault not available: fall back to DB insert
-            for note in &memory_notes {
-                let new_note_id = Uuid::new_v4().to_string();
-                tx.execute(
-                    "INSERT INTO memory_notes (id, agent_id, title, content, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                    rusqlite::params![
-                        new_note_id,
-                        new_agent_id,
-                        note.title,
-                        note.content,
-                        note.created_at,
-                        note.updated_at,
-                    ],
-                ).map_err(|e| AppError::Database(format!("Failed to insert memory note: {e}")))?;
-                memory_notes_imported += 1;
             }
         }
     }
@@ -682,11 +596,6 @@ pub fn import_agent(
         }
     }
 
-    // Migrate legacy TOOLS.md → TOOL_CONFIG.json for imported agent
-    if let Err(e) = ensure_tool_config(&agents_dir) {
-        eprintln!("Warning: tool config migration failed for imported agent '{}': {}", new_folder, e);
-    }
-
     // Only commit DB after all filesystem writes succeed
     if let Err(e) = tx.commit() {
         // DB commit failed — clean up vault files and filesystem
@@ -697,7 +606,7 @@ pub fn import_agent(
     drop(conn);
 
     // Rebuild vault index after import to pick up new files
-    if has_vault_memory || !memory_notes.is_empty() {
+    if has_vault_memory {
         if let Some(vault_state) = app.try_state::<VaultState>() {
             if let Ok(mut vm) = vault_state.lock() {
                 let _ = vm.rebuild_index();
@@ -709,7 +618,6 @@ pub fn import_agent(
         agents_imported: 1,
         conversations_imported,
         messages_imported,
-        memory_notes_imported,
         warnings,
     })
 }

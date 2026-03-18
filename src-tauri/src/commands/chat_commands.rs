@@ -137,7 +137,22 @@ pub fn list_memory_notes(
     agent_id: String,
 ) -> Result<Vec<serde_json::Value>, String> {
     let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    Ok(vm.to_legacy_json(&agent_id))
+    let summaries = vm.list_notes(Some(&agent_id), None, None);
+    Ok(summaries
+        .into_iter()
+        .filter(|n| n.scope.as_deref() != Some("shared"))
+        .filter_map(|n| {
+            let full = vm.read_note(&n.id).ok()?;
+            Some(serde_json::json!({
+                "id": full.id,
+                "agent_id": full.agent,
+                "title": full.title,
+                "content": strip_title_heading(&full.content),
+                "created_at": full.created,
+                "updated_at": full.updated,
+            }))
+        })
+        .collect())
 }
 
 #[tauri::command]

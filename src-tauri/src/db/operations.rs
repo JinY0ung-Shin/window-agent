@@ -1,5 +1,5 @@
 use super::error::DbError;
-use super::models::{BrowserArtifact, ConversationDetail, ConversationListItem, DeleteMessagesResult, MemoryNote, Message, SaveMessageRequest, ToolCallLog};
+use super::models::{BrowserArtifact, ConversationDetail, ConversationListItem, DeleteMessagesResult, Message, SaveMessageRequest, ToolCallLog};
 use super::Database;
 use chrono::Utc;
 use uuid::Uuid;
@@ -265,32 +265,6 @@ pub fn update_conversation_skills_impl(
             rusqlite::params![skills_json, id],
         )?;
         Ok(())
-    })
-}
-
-// ── Memory Notes CRUD ──
-
-pub fn list_memory_notes_impl(
-    db: &Database,
-    agent_id: String,
-) -> Result<Vec<MemoryNote>, DbError> {
-    db.with_conn(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT id, agent_id, title, content, created_at, updated_at FROM memory_notes WHERE agent_id = ?1 ORDER BY updated_at DESC",
-        )?;
-
-        let rows = stmt.query_map(rusqlite::params![agent_id], |row| {
-            Ok(MemoryNote {
-                id: row.get(0)?,
-                agent_id: row.get(1)?,
-                title: row.get(2)?,
-                content: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
-            })
-        })?;
-
-        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
 

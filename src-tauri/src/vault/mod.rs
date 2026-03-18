@@ -1,6 +1,5 @@
 pub mod graph;
 pub mod links;
-pub mod migration;
 pub mod note;
 pub mod search;
 pub mod security;
@@ -410,128 +409,6 @@ impl VaultManager {
         })
     }
 
-    /// Create a new note preserving a legacy ID.
-    ///
-    /// This is used during import to preserve the original SQLite note ID
-    /// so that references between notes remain valid.
-    pub fn create_note_preserving_id(
-        &mut self,
-        agent_id: &str,
-        scope: Option<&str>,
-        category: &str,
-        title: &str,
-        content: &str,
-        tags: Vec<String>,
-        related_ids: Vec<String>,
-        legacy_id: Option<&str>,
-        original_created: Option<&str>,
-        original_updated: Option<&str>,
-    ) -> Result<VaultNote, String> {
-        let id = Uuid::new_v4().to_string();
-        let now = Utc::now().to_rfc3339();
-        let created = original_created.unwrap_or(&now).to_string();
-        let updated = original_updated.unwrap_or(&now).to_string();
-        let is_shared = scope == Some("shared");
-
-        // Build body with title and wikilinks to related notes
-        let mut body = format!("# {title}\n\n{content}\n");
-        if !related_ids.is_empty() {
-            body.push_str("\n## Related\n");
-            for rid in &related_ids {
-                body.push_str(&format!("- [[{rid}]]\n"));
-            }
-        }
-
-        let revision = compute_revision(&body);
-
-        let frontmatter = Frontmatter {
-            id: id.clone(),
-            agent: agent_id.to_string(),
-            note_type: category.to_string(),
-            tags: tags.clone(),
-            confidence: 0.8,  // reasonable default for imported notes
-            created: created.clone(),
-            updated: updated.clone(),
-            revision,
-            source: None,
-            aliases: Vec::new(),
-            legacy_id: legacy_id.map(|s| s.to_string()),
-            scope: if is_shared {
-                Some("shared".to_string())
-            } else {
-                None
-            },
-            last_edited_by: if is_shared {
-                Some(agent_id.to_string())
-            } else {
-                None
-            },
-        };
-
-        let file_content = serialize_note(&frontmatter, &body);
-
-        // Determine path
-        let dir = if is_shared {
-            self.vault_path.join("shared").join(category)
-        } else {
-            self.vault_path
-                .join("agents")
-                .join(agent_id)
-                .join(category)
-        };
-
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Failed to create category dir: {e}"))?;
-
-        let filename = sanitize_title_to_filename(title);
-        VaultSecurity::sanitize_filename(&format!("{filename}.md"))?;
-
-        let file_path = dir.join(format!("{filename}.md"));
-
-        // Handle collision
-        let final_path = if file_path.exists() {
-            let mut counter = 1;
-            loop {
-                let candidate = dir.join(format!("{filename}-{counter}.md"));
-                if !candidate.exists() {
-                    break candidate;
-                }
-                counter += 1;
-            }
-        } else {
-            file_path
-        };
-
-        // Validate path is within vault
-        self.security.validate_within_vault(&final_path)?;
-
-        std::fs::write(&final_path, &file_content)
-            .map_err(|e| format!("Failed to write note: {e}"))?;
-
-        // Register
-        self.registry
-            .register(id.clone(), final_path.clone(), agent_id, &filename, &now);
-
-        Ok(VaultNote {
-            id,
-            agent: agent_id.to_string(),
-            note_type: category.to_string(),
-            tags,
-            confidence: 0.5,
-            created: now.clone(),
-            updated: now,
-            revision: frontmatter.revision,
-            source: None,
-            aliases: Vec::new(),
-            legacy_id: legacy_id.map(|s| s.to_string()),
-            scope: frontmatter.scope,
-            last_edited_by: frontmatter.last_edited_by,
-            title: title.to_string(),
-            content: content.to_string(),
-            path: final_path.to_string_lossy().to_string(),
-        })
-    }
-
     /// Read a note by its UUID.
     pub fn read_note(&self, note_id: &str) -> Result<VaultNote, String> {
         let path = self
@@ -901,43 +778,6 @@ impl VaultManager {
         }
     }
 
-    /// Find a note by its legacy SQLite ID.
-    pub fn find_by_legacy_id(&self, legacy_id: &str) -> Option<String> {
-        for (id, path) in &self.registry.id_to_path {
-            if let Ok(content) = std::fs::read_to_string(path) {
-                if let Ok((fm, _)) = parse_frontmatter(&content) {
-                    if fm.legacy_id.as_deref() == Some(legacy_id) {
-                        return Some(id.clone());
-                    }
-                }
-            }
-        }
-        None
-    }
-
-    /// Convert vault data back to legacy JSON format for backward compatibility.
-    ///
-    /// Returns a list of MemoryNote-compatible JSON objects.
-    /// Excludes shared notes and strips markdown heading/related sections from content.
-    pub fn to_legacy_json(&self, agent_id: &str) -> Vec<serde_json::Value> {
-        let notes = self.list_notes(Some(agent_id), None, None);
-        notes
-            .into_iter()
-            .filter(|n| n.scope.as_deref() != Some("shared"))
-            .filter_map(|summary| {
-                let full_note = self.read_note(&summary.id).ok()?;
-                Some(serde_json::json!({
-                    "id": full_note.id,
-                    "agent_id": full_note.agent,
-                    "title": full_note.title,
-                    "content": strip_title_heading(&full_note.content),
-                    "created_at": full_note.created,
-                    "updated_at": full_note.updated,
-                }))
-            })
-            .collect()
-    }
-
     /// Get the vault path.
     pub fn get_vault_path(&self) -> &Path {
         &self.vault_path
@@ -1138,21 +978,6 @@ mod tests {
         let stats = manager.rebuild_index().unwrap();
         assert_eq!(stats.total_notes, 1);
         assert_eq!(stats.total_tags, 1);
-    }
-
-    #[test]
-    fn test_to_legacy_json() {
-        let (_tmp, mut manager) = create_test_manager();
-        manager
-            .create_note("manager", None, "knowledge", "Legacy Test", "Content.", vec![], vec![])
-            .unwrap();
-
-        let legacy = manager.to_legacy_json("manager");
-        assert_eq!(legacy.len(), 1);
-        assert!(legacy[0].get("id").is_some());
-        assert!(legacy[0].get("agent_id").is_some());
-        assert!(legacy[0].get("title").is_some());
-        assert!(legacy[0].get("content").is_some());
     }
 
     #[test]

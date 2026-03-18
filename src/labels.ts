@@ -75,7 +75,7 @@ export interface Labels {
   exportButton: string;
   importing: string;
   importButton: string;
-  importResult: (agents: number, convs: number, msgs: number, notes: number) => string;
+  importResult: (agents: number, convs: number, msgs: number) => string;
 
   // ── Conversation ──
   newConversation: string;
@@ -196,7 +196,7 @@ const CLASSIC: Labels = {
   exportButton: "내보내기",
   importing: "불러오는 중...",
   importButton: "ZIP 파일 선택",
-  importResult: (a, c, m, n) => `에이전트 ${a}개, 대화 ${c}개, 메시지 ${m}개, 메모리 ${n}개 불러옴`,
+  importResult: (a, c, m) => `에이전트 ${a}개, 대화 ${c}개, 메시지 ${m}개 불러옴`,
 
   // ── Conversation ──
   newConversation: "새 대화",
@@ -317,7 +317,7 @@ const ORG: Labels = {
   exportButton: "내보내기",
   importing: "영입하는 중...",
   importButton: "ZIP 파일 선택",
-  importResult: (a, c, m, n) => `직원 ${a}명, 대화 ${c}개, 메시지 ${m}개, 업무일지 ${n}개 영입 완료`,
+  importResult: (a, c, m) => `직원 ${a}명, 대화 ${c}개, 메시지 ${m}개 영입 완료`,
 
   // ── Conversation ──
   newConversation: "새 대화",

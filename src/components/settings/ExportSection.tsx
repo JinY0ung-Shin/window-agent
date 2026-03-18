@@ -125,7 +125,7 @@ export default function ExportSection() {
       {result && (
         <div className="export-result">
           <p>
-            {labels.importResult(result.agents_imported, result.conversations_imported, result.messages_imported, result.memory_notes_imported)}
+            {labels.importResult(result.agents_imported, result.conversations_imported, result.messages_imported)}
           </p>
           {result.warnings.map((w, i) => (
             <p key={i} className="export-warning">{w}</p>

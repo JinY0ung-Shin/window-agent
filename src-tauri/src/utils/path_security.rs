@@ -1,7 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 /// Allowed persona file names for agent directories.
-pub const ALLOWED_AGENT_FILES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOLS.md", "TOOL_CONFIG.json", "TOOLS_LEGACY.md"];
+pub const ALLOWED_AGENT_FILES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json"];
 
 // ── Common internal helpers ──
 
@@ -237,7 +237,7 @@ mod tests {
     fn test_agent_filename_valid() {
         assert!(validate_agent_filename("my-agent", "IDENTITY.md").is_ok());
         assert!(validate_agent_filename("my-agent", "SOUL.md").is_ok());
-        assert!(validate_agent_filename("my-agent", "TOOLS.md").is_ok());
+        assert!(validate_agent_filename("my-agent", "TOOL_CONFIG.json").is_ok());
     }
 
     #[test]

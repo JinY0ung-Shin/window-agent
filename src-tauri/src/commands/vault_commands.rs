@@ -1,7 +1,5 @@
-use crate::db::Database;
 use crate::vault::links::LinkRef;
 use crate::vault::graph::GraphData;
-use crate::vault::migration::{MigrationPreview, MigrationResult};
 use crate::vault::search::SearchResult;
 use crate::vault::{IndexStats, VaultManager, VaultNote, VaultNoteSummary};
 use std::sync::Mutex;
@@ -172,20 +170,3 @@ pub fn vault_rebuild_index(
     vm.rebuild_index()
 }
 
-// ── Migration ──
-
-#[tauri::command]
-pub fn vault_migrate_preview(
-    db: State<'_, Database>,
-) -> Result<MigrationPreview, String> {
-    crate::vault::migration::preview(&db)
-}
-
-#[tauri::command]
-pub fn vault_migrate_execute(
-    vault: State<'_, VaultState>,
-    db: State<'_, Database>,
-) -> Result<MigrationResult, String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    crate::vault::migration::execute(&db, &mut vm)
-}

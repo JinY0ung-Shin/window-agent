@@ -102,16 +102,6 @@ pub struct SaveMessageRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoryNote {
-    pub id: String,
-    pub agent_id: String,
-    pub title: String,
-    pub content: String,
-    pub created_at: String,
-    pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrowserArtifact {
     pub id: String,
     pub session_id: String,

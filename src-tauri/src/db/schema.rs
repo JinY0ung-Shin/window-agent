@@ -5,7 +5,7 @@ pub fn initialize(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch("PRAGMA journal_mode=WAL;")?;
     conn.execute_batch("PRAGMA foreign_keys=ON;")?;
 
-    migrations::run_migrations(conn)?;
+    migrations::ensure_schema(conn)?;
 
     Ok(())
 }
@@ -34,7 +34,6 @@ mod tests {
         assert!(tables.contains(&"conversations".to_string()));
         assert!(tables.contains(&"messages".to_string()));
         assert!(tables.contains(&"agents".to_string()));
-        assert!(tables.contains(&"memory_notes".to_string()));
         assert!(tables.contains(&"tool_call_logs".to_string()));
     }
 

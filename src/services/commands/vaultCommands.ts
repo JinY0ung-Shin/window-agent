@@ -7,8 +7,6 @@ import type {
   LinkRef,
   CreateNoteParams,
   NoteUpdates,
-  MigrationPreview,
-  MigrationResult,
   IndexStats,
 } from "../vaultTypes";
 
@@ -92,16 +90,6 @@ export async function vaultOpenInObsidian(): Promise<void> {
 
 export async function vaultRebuildIndex(): Promise<IndexStats> {
   return invoke("vault_rebuild_index");
-}
-
-// ── Migration ────────────────────────────────────────
-
-export async function vaultMigratePreview(): Promise<MigrationPreview> {
-  return invoke("vault_migrate_preview");
-}
-
-export async function vaultMigrateExecute(): Promise<MigrationResult> {
-  return invoke("vault_migrate_execute");
 }
 
 // ── Export / Import ──────────────────────────────────

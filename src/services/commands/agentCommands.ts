@@ -71,7 +71,6 @@ export interface ImportResult {
   agents_imported: number;
   conversations_imported: number;
   messages_imported: number;
-  memory_notes_imported: number;
   warnings: string[];
 }
 

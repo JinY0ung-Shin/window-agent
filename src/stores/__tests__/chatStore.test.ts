@@ -27,8 +27,6 @@ vi.mock("../../services/commands/vaultCommands", () => ({
   vaultGetPath: vi.fn().mockResolvedValue(""),
   vaultOpenInObsidian: vi.fn().mockResolvedValue(undefined),
   vaultRebuildIndex: vi.fn().mockResolvedValue({ totalNotes: 0, totalLinks: 0, brokenLinks: 0 }),
-  vaultMigratePreview: vi.fn().mockResolvedValue({ noteCount: 0, estimatedFiles: 0 }),
-  vaultMigrateExecute: vi.fn().mockResolvedValue({ migrated: 0, skipped: 0, errors: [] }),
 }));
 vi.mock("../../services/personaService", () => ({
   FILE_NAME_MAP: { identity: "IDENTITY.md", soul: "SOUL.md", user: "USER.md", agents: "AGENTS.md", tools: "TOOLS.md" },
