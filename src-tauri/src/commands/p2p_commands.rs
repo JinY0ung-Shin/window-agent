@@ -50,7 +50,7 @@ pub fn p2p_get_peer_id(manager: State<'_, P2PManager>) -> String {
 
 // ── Invite commands ──
 
-/// Validate and sanitize multiaddr strings, stripping /p2p/ suffixes.
+/// Validate and sanitize multiaddr strings, stripping only a trailing /p2p/ suffix.
 fn validate_multiaddrs(addresses: Vec<String>) -> Result<Vec<String>, String> {
     addresses
         .into_iter()
@@ -58,11 +58,16 @@ fn validate_multiaddrs(addresses: Vec<String>) -> Result<Vec<String>, String> {
             let addr: libp2p::Multiaddr = raw
                 .parse()
                 .map_err(|_| format!("Invalid multiaddr: {}", raw))?;
-            // Strip /p2p/<peer_id> suffix if present
-            let stripped: libp2p::Multiaddr = addr
-                .iter()
-                .filter(|p| !matches!(p, libp2p::multiaddr::Protocol::P2p(_)))
-                .collect();
+            // Strip only a trailing /p2p/<peer_id> suffix
+            let protos: Vec<libp2p::multiaddr::Protocol> = addr.iter().collect();
+            let stripped: libp2p::Multiaddr = if protos.last().map_or(false, |p| matches!(p, libp2p::multiaddr::Protocol::P2p(_))) {
+                protos[..protos.len() - 1].iter().cloned().collect()
+            } else {
+                addr
+            };
+            if stripped.iter().next().is_none() {
+                return Err(format!("Address is empty after stripping /p2p/: {}", raw));
+            }
             Ok(stripped.to_string())
         })
         .collect()
@@ -673,5 +678,23 @@ mod tests {
         assert!(result.is_ok());
         let addrs = result.unwrap();
         assert_eq!(addrs.len(), 2);
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_bare_p2p_rejected() {
+        let result = validate_multiaddrs(vec![
+            "/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN".to_string(),
+        ]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("empty after stripping"));
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_non_trailing_p2p_preserved() {
+        // Non-trailing /p2p/ (e.g. relay-style) should be preserved
+        let addr = "/ip4/1.2.3.4/tcp/4001".to_string();
+        let result = validate_multiaddrs(vec![addr]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec!["/ip4/1.2.3.4/tcp/4001"]);
     }
 }

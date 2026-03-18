@@ -289,7 +289,9 @@ function tryDecodeInvite(code: string): InvitePreview | null {
     let b64 = trimmed.replace(/-/g, "+").replace(/_/g, "/");
     // Add padding
     while (b64.length % 4 !== 0) b64 += "=";
-    const json = atob(b64);
+    const binary = atob(b64);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
     const obj = JSON.parse(json);
     if (typeof obj === "object" && obj !== null) {
       return {

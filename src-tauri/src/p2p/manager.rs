@@ -195,13 +195,22 @@ impl P2PManager {
                 .unwrap_or(0)
         };
 
-        let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{port}")
+        let listen_addr_v4: Multiaddr = format!("/ip4/0.0.0.0/tcp/{port}")
             .parse()
             .map_err(|e: libp2p::multiaddr::Error| P2PError::Transport(e.to_string()))?;
 
         swarm
-            .listen_on(listen_addr)
+            .listen_on(listen_addr_v4)
             .map_err(|e| P2PError::Transport(e.to_string()))?;
+
+        // Also listen on IPv6 (best-effort — may fail on systems without IPv6)
+        let listen_addr_v6: Multiaddr = format!("/ip6/::/tcp/{port}")
+            .parse()
+            .map_err(|e: libp2p::multiaddr::Error| P2PError::Transport(e.to_string()))?;
+
+        if let Err(e) = swarm.listen_on(listen_addr_v6) {
+            eprintln!("P2P IPv6 listen failed (non-fatal): {e}");
+        }
 
         let (cmd_tx, cmd_rx) = mpsc::channel::<P2PCommand>(64);
 
