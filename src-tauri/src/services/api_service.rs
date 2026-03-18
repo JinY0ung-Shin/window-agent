@@ -22,12 +22,12 @@ pub struct HttpLogEntry {
 }
 
 /// Emit an HTTP log entry to the frontend via Tauri event.
-fn emit_http_log(app: &tauri::AppHandle, entry: HttpLogEntry) {
+pub fn emit_http_log_entry(app: &tauri::AppHandle, entry: HttpLogEntry) {
     let _ = app.emit("debug:http-log", entry);
 }
 
 /// Format response headers for display.
-fn format_headers(headers: &reqwest::header::HeaderMap) -> String {
+pub fn format_resp_headers(headers: &reqwest::header::HeaderMap) -> String {
     headers
         .iter()
         .map(|(k, v)| format!("{}: {}", k, v.to_str().unwrap_or("<binary>")))
@@ -36,7 +36,7 @@ fn format_headers(headers: &reqwest::header::HeaderMap) -> String {
 }
 
 /// Truncate text for preview.
-fn truncate(s: &str, max: usize) -> String {
+pub fn truncate_text(s: &str, max: usize) -> String {
     if s.len() <= max { s.to_string() } else { format!("{}...", &s[..max]) }
 }
 
@@ -118,7 +118,7 @@ pub async fn do_completion(
         Ok(r) => r,
         Err(e) => {
             if let Some(app) = app {
-                emit_http_log(app, HttpLogEntry {
+                emit_http_log_entry(app, HttpLogEntry {
                     id: log_id,
                     timestamp: chrono::Utc::now().to_rfc3339(),
                     method: "POST".into(),
@@ -136,12 +136,12 @@ pub async fn do_completion(
     };
 
     let status = resp.status().as_u16();
-    let resp_headers = format_headers(resp.headers());
+    let resp_headers = format_resp_headers(resp.headers());
 
     if !resp.status().is_success() {
         let text = resp.text().await.unwrap_or_default();
         if let Some(app) = app {
-            emit_http_log(app, HttpLogEntry {
+            emit_http_log_entry(app, HttpLogEntry {
                 id: log_id,
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 method: "POST".into(),
@@ -150,7 +150,7 @@ pub async fn do_completion(
                 duration_ms: Some(start.elapsed().as_millis() as u64),
                 request_headers: format!("Authorization: {auth_header}"),
                 response_headers: resp_headers,
-                response_body_preview: truncate(&text, 500),
+                response_body_preview: truncate_text(&text, 500),
                 error: Some(format!("HTTP {status}")),
             });
         }
@@ -163,7 +163,7 @@ pub async fn do_completion(
         .map_err(|e| AppError::Api(format!("PARSE_ERROR: JSON parse error: {}", e)))?;
 
     if let Some(app) = app {
-        emit_http_log(app, HttpLogEntry {
+        emit_http_log_entry(app, HttpLogEntry {
             id: log_id,
             timestamp: chrono::Utc::now().to_rfc3339(),
             method: "POST".into(),
@@ -231,7 +231,7 @@ pub async fn stream_completion(
     let resp = match req.json(body).send().await {
         Ok(r) => r,
         Err(e) => {
-            emit_http_log(app, HttpLogEntry {
+            emit_http_log_entry(app, HttpLogEntry {
                 id: log_id,
                 timestamp: chrono::Utc::now().to_rfc3339(),
                 method: "POST".into(),
@@ -248,12 +248,12 @@ pub async fn stream_completion(
     };
 
     let status_code = resp.status().as_u16();
-    let resp_headers = format_headers(resp.headers());
+    let resp_headers = format_resp_headers(resp.headers());
 
     // Check HTTP status before attempting to stream
     if !resp.status().is_success() {
         let text = resp.text().await.unwrap_or_default();
-        emit_http_log(app, HttpLogEntry {
+        emit_http_log_entry(app, HttpLogEntry {
             id: log_id,
             timestamp: chrono::Utc::now().to_rfc3339(),
             method: "POST".into(),
@@ -262,14 +262,14 @@ pub async fn stream_completion(
             duration_ms: Some(start.elapsed().as_millis() as u64),
             request_headers: format!("Authorization: {auth_preview}"),
             response_headers: resp_headers,
-            response_body_preview: truncate(&text, 500),
+            response_body_preview: truncate_text(&text, 500),
             error: Some(format!("HTTP {status_code}")),
         });
         return Err(AppError::Api(format!("HTTP_{}: {}", status_code, text)));
     }
 
     // Log successful stream start
-    emit_http_log(app, HttpLogEntry {
+    emit_http_log_entry(app, HttpLogEntry {
         id: log_id,
         timestamp: chrono::Utc::now().to_rfc3339(),
         method: "POST (stream)".into(),

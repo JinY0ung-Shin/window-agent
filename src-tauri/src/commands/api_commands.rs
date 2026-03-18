@@ -183,6 +183,7 @@ fn format_http_detail(status: u16, text: String) -> String {
 
 #[tauri::command]
 pub async fn check_api_health(
+    app: tauri::AppHandle,
     api: State<'_, ApiState>,
     request: ApiHealthCheckRequest,
 ) -> Result<ApiHealthCheckResponse, AppError> {
@@ -201,6 +202,16 @@ pub async fn check_api_health(
     }
 
     let models_url = api_service::models_url(&base_url);
+    let start = std::time::Instant::now();
+    let log_id = uuid::Uuid::new_v4().to_string();
+
+    let auth_preview = if api_key.len() > 8 {
+        format!("Bearer {}...{}", &api_key[..4], &api_key[api_key.len()-3..])
+    } else if api_key.is_empty() {
+        "(none)".to_string()
+    } else {
+        format!("Bearer {}...", &api_key[..api_key.len().min(4)])
+    };
 
     let (ok, detail) = {
         let mut req = client.get(&models_url);
@@ -211,7 +222,7 @@ pub async fn check_api_health(
         match req.send().await {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                // Capture server header for debugging
+                let resp_headers = api_service::format_resp_headers(resp.headers());
                 let server_header = resp
                     .headers()
                     .get("server")
@@ -234,12 +245,38 @@ pub async fn check_api_health(
                             } else {
                                 format!("연결 성공 — 모델 {count}개 (예: {sample})")
                             };
+                            // Emit HTTP log for success
+                            api_service::emit_http_log_entry(&app, api_service::HttpLogEntry {
+                                id: log_id.clone(),
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                method: "GET".into(),
+                                url: models_url.clone(),
+                                status: Some(status),
+                                duration_ms: Some(start.elapsed().as_millis() as u64),
+                                request_headers: format!("Authorization: {auth_preview}"),
+                                response_headers: resp_headers,
+                                response_body_preview: format!("models={count}"),
+                                error: None,
+                            });
                             (true, detail)
                         }
                         Err(e) => (false, format!("응답 파싱 실패: {e}")),
                     }
                 } else {
                     let text = resp.text().await.unwrap_or_default();
+                    // Emit HTTP log for failure
+                    api_service::emit_http_log_entry(&app, api_service::HttpLogEntry {
+                        id: log_id.clone(),
+                        timestamp: chrono::Utc::now().to_rfc3339(),
+                        method: "GET".into(),
+                        url: models_url.clone(),
+                        status: Some(status),
+                        duration_ms: Some(start.elapsed().as_millis() as u64),
+                        request_headers: format!("Authorization: {auth_preview}"),
+                        response_headers: resp_headers,
+                        response_body_preview: api_service::truncate_text(&text, 500),
+                        error: Some(format!("HTTP {status}")),
+                    });
                     let mut detail = format_http_detail(status, text);
                     if !server_header.is_empty() {
                         detail.push_str(&format!(" [서버: {server_header}]"));
@@ -248,7 +285,22 @@ pub async fn check_api_health(
                     (false, detail)
                 }
             }
-            Err(e) => (false, format!("요청 실패: {e} [URL: {models_url}]")),
+            Err(e) => {
+                // Emit HTTP log for connection error
+                api_service::emit_http_log_entry(&app, api_service::HttpLogEntry {
+                    id: log_id.clone(),
+                    timestamp: chrono::Utc::now().to_rfc3339(),
+                    method: "GET".into(),
+                    url: models_url.clone(),
+                    status: None,
+                    duration_ms: Some(start.elapsed().as_millis() as u64),
+                    request_headers: format!("Authorization: {auth_preview}"),
+                    response_headers: String::new(),
+                    response_body_preview: String::new(),
+                    error: Some(e.to_string()),
+                });
+                (false, format!("요청 실패: {e} [URL: {models_url}]"))
+            },
         }
     };
 
