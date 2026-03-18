@@ -90,6 +90,8 @@ pub struct P2PManager {
     /// Set of peer_id strings that have completed the handshake.
     /// Shared with the event loop for send-gating.
     authenticated_peers: Arc<Mutex<HashSet<String>>>,
+    /// Snapshot of non-loopback listen addresses reported by the swarm.
+    listen_addresses: Arc<Mutex<Vec<String>>>,
 }
 
 struct P2PManagerInner {
@@ -97,6 +99,7 @@ struct P2PManagerInner {
     peer_id: PeerId,
     status: NetworkStatus,
     command_tx: Option<mpsc::Sender<P2PCommand>>,
+    active_listen_port: Option<u16>,
 }
 
 impl P2PManager {
@@ -107,11 +110,13 @@ impl P2PManager {
             peer_id: *identity.peer_id(),
             status: NetworkStatus::Dormant,
             command_tx: None,
+            active_listen_port: None,
         };
         Self {
             inner: Arc::new(Mutex::new(inner)),
             known_peers: Arc::new(Mutex::new(HashSet::new())),
             authenticated_peers: Arc::new(Mutex::new(HashSet::new())),
+            listen_addresses: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -146,6 +151,16 @@ impl P2PManager {
         self.inner.lock().unwrap().peer_id
     }
 
+    /// Non-loopback listen addresses reported by the swarm.
+    pub fn get_listen_addresses(&self) -> Vec<String> {
+        self.listen_addresses.lock().unwrap().clone()
+    }
+
+    /// The port the swarm is actually listening on (extracted from first NewListenAddr).
+    pub fn get_active_listen_port(&self) -> Option<u16> {
+        self.inner.lock().unwrap().active_listen_port
+    }
+
     /// Start the P2P swarm event loop. Transitions from Dormant → Active.
     pub async fn start(&self, app_handle: tauri::AppHandle) -> Result<(), P2PError> {
         let keypair = {
@@ -168,7 +183,19 @@ impl P2PManager {
         let mut swarm = transport::build_swarm(keypair)
             .map_err(|e| P2PError::Transport(e.to_string()))?;
 
-        let listen_addr: Multiaddr = "/ip4/0.0.0.0/tcp/0"
+        // Read configured listen port from store (None or 0 → random ephemeral port)
+        let port: u16 = {
+            use tauri_plugin_store::StoreExt;
+            app_handle
+                .store("p2p-settings.json")
+                .ok()
+                .and_then(|s| s.get("listen_port"))
+                .and_then(|v| v.as_u64())
+                .and_then(|p| u16::try_from(p).ok())
+                .unwrap_or(0)
+        };
+
+        let listen_addr: Multiaddr = format!("/ip4/0.0.0.0/tcp/{port}")
             .parse()
             .map_err(|e: libp2p::multiaddr::Error| P2PError::Transport(e.to_string()))?;
 
@@ -195,18 +222,22 @@ impl P2PManager {
         let inner_clone = self.inner.clone();
         let known_peers = self.known_peers.clone();
         let shared_authenticated = self.authenticated_peers.clone();
-        // Clear authenticated set on (re)start
+        let listen_addrs = self.listen_addresses.clone();
+        // Clear authenticated set and listen addresses on (re)start
         shared_authenticated.lock().unwrap().clear();
+        listen_addrs.lock().unwrap().clear();
         let identity = app_handle.state::<NodeIdentity>().inner().clone();
         tokio::spawn(async move {
-            Self::run_event_loop(swarm, cmd_rx, &app_handle, &known_peers, &shared_authenticated, &identity).await;
+            Self::run_event_loop(swarm, cmd_rx, &app_handle, &known_peers, &shared_authenticated, &listen_addrs, &identity).await;
 
             // Cleanup after event loop exits
             {
                 let mut inner = inner_clone.lock().unwrap();
                 inner.status = NetworkStatus::Dormant;
                 inner.command_tx = None;
+                inner.active_listen_port = None;
             }
+            listen_addrs.lock().unwrap().clear();
             let _ = app_handle.emit(
                 "p2p:connection-state",
                 ConnectionStateEvent {
@@ -229,6 +260,8 @@ impl P2PManager {
             inner.status = NetworkStatus::Stopping;
             inner.command_tx.take()
         };
+
+        self.listen_addresses.lock().unwrap().clear();
 
         if let Some(tx) = cmd_tx {
             let _ = tx.send(P2PCommand::Stop).await;
@@ -286,6 +319,7 @@ impl P2PManager {
         app_handle: &tauri::AppHandle,
         known_peers: &Arc<Mutex<HashSet<String>>>,
         shared_authenticated: &Arc<Mutex<HashSet<String>>>,
+        listen_addresses: &Arc<Mutex<Vec<String>>>,
         identity: &NodeIdentity,
     ) {
         let mut authenticated_peers: HashSet<String> = HashSet::new();
@@ -297,7 +331,7 @@ impl P2PManager {
         loop {
             tokio::select! {
                 event = swarm.select_next_some() => {
-                    Self::handle_swarm_event(&mut swarm, event, app_handle, known_peers, &mut authenticated_peers, &mut pending_handshakes, identity);
+                    Self::handle_swarm_event(&mut swarm, event, app_handle, known_peers, &mut authenticated_peers, &mut pending_handshakes, listen_addresses, identity);
                     // Sync authenticated set to shared state for external callers
                     *shared_authenticated.lock().unwrap() = authenticated_peers.clone();
                 }
@@ -335,6 +369,7 @@ impl P2PManager {
         known_peers: &Arc<Mutex<HashSet<String>>>,
         authenticated_peers: &mut HashSet<String>,
         pending_handshakes: &mut HashMap<String, HandshakeState>,
+        listen_addresses: &Arc<Mutex<Vec<String>>>,
         identity: &NodeIdentity,
     ) {
         match event {
@@ -796,6 +831,37 @@ impl P2PManager {
                         peer_count,
                     },
                 );
+            }
+
+            // -- Listen address lifecycle ------------------------------------
+            SwarmEvent::NewListenAddr { address, .. } => {
+                let addr_str = address.to_string();
+                // Filter out loopback and unspecified addresses
+                let dominated_by_local = addr_str.contains("/ip4/127.")
+                    || addr_str.contains("/ip6/::1/")
+                    || addr_str.contains("/ip4/0.0.0.0/")
+                    || addr_str.contains("/ip6/::/");
+                if !dominated_by_local {
+                    listen_addresses.lock().unwrap().push(addr_str);
+                }
+                // Extract port from address (last Tcp component)
+                for proto in address.iter() {
+                    if let libp2p::multiaddr::Protocol::Tcp(port) = proto {
+                        // Store active_listen_port via app_handle state
+                        if let Some(mgr) = app_handle.try_state::<P2PManager>() {
+                            mgr.inner.lock().unwrap().active_listen_port = Some(port);
+                        }
+                        break;
+                    }
+                }
+            }
+            SwarmEvent::ExpiredListenAddr { address, .. } => {
+                let addr_str = address.to_string();
+                let mut addrs = listen_addresses.lock().unwrap();
+                addrs.retain(|a| a != &addr_str);
+            }
+            SwarmEvent::ListenerClosed { .. } => {
+                listen_addresses.lock().unwrap().clear();
             }
 
             // Ignore other events

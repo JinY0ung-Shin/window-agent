@@ -26,12 +26,24 @@ export default function NetworkPanel() {
         <div className="network-panel-header">
           <Network size={20} />
           <h2>에이전트 네트워크</h2>
+          <div className="network-panel-actions">
+            <button
+              className="icon-btn"
+              onClick={() => setShowInviteDialog(true)}
+              title="초대"
+            >
+              <UserPlus size={16} />
+            </button>
+          </div>
         </div>
         <div className="network-panel-empty">
           <Network size={40} strokeWidth={1.5} />
           <p>네트워크가 비활성 상태입니다.</p>
           <p className="text-muted">설정에서 P2P 네트워크를 활성화하세요.</p>
         </div>
+        {showInviteDialog && (
+          <InviteDialog onClose={() => setShowInviteDialog(false)} />
+        )}
       </div>
     );
   }

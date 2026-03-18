@@ -4,6 +4,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useNetworkStore } from "../../stores/networkStore";
 import { checkApiHealth, listModels, type ApiHealthCheckResponse } from "../../services/tauriCommands";
 import { getNoProxy, setNoProxy } from "../../services/commands/apiCommands";
+import { p2pGetListenPort, p2pSetListenPort, p2pGetConnectionInfo } from "../../services/commands/p2pCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
 import type { UITheme } from "../../labels";
 import ExportSection from "./ExportSection";
@@ -39,6 +40,12 @@ export default function SettingsModal() {
   const [peerIdCopied, setPeerIdCopied] = useState(false);
   const hasEnabledBefore = useRef(localStorage.getItem("network_enabled") !== null);
   const [showConsent, setShowConsent] = useState(false);
+  const [configuredPort, setConfiguredPort] = useState<number | null>(null);
+  const [activePort, setActivePort] = useState<number | null>(null);
+  const [tempPort, setTempPort] = useState("");
+  const [portSaving, setPortSaving] = useState(false);
+  const [portSaved, setPortSaved] = useState(false);
+  const [portError, setPortError] = useState("");
 
   const fetchModels = async () => {
     setModelsLoading(true);
@@ -69,6 +76,15 @@ export default function SettingsModal() {
       setTab("general");
       fetchModels();
       getNoProxy().then(setNoProxyEnabled).catch(() => {});
+      p2pGetListenPort().then((p) => {
+        setConfiguredPort(p);
+        setTempPort(p != null ? String(p) : "");
+        setPortSaved(false);
+        setPortError("");
+      }).catch(() => {});
+      p2pGetConnectionInfo().then((info) => {
+        setActivePort(info.active_listen_port ?? null);
+      }).catch(() => setActivePort(null));
     }
   }, [isSettingsOpen]);
 
@@ -462,6 +478,68 @@ export default function SettingsModal() {
                 </div>
                 <p className="form-text">
                   다른 에이전트와 P2P 통신을 활성화합니다.
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="listenPort">리슨 포트</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input
+                    id="listenPort"
+                    type="number"
+                    min={1}
+                    max={65535}
+                    placeholder="자동 (랜덤)"
+                    value={tempPort}
+                    onChange={(e) => {
+                      setTempPort(e.target.value);
+                      setPortSaved(false);
+                      setPortError("");
+                    }}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    className="btn-secondary"
+                    disabled={portSaving}
+                    onClick={async () => {
+                      setPortError("");
+                      const val = tempPort.trim();
+                      const portNum = val === "" ? null : Number(val);
+                      if (portNum != null && (isNaN(portNum) || portNum < 1 || portNum > 65535 || !Number.isInteger(portNum))) {
+                        setPortError("1~65535 사이의 정수를 입력하세요");
+                        return;
+                      }
+                      setPortSaving(true);
+                      try {
+                        await p2pSetListenPort(portNum);
+                        setConfiguredPort(portNum);
+                        setPortSaved(true);
+                      } catch (e) {
+                        setPortError(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setPortSaving(false);
+                      }
+                    }}
+                  >
+                    {portSaving ? "저장 중..." : "저장"}
+                  </button>
+                </div>
+                {portSaved && (
+                  <p className="form-text text-success">
+                    저장됨 — 네트워크를 재시작해야 적용됩니다
+                  </p>
+                )}
+                {portError && (
+                  <p className="form-text text-error">{portError}</p>
+                )}
+                {network.status === "active" && activePort != null && (
+                  <p className="form-text">
+                    현재 활성 포트: <strong>{activePort}</strong>
+                    {configuredPort != null && activePort !== configuredPort && " (설정과 다름 — 재시작 필요)"}
+                  </p>
+                )}
+                <p className="form-text">
+                  고정 포트를 지정하면 외부에서 직접 연결할 수 있습니다. 비워두면 랜덤 포트를 사용합니다.
                 </p>
               </div>
 

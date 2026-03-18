@@ -14,6 +14,7 @@ export interface ContactRow {
   capabilities_json: string;
   status: string;
   invite_card_raw: string | null;
+  addresses_json: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -66,11 +67,13 @@ export async function p2pGetPeerId(): Promise<string> {
 export async function p2pGenerateInvite(
   agentName: string,
   agentDescription: string,
+  addresses: string[] = [],
   expiryHours?: number,
 ): Promise<string> {
   return invoke("p2p_generate_invite", {
     agentName,
     agentDescription,
+    addresses,
     expiryHours: expiryHours ?? null,
   });
 }
@@ -143,6 +146,20 @@ export async function p2pRequestDraft(
   return invoke("p2p_request_draft", { messageId, agentId });
 }
 
+// ── Connection Info ──
+
+export interface ConnectionInfo {
+  peer_id: string;
+  configured_listen_port: number | null;
+  active_listen_port: number | null;
+  listen_addresses: string[];
+  status: string;
+}
+
+export async function p2pGetConnectionInfo(): Promise<ConnectionInfo> {
+  return invoke("p2p_get_connection_info");
+}
+
 // ── Network Enabled ──
 
 export async function p2pGetNetworkEnabled(): Promise<boolean> {
@@ -151,6 +168,22 @@ export async function p2pGetNetworkEnabled(): Promise<boolean> {
 
 export async function p2pSetNetworkEnabled(enabled: boolean): Promise<void> {
   return invoke("p2p_set_network_enabled", { enabled });
+}
+
+// ── Listen Port ──
+
+export async function p2pGetListenPort(): Promise<number | null> {
+  return invoke("p2p_get_listen_port");
+}
+
+export async function p2pSetListenPort(port: number | null): Promise<void> {
+  return invoke("p2p_set_listen_port", { port });
+}
+
+// ── Dial ──
+
+export async function p2pDialPeer(contactId: string): Promise<void> {
+  return invoke("p2p_dial_peer", { contactId });
 }
 
 // ── Threads ──

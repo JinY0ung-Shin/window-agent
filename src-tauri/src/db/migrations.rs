@@ -112,6 +112,11 @@ fn all_migrations() -> &'static [Migration] {
             description: "P2P network: contacts, peer_threads, peer_messages, outbox",
             sql: "",  // handled by custom migration function
         },
+        Migration {
+            version: 10,
+            description: "Add addresses_json to contacts for direct P2P connection",
+            sql: "",  // handled by custom migration function
+        },
     ]
 }
 
@@ -328,6 +333,26 @@ fn migrate_v8_to_v9(conn: &Connection) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+/// Migration v10: Add addresses_json column to contacts table for direct P2P connection.
+fn migrate_v9_to_v10(conn: &Connection) -> Result<(), rusqlite::Error> {
+    let has_column = |table: &str, col: &str| -> bool {
+        let mut stmt = conn
+            .prepare(&format!("PRAGMA table_info({})", table))
+            .unwrap();
+        let cols: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        cols.contains(&col.to_string())
+    };
+
+    if !has_column("contacts", "addresses_json") {
+        conn.execute_batch("ALTER TABLE contacts ADD COLUMN addresses_json TEXT")?;
+    }
+    Ok(())
+}
+
 /// Ensure the _migrations tracking table exists.
 fn ensure_migrations_table(conn: &Connection) -> Result<(), rusqlite::Error> {
     conn.execute_batch(
@@ -369,6 +394,8 @@ pub fn run_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
                 migrate_v7_to_v8(&tx)?;
             } else if migration.version == 9 {
                 migrate_v8_to_v9(&tx)?;
+            } else if migration.version == 10 {
+                migrate_v9_to_v10(&tx)?;
             } else {
                 tx.execute_batch(migration.sql)?;
             }
@@ -419,7 +446,7 @@ mod tests {
         run_migrations(&conn).unwrap(); // should not error
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 9);
+        assert_eq!(version, 10);
     }
 
     #[test]
@@ -428,7 +455,7 @@ mod tests {
         run_migrations(&conn).unwrap();
 
         let version = current_version(&conn).unwrap();
-        assert_eq!(version, 9);
+        assert_eq!(version, 10);
 
         let desc: String = conn
             .query_row(
@@ -536,7 +563,7 @@ mod tests {
 
         // Run remaining migrations (v3 + v4 + v5 + v6)
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 9);
+        assert_eq!(current_version(&conn).unwrap(), 10);
 
         // Verify existing data is preserved
         let title: String = conn
@@ -598,7 +625,7 @@ mod tests {
     fn test_v4_migration_creates_tables_and_columns() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 9);
+        assert_eq!(current_version(&conn).unwrap(), 10);
 
         // Verify new tables exist
         let tables: Vec<String> = conn
@@ -667,7 +694,7 @@ mod tests {
 
         // Run v4 + v5 + v6
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 9);
+        assert_eq!(current_version(&conn).unwrap(), 10);
 
         // Verify existing data preserved, new columns are NULL
         let content: String = conn
@@ -685,7 +712,7 @@ mod tests {
     fn test_v5_migration_adds_active_skills_column() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 9);
+        assert_eq!(current_version(&conn).unwrap(), 10);
 
         // Verify active_skills column exists
         conn.execute(
@@ -719,7 +746,7 @@ mod tests {
     fn test_v9_migration_creates_p2p_tables() {
         let conn = setup_conn();
         run_migrations(&conn).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 9);
+        assert_eq!(current_version(&conn).unwrap(), 10);
 
         let tables: Vec<String> = conn
             .prepare("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -860,5 +887,55 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM outbox", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 0, "outbox should cascade through peer_messages → peer_threads → contacts");
+    }
+
+    #[test]
+    fn test_v10_adds_addresses_json_column() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Verify column exists by inserting and querying with addresses_json
+        conn.execute(
+            "INSERT INTO contacts (id, peer_id, public_key, display_name, mode, capabilities_json, addresses_json)
+             VALUES ('c1', 'peer1', 'pk', 'User1', 'secretary', '{}', '[\"addr1\"]')",
+            [],
+        ).unwrap();
+
+        let addr: Option<String> = conn
+            .query_row("SELECT addresses_json FROM contacts WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(addr.as_deref(), Some("[\"addr1\"]"));
+    }
+
+    #[test]
+    fn test_v10_migration_idempotent() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        // Run migrations twice — should not error
+        run_migrations(&conn).unwrap();
+        // Force re-run by resetting version
+        // Actually just verify it doesn't panic on second call
+        // (the migration checks column existence)
+        run_migrations(&conn).unwrap();
+    }
+
+    #[test]
+    fn test_v10_existing_contacts_have_null_addresses() {
+        let conn = Connection::open_in_memory().unwrap();
+        conn.execute_batch("PRAGMA foreign_keys = ON;").unwrap();
+        run_migrations(&conn).unwrap();
+
+        // Insert contact without specifying addresses_json
+        conn.execute(
+            "INSERT INTO contacts (id, peer_id, public_key, display_name, mode, capabilities_json)
+             VALUES ('c1', 'peer1', 'pk', 'User1', 'secretary', '{}')",
+            [],
+        ).unwrap();
+
+        let addr: Option<String> = conn
+            .query_row("SELECT addresses_json FROM contacts WHERE id = 'c1'", [], |row| row.get(0))
+            .unwrap();
+        assert!(addr.is_none(), "existing contacts should have NULL addresses_json");
     }
 }

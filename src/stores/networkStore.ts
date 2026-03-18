@@ -69,7 +69,7 @@ interface NetworkState {
   stopNetwork: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   refreshContacts: () => Promise<void>;
-  generateInvite: (agentName: string, agentDesc: string, expiryHours?: number) => Promise<string>;
+  generateInvite: (agentName: string, agentDesc: string, addresses?: string[], expiryHours?: number) => Promise<string>;
   acceptInvite: (code: string, localAgentId?: string) => Promise<void>;
   selectContact: (contactId: string | null) => void;
   selectThread: (threadId: string | null) => Promise<void>;
@@ -182,8 +182,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     }
   },
 
-  generateInvite: async (agentName, agentDesc, expiryHours) => {
-    return p2pGenerateInvite(agentName, agentDesc, expiryHours);
+  generateInvite: async (agentName, agentDesc, addresses = [], expiryHours) => {
+    return p2pGenerateInvite(agentName, agentDesc, addresses, expiryHours);
   },
 
   acceptInvite: async (code, localAgentId) => {

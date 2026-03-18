@@ -164,6 +164,10 @@ pub fn run() {
             commands::p2p_get_peer_id,
             commands::p2p_get_network_enabled,
             commands::p2p_set_network_enabled,
+            commands::p2p_get_connection_info,
+            commands::p2p_get_listen_port,
+            commands::p2p_set_listen_port,
+            commands::p2p_dial_peer,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

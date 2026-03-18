@@ -4167,6 +4167,129 @@ body {
   padding: 4px;
 }
 
+/* Address selection in GenerateTab */
+.addr-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.addr-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.addr-checkbox-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  flex-shrink: 0;
+}
+
+.addr-text {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  color: var(--text-main);
+  word-break: break-all;
+}
+
+.addr-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #e0e7ff;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.addr-manual-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.addr-manual-input input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.addr-manual-input input:focus {
+  border-color: var(--primary);
+}
+
+.addr-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px !important;
+  font-size: 0.8rem !important;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.addr-manual-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.addr-manual-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-color);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.addr-manual-item .icon-btn {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.addr-manual-item .icon-btn:hover {
+  color: #ef4444;
+}
+
+/* Invite preview in AcceptTab */
+.invite-preview {
+  padding: 12px 14px;
+  background: var(--bg-color);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.invite-preview-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #b45309;
+  align-self: flex-start;
+}
+
+.invite-preview-row {
+  color: var(--text-main);
+}
+
 /* ===== Contact Detail ===== */
 
 .contact-detail {

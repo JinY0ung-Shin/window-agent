@@ -17,6 +17,7 @@ pub struct ContactRow {
     pub capabilities_json: String,
     pub status: String,
     pub invite_card_raw: Option<String>,
+    pub addresses_json: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -30,6 +31,7 @@ pub struct ContactUpdate {
     pub mode: Option<String>,
     pub capabilities_json: Option<String>,
     pub status: Option<String>,
+    pub addresses_json: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -75,8 +77,8 @@ pub struct OutboxRow {
 pub fn insert_contact(db: &Database, contact: &ContactRow) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO contacts (id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO contacts (id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             rusqlite::params![
                 contact.id,
                 contact.peer_id,
@@ -89,6 +91,7 @@ pub fn insert_contact(db: &Database, contact: &ContactRow) -> Result<(), DbError
                 contact.capabilities_json,
                 contact.status,
                 contact.invite_card_raw,
+                contact.addresses_json,
                 contact.created_at,
                 contact.updated_at,
             ],
@@ -100,7 +103,7 @@ pub fn insert_contact(db: &Database, contact: &ContactRow) -> Result<(), DbError
 pub fn get_contact(db: &Database, id: &str) -> Result<Option<ContactRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, created_at, updated_at
+            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at
              FROM contacts WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(rusqlite::params![id], map_contact_row)?;
@@ -117,7 +120,7 @@ pub fn get_contact_by_peer_id(
 ) -> Result<Option<ContactRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, created_at, updated_at
+            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at
              FROM contacts WHERE peer_id = ?1",
         )?;
         let mut rows = stmt.query_map(rusqlite::params![peer_id], map_contact_row)?;
@@ -131,7 +134,7 @@ pub fn get_contact_by_peer_id(
 pub fn list_contacts(db: &Database) -> Result<Vec<ContactRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, created_at, updated_at
+            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at
              FROM contacts ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], map_contact_row)?;
@@ -176,6 +179,10 @@ pub fn update_contact(
             sets.push(format!("status = ?{}", params.len() + 1));
             params.push(Box::new(v.clone()));
         }
+        if let Some(ref v) = updates.addresses_json {
+            sets.push(format!("addresses_json = ?{}", params.len() + 1));
+            params.push(Box::new(v.clone()));
+        }
 
         if sets.is_empty() {
             return Ok(());
@@ -215,8 +222,9 @@ fn map_contact_row(row: &rusqlite::Row) -> Result<ContactRow, rusqlite::Error> {
         capabilities_json: row.get(8)?,
         status: row.get(9)?,
         invite_card_raw: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        addresses_json: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
     })
 }
 
@@ -512,6 +520,7 @@ mod tests {
             capabilities_json: r#"{"can_send_messages":true}"#.to_string(),
             status: "pending".to_string(),
             invite_card_raw: None,
+            addresses_json: None,
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         }
@@ -773,5 +782,181 @@ mod tests {
 
         let pending = get_pending_outbox(&db).unwrap();
         assert!(pending.is_empty());
+    }
+
+    // ── addresses_json tests ──
+
+    #[test]
+    fn test_insert_contact_with_addresses_json() {
+        let db = setup_db();
+        let mut c = make_contact("c1", "peer1");
+        c.addresses_json = Some(r#"["/ip4/1.2.3.4/tcp/4001"]"#.to_string());
+        insert_contact(&db, &c).unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(
+            found.addresses_json.as_deref(),
+            Some(r#"["/ip4/1.2.3.4/tcp/4001"]"#)
+        );
+    }
+
+    #[test]
+    fn test_insert_contact_without_addresses_json() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert!(found.addresses_json.is_none());
+    }
+
+    #[test]
+    fn test_update_contact_addresses_json() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+
+        update_contact(
+            &db,
+            "c1",
+            ContactUpdate {
+                addresses_json: Some(Some(r#"["/ip4/5.6.7.8/tcp/9000"]"#.to_string())),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(
+            found.addresses_json.as_deref(),
+            Some(r#"["/ip4/5.6.7.8/tcp/9000"]"#)
+        );
+    }
+
+    #[test]
+    fn test_addresses_json_roundtrip_multiple() {
+        let db = setup_db();
+        let addrs = r#"["/ip4/1.2.3.4/tcp/4001","/ip6/::1/tcp/4001"]"#;
+        let mut c = make_contact("c1", "peer1");
+        c.addresses_json = Some(addrs.to_string());
+        insert_contact(&db, &c).unwrap();
+
+        let found = get_contact_by_peer_id(&db, "peer1").unwrap().unwrap();
+        assert_eq!(found.addresses_json.as_deref(), Some(addrs));
+
+        // Verify JSON parsing roundtrip
+        let parsed: Vec<String> = serde_json::from_str(found.addresses_json.as_ref().unwrap()).unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed[0], "/ip4/1.2.3.4/tcp/4001");
+        assert_eq!(parsed[1], "/ip6/::1/tcp/4001");
+    }
+
+    #[test]
+    fn test_duplicate_peer_id_update_addresses() {
+        let db = setup_db();
+        let mut c1 = make_contact("c1", "peer1");
+        c1.addresses_json = Some(r#"["/ip4/1.1.1.1/tcp/4001"]"#.to_string());
+        c1.agent_name = "OldAgent".to_string();
+        insert_contact(&db, &c1).unwrap();
+
+        // Simulate updating existing contact when re-invited with new addresses
+        update_contact(
+            &db,
+            "c1",
+            ContactUpdate {
+                addresses_json: Some(Some(r#"["/ip4/2.2.2.2/tcp/5000"]"#.to_string())),
+                agent_name: Some("NewAgent".to_string()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(
+            found.addresses_json.as_deref(),
+            Some(r#"["/ip4/2.2.2.2/tcp/5000"]"#)
+        );
+        assert_eq!(found.agent_name, "NewAgent");
+    }
+
+    #[test]
+    fn test_clear_addresses_json_with_none() {
+        let db = setup_db();
+        let mut c = make_contact("c1", "peer1");
+        c.addresses_json = Some(r#"["/ip4/1.1.1.1/tcp/4001"]"#.to_string());
+        insert_contact(&db, &c).unwrap();
+
+        // Re-accept with empty addresses should clear stored addresses
+        update_contact(
+            &db,
+            "c1",
+            ContactUpdate {
+                addresses_json: Some(None), // tri-state: explicitly set to NULL
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert!(
+            found.addresses_json.is_none(),
+            "addresses_json should be cleared to NULL"
+        );
+    }
+
+    #[test]
+    fn test_dial_peer_no_address_scenarios() {
+        let db = setup_db();
+
+        // Scenario 1: addresses_json is None
+        let c1 = make_contact("c1", "peer1");
+        insert_contact(&db, &c1).unwrap();
+        let contact = get_contact(&db, "c1").unwrap().unwrap();
+        assert!(contact.addresses_json.is_none(), "new contact has no addresses");
+
+        // Scenario 2: addresses_json is empty array
+        let mut c2 = make_contact("c2", "peer2");
+        c2.addresses_json = Some("[]".to_string());
+        insert_contact(&db, &c2).unwrap();
+        let contact2 = get_contact(&db, "c2").unwrap().unwrap();
+        let addrs: Vec<String> =
+            serde_json::from_str(contact2.addresses_json.as_ref().unwrap()).unwrap();
+        assert!(addrs.is_empty(), "empty array should have no addresses");
+
+        // Scenario 3: addresses_json has valid addresses
+        let mut c3 = make_contact("c3", "peer3");
+        c3.addresses_json = Some(r#"["/ip4/1.2.3.4/tcp/4001"]"#.to_string());
+        insert_contact(&db, &c3).unwrap();
+        let contact3 = get_contact(&db, "c3").unwrap().unwrap();
+        let addrs3: Vec<String> =
+            serde_json::from_str(contact3.addresses_json.as_ref().unwrap()).unwrap();
+        assert_eq!(addrs3.len(), 1, "should have one address");
+    }
+
+    #[test]
+    fn test_addresses_json_not_updated_when_outer_none() {
+        let db = setup_db();
+        let mut c = make_contact("c1", "peer1");
+        c.addresses_json = Some(r#"["/ip4/1.1.1.1/tcp/4001"]"#.to_string());
+        insert_contact(&db, &c).unwrap();
+
+        // Update with None (outer) — should NOT touch addresses_json
+        update_contact(
+            &db,
+            "c1",
+            ContactUpdate {
+                display_name: Some("New Name".to_string()),
+                addresses_json: None, // don't update
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(
+            found.addresses_json.as_deref(),
+            Some(r#"["/ip4/1.1.1.1/tcp/4001"]"#),
+            "addresses_json should be unchanged"
+        );
     }
 }

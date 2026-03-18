@@ -50,51 +50,124 @@ pub fn p2p_get_peer_id(manager: State<'_, P2PManager>) -> String {
 
 // ── Invite commands ──
 
+/// Validate and sanitize multiaddr strings, stripping /p2p/ suffixes.
+fn validate_multiaddrs(addresses: Vec<String>) -> Result<Vec<String>, String> {
+    addresses
+        .into_iter()
+        .map(|raw| {
+            let addr: libp2p::Multiaddr = raw
+                .parse()
+                .map_err(|_| format!("Invalid multiaddr: {}", raw))?;
+            // Strip /p2p/<peer_id> suffix if present
+            let stripped: libp2p::Multiaddr = addr
+                .iter()
+                .filter(|p| !matches!(p, libp2p::multiaddr::Protocol::P2p(_)))
+                .collect();
+            Ok(stripped.to_string())
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub fn p2p_generate_invite(
     identity: State<'_, NodeIdentity>,
     agent_name: String,
     agent_description: String,
+    addresses: Vec<String>,
     expiry_hours: Option<u64>,
 ) -> Result<String, String> {
-    // Phase 1: empty addresses (mDNS handles local discovery)
-    let addresses = vec![];
-    invite::generate_invite(&identity, addresses, agent_name, agent_description, expiry_hours)
+    let validated = validate_multiaddrs(addresses)?;
+    invite::generate_invite(&identity, validated, agent_name, agent_description, expiry_hours)
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn p2p_accept_invite(
+pub async fn p2p_accept_invite(
     db: State<'_, Database>,
     manager: State<'_, P2PManager>,
     code: String,
     local_agent_id: Option<String>,
 ) -> Result<p2p_db::ContactRow, String> {
     let card = invite::parse_invite(&code).map_err(|e| e.to_string())?;
-    let now = chrono::Utc::now().to_rfc3339();
-    let contact = p2p_db::ContactRow {
-        id: uuid::Uuid::new_v4().to_string(),
-        peer_id: card.peer_id.clone(),
-        public_key: base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            &card.public_key,
-        ),
-        display_name: card.agent_name.clone(),
-        agent_name: card.agent_name,
-        agent_description: card.agent_description,
-        local_agent_id,
-        mode: "secretary".to_string(),
-        capabilities_json: serde_json::to_string(&CapabilitySet::default_phase1())
-            .unwrap_or_default(),
-        status: "pending".to_string(),
-        invite_card_raw: Some(code),
-        created_at: now.clone(),
-        updated_at: now,
+
+    // Serialize addresses from ContactCard as JSON array
+    let addresses_json = if card.addresses.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_string(&card.addresses).unwrap_or_default())
     };
-    p2p_db::insert_contact(&db, &contact).map_err(|e| e.to_string())?;
+
+    // Check if a contact with this peer_id already exists
+    let contact = if let Some(existing) =
+        p2p_db::get_contact_by_peer_id(&db, &card.peer_id).map_err(|e| e.to_string())?
+    {
+        // Update existing contact — always set addresses_json (Some(None) clears it)
+        let mut update = p2p_db::ContactUpdate {
+            agent_name: Some(card.agent_name.clone()),
+            agent_description: Some(card.agent_description.clone()),
+            addresses_json: Some(addresses_json.clone()),
+            ..Default::default()
+        };
+        if let Some(ref aid) = local_agent_id {
+            update.local_agent_id = Some(Some(aid.clone()));
+        }
+        p2p_db::update_contact(&db, &existing.id, update).map_err(|e| e.to_string())?;
+        // Update invite_card_raw directly (not in ContactUpdate)
+        db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE contacts SET invite_card_raw = ?1 WHERE id = ?2",
+                rusqlite::params![code, existing.id],
+            )?;
+            Ok(())
+        })
+        .map_err(|e: crate::db::error::DbError| e.to_string())?;
+        // Re-fetch to return fresh data
+        p2p_db::get_contact(&db, &existing.id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Contact disappeared after update".to_string())?
+    } else {
+        // Insert new contact
+        let now = chrono::Utc::now().to_rfc3339();
+        let contact = p2p_db::ContactRow {
+            id: uuid::Uuid::new_v4().to_string(),
+            peer_id: card.peer_id.clone(),
+            public_key: base64::Engine::encode(
+                &base64::engine::general_purpose::STANDARD,
+                &card.public_key,
+            ),
+            display_name: card.agent_name.clone(),
+            agent_name: card.agent_name.clone(),
+            agent_description: card.agent_description.clone(),
+            local_agent_id,
+            mode: "secretary".to_string(),
+            capabilities_json: serde_json::to_string(&CapabilitySet::default_phase1())
+                .unwrap_or_default(),
+            status: "pending".to_string(),
+            invite_card_raw: Some(code),
+            addresses_json,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        p2p_db::insert_contact(&db, &contact).map_err(|e| e.to_string())?;
+        contact
+    };
 
     // Update known peers set so the new contact can communicate immediately
     manager.add_known_peer(contact.peer_id.clone());
+
+    // Best-effort dial if addresses are available
+    if !card.addresses.is_empty() {
+        let addrs: Vec<libp2p::Multiaddr> = card
+            .addresses
+            .iter()
+            .filter_map(|a| a.parse().ok())
+            .collect();
+        if !addrs.is_empty() {
+            if let Ok(peer_id) = contact.peer_id.parse::<libp2p::PeerId>() {
+                let _ = manager.dial(peer_id, addrs).await;
+            }
+        }
+    }
 
     Ok(contact)
 }
@@ -366,6 +439,112 @@ pub fn p2p_set_network_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(
     store.save().map_err(|e| e.to_string())
 }
 
+// ── Connection info ──
+
+#[derive(Clone, serde::Serialize)]
+pub struct ConnectionInfo {
+    pub peer_id: String,
+    pub configured_listen_port: Option<u16>,
+    pub active_listen_port: Option<u16>,
+    pub listen_addresses: Vec<String>,
+    pub status: String,
+}
+
+#[tauri::command]
+pub fn p2p_get_connection_info(
+    app: tauri::AppHandle,
+    manager: State<'_, P2PManager>,
+) -> ConnectionInfo {
+    use tauri_plugin_store::StoreExt;
+    let configured_listen_port = app
+        .store("p2p-settings.json")
+        .ok()
+        .and_then(|s| s.get("listen_port"))
+        .and_then(|v| v.as_u64())
+        .and_then(|p| u16::try_from(p).ok());
+
+    ConnectionInfo {
+        peer_id: manager.peer_id().to_string(),
+        configured_listen_port,
+        active_listen_port: manager.get_active_listen_port(),
+        listen_addresses: manager.get_listen_addresses(),
+        status: format!("{:?}", manager.status()).to_lowercase(),
+    }
+}
+
+// ── Listen port commands ──
+
+#[tauri::command]
+pub fn p2p_get_listen_port(app: tauri::AppHandle) -> Option<u16> {
+    use tauri_plugin_store::StoreExt;
+    app.store("p2p-settings.json")
+        .ok()
+        .and_then(|s| s.get("listen_port"))
+        .and_then(|v| v.as_u64())
+        .and_then(|p| u16::try_from(p).ok())
+}
+
+#[tauri::command]
+pub fn p2p_set_listen_port(app: tauri::AppHandle, port: Option<u16>) -> Result<(), String> {
+    use tauri_plugin_store::StoreExt;
+    if let Some(p) = port {
+        if p == 0 {
+            return Err("Port 0 is not allowed; use null for automatic port".into());
+        }
+    }
+    let store = app
+        .store("p2p-settings.json")
+        .map_err(|e| e.to_string())?;
+    match port {
+        Some(p) => store.set("listen_port", serde_json::json!(p)),
+        None => { store.delete("listen_port"); }
+    }
+    store.save().map_err(|e| e.to_string())
+}
+
+// ── Dial command ──
+
+#[tauri::command]
+pub async fn p2p_dial_peer(
+    db: State<'_, Database>,
+    manager: State<'_, P2PManager>,
+    contact_id: String,
+) -> Result<(), String> {
+    let contact = p2p_db::get_contact(&db, &contact_id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("Contact not found: {}", contact_id))?;
+
+    // Parse addresses from addresses_json
+    let addr_strings: Vec<String> = match &contact.addresses_json {
+        Some(json) => serde_json::from_str(json)
+            .map_err(|e| format!("Invalid addresses_json: {}", e))?,
+        None => {
+            return Err("No addresses available for this contact".to_string());
+        }
+    };
+
+    if addr_strings.is_empty() {
+        return Err("No addresses available for this contact".to_string());
+    }
+
+    // Parse each string as Multiaddr, skip invalid ones
+    let addrs: Vec<libp2p::Multiaddr> = addr_strings
+        .iter()
+        .filter_map(|s| s.parse::<libp2p::Multiaddr>().ok())
+        .collect();
+
+    if addrs.is_empty() {
+        return Err("No valid addresses after parsing".to_string());
+    }
+
+    let peer_id: libp2p::PeerId = contact
+        .peer_id
+        .parse()
+        .map_err(|_| format!("Invalid peer_id: {}", contact.peer_id))?;
+
+    manager.dial(peer_id, addrs).await.map_err(|e| e.to_string())
+}
+
 // ── Outbox processor ──
 
 /// Process pending outbox entries — retries queued messages with exponential backoff.
@@ -432,5 +611,67 @@ async fn process_pending_outbox(db: &Database, manager: &P2PManager) {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_multiaddrs_valid_ipv4() {
+        let result = validate_multiaddrs(vec!["/ip4/1.2.3.4/tcp/4001".to_string()]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec!["/ip4/1.2.3.4/tcp/4001"]);
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_valid_ipv6() {
+        let result = validate_multiaddrs(vec!["/ip6/::1/tcp/4001".to_string()]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec!["/ip6/::1/tcp/4001"]);
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_invalid() {
+        let result = validate_multiaddrs(vec!["not-a-multiaddr".to_string()]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid multiaddr"));
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_strips_p2p_suffix() {
+        let addr = "/ip4/1.2.3.4/tcp/4001/p2p/12D3KooWDpJ7As7BWAwRMfu1VU2WCqNjvq387JEYKDBj4kx6nXTN"
+            .to_string();
+        let result = validate_multiaddrs(vec![addr]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), vec!["/ip4/1.2.3.4/tcp/4001"]);
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_empty_list() {
+        let result = validate_multiaddrs(vec![]);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_mixed_valid_and_invalid() {
+        let result = validate_multiaddrs(vec![
+            "/ip4/1.2.3.4/tcp/4001".to_string(),
+            "garbage".to_string(),
+        ]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_multiaddrs_multiple_valid() {
+        let result = validate_multiaddrs(vec![
+            "/ip4/1.2.3.4/tcp/4001".to_string(),
+            "/ip6/2001:db8::1/tcp/5000".to_string(),
+        ]);
+        assert!(result.is_ok());
+        let addrs = result.unwrap();
+        assert_eq!(addrs.len(), 2);
     }
 }

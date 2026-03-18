@@ -401,6 +401,7 @@ mod tests {
             capabilities_json: "{}".to_string(),
             status: "accepted".to_string(),
             invite_card_raw: None,
+            addresses_json: None,
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         };
