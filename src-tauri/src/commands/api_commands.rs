@@ -211,6 +211,13 @@ pub async fn check_api_health(
         match req.send().await {
             Ok(resp) => {
                 let status = resp.status().as_u16();
+                // Capture server header for debugging
+                let server_header = resp
+                    .headers()
+                    .get("server")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_string();
                 if resp.status().is_success() {
                     match resp.json::<ModelsResponse>().await {
                         Ok(parsed) => {
@@ -233,10 +240,15 @@ pub async fn check_api_health(
                     }
                 } else {
                     let text = resp.text().await.unwrap_or_default();
-                    (false, format_http_detail(status, text))
+                    let mut detail = format_http_detail(status, text);
+                    if !server_header.is_empty() {
+                        detail.push_str(&format!(" [서버: {server_header}]"));
+                    }
+                    detail.push_str(&format!(" [URL: {models_url}]"));
+                    (false, detail)
                 }
             }
-            Err(e) => (false, format!("요청 실패: {e}")),
+            Err(e) => (false, format!("요청 실패: {e} [URL: {models_url}]")),
         }
     };
 

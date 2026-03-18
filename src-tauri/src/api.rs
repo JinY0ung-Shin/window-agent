@@ -78,9 +78,14 @@ impl ApiState {
             }
         }
 
+        let client = reqwest::Client::builder()
+            .user_agent("WindowAgent/0.5.0")
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
         Self {
             inner: Mutex::new(ApiConfig { api_key, base_url }),
-            client: reqwest::Client::new(),
+            client,
         }
     }
 
