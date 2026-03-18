@@ -18,3 +18,7 @@ export async function readToolConfig(folderName: string): Promise<string> {
 export async function writeToolConfig(folderName: string, config: string): Promise<void> {
   return invoke("write_tool_config", { folderName, config });
 }
+
+export async function getWorkspacePath(conversationId: string): Promise<string> {
+  return invoke("get_workspace_path", { conversationId });
+}

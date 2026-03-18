@@ -105,21 +105,64 @@ pub fn validate_agent_filename(folder_name: &str, file_name: &str) -> Result<(),
 pub fn validate_tool_roots(raw_path: &str, allowed_roots: &[PathBuf]) -> Result<PathBuf, String> {
     let path = Path::new(raw_path);
 
-    // Resolve to absolute, canonicalizing symlinks
     let canonical = if path.exists() {
         std::fs::canonicalize(path)
             .map_err(|e| format!("Cannot resolve path '{}': {}", raw_path, e))?
     } else {
-        // For write targets that don't exist yet, canonicalize the parent
         let parent = path
             .parent()
             .ok_or_else(|| format!("Invalid path: {}", raw_path))?;
-        let canonical_parent = std::fs::canonicalize(parent)
-            .map_err(|e| format!("Cannot resolve parent of '{}': {}", raw_path, e))?;
-        canonical_parent.join(
-            path.file_name()
-                .ok_or_else(|| format!("Invalid file name in path: {}", raw_path))?,
-        )
+        match std::fs::canonicalize(parent) {
+            Ok(canonical_parent) => {
+                canonical_parent.join(
+                    path.file_name()
+                        .ok_or_else(|| format!("Invalid file name in path: {}", raw_path))?,
+                )
+            }
+            Err(_) => {
+                // Parent doesn't exist — walk up to the nearest existing ancestor
+                let mut existing = parent;
+                let mut remaining_components: Vec<&std::ffi::OsStr> = Vec::new();
+
+                // Collect the file name first
+                if let Some(fname) = path.file_name() {
+                    remaining_components.push(fname);
+                } else {
+                    return Err(format!("Invalid file name in path: {}", raw_path));
+                }
+
+                loop {
+                    if existing.exists() {
+                        break;
+                    }
+                    if let Some(name) = existing.file_name() {
+                        remaining_components.push(name);
+                        existing = existing.parent().ok_or_else(|| {
+                            format!("Cannot resolve path '{}': no existing ancestor", raw_path)
+                        })?;
+                    } else {
+                        return Err(format!("Cannot resolve path '{}': no existing ancestor", raw_path));
+                    }
+                }
+
+                // Validate remaining components don't contain traversal
+                for comp in &remaining_components {
+                    if *comp == ".." {
+                        return Err(format!("Path traversal detected in: {}", raw_path));
+                    }
+                }
+
+                let canonical_ancestor = std::fs::canonicalize(existing)
+                    .map_err(|e| format!("Cannot resolve path '{}': {}", raw_path, e))?;
+
+                // Rebuild path: ancestor + remaining (reversed since we collected bottom-up)
+                let mut result = canonical_ancestor;
+                for comp in remaining_components.into_iter().rev() {
+                    result = result.join(comp);
+                }
+                result
+            }
+        }
     };
 
     for root in allowed_roots {
@@ -247,6 +290,26 @@ mod tests {
         let new_file = tmp.path().join("newfile.txt");
         let result = validate_tool_roots(new_file.to_str().unwrap(), &allowed);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_tool_roots_nested_nonexistent_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let allowed = vec![tmp.path().to_path_buf()];
+        // Deep nested path where intermediate dirs don't exist
+        let nested = tmp.path().join("a").join("b").join("c.txt");
+        let result = validate_tool_roots(nested.to_str().unwrap(), &allowed);
+        assert!(result.is_ok(), "Nested non-existent dirs within allowed root should pass");
+    }
+
+    #[test]
+    fn test_tool_roots_nested_traversal_blocked() {
+        let tmp = TempDir::new().unwrap();
+        let allowed = vec![tmp.path().to_path_buf()];
+        // Traversal hidden inside nested non-existent path
+        let evil = tmp.path().join("a").join("..").join("..").join("etc").join("passwd");
+        let result = validate_tool_roots(evil.to_str().unwrap(), &allowed);
+        assert!(result.is_err(), "Traversal within nested path should be blocked");
     }
 
     // ── validate_zip_entry ──

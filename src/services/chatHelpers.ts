@@ -155,6 +155,7 @@ export function buildConversationContext(params: {
   skillsSection?: string;
   memoryNotes?: MemoryNote[];
   vaultNotes?: VaultNoteSummary[];
+  workspacePath?: string;
 }): { systemPrompt: string; apiMessages: OpenAIMessage[] } {
   let systemPrompt = params.baseSystemPrompt;
 
@@ -169,6 +170,11 @@ export function buildConversationContext(params: {
     : buildMemorySection(params.memoryNotes ?? []);
   if (memorySection) {
     systemPrompt += `\n\n${memorySection}`;
+  }
+
+  // Workspace section
+  if (params.workspacePath) {
+    systemPrompt += `\n\n[WORKSPACE]\n당신의 개인 작업 공간: ${params.workspacePath}\n이 디렉토리에서 read_file, write_file, delete_file, list_directory 도구로 자유롭게 파일을 관리할 수 있습니다.\n파일은 대화 간에 유지됩니다. 하위 디렉토리로 자유롭게 정리하세요.\n구조화된 메모리(태그, 그래프 연결)가 필요하면 memory_note 도구를 사용하세요.`;
   }
 
   if (params.summary) {

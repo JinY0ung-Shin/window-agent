@@ -216,6 +216,18 @@ impl VaultManager {
             {
                 continue;
             }
+            // Skip agent workspace directories (agents/*/workspace/**)
+            if let Ok(rel) = path.strip_prefix(&self.vault_path) {
+                let components: Vec<_> = rel.components()
+                    .map(|c| c.as_os_str().to_string_lossy().to_string())
+                    .collect();
+                if components.len() >= 3
+                    && components[0] == "agents"
+                    && components[2] == "workspace"
+                {
+                    continue;
+                }
+            }
 
             let content = match std::fs::read_to_string(path) {
                 Ok(c) => c,
@@ -1162,5 +1174,53 @@ mod tests {
         assert_eq!(extract_title_from_body("\n\n# Title\n"), "Title");
         assert_eq!(extract_title_from_body("Plain text"), "Plain text");
         assert_eq!(extract_title_from_body(""), "Untitled");
+    }
+
+    #[test]
+    fn test_workspace_files_excluded_from_index() {
+        let (_tmp, mut manager) = create_test_manager();
+
+        // Create a regular note via the API (should be indexed)
+        let note = manager
+            .create_note("test-agent", None, "knowledge", "Regular Note", "Content.", vec![], vec![])
+            .unwrap();
+
+        // Create a workspace file directly on disk (should NOT be indexed)
+        let ws_dir = manager.vault_path.join("agents").join("test-agent").join("workspace");
+        std::fs::create_dir_all(&ws_dir).unwrap();
+        // Write a .md file with valid frontmatter so it would normally be picked up
+        let ws_file = ws_dir.join("draft.md");
+        std::fs::write(&ws_file, "---\nid: ws-note-1\nagent: test-agent\ntype: knowledge\ntags: []\nconfidence: 0.5\ncreated: 2024-01-01T00:00:00Z\nupdated: 2024-01-01T00:00:00Z\nrevision: abc\n---\n# Draft\nWorkspace content\n").unwrap();
+
+        // Also test nested workspace subdirectory
+        let ws_subdir = ws_dir.join("subdir");
+        std::fs::create_dir_all(&ws_subdir).unwrap();
+        let ws_nested = ws_subdir.join("nested.md");
+        std::fs::write(&ws_nested, "---\nid: ws-note-2\nagent: test-agent\ntype: knowledge\ntags: []\nconfidence: 0.5\ncreated: 2024-01-01T00:00:00Z\nupdated: 2024-01-01T00:00:00Z\nrevision: def\n---\n# Nested\nNested workspace content\n").unwrap();
+
+        // Rebuild index
+        let stats = manager.rebuild_index().unwrap();
+
+        // Only the regular note should be indexed
+        assert_eq!(stats.total_notes, 1, "Only regular notes should be in the index, not workspace files");
+        assert!(manager.registry.id_to_path.contains_key(&note.id));
+        assert!(!manager.registry.id_to_path.contains_key("ws-note-1"));
+        assert!(!manager.registry.id_to_path.contains_key("ws-note-2"));
+    }
+
+    #[test]
+    fn test_non_agent_workspace_folder_not_excluded() {
+        let (_tmp, mut manager) = create_test_manager();
+
+        // Create a folder named "workspace" that is NOT under agents/*/workspace
+        // e.g., shared/workspace/note.md should still be indexed
+        let other_ws = manager.vault_path.join("shared").join("workspace");
+        std::fs::create_dir_all(&other_ws).unwrap();
+        let other_file = other_ws.join("note.md");
+        std::fs::write(&other_file, "---\nid: other-ws-note\nagent: test-agent\ntype: knowledge\ntags: []\nconfidence: 0.5\ncreated: 2024-01-01T00:00:00Z\nupdated: 2024-01-01T00:00:00Z\nrevision: ghi\n---\n# Other\nNot an agent workspace\n").unwrap();
+
+        let stats = manager.rebuild_index().unwrap();
+        assert_eq!(stats.total_notes, 1, "Non-agent workspace folders should still be indexed");
+        assert!(manager.registry.id_to_path.contains_key("other-ws-note"));
     }
 }

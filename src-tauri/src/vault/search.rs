@@ -78,6 +78,18 @@ pub fn search(
             if path.file_name().and_then(|n| n.to_str()) == Some("_index.md") {
                 continue;
             }
+            // Skip agent workspace directories (agents/*/workspace/**)
+            if let Ok(rel) = path.strip_prefix(vault_path) {
+                let components: Vec<_> = rel.components()
+                    .map(|c| c.as_os_str().to_string_lossy().to_string())
+                    .collect();
+                if components.len() >= 3
+                    && components[0] == "agents"
+                    && components[2] == "workspace"
+                {
+                    continue;
+                }
+            }
 
             if let Some(result) = match_note(path, &terms) {
                 results.push(result);
@@ -279,5 +291,38 @@ The project involves building an auth system.
         let tmp = create_test_vault();
         let results = search("", tmp.path(), None, None);
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn test_search_excludes_workspace_files() {
+        let tmp = create_test_vault();
+        let vault = tmp.path();
+
+        // Create a workspace file with content matching "auth"
+        let ws_dir = vault.join("agents/manager/workspace");
+        fs::create_dir_all(&ws_dir).unwrap();
+        fs::write(
+            ws_dir.join("draft.md"),
+            r#"---
+id: "ws-note"
+agent: "manager"
+type: "knowledge"
+tags: ["auth"]
+confidence: 0.9
+created: "2026-03-17T14:00:00+09:00"
+updated: "2026-03-17T14:00:00+09:00"
+revision: "ws123"
+---
+# Auth Draft
+Workspace draft about auth.
+"#,
+        )
+        .unwrap();
+
+        let results = search("auth", vault, Some("manager"), Some("self"));
+        // Only the regular note should match, not the workspace file
+        for r in &results {
+            assert_ne!(r.note_id, "ws-note", "Workspace files should be excluded from search");
+        }
     }
 }

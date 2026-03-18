@@ -79,6 +79,24 @@ function updateMessageInList(
 
 const MAX_TOOL_ITERATIONS = 10;
 
+// ── Workspace path auto-approve ──
+
+function isWorkspacePath(tc: ToolCall, workspacePath: string | undefined): boolean {
+  if (!workspacePath) return false;
+  if (!["write_file", "delete_file"].includes(tc.name)) return false;
+  let p: string | undefined;
+  try {
+    const args = JSON.parse(tc.arguments);
+    p = args?.path;
+  } catch { return false; }
+  if (!p || typeof p !== "string") return false;
+  if (p.includes("..")) return false;
+  const normalized = p.startsWith("/") ? p : `${workspacePath}/${p}`;
+  const wsSegments = workspacePath.split("/").filter(Boolean);
+  const pSegments = normalized.split("/").filter(Boolean);
+  return wsSegments.every((seg, i) => pSegments[i] === seg);
+}
+
 // ── Browser domain approval (per conversation) ──
 
 const browserApprovedDomains = new Map<string, Set<string>>();
@@ -308,9 +326,10 @@ async function streamOneTurn(
     msgId: string;
     tools?: object[];
     skillsSection?: string;
+    workspacePath?: string;
   },
 ): Promise<StreamDoneEvent> {
-  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection } = params;
+  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection, workspacePath } = params;
 
   // memoryStore is already vault-backed (chat_commands.rs → VaultManager),
   // so memoryNotes provides full content with shared notes excluded.
@@ -321,6 +340,7 @@ async function streamOneTurn(
     baseSystemPrompt,
     skillsSection,
     memoryNotes: useMemoryStore.getState().notes,
+    workspacePath,
   });
 
   let pendingDelta = "";
@@ -517,6 +537,12 @@ async function sendNormalMessage() {
 
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
 
+    // Resolve workspace path for file tool scoping + prompt injection
+    let workspacePath: string | undefined;
+    try {
+      workspacePath = await cmds.getWorkspacePath(convId);
+    } catch { /* non-fatal */ }
+
     let iterationCount = 0;
 
     while (iterationCount <= MAX_TOOL_ITERATIONS) {
@@ -527,6 +553,7 @@ async function sendNormalMessage() {
         msgId: currentMsgId,
         tools: openAITools,
         skillsSection,
+        workspacePath,
       });
 
       if (done.error) {
@@ -617,9 +644,11 @@ async function sendNormalMessage() {
         if (tier === "deny") {
           denyTools.push(tc);
         } else if (tier === "confirm") {
+          // Workspace write/delete auto-approve
+          if (isWorkspacePath(tc, workspacePath)) {
+            autoTools.push(tc);
           // Browser tools with already-approved domains skip confirmation
-          const domain = extractBrowserDomain(tc.name, tc.arguments);
-          if (domain && isBrowserDomainApproved(convId, domain)) {
+          } else if (extractBrowserDomain(tc.name, tc.arguments) && isBrowserDomainApproved(convId, extractBrowserDomain(tc.name, tc.arguments))) {
             autoTools.push(tc);
           } else if (autoApproveEnabled && !hasCredentialRefs(tc)) {
             // auto_approve: skip confirmation for non-credential tools
@@ -818,12 +847,20 @@ async function regenerateStream(
         };
 
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
+
+    // Resolve workspace path for prompt injection
+    let workspacePath: string | undefined;
+    try {
+      workspacePath = await cmds.getWorkspacePath(convId);
+    } catch { /* non-fatal */ }
+
     const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
       messages: msg().messages,
       summary: summary().currentSummary,
       baseSystemPrompt,
       skillsSection,
       memoryNotes: useMemoryStore.getState().notes,
+      workspacePath,
     });
 
     let pendingDelta = "";

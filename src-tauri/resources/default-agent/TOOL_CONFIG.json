@@ -5,6 +5,7 @@
     "read_file": { "enabled": true, "tier": "auto" },
     "write_file": { "enabled": true, "tier": "confirm" },
     "list_directory": { "enabled": true, "tier": "auto" },
+    "delete_file": { "enabled": true, "tier": "confirm" },
     "web_search": { "enabled": true, "tier": "confirm" },
     "memory_note": { "enabled": true, "tier": "auto" },
     "browser_navigate": { "enabled": true, "tier": "confirm" },

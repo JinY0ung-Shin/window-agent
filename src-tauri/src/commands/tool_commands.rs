@@ -8,7 +8,7 @@ use crate::utils::path_security::{validate_no_traversal, validate_tool_roots};
 use crate::vault::strip_title_heading;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::{AppHandle, Manager, State};
 use tokio::time::{timeout, Duration};
@@ -26,7 +26,7 @@ pub struct NativeToolDef {
     pub parameters: serde_json::Value,
 }
 
-/// Returns all 13 native tool definitions with full schemas.
+/// Returns all 14 native tool definitions with full schemas.
 #[tauri::command]
 pub fn get_native_tools() -> Result<Vec<NativeToolDef>, String> {
     Ok(native_tool_definitions())
@@ -117,6 +117,13 @@ fn native_tool_definitions() -> Vec<NativeToolDef> {
             category: "file".into(),
             default_tier: "auto".into(),
             parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"디렉토리 경로"}},"required":["path"]}),
+        },
+        NativeToolDef {
+            name: "delete_file".into(),
+            description: "지정 경로의 파일을 삭제합니다".into(),
+            category: "file".into(),
+            default_tier: "confirm".into(),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"삭제할 파일 경로"}},"required":["path"]}),
         },
         NativeToolDef {
             name: "web_search".into(),
@@ -246,6 +253,63 @@ fn allowed_roots(app: &AppHandle) -> Vec<PathBuf> {
     roots
 }
 
+// ── Workspace path resolution ──
+
+/// Resolve the workspace path for a conversation's agent.
+/// Returns `vault_path/agents/<agent_id>/workspace`, creating the directory if needed.
+fn resolve_workspace_path(
+    app: &AppHandle,
+    db: &Database,
+    conversation_id: &str,
+) -> Result<PathBuf, String> {
+    let conv = operations::get_conversation_detail_impl(db, conversation_id.to_string())
+        .map_err(|e| format!("Failed to get conversation: {}", e))?;
+
+    // Validate agent_id has no traversal characters
+    validate_no_traversal(&conv.agent_id, "agent_id")?;
+
+    let vault = app.state::<VaultState>();
+    let vault_path = {
+        let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+        vm.get_vault_path().to_path_buf()
+    };
+
+    let workspace = vault_path
+        .join("agents")
+        .join(&conv.agent_id)
+        .join("workspace");
+
+    std::fs::create_dir_all(&workspace)
+        .map_err(|e| format!("Failed to create workspace directory: {}", e))?;
+
+    // Canonicalize and verify the workspace is still inside the vault
+    // (prevents symlink-based escapes)
+    let canonical_workspace = std::fs::canonicalize(&workspace)
+        .map_err(|e| format!("Cannot resolve workspace path: {}", e))?;
+    let canonical_vault = std::fs::canonicalize(&vault_path)
+        .map_err(|e| format!("Cannot resolve vault path: {}", e))?;
+
+    if !canonical_workspace.starts_with(&canonical_vault) {
+        return Err(format!(
+            "Workspace path escapes vault boundary: {}",
+            canonical_workspace.display()
+        ));
+    }
+
+    Ok(canonical_workspace)
+}
+
+/// Tauri command: get the workspace path for a conversation.
+#[tauri::command]
+pub fn get_workspace_path(
+    app: AppHandle,
+    db: State<'_, Database>,
+    conversation_id: String,
+) -> Result<String, String> {
+    let ws = resolve_workspace_path(&app, &db, &conversation_id)?;
+    Ok(ws.to_string_lossy().to_string())
+}
+
 // ── Individual tool implementations ──
 
 fn tool_read_file(path: &str, allowed: &[PathBuf]) -> Result<serde_json::Value, String> {
@@ -269,6 +333,15 @@ fn tool_write_file(
     }
 
     std::fs::write(&validated, content).map_err(|e| format!("write_file failed: {}", e))?;
+    Ok(serde_json::json!({ "success": true, "path": validated.to_string_lossy() }))
+}
+
+fn tool_delete_file(path: &str, allowed: &[PathBuf]) -> Result<serde_json::Value, String> {
+    let validated = validate_path(path, allowed)?;
+    if !validated.is_file() {
+        return Err(format!("delete_file: '{}' is not a file or does not exist", path));
+    }
+    std::fs::remove_file(&validated).map_err(|e| format!("delete_file failed: {}", e))?;
     Ok(serde_json::json!({ "success": true, "path": validated.to_string_lossy() }))
 }
 
@@ -594,29 +667,51 @@ async fn execute_tool_inner(
     input: &serde_json::Value,
     conversation_id: &str,
 ) -> Result<serde_json::Value, String> {
-    let allowed = allowed_roots(app);
-
     match tool_name {
-        "read_file" => {
-            let path = input["path"]
-                .as_str()
-                .ok_or("read_file: missing 'path' parameter")?;
-            tool_read_file(path, &allowed)
-        }
-        "write_file" => {
-            let path = input["path"]
-                .as_str()
-                .ok_or("write_file: missing 'path' parameter")?;
-            let content = input["content"]
-                .as_str()
-                .ok_or("write_file: missing 'content' parameter")?;
-            tool_write_file(path, content, &allowed)
-        }
-        "list_directory" => {
-            let path = input["path"]
-                .as_str()
-                .ok_or("list_directory: missing 'path' parameter")?;
-            tool_list_directory(path, &allowed)
+        "read_file" | "write_file" | "delete_file" | "list_directory" => {
+            // File tools are scoped to the agent's workspace directory
+            let workspace = resolve_workspace_path(app, db, conversation_id)?;
+            let ws_roots = vec![workspace.clone()];
+
+            // Helper: resolve relative paths against the workspace root
+            let resolve_path = |raw: &str| -> String {
+                if Path::new(raw).is_absolute() {
+                    raw.to_string()
+                } else {
+                    workspace.join(raw).to_string_lossy().to_string()
+                }
+            };
+
+            match tool_name {
+                "read_file" => {
+                    let raw = input["path"]
+                        .as_str()
+                        .ok_or("read_file: missing 'path' parameter")?;
+                    tool_read_file(&resolve_path(raw), &ws_roots)
+                }
+                "write_file" => {
+                    let raw = input["path"]
+                        .as_str()
+                        .ok_or("write_file: missing 'path' parameter")?;
+                    let content = input["content"]
+                        .as_str()
+                        .ok_or("write_file: missing 'content' parameter")?;
+                    tool_write_file(&resolve_path(raw), content, &ws_roots)
+                }
+                "delete_file" => {
+                    let raw = input["path"]
+                        .as_str()
+                        .ok_or("delete_file: missing 'path' parameter")?;
+                    tool_delete_file(&resolve_path(raw), &ws_roots)
+                }
+                "list_directory" => {
+                    let raw = input["path"]
+                        .as_str()
+                        .ok_or("list_directory: missing 'path' parameter")?;
+                    tool_list_directory(&resolve_path(raw), &ws_roots)
+                }
+                _ => unreachable!(),
+            }
         }
         "web_search" => {
             let url = input["url"]
@@ -738,6 +833,23 @@ pub fn normalize_tool_config(config_str: &str) -> Result<(String, bool), String>
     if !config.get("native").and_then(|v| v.as_object()).is_some() {
         config["native"] = serde_json::json!({});
         changed = true;
+    }
+
+    // Migration: if write_file is enabled but delete_file is missing, enable delete_file too
+    // (must run before "add missing" which would add it as disabled)
+    if let Some(native) = config["native"].as_object_mut() {
+        let write_file_enabled = native
+            .get("write_file")
+            .and_then(|v| v.get("enabled"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if write_file_enabled && !native.contains_key("delete_file") {
+            native.insert(
+                "delete_file".to_string(),
+                serde_json::json!({ "enabled": true, "tier": "confirm" }),
+            );
+            changed = true;
+        }
     }
 
     // Add missing native tools as disabled with their default_tier
@@ -1256,6 +1368,35 @@ mod tests {
     }
 
     #[test]
+    fn test_delete_file_success() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("to_delete.txt");
+        fs::write(&file_path, "bye").unwrap();
+
+        let allowed = make_allowed(tmp.path());
+        let result = tool_delete_file(file_path.to_str().unwrap(), &allowed);
+        assert!(result.is_ok());
+        assert!(!file_path.exists());
+    }
+
+    #[test]
+    fn test_delete_file_outside_allowed() {
+        let tmp = TempDir::new().unwrap();
+        let allowed = make_allowed(tmp.path());
+        let result = tool_delete_file("/etc/hostname", &allowed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_delete_file_nonexistent() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("ghost.txt");
+        let allowed = make_allowed(tmp.path());
+        let result = tool_delete_file(file_path.to_str().unwrap(), &allowed);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_list_directory_success() {
         let tmp = TempDir::new().unwrap();
         fs::write(tmp.path().join("a.txt"), "").unwrap();
@@ -1393,5 +1534,27 @@ mod tests {
         });
         let results = tool_memory_note(&vault, &recall_input, agent_id).unwrap();
         assert_eq!(results.as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_normalize_config_adds_delete_file_when_write_enabled() {
+        let config = r#"{"version":2,"auto_approve":false,"native":{"read_file":{"enabled":true,"tier":"auto"},"write_file":{"enabled":true,"tier":"confirm"}},"credentials":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        assert!(changed);
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let delete = &parsed["native"]["delete_file"];
+        assert_eq!(delete["enabled"], true);
+        assert_eq!(delete["tier"], "confirm");
+    }
+
+    #[test]
+    fn test_normalize_config_skips_delete_file_when_write_disabled() {
+        let config = r#"{"version":2,"auto_approve":false,"native":{"read_file":{"enabled":true,"tier":"auto"},"write_file":{"enabled":false,"tier":"confirm"}},"credentials":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        // delete_file is still added via the "add missing native tools" logic, but as disabled
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let delete = &parsed["native"]["delete_file"];
+        assert_eq!(delete["enabled"], false);
+        assert!(changed);
     }
 }
