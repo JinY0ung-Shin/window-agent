@@ -110,6 +110,17 @@ pub fn update_conversation_skills(
     Ok(operations::update_conversation_skills_impl(&db, id, skills_json)?)
 }
 
+// ── Learning Mode ──
+
+#[tauri::command]
+pub fn set_learning_mode(
+    db: State<'_, Database>,
+    id: String,
+    enabled: bool,
+) -> Result<(), AppError> {
+    Ok(operations::set_learning_mode_impl(&db, id, enabled)?)
+}
+
 // ── Memory Notes (backed by Vault) ──
 
 #[tauri::command]

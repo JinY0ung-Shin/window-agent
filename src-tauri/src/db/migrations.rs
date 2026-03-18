@@ -30,6 +30,7 @@ fn create_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             summary         TEXT,
             summary_up_to_message_id TEXT,
             active_skills   TEXT,
+            learning_mode   INTEGER DEFAULT 0,
             created_at      TEXT NOT NULL,
             updated_at      TEXT NOT NULL
         );
@@ -176,10 +177,33 @@ pub fn needs_reset(db_path: &str) -> bool {
     }
 }
 
+/// Run idempotent incremental migrations for columns added after SCHEMA_VERSION 1.
+/// Each migration checks if the column exists before attempting ALTER TABLE.
+fn run_incremental_migrations(conn: &Connection) -> Result<(), rusqlite::Error> {
+    // Check if learning_mode column exists on conversations
+    let has_learning_mode: bool = conn
+        .prepare("PRAGMA table_info(conversations)")?
+        .query_map([], |row| {
+            let name: String = row.get(1)?;
+            Ok(name)
+        })?
+        .filter_map(|r| r.ok())
+        .any(|name| name == "learning_mode");
+
+    if !has_learning_mode {
+        conn.execute_batch(
+            "ALTER TABLE conversations ADD COLUMN learning_mode INTEGER DEFAULT 0;"
+        )?;
+    }
+
+    Ok(())
+}
+
 /// Ensure the database has the current schema.
 /// Creates all tables and records the schema version.
 pub fn ensure_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
     create_schema(conn)?;
+    run_incremental_migrations(conn)?;
     set_schema_version(conn)?;
     Ok(())
 }
@@ -331,5 +355,62 @@ mod tests {
         conn.execute("UPDATE _schema_version SET version = 999", []).unwrap();
         let version = get_schema_version(&conn).unwrap();
         assert_ne!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_incremental_migration_idempotent() {
+        let conn = setup_conn();
+        ensure_schema(&conn).unwrap();
+
+        // Running incremental migrations again should not error
+        run_incremental_migrations(&conn).unwrap();
+        run_incremental_migrations(&conn).unwrap();
+
+        // Verify learning_mode column exists
+        let has_col: bool = conn
+            .prepare("PRAGMA table_info(conversations)")
+            .unwrap()
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .any(|name| name == "learning_mode");
+        assert!(has_col, "learning_mode column should exist after migration");
+    }
+
+    #[test]
+    fn test_incremental_migration_adds_missing_column() {
+        let conn = setup_conn();
+        // Create schema without learning_mode (simulate old DB)
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                agent_id TEXT NOT NULL,
+                summary TEXT,
+                summary_up_to_message_id TEXT,
+                active_skills TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );"
+        ).unwrap();
+
+        // Run incremental migration — should add the column
+        run_incremental_migrations(&conn).unwrap();
+
+        // Verify column was added
+        let has_col: bool = conn
+            .prepare("PRAGMA table_info(conversations)")
+            .unwrap()
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .any(|name| name == "learning_mode");
+        assert!(has_col, "learning_mode column should be added by migration");
     }
 }

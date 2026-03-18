@@ -64,12 +64,13 @@ pub fn get_conversation_detail_impl(
 ) -> Result<ConversationDetail, DbError> {
     db.with_conn(|conn| {
         let detail = conn.query_row(
-            "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, created_at, updated_at FROM conversations WHERE id = ?1",
+            "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, learning_mode, created_at, updated_at FROM conversations WHERE id = ?1",
             rusqlite::params![id],
             |row| {
                 let active_skills_raw: Option<String> = row.get(5)?;
                 let active_skills: Option<Vec<String>> = active_skills_raw
                     .and_then(|s| serde_json::from_str(&s).ok());
+                let learning_mode_raw: i64 = row.get::<_, Option<i64>>(6)?.unwrap_or(0);
                 Ok(ConversationDetail {
                     id: row.get(0)?,
                     title: row.get(1)?,
@@ -77,8 +78,9 @@ pub fn get_conversation_detail_impl(
                     summary: row.get(3)?,
                     summary_up_to_message_id: row.get(4)?,
                     active_skills,
-                    created_at: row.get(6)?,
-                    updated_at: row.get(7)?,
+                    learning_mode: learning_mode_raw != 0,
+                    created_at: row.get(7)?,
+                    updated_at: row.get(8)?,
                 })
             },
         )?;
@@ -263,6 +265,22 @@ pub fn update_conversation_skills_impl(
         conn.execute(
             "UPDATE conversations SET active_skills = ?1 WHERE id = ?2",
             rusqlite::params![skills_json, id],
+        )?;
+        Ok(())
+    })
+}
+
+// ── Learning Mode ──
+
+pub fn set_learning_mode_impl(
+    db: &Database,
+    id: String,
+    enabled: bool,
+) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE conversations SET learning_mode = ?1 WHERE id = ?2",
+            rusqlite::params![enabled as i64, id],
         )?;
         Ok(())
     })
@@ -1062,5 +1080,31 @@ mod tests {
         // Delete conversation — FK cascade should remove artifacts
         delete_conversation_impl(&db, conv.id).unwrap();
         assert!(get_browser_artifact(&db, &artifact.id).is_err());
+    }
+
+    // ── Learning Mode tests ──
+
+    #[test]
+    fn test_learning_mode_default_false() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, Some("Test".into()), agent.id).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert!(!detail.learning_mode);
+    }
+
+    #[test]
+    fn test_set_learning_mode() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, Some("Test".into()), agent.id).unwrap();
+
+        set_learning_mode_impl(&db, conv.id.clone(), true).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id.clone()).unwrap();
+        assert!(detail.learning_mode);
+
+        set_learning_mode_impl(&db, conv.id.clone(), false).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert!(!detail.learning_mode);
     }
 }

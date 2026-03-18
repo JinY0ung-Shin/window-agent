@@ -375,13 +375,14 @@ pub fn import_agent(
             .as_ref()
             .map(|skills| serde_json::to_string(skills).unwrap_or_default());
         tx.execute(
-            "INSERT INTO conversations (id, title, agent_id, summary, summary_up_to_message_id, active_skills, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7)",
+            "INSERT INTO conversations (id, title, agent_id, summary, summary_up_to_message_id, active_skills, learning_mode, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, ?7, ?8)",
             rusqlite::params![
                 new_conv_id,
                 conv_detail.title,
                 new_agent_id,
                 conv_detail.summary,
                 active_skills_json,
+                conv_detail.learning_mode as i64,
                 conv_detail.created_at,
                 conv_detail.updated_at,
             ],

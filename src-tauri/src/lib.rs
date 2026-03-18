@@ -116,6 +116,7 @@ pub fn run() {
             commands::export_agent,
             commands::import_agent,
             commands::update_conversation_skills,
+            commands::set_learning_mode,
             commands::list_skills,
             commands::read_skill,
             commands::read_skill_resource,

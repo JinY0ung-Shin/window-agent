@@ -128,5 +128,8 @@
   "toolAgentCapability_org": "Adding tools allows the employee to perform external functions.",
   "noAgentForSkill": "Cannot find current employee",
   "noAgentForSkill_classic": "Cannot find current agent",
-  "noAgentForSkill_org": "Cannot find current employee"
+  "noAgentForSkill_org": "Cannot find current employee",
+  "learningMode": "Learning Mode",
+  "learningMode_classic": "Learning Mode",
+  "learningMode_org": "Learning Mode"
 }

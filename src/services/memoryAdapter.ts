@@ -11,7 +11,7 @@ const MAX_MEMORY_TOKENS = 500;
  *   - 형식: "- title: content" per line
  *   - 래핑: "[MEMORY NOTES]\n" 헤더
  */
-export function buildPromptReadySlice(notes: VaultNoteSummary[]): string {
+export function buildPromptReadySlice(notes: VaultNoteSummary[], maxTokens: number = MAX_MEMORY_TOKENS): string {
   if (notes.length === 0) return "";
 
   const sorted = [...notes].sort(
@@ -24,7 +24,7 @@ export function buildPromptReadySlice(notes: VaultNoteSummary[]): string {
   for (const note of sorted) {
     const line = `- ${note.title}: ${note.bodyPreview}`;
     const lineTokens = estimateTokens(line + "\n");
-    if (tokens + lineTokens > MAX_MEMORY_TOKENS) break;
+    if (tokens + lineTokens > maxTokens) break;
     tokens += lineTokens;
     lines.push(line);
   }

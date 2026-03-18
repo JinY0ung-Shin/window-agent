@@ -37,6 +37,12 @@ export async function deleteConversation(conversationId: string): Promise<void> 
   return invoke("delete_conversation", { conversationId });
 }
 
+// ── Learning Mode ──
+
+export async function setLearningMode(id: string, enabled: boolean): Promise<void> {
+  return invoke("set_learning_mode", { id, enabled });
+}
+
 // ── Message CRUD ──
 
 export async function getMessages(conversationId: string): Promise<DbMessage[]> {

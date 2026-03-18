@@ -29,6 +29,7 @@ export function resetTransientChatState() {
  */
 export function resetChatContext() {
   useConversationStore.setState({ currentConversationId: null });
+  useConversationStore.getState().resetLearningModeState();
   useAgentStore.getState().selectAgent(null);
   resetTransientChatState();
 }

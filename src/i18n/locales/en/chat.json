@@ -54,5 +54,13 @@
     "maximize": "Maximize",
     "restore": "Restore",
     "close": "Close"
+  },
+  "learningMode": {
+    "tooltip": "Memories saved in Learning Mode apply to all conversations with this employee",
+    "tooltip_classic": "Memories saved in Learning Mode apply to all conversations with this agent",
+    "tooltip_org": "Memories saved in Learning Mode apply to all conversations with this employee",
+    "warning": "This employee cannot use Learning Mode because memory tools are disabled",
+    "warning_classic": "This agent cannot use Learning Mode because memory tools are disabled",
+    "warning_org": "This employee cannot use Learning Mode because memory tools are disabled"
   }
 }

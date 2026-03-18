@@ -15,6 +15,7 @@ export interface ConversationDetail extends ConversationListItem {
   summary?: string;
   summary_up_to_message_id?: string;
   active_skills?: string[];
+  learning_mode?: boolean;
 }
 
 // Backward-compatible alias

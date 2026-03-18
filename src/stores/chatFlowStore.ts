@@ -331,6 +331,7 @@ async function streamOneTurn(
   // memoryStore is already vault-backed (chat_commands.rs → VaultManager),
   // so memoryNotes provides full content with shared notes excluded.
   // No need for a separate vaultNotes path.
+  const learningMode = useConversationStore.getState().getCurrentLearningMode();
   const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
     messages: msg().messages,
     summary: summary().currentSummary,
@@ -338,6 +339,7 @@ async function streamOneTurn(
     skillsSection,
     memoryNotes: useMemoryStore.getState().notes,
     workspacePath,
+    learningMode,
   });
 
   let pendingDelta = "";
@@ -459,6 +461,13 @@ async function sendNormalMessage() {
     const newConv = await cmds.createConversation(agentId, initialTitle);
     convId = newConv.id;
     useConversationStore.setState({ currentConversationId: convId });
+
+    // Propagate draft learning mode to the new conversation
+    const { draftLearningMode } = useConversationStore.getState();
+    if (draftLearningMode) {
+      await cmds.setLearningMode(convId, true);
+      useConversationStore.setState({ currentLearningMode: true, draftLearningMode: false });
+    }
 
     const skillNames = useSkillStore.getState().activeSkillNames;
     if (skillNames.length > 0) {
@@ -870,6 +879,7 @@ async function regenerateStream(
       workspacePath = await cmds.getWorkspacePath(convId);
     } catch { /* non-fatal */ }
 
+    const learningModeRegen = useConversationStore.getState().getCurrentLearningMode();
     const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
       messages: msg().messages,
       summary: summary().currentSummary,
@@ -877,6 +887,7 @@ async function regenerateStream(
       skillsSection,
       memoryNotes: useMemoryStore.getState().notes,
       workspacePath,
+      learningMode: learningModeRegen,
     });
 
     let pendingDelta = "";

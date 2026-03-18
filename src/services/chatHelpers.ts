@@ -112,7 +112,7 @@ export function buildChatMessages(
  * Build the [MEMORY NOTES] section from memory notes, capped at MAX_MEMORY_TOKENS.
  * Most recent notes take priority when truncating.
  */
-export function buildMemorySection(notes: MemoryNote[]): string {
+export function buildMemorySection(notes: MemoryNote[], maxTokens: number = MAX_MEMORY_TOKENS): string {
   if (notes.length === 0) return "";
 
   // Sort by created_at descending (newest first for priority)
@@ -128,7 +128,7 @@ export function buildMemorySection(notes: MemoryNote[]): string {
   for (const note of sorted) {
     const line = `- ${note.title}: ${note.content}`;
     const lineTokens = estimateTokens(line + "\n");
-    if (tokens + lineTokens > MAX_MEMORY_TOKENS) break;
+    if (tokens + lineTokens > maxTokens) break;
     tokens += lineTokens;
     lines.push(line);
   }
@@ -141,8 +141,8 @@ export function buildMemorySection(notes: MemoryNote[]): string {
  * Build the [MEMORY NOTES] section from vault notes, capped at MAX_MEMORY_TOKENS.
  * Uses the same format as buildMemorySection for backward compatibility.
  */
-export function buildVaultMemorySection(notes: VaultNoteSummary[]): string {
-  return buildPromptReadySlice(notes);
+export function buildVaultMemorySection(notes: VaultNoteSummary[], maxTokens?: number): string {
+  return buildPromptReadySlice(notes, maxTokens);
 }
 
 /**
@@ -157,6 +157,7 @@ export function buildConversationContext(params: {
   memoryNotes?: MemoryNote[];
   vaultNotes?: VaultNoteSummary[];
   workspacePath?: string;
+  learningMode?: boolean;
 }): { systemPrompt: string; apiMessages: OpenAIMessage[] } {
   let systemPrompt = params.baseSystemPrompt;
 
@@ -165,10 +166,18 @@ export function buildConversationContext(params: {
     systemPrompt += `\n\n${params.skillsSection}`;
   }
 
+  // Learning mode prompt injection (between skills and memory)
+  if (params.learningMode) {
+    const header = i18n.t("prompts:learningMode.header");
+    const body = i18n.t("prompts:learningMode.body");
+    systemPrompt += `\n\n${header}\n${body}`;
+  }
+
   // Vault notes take priority; fall back to legacy memory notes
+  const memoryMaxTokens = params.learningMode ? 1500 : 500;
   const memorySection = params.vaultNotes && params.vaultNotes.length > 0
-    ? buildVaultMemorySection(params.vaultNotes)
-    : buildMemorySection(params.memoryNotes ?? []);
+    ? buildVaultMemorySection(params.vaultNotes, memoryMaxTokens)
+    : buildMemorySection(params.memoryNotes ?? [], memoryMaxTokens);
   if (memorySection) {
     systemPrompt += `\n\n${memorySection}`;
   }

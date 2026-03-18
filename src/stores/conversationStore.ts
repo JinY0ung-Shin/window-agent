@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Conversation, ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
+import { readToolConfig } from "../services/nativeToolRegistry";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
 import { useVaultStore } from "./vaultStore";
@@ -13,6 +14,15 @@ import { resetTransientChatState, resetChatContext } from "./resetHelper";
 interface ConversationState {
   conversations: Conversation[];
   currentConversationId: string | null;
+
+  // Learning mode state (single owner)
+  currentLearningMode: boolean;
+  draftLearningMode: boolean;
+  learningModeWarning: boolean;
+  getCurrentLearningMode: () => boolean;
+  toggleLearningMode: () => Promise<void>;
+  resetLearningModeState: () => void;
+  dismissLearningModeWarning: () => void;
 
   loadConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<{ messages: ChatMessage[] }>;
@@ -28,6 +38,57 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   conversations: [],
   currentConversationId: null,
 
+  // Learning mode
+  currentLearningMode: false,
+  draftLearningMode: false,
+  learningModeWarning: false,
+
+  getCurrentLearningMode: () => {
+    const { currentConversationId, currentLearningMode, draftLearningMode } = get();
+    return currentConversationId ? currentLearningMode : draftLearningMode;
+  },
+
+  toggleLearningMode: async () => {
+    const { currentConversationId, currentLearningMode, draftLearningMode } = get();
+    const wantEnable = currentConversationId ? !currentLearningMode : !draftLearningMode;
+
+    // Check if memory_note is available for the selected agent before enabling
+    if (wantEnable) {
+      const agent = useAgentStore.getState().agents.find(
+        (a) => a.id === useAgentStore.getState().selectedAgentId,
+      );
+      if (agent) {
+        try {
+          const config = await readToolConfig(agent.folder_name);
+          const entry = config?.native?.memory_note;
+          if (entry && (!entry.enabled || entry.tier === "deny")) {
+            // memory_note is disabled/deny — cannot use learning mode
+            set({ learningModeWarning: true });
+            return;
+          }
+        } catch { /* proceed if config unreadable */ }
+      }
+    }
+
+    set({ learningModeWarning: false });
+
+    if (currentConversationId) {
+      const newValue = !currentLearningMode;
+      try {
+        await cmds.setLearningMode(currentConversationId, newValue);
+        set({ currentLearningMode: newValue });
+      } catch {
+        // Rollback on failure — state unchanged
+      }
+    } else {
+      set({ draftLearningMode: !draftLearningMode });
+    }
+  },
+
+  resetLearningModeState: () => set({ currentLearningMode: false, draftLearningMode: false, learningModeWarning: false }),
+
+  dismissLearningModeWarning: () => set({ learningModeWarning: false }),
+
   setCurrentConversationId: (id) => set({ currentConversationId: id }),
 
   loadConversations: async () => {
@@ -36,7 +97,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   selectConversation: async (id) => {
-    set({ currentConversationId: id });
+    set({ currentConversationId: id, draftLearningMode: false, learningModeWarning: false });
     resetTransientChatState();
 
     const [detail, dbMessages] = await Promise.all([
@@ -68,6 +129,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     useMessageStore.setState({ messages });
 
     useSummaryStore.getState().loadSummary(detail.summary, detail.summary_up_to_message_id);
+
+    // Sync learning mode from DB
+    set({ currentLearningMode: detail.learning_mode ?? false });
 
     // Sync agent selection and load memory/skills/debug
     if (detail.agent_id) {
@@ -133,6 +197,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (wasActive) {
       // Reset transient state and re-select the cleared agent for empty DM
       set({ currentConversationId: null });
+      get().resetLearningModeState();
       resetTransientChatState();
       useAgentStore.getState().selectAgent(agentId);
       const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
@@ -149,6 +214,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     // Prepare empty DM for the agent — reuses the same path as openAgentChat's "no conversation" branch
     // so memory, skills, and agent selection are correctly loaded.
     set({ currentConversationId: null });
+    get().resetLearningModeState();
     resetTransientChatState();
     useAgentStore.getState().selectAgent(agentId);
     const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);

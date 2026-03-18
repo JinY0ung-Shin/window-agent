@@ -70,6 +70,8 @@ pub struct ConversationDetail {
     pub summary_up_to_message_id: Option<String>,
     /// Serialized as a proper JSON array to the frontend, stored as JSON text in DB.
     pub active_skills: Option<Vec<String>>,
+    #[serde(default)]
+    pub learning_mode: bool,
     pub created_at: String,
     pub updated_at: String,
 }
