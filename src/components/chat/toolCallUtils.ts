@@ -1,4 +1,5 @@
 import type { ToolCall } from "../../services/types";
+import { i18n } from "../../i18n";
 
 export type ToolCallStatus =
   | "pending"
@@ -95,19 +96,19 @@ export function classifyToolResultStatus(result: string): Extract<ToolCallStatus
 export function getToolStatusLabel(status: ToolCallStatus): string {
   switch (status) {
     case "pending":
-      return "승인 대기";
+      return i18n.t("chat:tool.status.pending");
     case "approved":
-      return "승인됨";
+      return i18n.t("chat:tool.status.approved");
     case "running":
-      return "실행 중...";
+      return i18n.t("chat:tool.status.running");
     case "executed":
-      return "완료";
+      return i18n.t("chat:tool.status.done");
     case "denied":
-      return "거부됨";
+      return i18n.t("chat:tool.status.rejected");
     case "error":
-      return "오류";
+      return i18n.t("chat:tool.status.error");
     case "incomplete":
-      return "미완료";
+      return i18n.t("chat:tool.status.incomplete");
   }
 }
 
@@ -148,10 +149,10 @@ export function getToolOutcomePreview(
       return truncate(browserResult.url, PREVIEW_TRUNCATE);
     }
     if (browserResult?.elementCount !== undefined) {
-      return `접근성 스냅샷 ${browserResult.elementCount}개 요소`;
+      return i18n.t("chat:tool.browser.snapshot", { count: browserResult.elementCount });
     }
     if (browserResult?.screenshot_path) {
-      return "브라우저 스크린샷 생성";
+      return i18n.t("chat:tool.browser.screenshot");
     }
   }
 
@@ -169,5 +170,5 @@ export function getToolOutcomePreview(
     return truncate(argsSummary, PREVIEW_TRUNCATE);
   }
 
-  return `${toolCall.name} 준비 중`;
+  return i18n.t("chat:tool.preparing", { name: toolCall.name });
 }

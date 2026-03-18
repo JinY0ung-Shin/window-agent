@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { X, Plus, Bot } from "lucide-react";
 import { listModels } from "../../services/tauriCommands";
 import { useAgentEditor } from "../../hooks/useAgentEditor";
-import { useLabels } from "../../hooks/useLabels";
+import { useSettingsStore } from "../../stores/settingsStore";
 import AgentMetadataForm from "./AgentMetadataForm";
 import AgentPersonaEditor, { PERSONA_TABS } from "./AgentPersonaEditor";
 import AgentSkillsPanel from "./AgentSkillsPanel";
@@ -19,7 +20,9 @@ export default function AgentEditor() {
     saveAgent, deleteAgent, openEditor,
   } = useAgentEditor();
 
-  const labels = useLabels();
+  const { t } = useTranslation("glossary");
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
+  const ta = useTranslation("agent").t;
   const toolConfig = useAgentStore((s) => s.toolConfig);
   const setToolConfig = (config: ToolConfig) => useAgentStore.setState({ toolConfig: config });
 
@@ -66,7 +69,7 @@ export default function AgentEditor() {
 
   const handleSave = () => {
     saveAgent({
-      name: name || labels.newAgent,
+      name: name || t("newAgent", { context: uiTheme }),
       description,
       avatar,
       model: model || null,
@@ -91,7 +94,7 @@ export default function AgentEditor() {
       <div className="agent-editor-modal">
         {/* Header */}
         <div className="modal-header">
-          <h2>{editingAgentId ? labels.editorTitle : labels.editorNewTitle}</h2>
+          <h2>{editingAgentId ? t("editorTitle", { context: uiTheme }) : t("editorNewTitle", { context: uiTheme })}</h2>
           <button className="close-button" onClick={closeEditor}>
             <X size={20} />
           </button>
@@ -118,7 +121,7 @@ export default function AgentEditor() {
             onClick={() => openEditor(null)}
           >
             <span className="agent-list-icon"><Plus size={14} /></span>
-            <span className="agent-list-name">{labels.editorNewTitle}</span>
+            <span className="agent-list-name">{t("editorNewTitle", { context: uiTheme })}</span>
           </button>
         </div>
 
@@ -155,10 +158,10 @@ export default function AgentEditor() {
                   onClick={() => { setPersonaTab(tab.key); setActivePanel("persona"); }}
                 >
                   {({
-                    identity: labels.personaIdentity,
-                    soul: labels.personaSoul,
-                    user: labels.personaUser,
-                    agents: labels.personaAgents,
+                    identity: t("personaIdentity", { context: uiTheme }),
+                    soul: t("personaSoul", { context: uiTheme }),
+                    user: t("personaUser", { context: uiTheme }),
+                    agents: t("personaAgents", { context: uiTheme }),
                   } as Record<string, string>)[tab.key] ?? tab.label}
                 </button>
               ))}
@@ -166,21 +169,21 @@ export default function AgentEditor() {
                 className={`persona-tab ${activePanel === "tools" ? "active" : ""}`}
                 onClick={() => setActivePanel("tools")}
               >
-                {labels.personaTools}
+                {t("personaTools", { context: uiTheme })}
               </button>
               <button
                 className={`persona-tab ${activePanel === "credentials" ? "active" : ""}`}
                 onClick={() => setActivePanel("credentials")}
               >
-                {labels.credentials}
+                {ta("credentials.title")}
               </button>
               <button
                 className={`persona-tab ${activePanel === "skills" ? "active" : ""}`}
                 disabled={!editingAgentId}
-                title={!editingAgentId ? "먼저 저장하세요" : undefined}
+                title={!editingAgentId ? ta("skills.saveFirst") : undefined}
                 onClick={() => editingAgentId && setActivePanel("skills")}
               >
-                SKILLS
+                {ta("skills.tabLabel")}
               </button>
             </div>
 
@@ -219,10 +222,10 @@ export default function AgentEditor() {
         )}
         <div className="modal-footer">
           <button className="btn-secondary" onClick={closeEditor}>
-            취소
+            {t("common:cancel")}
           </button>
           <button className="btn-primary" onClick={handleSave}>
-            저장
+            {t("common:save")}
           </button>
         </div>
       </div>

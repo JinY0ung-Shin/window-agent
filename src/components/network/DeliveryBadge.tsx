@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
 
 interface DeliveryBadgeProps {
@@ -6,25 +7,26 @@ interface DeliveryBadgeProps {
 }
 
 export default function DeliveryBadge({ state, onRetry }: DeliveryBadgeProps) {
+  const { t } = useTranslation("network");
   switch (state) {
     case "sending":
       return (
         <span className="delivery-badge delivery-sending">
-          <span className="delivery-spinner" /> 전송 중...
+          <span className="delivery-spinner" /> {t("delivery.sending")}
         </span>
       );
     case "delivered":
       return (
         <span className="delivery-badge delivery-delivered">
-          ✓ 전달됨
+          ✓ {t("delivery.delivered")}
         </span>
       );
     case "failed":
       return (
         <span className="delivery-badge delivery-failed">
-          ✗ 실패
+          ✗ {t("delivery.failed")}
           {onRetry && (
-            <button className="delivery-retry-btn" onClick={onRetry} title="재시도">
+            <button className="delivery-retry-btn" onClick={onRetry} title={t("delivery.retryTitle")}>
               <RefreshCw size={12} />
             </button>
           )}
@@ -33,7 +35,7 @@ export default function DeliveryBadge({ state, onRetry }: DeliveryBadgeProps) {
     case "queued":
       return (
         <span className="delivery-badge delivery-queued">
-          📤 대기 중
+          📤 {t("delivery.queued")}
         </span>
       );
     default:

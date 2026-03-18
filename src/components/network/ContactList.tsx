@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Users } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import type { ContactRow } from "../../services/commands/p2pCommands";
@@ -8,13 +9,8 @@ function statusDot(status: string) {
   return "status-dot offline";
 }
 
-function statusLabel(status: string) {
-  if (status === "connected") return "온라인";
-  if (status === "connecting") return "연결 중";
-  return "오프라인";
-}
-
 export default function ContactList() {
+  const { t } = useTranslation("network");
   const contacts = useNetworkStore((s) => s.contacts);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const selectContact = useNetworkStore((s) => s.selectContact);
@@ -24,8 +20,8 @@ export default function ContactList() {
     return (
       <div className="contact-list-empty">
         <Users size={32} strokeWidth={1.5} />
-        <p>연락처가 없습니다</p>
-        <p className="text-muted">초대 코드를 생성하거나 받아서 연결하세요.</p>
+        <p>{t("contact.noContacts")}</p>
+        <p className="text-muted">{t("contact.noContactsHint")}</p>
       </div>
     );
   }
@@ -33,7 +29,7 @@ export default function ContactList() {
   return (
     <div className="contact-list">
       <div className="contact-list-header">
-        <span>연락처</span>
+        <span>{t("contact.listHeader")}</span>
         <span className="contact-count">{contacts.length}</span>
       </div>
       {contacts.map((contact: ContactRow) => (
@@ -44,7 +40,7 @@ export default function ContactList() {
             selectContact(selectedContactId === contact.id ? null : contact.id)
           }
         >
-          <span className={statusDot(connectedPeers.has(contact.peer_id) ? "connected" : contact.status)} title={statusLabel(connectedPeers.has(contact.peer_id) ? "connected" : contact.status)} />
+          <span className={statusDot(connectedPeers.has(contact.peer_id) ? "connected" : contact.status)} title={t(`contact.${connectedPeers.has(contact.peer_id) ? "online" : contact.status === "connecting" ? "connecting" : "offline"}`)} />
           <div className="contact-item-info">
             <span className="contact-item-name">
               {contact.display_name || contact.agent_name}
@@ -53,7 +49,7 @@ export default function ContactList() {
               <span className="contact-item-desc">{contact.agent_description}</span>
             )}
           </div>
-          <span className="contact-item-mode">{contact.mode === "secretary" ? "비서" : contact.mode}</span>
+          <span className="contact-item-mode">{contact.mode === "secretary" ? t("contact.modeSecretary") : contact.mode}</span>
         </button>
       ))}
     </div>

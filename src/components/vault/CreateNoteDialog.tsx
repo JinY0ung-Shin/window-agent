@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import type { NoteType, NoteScope } from "../../services/vaultTypes";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -9,18 +10,14 @@ interface CreateNoteDialogProps {
   defaultAgentId: string | null;
 }
 
-const CATEGORY_OPTIONS: { value: NoteType; label: string }[] = [
-  { value: "knowledge", label: "지식" },
-  { value: "decision", label: "결정" },
-  { value: "conversation", label: "대화" },
-  { value: "reflection", label: "회고" },
-];
+const CATEGORY_KEYS: NoteType[] = ["knowledge", "decision", "conversation", "reflection"];
 
 export default function CreateNoteDialog({
   isOpen,
   onClose,
   defaultAgentId,
 }: CreateNoteDialogProps) {
+  const { t } = useTranslation("vault");
   const createNote = useVaultStore((s) => s.createNote);
 
   const [title, setTitle] = useState("");
@@ -39,7 +36,7 @@ export default function CreateNoteDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError("제목을 입력하세요");
+      setError(t("create.titleRequired"));
       return;
     }
 
@@ -60,7 +57,7 @@ export default function CreateNoteDialog({
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "노트 생성에 실패했습니다");
+      setError(err instanceof Error ? err.message : t("create.failed"));
     } finally {
       setIsSubmitting(false);
     }
@@ -72,15 +69,15 @@ export default function CreateNoteDialog({
         className="modal-content vault-create-dialog"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3>새 노트 만들기</h3>
+        <h3>{t("create.title")}</h3>
         <form onSubmit={handleSubmit}>
           {/* Title */}
           <div className="vault-create-field">
-            <label>제목</label>
+            <label>{t("create.titleLabel")}</label>
             <input
               type="text"
               value={title}
-              placeholder="노트 제목"
+              placeholder={t("create.titlePlaceholder")}
               autoFocus
               {...titleComposition.compositionProps}
             />
@@ -88,18 +85,18 @@ export default function CreateNoteDialog({
 
           {/* Category */}
           <div className="vault-create-field">
-            <label>분류</label>
+            <label>{t("create.categoryLabel")}</label>
             <div className="vault-create-radio-group">
-              {CATEGORY_OPTIONS.map((opt) => (
-                <label key={opt.value} className="vault-create-radio">
+              {CATEGORY_KEYS.map((key) => (
+                <label key={key} className="vault-create-radio">
                   <input
                     type="radio"
                     name="category"
-                    value={opt.value}
-                    checked={category === opt.value}
-                    onChange={() => setCategory(opt.value)}
+                    value={key}
+                    checked={category === key}
+                    onChange={() => setCategory(key)}
                   />
-                  {opt.label}
+                  {t(`category.${key}`)}
                 </label>
               ))}
             </div>
@@ -107,7 +104,7 @@ export default function CreateNoteDialog({
 
           {/* Scope */}
           <div className="vault-create-field">
-            <label>범위</label>
+            <label>{t("create.scopeLabel")}</label>
             <div className="vault-create-radio-group">
               <label className="vault-create-radio">
                 <input
@@ -117,7 +114,7 @@ export default function CreateNoteDialog({
                   checked={scope === "agent"}
                   onChange={() => setScope("agent")}
                 />
-                에이전트 전용
+                {t("create.agentOnly")}
               </label>
               <label className="vault-create-radio">
                 <input
@@ -127,29 +124,29 @@ export default function CreateNoteDialog({
                   checked={scope === "shared"}
                   onChange={() => setScope("shared")}
                 />
-                공유
+                {t("create.shared")}
               </label>
             </div>
           </div>
 
           {/* Tags */}
           <div className="vault-create-field">
-            <label>태그</label>
+            <label>{t("create.tagsLabel")}</label>
             <input
               type="text"
               value={tags}
-              placeholder="쉼표로 구분"
+              placeholder={t("create.tagsSeparator")}
               {...tagsComposition.compositionProps}
             />
           </div>
 
           {/* Content */}
           <div className="vault-create-field">
-            <label>내용</label>
+            <label>{t("create.contentLabel")}</label>
             <textarea
               rows={4}
               value={content}
-              placeholder="노트 내용"
+              placeholder={t("create.contentPlaceholder")}
               {...contentComposition.compositionProps}
             />
           </div>
@@ -163,14 +160,14 @@ export default function CreateNoteDialog({
               onClick={onClose}
               disabled={isSubmitting}
             >
-              취소
+              {t("common:cancel")}
             </button>
             <button
               type="submit"
               className="vault-btn vault-btn-primary"
               disabled={isSubmitting}
             >
-              {isSubmitting ? "생성 중…" : "만들기"}
+              {isSubmitting ? t("create.creating") : t("create.submit")}
             </button>
           </div>
         </form>

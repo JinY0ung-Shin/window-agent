@@ -1,0 +1,128 @@
+{
+  "consent": {
+    "title": "P2P Network Notice",
+    "description": "Enabling the network allows this agent to exchange messages directly with other agents. All communication is encrypted, and only peers who have exchanged invitation codes can connect. Received messages are processed only after user approval.",
+    "cancel": "Cancel",
+    "agreeAndEnable": "Agree & Enable"
+  },
+  "toggle": {
+    "label": "P2P Network",
+    "hint": "Enable P2P communication with other agents."
+  },
+  "port": {
+    "label": "Listen Port",
+    "placeholder": "Auto (random)",
+    "validationError": "Enter an integer between 1 and 65535",
+    "saved": "Saved — restart the network to apply",
+    "activePort": "Current active port: {{port}}",
+    "portMismatch": "(differs from config — restart needed)",
+    "hint": "Specify a fixed port for direct external connections. Leave empty for a random port."
+  },
+  "status": {
+    "label": "Connection Status",
+    "dormant": "Inactive",
+    "starting": "Starting...",
+    "active": "Active",
+    "stopping": "Stopping...",
+    "connectedPeers": "Connected peers: {{count}}"
+  },
+  "peerId": {
+    "label": "Peer ID",
+    "copy": "Copy",
+    "copied": "Copied"
+  },
+  "invite": {
+    "title": "Invite Code",
+    "generate": "Generate",
+    "accept": "Accept",
+    "representativeAgent": "Representative Agent",
+    "descriptionOptional": "Description (optional)",
+    "descriptionPlaceholder": "Description shown to the peer",
+    "expiry": "Expiry",
+    "hours24": "24 hours",
+    "hours48": "48 hours",
+    "week1": "1 week",
+    "noExpiry": "No expiry",
+    "addressLabel": "Connection Addresses",
+    "detectingAddresses": "Detecting addresses...",
+    "noLanAddresses": "No LAN addresses detected",
+    "publicAddressLabel": "Add Public Address",
+    "publicAddrPlaceholder": "/ip4/publicIP/tcp/{{port}}",
+    "autoConvertHint": "Plain IP will be auto-converted to Multiaddr.",
+    "removeTitle": "Remove",
+    "generateButton": "Generate",
+    "codeLabel": "Invite Code",
+    "shareHint": "Share this code with the peer.",
+    "pasteLabel": "Paste Invite Code",
+    "pastePlaceholder": "Enter invite code received from peer",
+    "unverified": "Unverified",
+    "agentPrefix": "Agent: {{name}}",
+    "addressCount": "Contains {{count}} address(es)",
+    "noAddressHint": "No addresses — local network only",
+    "bindingAgent": "Binding Agent",
+    "noSelection": "None",
+    "bindingHint": "Select a local agent to respond to this contact.",
+    "acceptButton": "Accept"
+  },
+  "delivery": {
+    "sending": "Sending...",
+    "delivered": "Delivered",
+    "failed": "Failed",
+    "retryTitle": "Retry",
+    "queued": "Queued"
+  },
+  "panel": {
+    "title": "Agent Network",
+    "inviteTitle": "Invite",
+    "inactive": "Network is inactive.",
+    "inactiveHint": "Enable P2P network in settings.",
+    "refreshTitle": "Refresh"
+  },
+  "peer": {
+    "approved": "Approved",
+    "rejected": "Rejected",
+    "selectConversation": "Select a conversation",
+    "backTitle": "Back",
+    "unknown": "Unknown",
+    "online": "● Connected",
+    "offline": "○ Offline",
+    "noMessages": "No messages yet. Start a conversation.",
+    "inputPlaceholder": "Type a message..."
+  },
+  "contact": {
+    "online": "Online",
+    "connecting": "Connecting",
+    "offline": "Offline",
+    "noContacts": "No contacts",
+    "noContactsHint": "Generate or accept invite codes to connect.",
+    "listHeader": "Contacts",
+    "modeSecretary": "Secretary",
+    "detailTitle": "Contact Details",
+    "noAddressHint": "Invite has no addresses",
+    "reconnectTitle": "Reconnect",
+    "dialing": "Dialing...",
+    "connected": "Connected",
+    "timeout": "Not connected yet",
+    "reconnect": "Reconnect",
+    "displayNameLabel": "Display Name",
+    "agentNameLabel": "Agent Name",
+    "descriptionLabel": "Description",
+    "boundAgentLabel": "Bound Agent",
+    "boundAgentHint": "Agent that responds to messages from this contact",
+    "modeLabel": "Mode",
+    "secretaryMode": "Secretary",
+    "delegateHint": "Delegate mode coming in Phase 2",
+    "deleteContact": "Delete Contact",
+    "confirmDeleteMessage": "Are you sure you want to delete?"
+  },
+  "approval": {
+    "defaultResponse": "Thank you. Acknowledged.",
+    "showOriginal": "Show Original",
+    "hideOriginal": "Hide Original",
+    "responsePlaceholder": "Enter response...",
+    "drafting": "Drafting...",
+    "requestDraft": "Request Draft",
+    "approveAndSend": "Approve & Send",
+    "reject": "Reject"
+  }
+}

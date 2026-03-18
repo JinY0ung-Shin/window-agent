@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { BookOpen, List, Share2, Plus, ExternalLink } from "lucide-react";
 import type { Agent } from "../../services/types";
 
@@ -20,17 +21,18 @@ export default function VaultHeader({
   selectedAgentId,
   onAgentChange,
 }: VaultHeaderProps) {
+  const { t } = useTranslation("vault");
   return (
     <div className="vault-header">
       <BookOpen size={20} />
-      <h2>볼트</h2>
+      <h2>{t("header.title")}</h2>
 
       <select
         className="vault-agent-select"
         value={selectedAgentId ?? ""}
         onChange={(e) => onAgentChange(e.target.value || null)}
       >
-        <option value="">전체</option>
+        <option value="">{t("header.filterAll")}</option>
         {agents.map((agent) => (
           <option key={agent.id} value={agent.id}>
             {agent.name}
@@ -44,14 +46,14 @@ export default function VaultHeader({
           onClick={() => onViewModeChange("list")}
         >
           <List size={14} />
-          목록
+          {t("header.listView")}
         </button>
         <button
           className={viewMode === "graph" ? "active" : ""}
           onClick={() => onViewModeChange("graph")}
         >
           <Share2 size={14} />
-          그래프
+          {t("header.graphView")}
         </button>
       </div>
 
@@ -59,14 +61,14 @@ export default function VaultHeader({
         <button
           className="icon-btn"
           onClick={onCreateNote}
-          title="새 노트"
+          title={t("header.newNote")}
         >
           <Plus size={18} />
         </button>
         <button
           className="icon-btn"
           onClick={onOpenObsidian}
-          title="Obsidian에서 열기"
+          title={t("header.openObsidian")}
         >
           <ExternalLink size={18} />
         </button>

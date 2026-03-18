@@ -1,0 +1,99 @@
+{
+  "title": "Memory",
+  "sectionHeader": "MEMORY NOTES",
+  "noteTitle": "Title",
+  "noteContent": "Content",
+  "noNotes": "No saved notes",
+  "addNote": "Add Note",
+  "deleteNote": "Delete Note",
+  "confirmDelete": "Delete this note?",
+  "header": {
+    "title": "Vault",
+    "filterAll": "All",
+    "listView": "List",
+    "graphView": "Graph",
+    "newNote": "New Note",
+    "openObsidian": "Open in Obsidian"
+  },
+  "search": {
+    "placeholder": "Search notes...",
+    "clearTitle": "Clear",
+    "all": "All",
+    "self": "My Notes",
+    "shared": "Shared"
+  },
+  "graph": {
+    "loading": "Loading graph...",
+    "empty": "No notes",
+    "stats": "Nodes {{nodes}} · Edges {{edges}}",
+    "shared": "Shared"
+  },
+  "category": {
+    "knowledge": "Knowledge",
+    "decision": "Decision",
+    "conversation": "Conversation",
+    "reflection": "Reflection",
+    "reflectionAlt": "Reflection"
+  },
+  "toolbar": {
+    "togglePreview": "Toggle Preview"
+  },
+  "note": {
+    "confidence": "Confidence {{percent}}%",
+    "created": "Created {{date}}",
+    "updated": "Updated {{date}}",
+    "linkNotFound": "Link target not found: {{target}}"
+  },
+  "create": {
+    "title": "Create New Note",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Note title",
+    "categoryLabel": "Category",
+    "scopeLabel": "Scope",
+    "agentOnly": "Agent only",
+    "shared": "Shared",
+    "tagsLabel": "Tags",
+    "tagsSeparator": "Comma-separated",
+    "contentLabel": "Content",
+    "contentPlaceholder": "Note content",
+    "titleRequired": "Title is required",
+    "failed": "Failed to create note",
+    "creating": "Creating…",
+    "submit": "Create"
+  },
+  "detail": {
+    "edit": "Edit",
+    "delete": "Delete",
+    "confirmDelete": "Are you sure you want to delete?",
+    "confirm": "Confirm",
+    "openObsidian": "Open in Obsidian"
+  },
+  "list": {
+    "loadFailed": "Failed to load notes",
+    "searchEmpty": "No search results",
+    "empty": "No notes"
+  },
+  "empty": {
+    "selectNote": "Select a note or",
+    "createNew": "create a new one"
+  },
+  "backlinks": {
+    "title": "Backlinks ({{count}})",
+    "none": "No other notes reference this note"
+  },
+  "editor": {
+    "titlePlaceholder": "Note title",
+    "contentPlaceholder": "Enter content…",
+    "tags": "Tags",
+    "tagsSeparator": "Comma-separated",
+    "confidence": "Confidence {{percent}}%",
+    "unsavedChanges": "You have unsaved changes",
+    "defaultText": "text"
+  },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  }
+}

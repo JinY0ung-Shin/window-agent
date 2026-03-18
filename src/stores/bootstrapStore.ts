@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import * as cmds from "../services/tauriCommands";
+import { useSettingsStore } from "./settingsStore";
 
 interface BootstrapState {
   isBootstrapping: boolean;
@@ -24,9 +25,10 @@ export const useBootstrapStore = create<BootstrapState>((set, _get) => ({
 
   startBootstrap: async () => {
     const folderName = `agent-${Date.now()}`;
+    const locale = useSettingsStore.getState().locale;
     let prompt: string;
     try {
-      prompt = await cmds.getBootstrapPrompt();
+      prompt = await cmds.getBootstrapPrompt(locale);
     } catch {
       console.error("Failed to load bootstrap prompt");
       return;

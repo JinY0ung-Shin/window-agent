@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertCircle,
   Bot,
@@ -88,6 +89,7 @@ export default function ToolRunBlock({
   steps,
   isActiveRun,
 }: ToolRunBlockProps) {
+  const { t } = useTranslation("chat");
   const toolRunState = useToolRunStore((state) => state.toolRunState);
   const approveToolCall = useToolRunStore((state) => state.approveToolCall);
   const rejectToolCall = useToolRunStore((state) => state.rejectToolCall);
@@ -125,7 +127,7 @@ export default function ToolRunBlock({
               <Wrench size={15} />
             </span>
             <span className="tool-run-summary-copy">
-              <span className="tool-run-summary-title">도구 {steps.length}개 실행</span>
+              <span className="tool-run-summary-title">{t("tool.runSummary", { count: steps.length })}</span>
               <span className="tool-run-summary-meta">{summarizeStatuses(steps)}</span>
             </span>
             <span className="tool-run-summary-chevron">
@@ -136,10 +138,10 @@ export default function ToolRunBlock({
           {hasPendingApprovals && (
             <div className="tool-call-actions tool-run-actions">
               <button type="button" className="tool-approve-btn" onClick={approveToolCall}>
-                <Check size={14} /> 승인
+                <Check size={14} /> {t("tool.approve")}
               </button>
               <button type="button" className="tool-reject-btn" onClick={rejectToolCall}>
-                <X size={14} /> 거부
+                <X size={14} /> {t("tool.reject")}
               </button>
             </div>
           )}

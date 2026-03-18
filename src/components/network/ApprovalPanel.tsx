@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, X, ChevronDown, ChevronUp, FileEdit } from "lucide-react";
 import { p2pRequestDraft } from "../../services/commands/p2pCommands";
 
@@ -19,8 +20,9 @@ export default function ApprovalPanel({
   onApprove,
   onReject,
 }: ApprovalPanelProps) {
+  const { t } = useTranslation("network");
   const [showOriginal, setShowOriginal] = useState(false);
-  const [responseText, setResponseText] = useState("감사합니다. 확인했습니다.");
+  const [responseText, setResponseText] = useState(t("approval.defaultResponse"));
   const [isDraftLoading, setIsDraftLoading] = useState(false);
 
   const handleRequestDraft = async () => {
@@ -47,7 +49,7 @@ export default function ApprovalPanel({
         onClick={() => setShowOriginal((v) => !v)}
       >
         {showOriginal ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-        {showOriginal ? "원문 접기" : "원문 보기"}
+        {showOriginal ? t("approval.hideOriginal") : t("approval.showOriginal")}
       </button>
 
       {showOriginal && (
@@ -61,7 +63,7 @@ export default function ApprovalPanel({
         value={responseText}
         onChange={(e) => setResponseText(e.target.value)}
         rows={3}
-        placeholder="응답 내용을 입력하세요..."
+        placeholder={t("approval.responsePlaceholder")}
       />
 
       <div className="approval-actions">
@@ -72,16 +74,16 @@ export default function ApprovalPanel({
             disabled={isDraftLoading}
           >
             <FileEdit size={14} />
-            {isDraftLoading ? "생성 중..." : "초안 요청"}
+            {isDraftLoading ? t("approval.drafting") : t("approval.requestDraft")}
           </button>
         )}
         <button className="approval-btn approve" onClick={() => onApprove(responseText)}>
           <Check size={14} />
-          승인 &amp; 전송
+          {t("approval.approveAndSend")}
         </button>
         <button className="approval-btn reject" onClick={onReject}>
           <X size={14} />
-          거절
+          {t("approval.reject")}
         </button>
       </div>
     </div>

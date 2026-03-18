@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Wrench, Check, X, Loader, ChevronDown, ChevronRight, AlertCircle } from "lucide-react";
 import type { ToolCall } from "../../services/types";
 import ToolResultDetail from "./ToolResultDetail";
@@ -18,6 +19,7 @@ interface ToolCallBubbleProps {
 }
 
 export default function ToolCallBubble({ toolCall, status, result, onApprove, onReject }: ToolCallBubbleProps) {
+  const { t } = useTranslation("chat");
   const [expanded, setExpanded] = useState(false);
   const canExpand = !!result && (status === "executed" || status === "error" || status === "denied");
 
@@ -63,10 +65,10 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
       {(status === "pending") && onApprove && onReject && (
         <div className="tool-call-actions">
           <button className="tool-approve-btn" onClick={onApprove}>
-            <Check size={14} /> 승인
+            <Check size={14} /> {t("tool.approve")}
           </button>
           <button className="tool-reject-btn" onClick={onReject}>
-            <X size={14} /> 거부
+            <X size={14} /> {t("tool.reject")}
           </button>
         </div>
       )}

@@ -1,17 +1,12 @@
+import { useTranslation } from "react-i18next";
 import { Bot } from "lucide-react";
+import { i18n } from "../../i18n";
 import type { VaultNote } from "../../services/vaultTypes";
 
 interface NoteMetadataBarProps {
   note: VaultNote;
   onTagClick?: (tag: string) => void;
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  knowledge: "지식",
-  conversation: "대화",
-  decision: "결정",
-  reflection: "성찰",
-};
 
 const CATEGORY_COLORS: Record<string, string> = {
   knowledge: "var(--vault-knowledge)",
@@ -22,7 +17,8 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("ko-KR", {
+    const intlLocale = i18n.language === "en" ? "en-US" : "ko-KR";
+    return new Date(iso).toLocaleDateString(intlLocale, {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -35,6 +31,7 @@ function formatDate(iso: string): string {
 }
 
 export default function NoteMetadataBar({ note, onTagClick }: NoteMetadataBarProps) {
+  const { t } = useTranslation("vault");
   const catColor = CATEGORY_COLORS[note.noteType] ?? "var(--text-muted)";
 
   return (
@@ -51,10 +48,10 @@ export default function NoteMetadataBar({ note, onTagClick }: NoteMetadataBarPro
           className="vault-category-badge-lg"
           style={{ background: catColor }}
         >
-          {CATEGORY_LABELS[note.noteType] ?? note.noteType}
+          {t(`category.${note.noteType}`, { defaultValue: note.noteType })}
         </span>
 
-        <div className="vault-confidence-bar-wrap" title={`신뢰도 ${Math.round(note.confidence * 100)}%`}>
+        <div className="vault-confidence-bar-wrap" title={t("note.confidence", { percent: Math.round(note.confidence * 100) })}>
           <span
             className="vault-confidence-bar"
             style={{ width: `${note.confidence * 100}%`, background: catColor }}
@@ -77,8 +74,8 @@ export default function NoteMetadataBar({ note, onTagClick }: NoteMetadataBarPro
       )}
 
       <div className="vault-metadata-dates">
-        <span>생성 {formatDate(note.created)}</span>
-        <span>수정 {formatDate(note.updated)}</span>
+        <span>{t("note.created", { date: formatDate(note.created) })}</span>
+        <span>{t("note.updated", { date: formatDate(note.updated) })}</span>
       </div>
     </div>
   );

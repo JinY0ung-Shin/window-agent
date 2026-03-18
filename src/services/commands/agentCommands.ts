@@ -53,16 +53,20 @@ export async function syncAgentsFromFs(): Promise<Agent[]> {
   return invoke("sync_agents_from_fs");
 }
 
-export async function seedManagerAgent(): Promise<Agent> {
-  return invoke("seed_manager_agent");
+export async function seedManagerAgent(locale: string): Promise<Agent> {
+  return invoke("seed_manager_agent", { locale });
+}
+
+export async function refreshDefaultManagerPersona(locale: string): Promise<void> {
+  return invoke("refresh_default_manager_persona", { locale });
 }
 
 export async function resizeAvatar(imageBase64: string): Promise<string> {
   return invoke("resize_avatar", { imageBase64 });
 }
 
-export async function getBootstrapPrompt(): Promise<string> {
-  return invoke("get_bootstrap_prompt");
+export async function getBootstrapPrompt(locale: string): Promise<string> {
+  return invoke("get_bootstrap_prompt", { locale });
 }
 
 // ── Export / Import ──

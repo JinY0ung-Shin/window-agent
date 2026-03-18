@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,6 +13,7 @@ interface NoteEditorProps {
 }
 
 export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) {
+  const { t } = useTranslation("vault");
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [tags, setTags] = useState(note.tags.join(", "));
@@ -37,7 +39,7 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
   }, [title, content, tags, confidence, onSave]);
 
   const handleCancel = useCallback(() => {
-    if (isDirty && !window.confirm("저장하지 않은 변경사항이 있습니다")) return;
+    if (isDirty && !window.confirm(t("editor.unsavedChanges"))) return;
     onCancel();
   }, [isDirty, onCancel]);
 
@@ -60,14 +62,15 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
     const selected = content.slice(start, end);
-    const replacement = `${before}${selected || "텍스트"}${after}`;
+    const defaultText = t("editor.defaultText");
+    const replacement = `${before}${selected || defaultText}${after}`;
     const next = content.slice(0, start) + replacement + content.slice(end);
     setContent(next);
     // restore cursor after React re-render
     requestAnimationFrame(() => {
       ta.focus();
       const cursorPos = start + before.length;
-      const selEnd = cursorPos + (selected || "텍스트").length;
+      const selEnd = cursorPos + (selected || defaultText).length;
       ta.setSelectionRange(cursorPos, selEnd);
     });
   };
@@ -97,7 +100,7 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
       <input
         className="vault-editor-title"
         value={title}
-        placeholder="노트 제목"
+        placeholder={t("editor.titlePlaceholder")}
         {...titleComposition.compositionProps}
       />
 
@@ -118,7 +121,7 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
             ref={textareaRef}
             className="vault-editor-textarea"
             value={content}
-            placeholder="내용을 입력하세요…"
+            placeholder={t("editor.contentPlaceholder")}
             {...contentComposition.compositionProps}
           />
         </div>
@@ -133,16 +136,16 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
       <div className="vault-editor-footer">
         <div className="vault-editor-meta-row">
           <label>
-            태그
+            {t("editor.tags")}
             <input
               type="text"
               value={tags}
-              placeholder="쉼표로 구분"
+              placeholder={t("editor.tagsSeparator")}
               {...tagsComposition.compositionProps}
             />
           </label>
           <label className="vault-confidence-label">
-            확신도 {Math.round(confidence * 100)}%
+            {t("editor.confidence", { percent: Math.round(confidence * 100) })}
             <input
               type="range"
               className="vault-confidence-slider"
@@ -156,10 +159,10 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
         </div>
         <div className="vault-editor-actions">
           <button className="vault-btn vault-btn-secondary" onClick={handleCancel}>
-            취소
+            {t("common:cancel")}
           </button>
           <button className="vault-btn vault-btn-primary" onClick={handleSave}>
-            저장
+            {t("common:save")}
           </button>
         </div>
       </div>

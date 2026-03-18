@@ -1,0 +1,42 @@
+{
+  "save": "저장",
+  "cancel": "취소",
+  "delete": "삭제",
+  "add": "추가",
+  "edit": "수정",
+  "close": "닫기",
+  "copy": "복사",
+  "copied": "복사됨",
+  "loading": "로딩 중...",
+  "saving": "저장 중...",
+  "saved": "저장됨",
+  "none": "(없음)",
+  "confirm": "확인",
+  "create": "생성",
+  "newConversation": "새 대화",
+  "clearChat": "대화 초기화",
+  "defaultConversationTitle": "새 대화",
+  "loadingMessage": "생각 중...",
+  "noResponse": "응답을 받지 못했습니다.",
+  "apiError": "API 호출 중 오류가 발생했습니다. API 키가 정확한지 확인해 주세요.",
+  "serverResponse": "서버 응답: {{detail}}",
+  "date": {
+    "today": "오늘",
+    "yesterday": "어제",
+    "thisWeek": "이번 주",
+    "other": "기타",
+    "monthDay": "{{month}}월 {{day}}일"
+  },
+  "errors": {
+    "http401": "API 키가 유효하지 않습니다. 설정에서 확인해 주세요.",
+    "http403": "API 접근 권한이 없습니다.",
+    "http429": "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.",
+    "http500": "서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
+    "http502": "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+    "http503": "서비스가 일시적으로 중단되었습니다.",
+    "parseError": "응답을 처리할 수 없습니다.",
+    "emptyResponse": "빈 응답을 받았습니다.",
+    "network": "네트워크 연결을 확인해 주세요.",
+    "settingsSaveFailed": "설정 저장 실패: {{error}}"
+  }
+}

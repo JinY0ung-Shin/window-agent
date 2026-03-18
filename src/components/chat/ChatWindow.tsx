@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { useMessageStore } from "../../stores/messageStore";
 import { useConversationStore } from "../../stores/conversationStore";
@@ -6,7 +7,7 @@ import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
 import { useStreamStore } from "../../stores/streamStore";
-import { useLabels, useCompanyName } from "../../hooks/useLabels";
+import { useSettingsStore } from "../../stores/settingsStore";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import AgentEditor from "../agent/AgentEditor";
@@ -26,8 +27,9 @@ export default function ChatWindow() {
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
   const openEditor = useAgentStore((s) => s.openEditor);
-  const labels = useLabels();
-  const companyName = useCompanyName();
+  const { t } = useTranslation("glossary");
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
+  const companyName = useSettingsStore((s) => s.companyName);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -152,7 +154,7 @@ export default function ChatWindow() {
           <button
             className="header-agent-btn"
             onClick={() => openEditor(currentAgent.id)}
-            title={labels.editAgent}
+            title={t("editAgent", { context: uiTheme })}
           >
             {currentAgent.avatar ? (
               <img src={currentAgent.avatar} alt="" className="header-agent-avatar" />
@@ -164,7 +166,7 @@ export default function ChatWindow() {
           <button
             className="bootstrap-cancel-btn"
             onClick={cancelBootstrap}
-            title="취소"
+            title={t("common:cancel")}
           >
             <X size={18} />
           </button>
@@ -175,8 +177,8 @@ export default function ChatWindow() {
         {showSelector ? (
           <div className="agent-selector">
             <div className="agent-selector-header">
-              <h2>{labels.appTitle(companyName)}</h2>
-              <p>{labels.chatSelectOrHire}</p>
+              <h2>{t("appTitle", { companyName, context: uiTheme })}</h2>
+              <p>{t("chatSelectOrHire", { context: uiTheme })}</p>
             </div>
           </div>
         ) : (
@@ -209,7 +211,7 @@ export default function ChatWindow() {
                   </svg>
                 </div>
                 <div className="bubble">
-                  {labels.bootstrapPrompt}
+                  {t("bootstrapPrompt", { context: uiTheme })}
                 </div>
               </div>
             )}

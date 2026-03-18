@@ -1,6 +1,7 @@
 import type { Agent, PersonaFiles } from "./types";
 import * as cmds from "./tauriCommands";
 import { useSettingsStore } from "../stores/settingsStore";
+import { i18n } from "../i18n";
 
 export const PERSONA_FILE_NAMES: Array<keyof PersonaFiles> = [
   "identity",
@@ -98,7 +99,7 @@ export function assembleManagerPrompt(
   companyName: string = "",
   enabledToolNames: string[] = [],
 ): string {
-  const effectiveCompanyName = companyName.trim() || "우리 회사";
+  const effectiveCompanyName = companyName.trim() || i18n.t("glossary:defaultCompanyName");
   let basePrompt = assembleSystemPrompt(files).replace(
     /\{\{company_name\}\}/g,
     effectiveCompanyName,
@@ -115,7 +116,7 @@ export function assembleManagerPrompt(
   }
 
   if (enabledToolNames.length > 0) {
-    basePrompt += `\n\n---\n\n[SYSTEM CONTEXT]\n사용 가능한 도구: ${enabledToolNames.join(", ")}`;
+    basePrompt += `\n\n---\n\n[SYSTEM CONTEXT]\n${i18n.t("prompts:systemContext.availableTools", { tools: enabledToolNames.join(", ") })}`;
   }
 
   return basePrompt;

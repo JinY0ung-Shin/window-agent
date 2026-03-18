@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Send, Square } from "lucide-react";
 import { useMessageStore } from "../../stores/messageStore";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
@@ -6,6 +7,7 @@ import { useStreamStore } from "../../stores/streamStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
 
 export default function ChatInput() {
+  const { t } = useTranslation("chat");
   const inputValue = useMessageStore((s) => s.inputValue);
   const setInputValue = useMessageStore((s) => s.setInputValue);
   const sendMessage = useChatFlowStore((s) => s.sendMessage);
@@ -73,12 +75,12 @@ export default function ChatInput() {
   };
 
   const placeholder = toolRunState === "tool_waiting"
-    ? "도구 승인 대기 중..."
+    ? t("input.placeholder.toolWaiting")
     : toolRunState === "tool_running"
-      ? "도구 실행 중..."
+      ? t("input.placeholder.toolRunning")
       : toolRunState === "continuing"
-        ? "도구 결과 처리 중..."
-        : "메시지를 입력하세요...";
+        ? t("input.placeholder.toolContinuing")
+        : t("input.placeholder.idle");
 
   return (
     <div className="input-area">
@@ -96,7 +98,7 @@ export default function ChatInput() {
           disabled={isToolBusy}
         />
         {isSending || isToolBusy ? (
-          <button className="send-button cancel" onClick={abortStream} title="취소">
+          <button className="send-button cancel" onClick={abortStream} title={t("input.cancelTitle")}>
             <Square size={18} />
           </button>
         ) : (

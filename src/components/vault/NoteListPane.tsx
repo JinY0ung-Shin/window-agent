@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useVaultStore } from "../../stores/vaultStore";
 import type { NoteType } from "../../services/vaultTypes";
 import NoteSearchBar from "./NoteSearchBar";
@@ -6,6 +7,7 @@ import NoteFilterBar from "./NoteFilterBar";
 import NoteListItem from "./NoteListItem";
 
 export default function NoteListPane() {
+  const { t } = useTranslation("vault");
   const {
     notes,
     notesStatus,
@@ -114,7 +116,7 @@ export default function NoteListPane() {
               <line x1="12" y1="8" x2="12" y2="12" />
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
-            <span>노트를 불러오지 못했습니다</span>
+            <span>{t("list.loadFailed")}</span>
           </div>
         ) : displayNotes.length === 0 ? (
           <div className="vault-note-list-empty">
@@ -122,7 +124,7 @@ export default function NoteListPane() {
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
               <polyline points="14 2 14 8 20 8" />
             </svg>
-            <span>{isSearching ? "검색 결과가 없습니다" : "노트가 없습니다"}</span>
+            <span>{isSearching ? t("list.searchEmpty") : t("list.empty")}</span>
           </div>
         ) : (
           displayNotes.map((note) => (

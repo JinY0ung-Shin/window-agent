@@ -19,6 +19,7 @@ import {
   type PeerThreadRow,
   type PeerMessageRow,
 } from "../services/commands/p2pCommands";
+import { i18n } from "../i18n";
 
 type NetworkStatus = "dormant" | "starting" | "active" | "stopping";
 
@@ -241,7 +242,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     }
   },
 
-  approveMessage: async (messageId, responseContent = "감사합니다. 확인했습니다.") => {
+  approveMessage: async (messageId, responseContent = i18n.t("network:approval.defaultResponse")) => {
     await p2pApproveMessage(messageId, responseContent);
     const { selectedThreadId, pendingApprovals } = get();
     if (selectedThreadId) {

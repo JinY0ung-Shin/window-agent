@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { Send, ArrowLeft } from "lucide-react";
+import { i18n } from "../../i18n";
 import { useNetworkStore } from "../../stores/networkStore";
 import type { PeerMessageRow } from "../../services/commands/p2pCommands";
 import DeliveryBadge from "./DeliveryBadge";
 import ApprovalPanel from "./ApprovalPanel";
 
-function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
+function PeerMessageBubble({ msg, t }: { msg: PeerMessageRow; t: (key: string) => string }) {
   const approveMessage = useNetworkStore((s) => s.approveMessage);
   const rejectMessage = useNetworkStore((s) => s.rejectMessage);
   const approvalSummaries = useNetworkStore((s) => s.approvalSummaries);
@@ -15,7 +17,8 @@ function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
   const time = (() => {
     try {
       const d = new Date(msg.created_at);
-      return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
+      const intlLocale = i18n.language === "en" ? "en-US" : "ko-KR";
+      return d.toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit" });
     } catch {
       return "";
     }
@@ -43,16 +46,17 @@ function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
         />
       )}
       {!isOutgoing && msg.approval_state === "approved" && (
-        <span className="peer-msg-approval approved">✓ 승인됨</span>
+        <span className="peer-msg-approval approved">✓ {t("peer.approved")}</span>
       )}
       {!isOutgoing && msg.approval_state === "rejected" && (
-        <span className="peer-msg-approval rejected">✗ 거절됨</span>
+        <span className="peer-msg-approval rejected">✗ {t("peer.rejected")}</span>
       )}
     </div>
   );
 }
 
 export default function PeerThread() {
+  const { t } = useTranslation("network");
   const messages = useNetworkStore((s) => s.messages);
   const selectedThreadId = useNetworkStore((s) => s.selectedThreadId);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
@@ -128,7 +132,7 @@ export default function PeerThread() {
   if (!selectedThreadId) {
     return (
       <div className="peer-thread-empty">
-        <p>대화를 선택하세요</p>
+        <p>{t("peer.selectConversation")}</p>
       </div>
     );
   }
@@ -139,16 +143,16 @@ export default function PeerThread() {
         <button
           className="peer-thread-back"
           onClick={() => selectThread(null)}
-          title="뒤로"
+          title={t("peer.backTitle")}
         >
           <ArrowLeft size={18} />
         </button>
         <div className="peer-thread-agent-info">
           <span className="peer-thread-agent-name">
-            {contact?.display_name || contact?.agent_name || "알 수 없음"}
+            {contact?.display_name || contact?.agent_name || t("peer.unknown")}
           </span>
           <span className={`peer-thread-status ${isOnline ? "online" : "offline"}`}>
-            {isOnline ? "● 연결됨" : "○ 오프라인"}
+            {isOnline ? t("peer.online") : t("peer.offline")}
           </span>
         </div>
       </header>
@@ -156,10 +160,10 @@ export default function PeerThread() {
       <div className="peer-thread-messages" ref={containerRef}>
         {messages.length === 0 ? (
           <div className="peer-thread-no-messages">
-            아직 메시지가 없습니다. 대화를 시작하세요.
+            {t("peer.noMessages")}
           </div>
         ) : (
-          messages.map((msg) => <PeerMessageBubble key={msg.id} msg={msg} />)
+          messages.map((msg) => <PeerMessageBubble key={msg.id} msg={msg} t={t} />)
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -169,7 +173,7 @@ export default function PeerThread() {
           <textarea
             ref={textareaRef}
             className="peer-thread-input"
-            placeholder="메시지를 입력하세요..."
+            placeholder={t("peer.inputPlaceholder")}
             value={inputValue}
             rows={1}
             onChange={(e) => setInputValue(e.target.value)}

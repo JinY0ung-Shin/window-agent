@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { X, ChevronDown, ChevronRight } from "lucide-react";
+import { i18n } from "../../i18n";
 import { useDebugStore, type HttpLogEntry } from "../../stores/debugStore";
 import { useConversationStore } from "../../stores/conversationStore";
 
@@ -18,7 +20,8 @@ function statusLabel(status: string) {
 function formatTime(iso: string) {
   try {
     const d = new Date(iso);
-    return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const intlLocale = i18n.language === "en" ? "en-US" : "ko-KR";
+    return d.toLocaleTimeString(intlLocale, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
   } catch {
     return iso;
   }
@@ -39,7 +42,7 @@ function httpStatusColor(status: number | null): string {
   return "var(--error, #ef4444)";
 }
 
-function HttpLogItem({ log }: { log: HttpLogEntry }) {
+function HttpLogItem({ log, t }: { log: HttpLogEntry; t: (key: string) => string }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -78,18 +81,18 @@ function HttpLogItem({ log }: { log: HttpLogEntry }) {
             <pre className="debug-code-block" style={{ wordBreak: "break-all" }}>{log.url}</pre>
           </div>
           <div className="debug-log-section">
-            <span className="debug-log-label">요청 헤더</span>
-            <pre className="debug-code-block">{log.request_headers || "(없음)"}</pre>
+            <span className="debug-log-label">{t("debug.requestHeaders")}</span>
+            <pre className="debug-code-block">{log.request_headers || t("common:none")}</pre>
           </div>
           {log.response_headers && (
             <div className="debug-log-section">
-              <span className="debug-log-label">응답 헤더</span>
+              <span className="debug-log-label">{t("debug.responseHeaders")}</span>
               <pre className="debug-code-block">{log.response_headers}</pre>
             </div>
           )}
           {log.response_body_preview && (
             <div className="debug-log-section">
-              <span className="debug-log-label">응답 미리보기</span>
+              <span className="debug-log-label">{t("debug.responsePreview")}</span>
               <pre className="debug-code-block">{formatJson(log.response_body_preview)}</pre>
             </div>
           )}
@@ -100,6 +103,7 @@ function HttpLogItem({ log }: { log: HttpLogEntry }) {
 }
 
 export default function DebugPanel() {
+  const { t } = useTranslation("chat");
   const isOpen = useDebugStore((s) => s.isOpen);
   const setOpen = useDebugStore((s) => s.setOpen);
   const logs = useDebugStore((s) => s.logs);
@@ -160,7 +164,7 @@ export default function DebugPanel() {
             className={`debug-tab ${activeTab === "tools" ? "active" : ""}`}
             onClick={() => setActiveTab("tools")}
           >
-            도구 로그
+            {t("debug.toolLog")}
           </button>
           <button
             className={`debug-tab ${activeTab === "http" ? "active" : ""}`}
@@ -182,7 +186,7 @@ export default function DebugPanel() {
               value={filterByTool ?? ""}
               onChange={(e) => setFilterByTool(e.target.value || null)}
             >
-              <option value="">모든 도구</option>
+              <option value="">{t("debug.allTools")}</option>
               {toolNames.map((name) => (
                 <option key={name} value={name}>{name}</option>
               ))}
@@ -208,7 +212,7 @@ export default function DebugPanel() {
 
           <div className="debug-panel-logs">
             {filteredLogs.length === 0 ? (
-              <div className="debug-empty">도구 호출 기록이 없습니다</div>
+              <div className="debug-empty">{t("debug.noToolLogs")}</div>
             ) : (
               filteredLogs.map((log) => {
                 const isExpanded = expandedId === log.id;
@@ -262,15 +266,15 @@ export default function DebugPanel() {
               onClick={clearHttpLogs}
               disabled={httpLogs.length === 0}
             >
-              로그 지우기
+              {t("debug.clearLogs")}
             </button>
           </div>
           <div className="debug-panel-logs">
             {httpLogs.length === 0 ? (
-              <div className="debug-empty">HTTP 요청 기록이 없습니다</div>
+              <div className="debug-empty">{t("debug.noHttpLogs")}</div>
             ) : (
               [...httpLogs].reverse().map((log) => (
-                <HttpLogItem key={log.id} log={log} />
+                <HttpLogItem key={log.id} log={log} t={t} />
               ))
             )}
           </div>

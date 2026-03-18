@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { vaultGetBacklinks } from "../../services/commands/vaultCommands";
 import type { LinkRef } from "../../services/vaultTypes";
@@ -9,6 +10,7 @@ interface BacklinksSectionProps {
 }
 
 export default function BacklinksSection({ noteId, onNavigate }: BacklinksSectionProps) {
+  const { t } = useTranslation("vault");
   const [backlinks, setBacklinks] = useState<LinkRef[]>([]);
   const [expanded, setExpanded] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -39,14 +41,14 @@ export default function BacklinksSection({ noteId, onNavigate }: BacklinksSectio
         onClick={() => setExpanded(!expanded)}
       >
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        <span>백링크 ({loading ? "…" : backlinks.length})</span>
+        <span>{t("backlinks.title", { count: loading ? 0 : backlinks.length })}</span>
       </button>
 
       {expanded && (
         <div className="vault-backlinks-list">
           {backlinks.length === 0 && !loading && (
             <div className="vault-backlinks-empty">
-              이 노트를 참조하는 다른 노트가 없습니다
+              {t("backlinks.none")}
             </div>
           )}
           {backlinks.map((link) => (

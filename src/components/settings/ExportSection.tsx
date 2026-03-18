@@ -1,12 +1,15 @@
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Download, Upload } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { exportAgent, importAgent } from "../../services/tauriCommands";
 import type { ImportResult } from "../../services/tauriCommands";
-import { useLabels } from "../../hooks/useLabels";
 
 export default function ExportSection() {
-  const labels = useLabels();
+  const { t } = useTranslation("glossary");
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
+  const ta = useTranslation("agent").t;
   const agents = useAgentStore((s) => s.agents);
   const loadAgents = useAgentStore((s) => s.loadAgents);
 
@@ -35,7 +38,7 @@ export default function ExportSection() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(`내보내기 실패: ${e instanceof Error ? e.message : String(e)}`);
+      setError(ta("export.exportFailed", { error: e instanceof Error ? e.message : String(e) }));
     } finally {
       setExporting(false);
     }
@@ -56,7 +59,7 @@ export default function ExportSection() {
       setResult(importResult);
       await loadAgents();
     } catch (err) {
-      setError(`불러오기 실패: ${err instanceof Error ? err.message : String(err)}`);
+      setError(ta("export.importFailed", { error: err instanceof Error ? err.message : String(err) }));
     } finally {
       setImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -66,14 +69,14 @@ export default function ExportSection() {
   return (
     <>
       <div className="form-group">
-        <label>{labels.exportAgent}</label>
+        <label>{t("exportAgent", { context: uiTheme })}</label>
         <div className="export-row">
           <select
             value={selectedAgentId}
             onChange={(e) => setSelectedAgentId(e.target.value)}
             className="export-agent-select"
           >
-            <option value="">{labels.selectAgentExport}</option>
+            <option value="">{t("selectAgentExport", { context: uiTheme })}</option>
             {agents.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -86,7 +89,7 @@ export default function ExportSection() {
               checked={includeConversations}
               onChange={(e) => setIncludeConversations(e.target.checked)}
             />
-            {labels.exportIncludeConversations}
+            {ta("export.includeConversations")}
           </label>
           <button
             className="btn-secondary export-btn"
@@ -94,13 +97,13 @@ export default function ExportSection() {
             disabled={!selectedAgentId || exporting}
           >
             <Download size={14} />
-            {exporting ? labels.exporting : labels.exportButton}
+            {exporting ? ta("export.exporting") : ta("export.exportButton")}
           </button>
         </div>
       </div>
 
       <div className="form-group">
-        <label>{labels.importAgent}</label>
+        <label>{t("importAgent", { context: uiTheme })}</label>
         <div className="export-row">
           <input
             ref={fileInputRef}
@@ -115,7 +118,7 @@ export default function ExportSection() {
             disabled={importing}
           >
             <Upload size={14} />
-            {importing ? labels.importing : labels.importButton}
+            {importing ? t("importing", { context: uiTheme }) : ta("export.importButton")}
           </button>
         </div>
       </div>
@@ -125,7 +128,12 @@ export default function ExportSection() {
       {result && (
         <div className="export-result">
           <p>
-            {labels.importResult(result.agents_imported, result.conversations_imported, result.messages_imported)}
+            {t("importResult", {
+              agents: result.agents_imported,
+              convs: result.conversations_imported,
+              msgs: result.messages_imported,
+              context: uiTheme,
+            })}
           </p>
           {result.warnings.map((w, i) => (
             <p key={i} className="export-warning">{w}</p>

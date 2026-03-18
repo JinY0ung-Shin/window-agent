@@ -2,6 +2,7 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { useConversationStore } from "../stores/conversationStore";
 import { useAgentStore } from "../stores/agentStore";
 import * as cmds from "./tauriCommands";
+import { refreshDefaultManagerPersona } from "./commands/agentCommands";
 
 export async function initializeApp(): Promise<void> {
   const loadSettings = useSettingsStore.getState().loadSettings;
@@ -23,11 +24,28 @@ export async function initializeApp(): Promise<void> {
     console.warn("loadEnvDefaults:", e);
   }
 
-  // Step 3: Seed manager agent (best-effort)
-  try {
-    await cmds.seedManagerAgent();
-  } catch (e) {
-    console.warn("seedManagerAgent:", e);
+  // Step 3: Determine if this is a fresh install or existing install.
+  // Fresh installs skip seeding here — it happens after onboarding completes.
+  const settings = useSettingsStore.getState();
+  const isFreshInstall = !settings.brandingInitialized && !([
+    "openai_base_url", "openai_model_name",
+    "thinking_enabled", "thinking_budget",
+  ].some((key) => localStorage.getItem(key) !== null));
+
+  if (!isFreshInstall) {
+    // Existing install: seed with current locale (existing agents are untouched)
+    try {
+      await cmds.seedManagerAgent(settings.locale);
+    } catch (e) {
+      console.warn("seedManagerAgent:", e);
+    }
+    // Refresh default manager persona with current locale
+    // (upgrades old defaults, switches locale on untouched files, preserves user edits)
+    try {
+      await refreshDefaultManagerPersona(settings.locale);
+    } catch (e) {
+      console.warn("refreshDefaultManagerPersona:", e);
+    }
   }
 
   // Step 4: Sync agents from FS (best-effort)
@@ -54,7 +72,6 @@ export async function initializeApp(): Promise<void> {
   // Step 7: Auto-initialize branding for upgraded users.
   // Fresh installs have 0 conversations and no localStorage settings.
   // Existing installs have conversations or any previously saved settings.
-  const settings = useSettingsStore.getState();
   if (!settings.brandingInitialized) {
     const conversations = useConversationStore.getState().conversations;
     const hasExistingSettings = [
@@ -68,4 +85,27 @@ export async function initializeApp(): Promise<void> {
 
   // Step 8: Mark app as ready (onboarding gate can now make an informed decision).
   useSettingsStore.setState({ appReady: true });
+}
+
+/**
+ * Seed the manager agent after onboarding completes (fresh install only).
+ * Called from OnboardingScreen after the user selects language, theme, and company name.
+ */
+export async function seedManagerAfterOnboarding(locale: string): Promise<void> {
+  const loadAgents = useAgentStore.getState().loadAgents;
+
+  // seedManagerAgent is critical — let it throw so the caller can show an error
+  await cmds.seedManagerAgent(locale);
+
+  try {
+    await cmds.syncAgentsFromFs();
+  } catch (e) {
+    console.warn("syncAgentsFromFs:", e);
+  }
+
+  try {
+    await loadAgents();
+  } catch (e) {
+    console.warn("loadAgents:", e);
+  }
 }

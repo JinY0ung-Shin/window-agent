@@ -1,19 +1,12 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { ToolConfig, NativeToolDef, ToolPermissionTier } from "../../services/types";
 import { getNativeTools } from "../../services/nativeToolRegistry";
-import { useLabels } from "../../hooks/useLabels";
 
 const TIER_INFO: Record<ToolPermissionTier, { label: string; color: string }> = {
   auto: { label: "Auto", color: "#22c55e" },
   confirm: { label: "Confirm", color: "#f59e0b" },
   deny: { label: "Deny", color: "#ef4444" },
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  file: "파일",
-  web: "웹",
-  memory: "메모리",
-  browser: "브라우저",
 };
 
 interface Props {
@@ -23,7 +16,7 @@ interface Props {
 }
 
 export default function NativeToolPanel({ folderName: _folderName, toolConfig, onChange }: Props) {
-  const labels = useLabels();
+  const { t } = useTranslation("agent");
   const [nativeTools, setNativeTools] = useState<NativeToolDef[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,13 +28,13 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
   }, []);
 
   if (loading) {
-    return <div className="native-tool-panel"><span className="native-tool-loading">로딩 중...</span></div>;
+    return <div className="native-tool-panel"><span className="native-tool-loading">{t("tools.loading")}</span></div>;
   }
 
   if (!toolConfig || nativeTools.length === 0) {
     return (
       <div className="native-tool-panel">
-        <div className="native-tool-empty">등록된 네이티브 도구가 없습니다</div>
+        <div className="native-tool-empty">{t("tools.noNativeTools")}</div>
       </div>
     );
   }
@@ -53,6 +46,16 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
     if (!groups.has(cat)) groups.set(cat, []);
     groups.get(cat)!.push(tool);
   }
+
+  const categoryLabel = (category: string): string => {
+    const keyMap: Record<string, string> = {
+      file: "tools.categoryFile",
+      web: "tools.categoryWeb",
+      memory: "tools.categoryMemory",
+      browser: "tools.categoryBrowser",
+    };
+    return keyMap[category] ? t(keyMap[category]) : category;
+  };
 
   const toggleTool = (toolName: string, enabled: boolean) => {
     const entry = toolConfig.native[toolName];
@@ -104,7 +107,7 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
     <div className="native-tool-panel">
       <div className="native-tool-auto-approve">
         <div className="toggle-row">
-          <label>{labels.autoApproveTools}</label>
+          <label>{t("credentials.autoApproveTools")}</label>
           <button
             className={`toggle-switch ${toolConfig.auto_approve ? "on" : ""}`}
             onClick={() => toggleAutoApprove(!toolConfig.auto_approve)}
@@ -112,7 +115,7 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
             <span className="toggle-knob" />
           </button>
         </div>
-        <p className="form-text">{labels.autoApproveToolsDesc}</p>
+        <p className="form-text">{t("credentials.autoApproveToolsDesc")}</p>
       </div>
 
       {Array.from(groups.entries()).map(([category, tools]) => {
@@ -127,7 +130,7 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
                   onChange={(e) => toggleCategory(category, e.target.checked)}
                 />
               )}
-              <span>{CATEGORY_LABELS[category] ?? category}</span>
+              <span>{categoryLabel(category)}</span>
               <span className="native-tool-group-count">{tools.length}</span>
             </div>
             {tools.map((tool) => {

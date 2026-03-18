@@ -1,0 +1,54 @@
+{
+  "title": "환경 설정",
+  "tabs": {
+    "general": "일반",
+    "thinking": "추론 (Thinking)",
+    "branding": "브랜딩",
+    "credentials": "보안 키",
+    "backup": "백업/복원",
+    "network": "네트워크"
+  },
+  "general": {
+    "apiKeyLabel": "API Key (OpenAI 또는 Custom)",
+    "apiKeyPlaceholderClearing": "저장 시 기존 API 키가 삭제됩니다",
+    "apiKeyPlaceholderStored": "••••••••(설정됨, 변경하려면 입력)",
+    "apiKeyPlaceholderProxy": "프록시 서버는 비워둬도 됩니다",
+    "apiKeyClearWarning": "저장하면 백엔드에 저장된 API 키가 삭제됩니다.",
+    "apiKeyKeepHint": "필드를 비워두면 기존 API 키가 유지됩니다.",
+    "keepKey": "키 유지",
+    "deleteStoredKey": "저장된 키 삭제",
+    "baseUrlLabel": "Base URL (선택사항, vLLM / Local AI 등)",
+    "baseUrlDefault": "{{url}} (기본값)",
+    "proxyBypass": "프록시 우회 (Squid 등 프록시가 API 요청을 차단하는 경우)",
+    "healthChecking": "체크 중...",
+    "healthCheck": "연결 확인",
+    "healthCheckHint": "/models 엔드포인트로 API 연결 상태를 확인합니다.",
+    "healthSuccess": "연결 성공",
+    "healthFailed": "연결 실패 — {{detail}}",
+    "modelLabel": "모델",
+    "modelRefreshTitle": "모델 목록 새로고침",
+    "modelFetchError": "모델 목록을 불러올 수 없습니다",
+    "modelDefault": "{{model}} (기본값)",
+    "apiKeySecurityHint": "API 키는 백엔드에서만 관리되며 브라우저에 저장되지 않습니다."
+  },
+  "thinking": {
+    "enableLabel": "Thinking 모드 사용",
+    "enableHint": "활성화하면 모델이 응답 전에 내부 추론을 수행합니다. 지원하지 않는 모델에서는 자동으로 일반 모드로 전환됩니다.",
+    "budgetLabel": "Budget Tokens",
+    "budgetHint": "모델이 추론에 사용할 수 있는 최대 토큰 수입니다. 높을수록 더 깊이 생각하지만 응답이 느려집니다."
+  },
+  "language": {
+    "label": "언어",
+    "ko": "한국어",
+    "en": "English"
+  },
+  "branding": {
+    "companyNameLabel": "회사/워크스페이스 이름",
+    "companyNamePlaceholder": "예: 우리 회사",
+    "companyNameHint": "사이드바 헤더와 환영 화면에 표시됩니다.",
+    "themeLabel": "UI 테마",
+    "themeOrg": "조직 운영",
+    "themeClassic": "클래식",
+    "themeHint": "클래식: 에이전트 중심 UI / 조직 운영: 회사·직원 메타포"
+  }
+}

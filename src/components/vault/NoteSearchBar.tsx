@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 
 interface NoteSearchBarProps {
@@ -9,11 +10,7 @@ interface NoteSearchBarProps {
   onClear: () => void;
 }
 
-const SCOPES: { key: "all" | "self" | "shared"; label: string }[] = [
-  { key: "all", label: "전체" },
-  { key: "self", label: "내 노트" },
-  { key: "shared", label: "공유" },
-];
+const SCOPE_KEYS: ("all" | "self" | "shared")[] = ["all", "self", "shared"];
 
 export default function NoteSearchBar({
   value,
@@ -22,6 +19,7 @@ export default function NoteSearchBar({
   onScopeChange,
   onClear,
 }: NoteSearchBarProps) {
+  const { t } = useTranslation("vault");
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const showScope = focused || value.length > 0;
@@ -38,14 +36,14 @@ export default function NoteSearchBar({
           ref={inputRef}
           type="text"
           className="vault-search-input"
-          placeholder="노트 검색..."
+          placeholder={t("search.placeholder")}
           value={value}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           {...compositionProps}
         />
         {value && (
-          <button className="vault-search-clear" onClick={onClear} title="지우기">
+          <button className="vault-search-clear" onClick={onClear} title={t("search.clearTitle")}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -55,14 +53,14 @@ export default function NoteSearchBar({
       </div>
       {showScope && (
         <div className="vault-scope-toggle">
-          {SCOPES.map((s) => (
+          {SCOPE_KEYS.map((key) => (
             <button
-              key={s.key}
-              className={scope === s.key ? "active" : ""}
+              key={key}
+              className={scope === key ? "active" : ""}
               onMouseDown={(e) => e.preventDefault()}
-              onClick={() => onScopeChange(s.key)}
+              onClick={() => onScopeChange(key)}
             >
-              {s.label}
+              {t(`search.${key}`)}
             </button>
           ))}
         </div>

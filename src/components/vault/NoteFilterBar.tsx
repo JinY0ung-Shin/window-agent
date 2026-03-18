@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { NoteType } from "../../services/vaultTypes";
 
 interface NoteFilterBarProps {
@@ -9,11 +10,11 @@ interface NoteFilterBarProps {
   collapsed?: boolean;
 }
 
-const CATEGORIES: { key: NoteType; label: string; cssVar: string }[] = [
-  { key: "knowledge", label: "지식", cssVar: "var(--vault-knowledge)" },
-  { key: "decision", label: "결정", cssVar: "var(--vault-decision)" },
-  { key: "conversation", label: "대화", cssVar: "var(--vault-conversation)" },
-  { key: "reflection", label: "회고", cssVar: "var(--vault-reflection)" },
+const CATEGORIES: { key: NoteType; cssVar: string }[] = [
+  { key: "knowledge", cssVar: "var(--vault-knowledge)" },
+  { key: "decision", cssVar: "var(--vault-decision)" },
+  { key: "conversation", cssVar: "var(--vault-conversation)" },
+  { key: "reflection", cssVar: "var(--vault-reflection)" },
 ];
 
 export default function NoteFilterBar({
@@ -24,6 +25,7 @@ export default function NoteFilterBar({
   onTagsChange,
   collapsed,
 }: NoteFilterBarProps) {
+  const { t } = useTranslation("vault");
   if (collapsed) return null;
 
   const toggleTag = (tag: string) => {
@@ -52,7 +54,7 @@ export default function NoteFilterBar({
               className="vault-filter-chip-dot"
               style={{ background: cat.cssVar }}
             />
-            {cat.label}
+            {t(`category.${cat.key}`)}
           </button>
         ))}
       </div>

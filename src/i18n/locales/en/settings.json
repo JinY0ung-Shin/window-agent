@@ -1,0 +1,54 @@
+{
+  "title": "Settings",
+  "tabs": {
+    "general": "General",
+    "thinking": "Thinking",
+    "branding": "Branding",
+    "credentials": "Credentials",
+    "backup": "Backup/Restore",
+    "network": "Network"
+  },
+  "general": {
+    "apiKeyLabel": "API Key (OpenAI or Custom)",
+    "apiKeyPlaceholderClearing": "Stored API key will be deleted on save",
+    "apiKeyPlaceholderStored": "••••••••(set, enter to change)",
+    "apiKeyPlaceholderProxy": "Can be empty for proxy servers",
+    "apiKeyClearWarning": "The stored API key will be deleted from the backend on save.",
+    "apiKeyKeepHint": "Leave empty to keep the existing API key.",
+    "keepKey": "Keep Key",
+    "deleteStoredKey": "Delete Stored Key",
+    "baseUrlLabel": "Base URL (optional, vLLM / Local AI, etc.)",
+    "baseUrlDefault": "{{url}} (default)",
+    "proxyBypass": "Bypass proxy (if proxies like Squid block API requests)",
+    "healthChecking": "Checking...",
+    "healthCheck": "Test Connection",
+    "healthCheckHint": "Tests API connectivity via the /models endpoint.",
+    "healthSuccess": "Connection successful",
+    "healthFailed": "Connection failed — {{detail}}",
+    "modelLabel": "Model",
+    "modelRefreshTitle": "Refresh model list",
+    "modelFetchError": "Unable to fetch model list",
+    "modelDefault": "{{model}} (default)",
+    "apiKeySecurityHint": "API keys are managed by the backend only and never stored in the browser."
+  },
+  "thinking": {
+    "enableLabel": "Enable Thinking Mode",
+    "enableHint": "When enabled, the model performs internal reasoning before responding. Unsupported models will automatically fall back to normal mode.",
+    "budgetLabel": "Budget Tokens",
+    "budgetHint": "Maximum tokens the model can use for reasoning. Higher values enable deeper thinking but slower responses."
+  },
+  "language": {
+    "label": "Language",
+    "ko": "한국어",
+    "en": "English"
+  },
+  "branding": {
+    "companyNameLabel": "Company/Workspace Name",
+    "companyNamePlaceholder": "e.g., My Company",
+    "companyNameHint": "Displayed in the sidebar header and welcome screen.",
+    "themeLabel": "UI Theme",
+    "themeOrg": "Organization",
+    "themeClassic": "Classic",
+    "themeHint": "Classic: Agent-focused UI / Organization: Company & employee metaphor"
+  }
+}

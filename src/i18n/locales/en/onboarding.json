@@ -1,0 +1,20 @@
+{
+  "languageLabel": "Choose Language",
+  "languageKo": "한국어",
+  "languageKoDesc": "한국어로 사용합니다",
+  "languageEn": "English",
+  "languageEnDesc": "Use in English",
+  "nextButton": "Next",
+  "welcomeTitle": "Welcome!",
+  "welcomeSubtitle": "Choose a name for your company",
+  "companyNameLabel": "Company or Workspace Name",
+  "companyNamePlaceholder": "e.g., AI Startup",
+  "themeLabel": "UI Theme",
+  "classicMode": "Classic Mode",
+  "classicModeDesc": "Uses traditional terms: agents, skills, etc.",
+  "orgMode": "Organization Mode",
+  "orgModeDesc": "Uses company metaphor: employees, hiring, etc.",
+  "startButton": "Get Started",
+  "seedingMessage": "Setting up...",
+  "seedingError": "Setup failed. Please try again."
+}

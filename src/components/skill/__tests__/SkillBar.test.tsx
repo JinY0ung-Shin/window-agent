@@ -59,7 +59,7 @@ describe("SkillBar", () => {
 
     expect(screen.getByText("code-review")).toBeInTheDocument();
     expect(screen.getByText("translate")).toBeInTheDocument();
-    expect(screen.getByText("~0/2000 토큰")).toBeInTheDocument();
+    expect(screen.getByText("토큰: ~0/2000")).toBeInTheDocument();
   });
 
   it("shows warning token color when >= 2000", () => {
@@ -77,7 +77,7 @@ describe("SkillBar", () => {
     render(<SkillBar agentId="a1" />);
     fireEvent.click(screen.getByText("스킬 1개 활성"));
 
-    const indicator = screen.getByText("~2100/2000 토큰");
+    const indicator = screen.getByText("토큰: ~2100/2000");
     expect(indicator.classList.contains("skill-token-warn")).toBe(true);
   });
 });

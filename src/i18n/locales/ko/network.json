@@ -1,0 +1,128 @@
+{
+  "consent": {
+    "title": "P2P 네트워크 안내",
+    "description": "네트워크를 활성화하면 이 에이전트가 다른 에이전트와 직접 메시지를 주고받을 수 있습니다. 모든 통신은 암호화되며, 초대 코드를 교환한 상대만 연결됩니다. 수신된 메시지는 사용자 승인 후에만 처리됩니다.",
+    "cancel": "취소",
+    "agreeAndEnable": "동의 및 활성화"
+  },
+  "toggle": {
+    "label": "P2P 네트워크",
+    "hint": "다른 에이전트와 P2P 통신을 활성화합니다."
+  },
+  "port": {
+    "label": "리슨 포트",
+    "placeholder": "자동 (랜덤)",
+    "validationError": "1~65535 사이의 정수를 입력하세요",
+    "saved": "저장됨 — 네트워크를 재시작해야 적용됩니다",
+    "activePort": "현재 활성 포트: {{port}}",
+    "portMismatch": "(설정과 다름 — 재시작 필요)",
+    "hint": "고정 포트를 지정하면 외부에서 직접 연결할 수 있습니다. 비워두면 랜덤 포트를 사용합니다."
+  },
+  "status": {
+    "label": "연결 상태",
+    "dormant": "비활성",
+    "starting": "시작 중...",
+    "active": "활성",
+    "stopping": "중지 중...",
+    "connectedPeers": "연결된 피어: {{count}}"
+  },
+  "peerId": {
+    "label": "Peer ID",
+    "copy": "복사",
+    "copied": "복사됨"
+  },
+  "invite": {
+    "title": "초대 코드",
+    "generate": "생성",
+    "accept": "수락",
+    "representativeAgent": "대표 에이전트",
+    "descriptionOptional": "설명 (선택)",
+    "descriptionPlaceholder": "상대방에게 보여줄 설명",
+    "expiry": "유효 기간",
+    "hours24": "24시간",
+    "hours48": "48시간",
+    "week1": "1주일",
+    "noExpiry": "만료 없음",
+    "addressLabel": "연결 주소",
+    "detectingAddresses": "주소 감지 중...",
+    "noLanAddresses": "감지된 LAN 주소 없음",
+    "publicAddressLabel": "공인 주소 추가",
+    "publicAddrPlaceholder": "/ip4/공인IP/tcp/{{port}}",
+    "autoConvertHint": "IP만 입력하면 자동으로 Multiaddr로 변환됩니다.",
+    "removeTitle": "제거",
+    "generateButton": "생성",
+    "codeLabel": "초대 코드",
+    "shareHint": "이 코드를 상대방에게 전달하세요.",
+    "pasteLabel": "초대 코드 붙여넣기",
+    "pastePlaceholder": "상대방에게서 받은 초대 코드를 입력하세요",
+    "unverified": "미검증",
+    "agentPrefix": "에이전트: {{name}}",
+    "addressCount": "연결 주소 {{count}}개 포함",
+    "noAddressHint": "주소 없음 — 같은 네트워크에서만 연결 가능",
+    "bindingAgent": "바인딩할 에이전트",
+    "noSelection": "선택 안 함",
+    "bindingHint": "이 연락처에 응답할 로컬 에이전트를 선택합니다.",
+    "acceptButton": "수락"
+  },
+  "delivery": {
+    "sending": "전송 중...",
+    "delivered": "전달됨",
+    "failed": "실패",
+    "retryTitle": "재시도",
+    "queued": "대기 중"
+  },
+  "panel": {
+    "title": "에이전트 네트워크",
+    "inviteTitle": "초대",
+    "inactive": "네트워크가 비활성 상태입니다.",
+    "inactiveHint": "설정에서 P2P 네트워크를 활성화하세요.",
+    "refreshTitle": "새로고침"
+  },
+  "peer": {
+    "approved": "승인됨",
+    "rejected": "거절됨",
+    "selectConversation": "대화를 선택하세요",
+    "backTitle": "뒤로",
+    "unknown": "알 수 없음",
+    "online": "● 연결됨",
+    "offline": "○ 오프라인",
+    "noMessages": "아직 메시지가 없습니다. 대화를 시작하세요.",
+    "inputPlaceholder": "메시지를 입력하세요..."
+  },
+  "contact": {
+    "online": "온라인",
+    "connecting": "연결 중",
+    "offline": "오프라인",
+    "noContacts": "연락처가 없습니다",
+    "noContactsHint": "초대 코드를 생성하거나 받아서 연결하세요.",
+    "listHeader": "연락처",
+    "modeSecretary": "비서",
+    "detailTitle": "연락처 상세",
+    "noAddressHint": "초대에 주소가 포함되지 않았습니다",
+    "reconnectTitle": "재연결 시도",
+    "dialing": "연결 시도 중...",
+    "connected": "연결됨",
+    "timeout": "아직 연결되지 않았습니다",
+    "reconnect": "재연결",
+    "displayNameLabel": "표시 이름",
+    "agentNameLabel": "에이전트 이름",
+    "descriptionLabel": "설명",
+    "boundAgentLabel": "바인딩된 에이전트",
+    "boundAgentHint": "이 연락처의 메시지에 응답할 에이전트",
+    "modeLabel": "모드",
+    "secretaryMode": "비서 (Secretary)",
+    "delegateHint": "대리인 모드는 Phase 2에서 지원 예정",
+    "deleteContact": "연락처 삭제",
+    "confirmDeleteMessage": "정말 삭제하시겠습니까?"
+  },
+  "approval": {
+    "defaultResponse": "감사합니다. 확인했습니다.",
+    "showOriginal": "원문 보기",
+    "hideOriginal": "원문 접기",
+    "responsePlaceholder": "응답 내용을 입력하세요...",
+    "drafting": "생성 중...",
+    "requestDraft": "초안 요청",
+    "approveAndSend": "승인 & 전송",
+    "reject": "거절"
+  }
+}

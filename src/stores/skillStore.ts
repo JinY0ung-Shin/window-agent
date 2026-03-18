@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { SkillMetadata } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { estimateTokens } from "../services/tokenEstimator";
+import { i18n } from "../i18n";
 
 export const SKILL_TOKEN_HARD_CAP = 3000;
 
@@ -28,7 +29,7 @@ interface SkillState {
 function buildCatalogPrompt(skills: SkillMetadata[]): string {
   if (skills.length === 0) return "";
   const lines = skills.map((s) => `- ${s.name}: ${s.description}`);
-  return `[AVAILABLE SKILLS]\n${lines.join("\n")}\n(사용자가 활성화하면 상세 지침이 제공됩니다)`;
+  return `[AVAILABLE SKILLS]\n${lines.join("\n")}\n${i18n.t("agent:skills.availableSkillsHint")}`;
 }
 
 export const useSkillStore = create<SkillState>((set, get) => ({

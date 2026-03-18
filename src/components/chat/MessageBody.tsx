@@ -1,4 +1,5 @@
 import { useState, type AnchorHTMLAttributes } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -11,6 +12,7 @@ interface MessageBodyProps {
 }
 
 export default function MessageBody({ content, reasoningContent }: MessageBodyProps) {
+  const { t } = useTranslation("chat");
   const [showReasoning, setShowReasoning] = useState(false);
 
   return (
@@ -18,7 +20,7 @@ export default function MessageBody({ content, reasoningContent }: MessageBodyPr
       {reasoningContent && (
         <div className="reasoning-toggle" onClick={() => setShowReasoning(!showReasoning)}>
           {showReasoning ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          <span>추론 과정</span>
+          <span>{t("thinking.label")}</span>
         </div>
       )}
       {showReasoning && reasoningContent && (

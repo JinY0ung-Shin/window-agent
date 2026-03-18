@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "auto_approve": false,
+  "native": {
+    "read_file": { "enabled": true, "tier": "auto" },
+    "write_file": { "enabled": true, "tier": "confirm" },
+    "list_directory": { "enabled": true, "tier": "auto" },
+    "delete_file": { "enabled": true, "tier": "confirm" },
+    "web_search": { "enabled": true, "tier": "confirm" },
+    "memory_note": { "enabled": true, "tier": "auto" },
+    "browser_navigate": { "enabled": true, "tier": "confirm" },
+    "browser_snapshot": { "enabled": true, "tier": "auto" },
+    "browser_click": { "enabled": true, "tier": "confirm" },
+    "browser_type": { "enabled": true, "tier": "confirm" },
+    "browser_wait": { "enabled": true, "tier": "auto" },
+    "browser_back": { "enabled": true, "tier": "confirm" },
+    "browser_close": { "enabled": true, "tier": "confirm" },
+    "http_request": { "enabled": true, "tier": "confirm" }
+  },
+  "credentials": {}
+}

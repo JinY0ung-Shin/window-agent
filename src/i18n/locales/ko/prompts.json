@@ -1,0 +1,17 @@
+{
+  "defaultSystemPrompt": "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner. Respond in the same language as the user's prompt (usually Korean).",
+  "summaryGeneration": "대화 요약기입니다. 이전 요약과 새 메시지를 통합하여 간결한 요약을 생성하세요. 핵심 사실, 결정 사항, 사용자 선호만 포함. 200자 이내. 한국어로 작성하세요.",
+  "workspace": {
+    "header": "[WORKSPACE]",
+    "body": "당신의 개인 작업 공간: {{path}}\n이 디렉토리에서 read_file, write_file, delete_file, list_directory 도구로 자유롭게 파일을 관리할 수 있습니다.\n파일은 대화 간에 유지됩니다. 하위 디렉토리로 자유롭게 정리하세요.\n구조화된 메모리(태그, 그래프 연결)가 필요하면 memory_note 도구를 사용하세요."
+  },
+  "summary": {
+    "previousSummary": "[이전 대화 요약]",
+    "recentConversation": "[최근 대화는 아래에 이어집니다]",
+    "inputPreviousSummary": "이전 요약:",
+    "inputNewMessages": "새 메시지:"
+  },
+  "systemContext": {
+    "availableTools": "사용 가능한 도구: {{tools}}"
+  }
+}

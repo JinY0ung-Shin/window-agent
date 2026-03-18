@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Bot, User, Wrench, Copy, Check, RefreshCw } from "lucide-react";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 import { useMessageStore } from "../../stores/messageStore";
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function ChatMessage({ message }: Props) {
+  const { t } = useTranslation("chat");
   const isPending = message.status === "pending";
   const [copied, setCopied] = useState(false);
   const copyMessage = useMessageStore((s) => s.copyMessage);
@@ -102,10 +104,10 @@ export default function ChatMessage({ message }: Props) {
             )}
             {message.type === "agent" && message.status === "complete" && !hasToolCalls && (
               <div className="message-actions">
-                <button className="action-btn" onClick={handleCopy} title="복사">
+                <button className="action-btn" onClick={handleCopy} title={t("message.copyTitle")}>
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                 </button>
-                <button className="action-btn" onClick={() => regenerateMessage(message.id)} title="재생성">
+                <button className="action-btn" onClick={() => regenerateMessage(message.id)} title={t("message.regenerateTitle")}>
                   <RefreshCw size={14} />
                 </button>
               </div>

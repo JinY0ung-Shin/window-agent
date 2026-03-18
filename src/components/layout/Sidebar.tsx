@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { BookOpen, Bot, Check, Eraser, Network, Plus, Settings, Users, X } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
@@ -6,7 +7,6 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useNavigationStore } from "../../stores/navigationStore";
 import { resetChatContext } from "../../stores/resetHelper";
-import { useLabels, useCompanyName } from "../../hooks/useLabels";
 import { useDragRegion } from "../../hooks/useDragRegion";
 
 export default function Sidebar() {
@@ -21,8 +21,9 @@ export default function Sidebar() {
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
   const { mainView, toggleView, setMainView } = useNavigationStore();
-  const labels = useLabels();
-  const companyName = useCompanyName();
+  const { t } = useTranslation("glossary");
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
+  const companyName = useSettingsStore((s) => s.companyName);
   const onDrag = useDragRegion();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -94,7 +95,7 @@ export default function Sidebar() {
         <div className="logo-icon">
           <Bot size={24} />
         </div>
-        <h1>{labels.appTitle(companyName)}</h1>
+        <h1>{t("appTitle", { companyName, context: uiTheme })}</h1>
       </div>
 
       <div className="sidebar-content">
@@ -103,7 +104,7 @@ export default function Sidebar() {
           onClick={() => { setMainView("chat"); handleNewAgent(); }}
         >
           <Plus size={20} />
-          <span>{labels.sidebarNewButton}</span>
+          <span>{t("sidebarNewButton", { context: uiTheme })}</span>
         </div>
 
         <div className="conversation-list">
@@ -137,7 +138,7 @@ export default function Sidebar() {
                         clearAgentChat(agent.id);
                         setConfirmDeleteId(null);
                       }}
-                      title={labels.clearChat}
+                      title={t("common:clearChat")}
                     >
                       <Check size={14} />
                     </button>
@@ -155,7 +156,7 @@ export default function Sidebar() {
                       e.stopPropagation();
                       setConfirmDeleteId(agent.id);
                     }}
-                    title={labels.clearChat}
+                    title={t("common:clearChat")}
                   >
                     <Eraser size={14} />
                   </button>
@@ -170,28 +171,28 @@ export default function Sidebar() {
           onClick={() => { setMainView("chat"); handleOpenAgentEditor(); }}
         >
           <Users size={20} />
-          <span>{labels.editAgent}</span>
+          <span>{t("editAgent", { context: uiTheme })}</span>
         </div>
         <div
           className={`menu-item ${mainView === "network" ? "active" : ""}`}
           onClick={() => toggleView("network")}
         >
           <Network size={20} />
-          <span>네트워크</span>
+          <span>{t("settings:tabs.network")}</span>
         </div>
         <div
           className={`menu-item ${mainView === "vault" ? "active" : ""}`}
           onClick={() => toggleView("vault")}
         >
           <BookOpen size={20} />
-          <span>볼트</span>
+          <span>{t("vault:title")}</span>
         </div>
         <div
           className="menu-item settings-btn"
           onClick={() => setIsSettingsOpen(true)}
         >
           <Settings size={20} />
-          <span>설정</span>
+          <span>{t("settings:title")}</span>
         </div>
       </div>
     </aside>

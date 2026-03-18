@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { Settings, X, RefreshCw, Wifi } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -7,13 +8,17 @@ import { checkApiHealth, listModels, type ApiHealthCheckResponse } from "../../s
 import { getNoProxy, setNoProxy } from "../../services/commands/apiCommands";
 import { p2pGetListenPort, p2pSetListenPort, p2pGetConnectionInfo } from "../../services/commands/p2pCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL, DEFAULT_THINKING_BUDGET } from "../../constants";
-import type { UITheme } from "../../labels";
+import type { UITheme } from "../../stores/settingsStore";
+import type { Locale } from "../../i18n";
+import { SUPPORTED_LOCALES } from "../../i18n";
 import ExportSection from "./ExportSection";
 import CredentialManager from "./CredentialManager";
 
 type Tab = "general" | "thinking" | "branding" | "credentials" | "backup" | "network";
 
 export default function SettingsModal() {
+  const { t } = useTranslation("settings");
+  const tn = useTranslation("network").t;
   const store = useSettingsStore();
   const { isSettingsOpen, setIsSettingsOpen, saveSettings, settingsError } = store;
 
@@ -55,7 +60,7 @@ export default function SettingsModal() {
       const result = await listModels();
       setModels(result);
     } catch (e) {
-      setModelsError("모델 목록을 불러올 수 없습니다");
+      setModelsError(t("general.modelFetchError"));
       setModels([]);
     } finally {
       setModelsLoading(false);
@@ -66,12 +71,12 @@ export default function SettingsModal() {
     if (isSettingsOpen) {
       setTempApiKey("");
       setClearStoredApiKey(false);
-      setTempBaseUrl(store.baseUrl);
-      setTempModelName(store.modelName);
-      setTempThinkingEnabled(store.thinkingEnabled);
-      setTempThinkingBudget(store.thinkingBudget);
-      setTempCompanyName(store.companyName);
-      setTempUITheme(store.uiTheme);
+      setTempBaseUrl(store.baseUrl || "");
+      setTempModelName(store.modelName || "");
+      setTempThinkingEnabled(store.thinkingEnabled ?? true);
+      setTempThinkingBudget(store.thinkingBudget || DEFAULT_THINKING_BUDGET);
+      setTempCompanyName(store.companyName || "");
+      setTempUITheme(store.uiTheme || "org");
       setHealthResult(null);
       setHealthError("");
       setTab("general");
@@ -130,7 +135,7 @@ export default function SettingsModal() {
         <div className="modal-header">
           <h2>
             <Settings size={24} color="#6366f1" />
-            환경 설정
+            {t("title")}
           </h2>
           <button className="close-button" onClick={() => setIsSettingsOpen(false)}>
             <X size={20} />
@@ -142,38 +147,38 @@ export default function SettingsModal() {
             className={`settings-tab ${tab === "general" ? "active" : ""}`}
             onClick={() => setTab("general")}
           >
-            일반
+            {t("tabs.general")}
           </button>
           <button
             className={`settings-tab ${tab === "thinking" ? "active" : ""}`}
             onClick={() => setTab("thinking")}
           >
-            추론 (Thinking)
+            {t("tabs.thinking")}
           </button>
           <button
             className={`settings-tab ${tab === "branding" ? "active" : ""}`}
             onClick={() => setTab("branding")}
           >
-            브랜딩
+            {t("tabs.branding")}
           </button>
           <button
             className={`settings-tab ${tab === "credentials" ? "active" : ""}`}
             onClick={() => setTab("credentials")}
           >
-            보안 키
+            {t("tabs.credentials")}
           </button>
           <button
             className={`settings-tab ${tab === "backup" ? "active" : ""}`}
             onClick={() => setTab("backup")}
           >
-            백업/복원
+            {t("tabs.backup")}
           </button>
           <button
             className={`settings-tab ${tab === "network" ? "active" : ""}`}
             onClick={() => setTab("network")}
           >
             <Wifi size={14} />
-            네트워크
+            {t("tabs.network")}
           </button>
         </div>
 
@@ -181,17 +186,32 @@ export default function SettingsModal() {
           {tab === "general" && (
             <>
               <div className="form-group">
-                <label htmlFor="apiKey">API Key (OpenAI 또는 Custom)</label>
+                <label>{t("language.label")}</label>
+                <div className="locale-selector">
+                  {SUPPORTED_LOCALES.map((loc) => (
+                    <button
+                      key={loc}
+                      className={`locale-option ${store.locale === loc ? "selected" : ""}`}
+                      onClick={() => store.setLocale(loc as Locale)}
+                    >
+                      {t(`language.${loc}`)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="apiKey">{t("general.apiKeyLabel")}</label>
                 <input
                   id="apiKey"
                   type="password"
                   placeholder={
                     clearStoredApiKey
-                      ? "저장 시 기존 API 키가 삭제됩니다"
+                      ? t("general.apiKeyPlaceholderClearing")
                       : store.hasStoredKey
-                        ? "••••••••(설정됨, 변경하려면 입력)"
+                        ? t("general.apiKeyPlaceholderStored")
                         : tempBaseUrl && tempBaseUrl !== DEFAULT_BASE_URL
-                          ? "프록시 서버는 비워둬도 됩니다"
+                          ? t("general.apiKeyPlaceholderProxy")
                           : "sk-..."
                   }
                   value={tempApiKey}
@@ -208,8 +228,8 @@ export default function SettingsModal() {
                   <div className="settings-inline-action-row">
                     <p className="form-text">
                       {clearStoredApiKey
-                        ? "저장하면 백엔드에 저장된 API 키가 삭제됩니다."
-                        : "필드를 비워두면 기존 API 키가 유지됩니다."}
+                        ? t("general.apiKeyClearWarning")
+                        : t("general.apiKeyKeepHint")}
                     </p>
                     <button
                       type="button"
@@ -221,18 +241,18 @@ export default function SettingsModal() {
                         setHealthError("");
                       }}
                     >
-                      {clearStoredApiKey ? "키 유지" : "저장된 키 삭제"}
+                      {clearStoredApiKey ? t("general.keepKey") : t("general.deleteStoredKey")}
                     </button>
                   </div>
                 )}
               </div>
 
               <div className="form-group">
-                <label htmlFor="baseUrl">Base URL (선택사항, vLLM / Local AI 등)</label>
+                <label htmlFor="baseUrl">{t("general.baseUrlLabel")}</label>
                 <input
                   id="baseUrl"
                   type="text"
-                  placeholder={`${DEFAULT_BASE_URL} (기본값)`}
+                  placeholder={t("general.baseUrlDefault", { url: DEFAULT_BASE_URL })}
                   value={tempBaseUrl}
                   onChange={(e) => {
                     setTempBaseUrl(e.target.value);
@@ -253,7 +273,7 @@ export default function SettingsModal() {
                         } catch { /* ignore */ }
                       }}
                     />
-                    프록시 우회 (Squid 등 프록시가 API 요청을 차단하는 경우)
+                    {t("general.proxyBypass")}
                   </label>
                 </div>
                 <div className="settings-health-row">
@@ -263,31 +283,31 @@ export default function SettingsModal() {
                     onClick={handleHealthCheck}
                     disabled={healthLoading}
                   >
-                    {healthLoading ? "체크 중..." : "연결 확인"}
+                    {healthLoading ? t("general.healthChecking") : t("general.healthCheck")}
                   </button>
                   <p className="form-text">
-                    /models 엔드포인트로 API 연결 상태를 확인합니다.
+                    {t("general.healthCheckHint")}
                   </p>
                 </div>
                 {healthResult && (
                   <p className={`form-text ${healthResult.ok ? "text-success" : "text-error"}`}>
-                    {healthResult.ok ? "연결 성공" : `연결 실패 — ${healthResult.detail}`}
+                    {healthResult.ok ? t("general.healthSuccess") : t("general.healthFailed", { detail: healthResult.detail })}
                   </p>
                 )}
                 {healthError && (
-                  <p className="form-text text-error">연결 실패 — {healthError}</p>
+                  <p className="form-text text-error">{t("general.healthFailed", { detail: healthError })}</p>
                 )}
               </div>
 
               <div className="form-group">
                 <label htmlFor="modelName">
-                  모델
+                  {t("general.modelLabel")}
                   <button
                     type="button"
                     className="model-refresh-btn"
                     onClick={fetchModels}
                     disabled={modelsLoading}
-                    title="모델 목록 새로고침"
+                    title={t("general.modelRefreshTitle")}
                   >
                     <RefreshCw size={14} className={modelsLoading ? "spinning" : ""} />
                   </button>
@@ -309,13 +329,13 @@ export default function SettingsModal() {
                   <input
                     id="modelName"
                     type="text"
-                    placeholder={modelsError || `${DEFAULT_MODEL} (기본값)`}
+                    placeholder={modelsError || t("general.modelDefault", { model: DEFAULT_MODEL })}
                     value={tempModelName}
                     onChange={(e) => setTempModelName(e.target.value)}
                   />
                 )}
                 <p className="form-text">
-                  API 키는 백엔드에서만 관리되며 브라우저에 저장되지 않습니다.
+                  {t("general.apiKeySecurityHint")}
                 </p>
               </div>
             </>
@@ -325,7 +345,7 @@ export default function SettingsModal() {
             <>
               <div className="form-group">
                 <div className="toggle-row">
-                  <label htmlFor="thinkingEnabled">Thinking 모드 사용</label>
+                  <label htmlFor="thinkingEnabled">{t("thinking.enableLabel")}</label>
                   <button
                     id="thinkingEnabled"
                     className={`toggle-switch ${tempThinkingEnabled ? "on" : ""}`}
@@ -335,12 +355,12 @@ export default function SettingsModal() {
                   </button>
                 </div>
                 <p className="form-text">
-                  활성화하면 모델이 응답 전에 내부 추론을 수행합니다. 지원하지 않는 모델에서는 자동으로 일반 모드로 전환됩니다.
+                  {t("thinking.enableHint")}
                 </p>
               </div>
 
               <div className="form-group">
-                <label htmlFor="thinkingBudget">Budget Tokens</label>
+                <label htmlFor="thinkingBudget">{t("thinking.budgetLabel")}</label>
                 <input
                   id="thinkingBudget"
                   type="number"
@@ -362,7 +382,7 @@ export default function SettingsModal() {
                   className="budget-slider"
                 />
                 <p className="form-text">
-                  모델이 추론에 사용할 수 있는 최대 토큰 수입니다. 높을수록 더 깊이 생각하지만 응답이 느려집니다.
+                  {t("thinking.budgetHint")}
                 </p>
               </div>
             </>
@@ -371,23 +391,23 @@ export default function SettingsModal() {
           {tab === "branding" && (
             <>
               <div className="form-group">
-                <label htmlFor="companyName">회사/워크스페이스 이름</label>
+                <label htmlFor="companyName">{t("branding.companyNameLabel")}</label>
                 <input
                   id="companyName"
                   type="text"
-                  placeholder="예: 우리 회사"
+                  placeholder={t("branding.companyNamePlaceholder")}
                   value={tempCompanyName}
                   {...companyNameComposition.compositionProps}
                 />
                 <p className="form-text">
-                  사이드바 헤더와 환영 화면에 표시됩니다.
+                  {t("branding.companyNameHint")}
                 </p>
               </div>
 
               <div className="form-group">
-                <label>UI 테마</label>
+                <label>{t("branding.themeLabel")}</label>
                 <div className="toggle-row">
-                  <span>{tempUITheme === "org" ? "조직 운영" : "클래식"}</span>
+                  <span>{tempUITheme === "org" ? t("branding.themeOrg") : t("branding.themeClassic")}</span>
                   <button
                     className={`toggle-switch ${tempUITheme === "org" ? "on" : ""}`}
                     onClick={() => setTempUITheme(tempUITheme === "org" ? "classic" : "org")}
@@ -396,7 +416,7 @@ export default function SettingsModal() {
                   </button>
                 </div>
                 <p className="form-text">
-                  클래식: 에이전트 중심 UI / 조직 운영: 회사·직원 메타포
+                  {t("branding.themeHint")}
                 </p>
               </div>
             </>
@@ -411,18 +431,16 @@ export default function SettingsModal() {
               {/* First-time consent */}
               {showConsent && (
                 <div className="network-consent">
-                  <p><strong>P2P 네트워크 안내</strong></p>
+                  <p><strong>{tn("consent.title")}</strong></p>
                   <p>
-                    네트워크를 활성화하면 이 에이전트가 다른 에이전트와 직접 메시지를 주고받을 수 있습니다.
-                    모든 통신은 암호화되며, 초대 코드를 교환한 상대만 연결됩니다.
-                    수신된 메시지는 사용자 승인 후에만 처리됩니다.
+                    {tn("consent.description")}
                   </p>
                   <div className="network-consent-actions">
                     <button
                       className="btn-secondary"
                       onClick={() => setShowConsent(false)}
                     >
-                      취소
+                      {tn("consent.cancel")}
                     </button>
                     <button
                       className="btn-primary"
@@ -437,7 +455,7 @@ export default function SettingsModal() {
                         }
                       }}
                     >
-                      동의 및 활성화
+                      {tn("consent.agreeAndEnable")}
                     </button>
                   </div>
                 </div>
@@ -445,7 +463,7 @@ export default function SettingsModal() {
 
               <div className="form-group">
                 <div className="toggle-row">
-                  <label>P2P 네트워크</label>
+                  <label>{tn("toggle.label")}</label>
                   <button
                     className={`toggle-switch ${network.networkEnabled ? "on" : ""}`}
                     disabled={networkToggleLoading}
@@ -473,19 +491,19 @@ export default function SettingsModal() {
                   </button>
                 </div>
                 <p className="form-text">
-                  다른 에이전트와 P2P 통신을 활성화합니다.
+                  {tn("toggle.hint")}
                 </p>
               </div>
 
               <div className="form-group">
-                <label htmlFor="listenPort">리슨 포트</label>
+                <label htmlFor="listenPort">{tn("port.label")}</label>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <input
                     id="listenPort"
                     type="number"
                     min={1}
                     max={65535}
-                    placeholder="자동 (랜덤)"
+                    placeholder={tn("port.placeholder")}
                     value={tempPort}
                     onChange={(e) => {
                       setTempPort(e.target.value);
@@ -502,7 +520,7 @@ export default function SettingsModal() {
                       const val = tempPort.trim();
                       const portNum = val === "" ? null : Number(val);
                       if (portNum != null && (isNaN(portNum) || portNum < 1 || portNum > 65535 || !Number.isInteger(portNum))) {
-                        setPortError("1~65535 사이의 정수를 입력하세요");
+                        setPortError(tn("port.validationError"));
                         return;
                       }
                       setPortSaving(true);
@@ -517,12 +535,12 @@ export default function SettingsModal() {
                       }
                     }}
                   >
-                    {portSaving ? "저장 중..." : "저장"}
+                    {portSaving ? t("common:saving") : t("common:save")}
                   </button>
                 </div>
                 {portSaved && (
                   <p className="form-text text-success">
-                    저장됨 — 네트워크를 재시작해야 적용됩니다
+                    {tn("port.saved")}
                   </p>
                 )}
                 {portError && (
@@ -530,28 +548,28 @@ export default function SettingsModal() {
                 )}
                 {network.status === "active" && activePort != null && (
                   <p className="form-text">
-                    현재 활성 포트: <strong>{activePort}</strong>
-                    {configuredPort != null && activePort !== configuredPort && " (설정과 다름 — 재시작 필요)"}
+                    {tn("port.activePort", { port: activePort })}
+                    {configuredPort != null && activePort !== configuredPort && ` ${tn("port.portMismatch")}`}
                   </p>
                 )}
                 <p className="form-text">
-                  고정 포트를 지정하면 외부에서 직접 연결할 수 있습니다. 비워두면 랜덤 포트를 사용합니다.
+                  {tn("port.hint")}
                 </p>
               </div>
 
               <div className="form-group">
-                <label>연결 상태</label>
+                <label>{tn("status.label")}</label>
                 <div className="network-status-row">
                   <span className={`network-status-dot network-status-${network.status}`} />
                   <span>
-                    {network.status === "dormant" && "비활성"}
-                    {network.status === "starting" && "시작 중..."}
-                    {network.status === "active" && "활성"}
-                    {network.status === "stopping" && "중지 중..."}
+                    {network.status === "dormant" && tn("status.dormant")}
+                    {network.status === "starting" && tn("status.starting")}
+                    {network.status === "active" && tn("status.active")}
+                    {network.status === "stopping" && tn("status.stopping")}
                   </span>
                   {network.networkEnabled && (
                     <span className="network-peer-count">
-                      연결된 피어: {network.contacts.filter((c) => c.status === "connected").length}
+                      {tn("status.connectedPeers", { count: network.contacts.filter((c) => c.status === "connected").length })}
                     </span>
                   )}
                 </div>
@@ -559,7 +577,7 @@ export default function SettingsModal() {
 
               {network.peerId && (
                 <div className="form-group">
-                  <label>Peer ID</label>
+                  <label>{tn("peerId.label")}</label>
                   <div className="peer-id-display">
                     <code>{network.peerId}</code>
                     <button
@@ -570,7 +588,7 @@ export default function SettingsModal() {
                         setTimeout(() => setPeerIdCopied(false), 2000);
                       }}
                     >
-                      {peerIdCopied ? "복사됨" : "복사"}
+                      {peerIdCopied ? tn("peerId.copied") : tn("peerId.copy")}
                     </button>
                   </div>
                 </div>
@@ -589,10 +607,10 @@ export default function SettingsModal() {
 
         <div className="modal-footer">
           <button className="btn-secondary" onClick={() => setIsSettingsOpen(false)}>
-            취소
+            {t("common:cancel")}
           </button>
           <button className="btn-primary" onClick={handleSave}>
-            저장
+            {t("common:save")}
           </button>
         </div>
       </div>

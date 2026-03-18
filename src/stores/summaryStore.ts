@@ -5,10 +5,8 @@ import { buildChatMessages } from "../services/chatHelpers";
 import { estimateTokens, estimateMessageTokens } from "../services/tokenEstimator";
 import type { ChatMessage } from "../services/types";
 import { useConversationStore } from "./conversationStore";
-import {
-  MAX_CONTEXT_TOKENS,
-  SUMMARY_GENERATION_PROMPT,
-} from "../constants";
+import { MAX_CONTEXT_TOKENS } from "../constants";
+import { i18n } from "../i18n";
 
 interface SummaryState {
   currentSummary: string | null;
@@ -52,7 +50,7 @@ export const useSummaryStore = create<SummaryState>((set, get) => ({
     const { currentSummary, summaryUpToMessageId } = get();
 
     const systemTokens = estimateTokens(currentSummary
-      ? `${baseSystemPrompt}\n\n[이전 대화 요약]\n${currentSummary}\n\n[최근 대화는 아래에 이어집니다]`
+      ? `${baseSystemPrompt}\n\n${i18n.t("prompts:summary.previousSummary")}\n${currentSummary}\n\n${i18n.t("prompts:summary.recentConversation")}`
       : baseSystemPrompt);
     const budget = MAX_CONTEXT_TOKENS - systemTokens;
     if (totalTokens < budget * 0.8) return;
@@ -87,8 +85,8 @@ export const useSummaryStore = create<SummaryState>((set, get) => ({
         const settings = useSettingsStore.getState();
         const resp = await cmds.chatCompletion({
           messages: [
-            { role: "system", content: SUMMARY_GENERATION_PROMPT },
-            { role: "user", content: `이전 요약:\n${existingSummary}\n\n새 메시지:\n${toSummarize}` },
+            { role: "system", content: i18n.t("prompts:summaryGeneration") },
+            { role: "user", content: `${i18n.t("prompts:summary.inputPreviousSummary")}\n${existingSummary}\n\n${i18n.t("prompts:summary.inputNewMessages")}\n${toSummarize}` },
           ],
           system_prompt: "",
           model: settings.modelName,

@@ -1,7 +1,8 @@
 import { Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
+import { useSettingsStore } from "../../stores/settingsStore";
 import AvatarUploader from "./AvatarUploader";
-import { useLabels } from "../../hooks/useLabels";
 
 interface Props {
   avatar: string | null;
@@ -33,7 +34,9 @@ export default function AgentMetadataForm({
   thinkingBudget, onThinkingBudgetChange,
   canDelete, onDelete,
 }: Props) {
-  const labels = useLabels();
+  const { t } = useTranslation("glossary");
+  const ta = useTranslation("agent").t;
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
   const nameComposition = useCompositionInput(onNameChange);
   const descComposition = useCompositionInput(onDescriptionChange);
 
@@ -42,21 +45,21 @@ export default function AgentMetadataForm({
       <AvatarUploader avatar={avatar} onChange={onAvatarChange} />
 
       <div className="form-group">
-        <label>이름</label>
+        <label>{ta("metadata.nameLabel")}</label>
         <input
           type="text"
           value={name}
-          placeholder={labels.agentNamePlaceholder}
+          placeholder={t("agentNamePlaceholder", { context: uiTheme })}
           {...nameComposition.compositionProps}
         />
       </div>
 
       <div className="form-group">
-        <label>설명</label>
+        <label>{ta("metadata.descriptionLabel")}</label>
         <input
           type="text"
           value={description}
-          placeholder={labels.agentDescPlaceholder}
+          placeholder={t("agentDescPlaceholder", { context: uiTheme })}
           {...descComposition.compositionProps}
         />
       </div>
@@ -64,12 +67,12 @@ export default function AgentMetadataForm({
       <div className="agent-editor-divider" />
 
       <div className="form-group">
-        <label>모델 (비워두면 글로벌 설정 사용)</label>
+        <label>{ta("metadata.modelLabel")}</label>
         <select
           value={model}
           onChange={(e) => onModelChange(e.target.value)}
         >
-          <option value="">글로벌 설정 사용</option>
+          <option value="">{ta("metadata.globalSettingsOption")}</option>
           {!models.includes(model) && model && (
             <option value={model}>{model}</option>
           )}
@@ -80,7 +83,7 @@ export default function AgentMetadataForm({
       </div>
 
       <div className="form-group">
-        <label>Temperature (비워두면 기본값)</label>
+        <label>{ta("metadata.temperatureLabel")}</label>
         <input
           type="number"
           step="0.1"
@@ -88,18 +91,18 @@ export default function AgentMetadataForm({
           max="2"
           value={temperature}
           onChange={(e) => onTemperatureChange(e.target.value)}
-          placeholder="기본값"
+          placeholder={ta("metadata.temperaturePlaceholder")}
         />
       </div>
 
       <div className="form-group">
-        <label>Thinking 모드</label>
+        <label>{ta("metadata.thinkingLabel")}</label>
         <div className="agent-thinking-select">
           <button
             className={`thinking-option ${thinkingEnabled === null ? "active" : ""}`}
             onClick={() => onThinkingEnabledChange(null)}
           >
-            글로벌
+            {ta("metadata.thinkingGlobal")}
           </button>
           <button
             className={`thinking-option ${thinkingEnabled === true ? "active" : ""}`}
@@ -126,7 +129,7 @@ export default function AgentMetadataForm({
             step="1024"
             value={thinkingBudget}
             onChange={(e) => onThinkingBudgetChange(e.target.value)}
-            placeholder="글로벌 설정 사용"
+            placeholder={ta("metadata.globalSettingsOption")}
           />
         </div>
       )}
@@ -136,7 +139,7 @@ export default function AgentMetadataForm({
           <div className="agent-editor-divider" />
           <button className="agent-delete-btn" onClick={onDelete}>
             <Trash2 size={16} />
-            {labels.deleteAgent}
+            {t("deleteAgent", { context: uiTheme })}
           </button>
         </>
       )}

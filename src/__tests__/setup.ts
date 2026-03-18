@@ -1,4 +1,5 @@
 import "@testing-library/jest-dom";
+import "../i18n";
 
 // Mock @tauri-apps/api/core
 vi.mock("@tauri-apps/api/core", () => ({

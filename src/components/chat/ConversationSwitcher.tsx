@@ -1,40 +1,23 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, Plus } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useStreamStore } from "../../stores/streamStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
-import { useLabels, useCompanyName } from "../../hooks/useLabels";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { useMessageStore } from "../../stores/messageStore";
+import { getDateGroup } from "../../utils/dateFormat";
+import type { Locale } from "../../i18n";
 import type { Conversation } from "../../services/types";
 
 // ── Date grouping ──────────────────────────────────────
-interface DateGroup { key: string; label: string }
-
-function getDateGroup(dateStr: string): DateGroup {
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return { key: "unknown", label: "기타" };
-
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-  const diffDays = Math.floor((today.getTime() - target.getTime()) / 86_400_000);
-
-  if (diffDays === 0) return { key: "today", label: "오늘" };
-  if (diffDays === 1) return { key: "yesterday", label: "어제" };
-  if (diffDays < 7) return { key: "this-week", label: "이번 주" };
-  // Use ISO date as stable key to avoid cross-year collisions
-  const key = target.toISOString().slice(0, 10);
-  const label = `${date.getMonth() + 1}월 ${date.getDate()}일`;
-  return { key, label };
-}
-
-function groupByDate(conversations: Conversation[]): { key: string; label: string; convs: Conversation[] }[] {
+function groupByDate(conversations: Conversation[], locale: Locale): { key: string; label: string; convs: Conversation[] }[] {
   const groups: { key: string; label: string; convs: Conversation[] }[] = [];
   const keyIndex = new Map<string, number>();
   for (const conv of conversations) {
-    const { key, label } = getDateGroup(conv.updated_at);
+    const { key, label } = getDateGroup(conv.updated_at, locale);
     const idx = keyIndex.get(key);
     if (idx !== undefined) {
       groups[idx].convs.push(conv);
@@ -60,9 +43,11 @@ export default function ConversationSwitcher() {
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
   const activeRun = useStreamStore((s) => s.activeRun);
   const toolRunState = useToolRunStore((s) => s.toolRunState);
-  const labels = useLabels();
-  const companyName = useCompanyName();
+  const { t, i18n } = useTranslation("glossary");
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
+  const companyName = useSettingsStore((s) => s.companyName);
   const messages = useMessageStore((s) => s.messages);
+  const locale = i18n.language as Locale;
 
   // Resolve current agent ID from conversation or selection.
   // Falls through to selectedAgentId when the conversation is not yet in the list
@@ -93,16 +78,16 @@ export default function ConversationSwitcher() {
       const optimistic: Conversation = {
         id: currentConversationId,
         agent_id: currentAgentId,
-        title: firstUserMsg?.content.slice(0, 50) ?? "새 대화",
+        title: firstUserMsg?.content.slice(0, 50) ?? t("common:defaultConversationTitle"),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
       list.unshift(optimistic);
     }
     return list;
-  }, [conversations, currentAgentId, currentConversationId, messages]);
+  }, [conversations, currentAgentId, currentConversationId, messages, t]);
 
-  const dateGroups = useMemo(() => groupByDate(agentConversations), [agentConversations]);
+  const dateGroups = useMemo(() => groupByDate(agentConversations, locale), [agentConversations, locale]);
 
   // Is the chat busy? (streaming, tool running, etc.)
   const isBusy = activeRun !== null || toolRunState !== "idle";
@@ -113,14 +98,14 @@ export default function ConversationSwitcher() {
     : null;
 
   const displayTitle = isBootstrapping
-    ? labels.bootstrapTitle
+    ? t("bootstrapTitle", { context: uiTheme })
     : currentConversationId
       ? (conversations.find((c) => c.id === currentConversationId)?.title
           ?? agentConversations.find((c) => c.id === currentConversationId)?.title
-          ?? "대화")
+          ?? t("chat:conversation.fallbackTitle"))
       : currentAgent
         ? currentAgent.name
-        : labels.appTitle(companyName);
+        : t("appTitle", { companyName, context: uiTheme });
 
   // Can the dropdown be shown?
   const canShowDropdown = !isBootstrapping && currentAgentId !== null && agentConversations.length > 0;
@@ -192,7 +177,7 @@ export default function ConversationSwitcher() {
             disabled={isBusy}
           >
             <Plus size={14} />
-            <span>{labels.newConversation}</span>
+            <span>{t("common:newConversation")}</span>
           </button>
 
           <div className="conv-list">

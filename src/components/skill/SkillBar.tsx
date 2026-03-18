@@ -1,17 +1,17 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useSkillStore } from "../../stores/skillStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useConversationStore } from "../../stores/conversationStore";
 import SkillChip from "./SkillChip";
-import { useLabels } from "../../hooks/useLabels";
 
 interface Props {
   agentId: string;
 }
 
 export default function SkillBar({ agentId }: Props) {
-  const labels = useLabels();
+  const { t } = useTranslation("agent");
   const availableSkills = useSkillStore((s) => s.availableSkills);
   const activeSkillNames = useSkillStore((s) => s.activeSkillNames);
   const activeSkillTokens = useSkillStore((s) => s.activeSkillTokens);
@@ -59,7 +59,7 @@ export default function SkillBar({ agentId }: Props) {
       >
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span>
-          {isLoading ? labels.skillLoading : labels.skillCount(activeSkillNames.length)}
+          {isLoading ? t("skills.skillLoading") : t("skills.skillCount", { count: activeSkillNames.length })}
         </span>
       </button>
 
@@ -77,7 +77,7 @@ export default function SkillBar({ agentId }: Props) {
             ))}
           </div>
           <div className={`skill-token-indicator ${tokenClass}`}>
-            ~{activeSkillTokens}/2000 토큰
+            {t("skills.tokenCount", { tokens: activeSkillTokens })}
           </div>
         </div>
       )}

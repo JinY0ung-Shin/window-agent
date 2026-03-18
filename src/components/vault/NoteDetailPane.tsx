@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Pencil, Trash2, ExternalLink } from "lucide-react";
 import type { VaultNote } from "../../services/vaultTypes";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -25,6 +26,7 @@ export default function NoteDetailPane({
   onNavigate,
   onOpenInObsidian,
 }: NoteDetailPaneProps) {
+  const { t } = useTranslation("vault");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const allNotes = useVaultStore((s) => s.notes);
 
@@ -51,7 +53,7 @@ export default function NoteDetailPane({
       <div className="vault-detail-actions">
         <button className="vault-action-btn" onClick={onEdit}>
           <Pencil size={14} />
-          편집
+          {t("detail.edit")}
         </button>
 
         {!confirmDelete ? (
@@ -60,11 +62,11 @@ export default function NoteDetailPane({
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 size={14} />
-            삭제
+            {t("detail.delete")}
           </button>
         ) : (
           <div className="vault-delete-confirm">
-            <span>정말 삭제하시겠습니까?</span>
+            <span>{t("detail.confirmDelete")}</span>
             <button
               className="vault-action-btn vault-action-danger"
               onClick={() => {
@@ -72,13 +74,13 @@ export default function NoteDetailPane({
                 setConfirmDelete(false);
               }}
             >
-              확인
+              {t("detail.confirm")}
             </button>
             <button
               className="vault-action-btn"
               onClick={() => setConfirmDelete(false)}
             >
-              취소
+              {t("common:cancel")}
             </button>
           </div>
         )}
@@ -86,7 +88,7 @@ export default function NoteDetailPane({
         {onOpenInObsidian && (
           <button className="vault-action-btn" onClick={onOpenInObsidian}>
             <ExternalLink size={14} />
-            Obsidian에서 열기
+            {t("detail.openObsidian")}
           </button>
         )}
       </div>

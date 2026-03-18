@@ -129,11 +129,11 @@ describe("tauriCommands", () => {
     expect(result).toEqual([]);
   });
 
-  it("seedManagerAgent calls invoke with no extra args", async () => {
+  it("seedManagerAgent passes locale", async () => {
     const agent = { id: "m1", name: "매니저" };
     vi.mocked(invoke).mockResolvedValue(agent);
-    const result = await seedManagerAgent();
-    expect(invoke).toHaveBeenCalledWith("seed_manager_agent");
+    const result = await seedManagerAgent("ko");
+    expect(invoke).toHaveBeenCalledWith("seed_manager_agent", { locale: "ko" });
     expect(result).toEqual(agent);
   });
 
@@ -144,10 +144,10 @@ describe("tauriCommands", () => {
     expect(result).toBe("resized_base64");
   });
 
-  it("getBootstrapPrompt calls invoke with no extra args", async () => {
+  it("getBootstrapPrompt passes locale", async () => {
     vi.mocked(invoke).mockResolvedValue("bootstrap content");
-    const result = await getBootstrapPrompt();
-    expect(invoke).toHaveBeenCalledWith("get_bootstrap_prompt");
+    const result = await getBootstrapPrompt("ko");
+    expect(invoke).toHaveBeenCalledWith("get_bootstrap_prompt", { locale: "ko" });
     expect(result).toBe("bootstrap content");
   });
 });

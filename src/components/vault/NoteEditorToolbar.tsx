@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Bold, Italic, Heading1, Heading2, Heading3, Link2, Eye, EyeOff } from "lucide-react";
 
 interface NoteEditorToolbarProps {
@@ -17,6 +18,7 @@ export default function NoteEditorToolbar({
   onTogglePreview,
   showPreview,
 }: NoteEditorToolbarProps) {
+  const { t } = useTranslation("vault");
   return (
     <div className="vault-editor-toolbar">
       <button type="button" title="Bold (Ctrl+B)" onClick={onBold}>
@@ -40,7 +42,7 @@ export default function NoteEditorToolbar({
 
       <span className="vault-editor-toolbar-divider" />
 
-      <button type="button" title="미리보기 토글" onClick={onTogglePreview}>
+      <button type="button" title={t("toolbar.togglePreview")} onClick={onTogglePreview}>
         {showPreview ? <EyeOff size={16} /> : <Eye size={16} />}
       </button>
     </div>

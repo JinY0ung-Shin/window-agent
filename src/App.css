@@ -1048,6 +1048,36 @@ body {
   color: #ef4444;
 }
 
+/* Locale Selector */
+.locale-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.locale-option {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.locale-option:hover {
+  border-color: var(--primary);
+}
+
+.locale-option.selected {
+  border-color: var(--primary);
+  background-color: #eef2ff;
+  color: var(--primary);
+  font-weight: 600;
+}
+
 .settings-inline-action-row {
   display: flex;
   align-items: center;
@@ -3464,6 +3494,13 @@ body {
 .onboarding-start-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.onboarding-error {
+  color: #e53e3e;
+  font-size: 13px;
+  margin: 0;
+  text-align: center;
 }
 
 /* ── Network Settings ── */

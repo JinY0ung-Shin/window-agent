@@ -1,0 +1,58 @@
+{
+  "input": {
+    "placeholder": {
+      "idle": "메시지를 입력하세요...",
+      "toolWaiting": "도구 승인 대기 중...",
+      "toolRunning": "도구 실행 중...",
+      "toolContinuing": "도구 결과 처리 중..."
+    },
+    "cancelTitle": "취소"
+  },
+  "message": {
+    "copyTitle": "복사",
+    "regenerateTitle": "재생성"
+  },
+  "conversation": {
+    "fallbackTitle": "대화"
+  },
+  "tool": {
+    "approve": "승인",
+    "reject": "거부",
+    "runSummary": "도구 {{count}}개 실행",
+    "status": {
+      "pending": "승인 대기",
+      "approved": "승인됨",
+      "running": "실행 중...",
+      "done": "완료",
+      "rejected": "거부됨",
+      "error": "오류",
+      "incomplete": "미완료"
+    },
+    "browser": {
+      "snapshot": "접근성 스냅샷 {{count}}개 요소",
+      "screenshot": "브라우저 스크린샷 생성"
+    },
+    "preparing": "{{name}} 준비 중"
+  },
+  "thinking": {
+    "label": "추론 과정"
+  },
+  "debug": {
+    "requestHeaders": "요청 헤더",
+    "responseHeaders": "응답 헤더",
+    "responsePreview": "응답 미리보기",
+    "toolLog": "도구 로그",
+    "allTools": "모든 도구",
+    "noToolLogs": "도구 호출 기록이 없습니다",
+    "clearLogs": "로그 지우기",
+    "noHttpLogs": "HTTP 요청 기록이 없습니다"
+  },
+  "layout": {
+    "toolLog": "도구 로그",
+    "chromiumFailed": "Chromium 설치 실패",
+    "minimize": "최소화",
+    "maximize": "최대화",
+    "restore": "이전 크기로",
+    "close": "닫기"
+  }
+}

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { Trash2, Save, RefreshCw } from "lucide-react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useNetworkStore } from "../../stores/networkStore";
@@ -10,6 +11,7 @@ import {
 } from "../../services/commands/p2pCommands";
 
 export default function ContactDetail() {
+  const { t } = useTranslation("network");
   const contacts = useNetworkStore((s) => s.contacts);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const selectContact = useNetworkStore((s) => s.selectContact);
@@ -24,6 +26,7 @@ export default function ContactDetail() {
       key={contact.id}
       contact={contact}
       agents={agents}
+      t={t}
       onDeselect={() => selectContact(null)}
       onRefresh={refreshContacts}
     />
@@ -43,13 +46,14 @@ interface InnerProps {
     addresses_json: string | null;
   };
   agents: { id: string; name: string }[];
+  t: (key: string) => string;
   onDeselect: () => void;
   onRefresh: () => Promise<void>;
 }
 
 type DialState = "idle" | "dialing" | "connected" | "timeout";
 
-function ContactDetailInner({ contact, agents, onDeselect, onRefresh }: InnerProps) {
+function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: InnerProps) {
   const [displayName, setDisplayName] = useState(contact.display_name);
   const [localAgentId, setLocalAgentId] = useState(contact.local_agent_id ?? "");
   const [saving, setSaving] = useState(false);
@@ -106,10 +110,10 @@ function ContactDetailInner({ contact, agents, onDeselect, onRefresh }: InnerPro
 
   const statusText =
     contact.status === "connected"
-      ? "온라인"
+      ? t("contact.online")
       : contact.status === "connecting"
-        ? "연결 중"
-        : "오프라인";
+        ? t("contact.connecting")
+        : t("contact.offline");
 
   const hasChanges =
     displayName !== contact.display_name ||
@@ -151,17 +155,17 @@ function ContactDetailInner({ contact, agents, onDeselect, onRefresh }: InnerPro
 
   const dialButtonLabel = (() => {
     switch (dialState) {
-      case "dialing": return "연결 시도 중...";
-      case "connected": return "연결됨";
-      case "timeout": return "아직 연결되지 않았습니다";
-      default: return "재연결";
+      case "dialing": return t("contact.dialing");
+      case "connected": return t("contact.connected");
+      case "timeout": return t("contact.timeout");
+      default: return t("contact.reconnect");
     }
   })();
 
   return (
     <div className="contact-detail">
       <div className="contact-detail-header">
-        <h3>연락처 상세</h3>
+        <h3>{t("contact.detailTitle")}</h3>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <span className={`status-badge ${contact.status}`}>{statusText}</span>
           {contact.status !== "connected" && (
@@ -169,7 +173,7 @@ function ContactDetailInner({ contact, agents, onDeselect, onRefresh }: InnerPro
               className="btn-secondary"
               onClick={handleDial}
               disabled={!hasAddresses || dialState === "dialing"}
-              title={!hasAddresses ? "초대에 주소가 포함되지 않았습니다" : "재연결 시도"}
+              title={!hasAddresses ? t("contact.noAddressHint") : t("contact.reconnectTitle")}
               style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", padding: "2px 8px" }}
             >
               <RefreshCw size={12} className={dialState === "dialing" ? "spinning" : ""} />
@@ -180,7 +184,7 @@ function ContactDetailInner({ contact, agents, onDeselect, onRefresh }: InnerPro
       </div>
 
       <div className="form-group">
-        <label>표시 이름</label>
+        <label>{t("contact.displayNameLabel")}</label>
         <input
           type="text"
           value={displayName}
@@ -189,42 +193,42 @@ function ContactDetailInner({ contact, agents, onDeselect, onRefresh }: InnerPro
       </div>
 
       <div className="form-group">
-        <label>에이전트 이름</label>
+        <label>{t("contact.agentNameLabel")}</label>
         <input type="text" value={contact.agent_name} readOnly disabled />
       </div>
 
       {contact.agent_description && (
         <div className="form-group">
-          <label>설명</label>
+          <label>{t("contact.descriptionLabel")}</label>
           <input type="text" value={contact.agent_description} readOnly disabled />
         </div>
       )}
 
       <div className="form-group">
-        <label>바인딩된 에이전트</label>
+        <label>{t("contact.boundAgentLabel")}</label>
         <select
           value={localAgentId}
           onChange={(e) => setLocalAgentId(e.target.value)}
         >
-          <option value="">선택 안 함</option>
+          <option value="">{t("invite.noSelection")}</option>
           {agents.map((a) => (
             <option key={a.id} value={a.id}>{a.name}</option>
           ))}
         </select>
-        <span className="form-text">이 연락처의 메시지에 응답할 에이전트</span>
+        <span className="form-text">{t("contact.boundAgentHint")}</span>
       </div>
 
       <div className="form-group">
-        <label>모드</label>
-        <input type="text" value="비서 (Secretary)" readOnly disabled />
-        <span className="form-text">대리인 모드는 Phase 2에서 지원 예정</span>
+        <label>{t("contact.modeLabel")}</label>
+        <input type="text" value={t("contact.secretaryMode")} readOnly disabled />
+        <span className="form-text">{t("contact.delegateHint")}</span>
       </div>
 
       <div className="contact-detail-actions">
         {hasChanges && (
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
             <Save size={14} />
-            {saving ? "저장 중..." : "저장"}
+            {saving ? t("common:saving") : t("common:save")}
           </button>
         )}
         {!confirmDelete ? (
@@ -233,13 +237,13 @@ function ContactDetailInner({ contact, agents, onDeselect, onRefresh }: InnerPro
             onClick={() => setConfirmDelete(true)}
           >
             <Trash2 size={14} />
-            연락처 삭제
+            {t("contact.deleteContact")}
           </button>
         ) : (
           <div className="confirm-delete-row">
-            <span>정말 삭제하시겠습니까?</span>
-            <button className="btn-danger" onClick={handleDelete}>삭제</button>
-            <button className="btn-secondary" onClick={() => setConfirmDelete(false)}>취소</button>
+            <span>{t("contact.confirmDeleteMessage")}</span>
+            <button className="btn-danger" onClick={handleDelete}>{t("common:delete")}</button>
+            <button className="btn-secondary" onClick={() => setConfirmDelete(false)}>{t("common:cancel")}</button>
           </div>
         )}
       </div>

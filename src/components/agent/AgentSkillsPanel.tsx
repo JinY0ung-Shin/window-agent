@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { X, Trash2, Plus, AlertTriangle, Pencil, Check } from "lucide-react";
 import { listSkills, createSkill, readSkill, updateSkill, deleteSkill } from "../../services/tauriCommands";
 import type { SkillMetadata } from "../../services/types";
 import type { Agent } from "../../services/types";
-import { useLabels } from "../../hooks/useLabels";
 
 interface Props {
   agent: Agent | null;
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
-  const labels = useLabels();
+  const { t } = useTranslation("agent");
   const [agentSkills, setAgentSkills] = useState<SkillMetadata[]>([]);
   const [globalSkills, setGlobalSkills] = useState<SkillMetadata[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
@@ -55,7 +55,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       setShowNewSkill(false);
       await loadAgentSkills();
     } catch (e) {
-      setSkillError(`생성 실패: ${e instanceof Error ? e.message : String(e)}`);
+      setSkillError(t("skills.createFailed", { error: e instanceof Error ? e.message : String(e) }));
     }
   };
 
@@ -67,7 +67,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       setEditingSkillName(skillName);
       setEditingSkillContent(content.raw_content);
     } catch (e) {
-      setSkillError(`읽기 실패: ${e instanceof Error ? e.message : String(e)}`);
+      setSkillError(t("skills.readFailed", { error: e instanceof Error ? e.message : String(e) }));
     }
   };
 
@@ -80,13 +80,13 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       setEditingSkillContent("");
       await loadAgentSkills();
     } catch (e) {
-      setSkillError(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+      setSkillError(t("skills.saveFailed", { error: e instanceof Error ? e.message : String(e) }));
     }
   };
 
   const handleDeleteSkill = async (skillName: string) => {
     if (!agent) return;
-    if (!confirm(labels.deleteSkillConfirm)) return;
+    if (!confirm(t("skills.deleteSkillConfirm"))) return;
     setSkillError("");
     try {
       await deleteSkill(agent.folder_name, skillName);
@@ -96,14 +96,14 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       }
       await loadAgentSkills();
     } catch (e) {
-      setSkillError(`삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
+      setSkillError(t("skills.deleteFailed", { error: e instanceof Error ? e.message : String(e) }));
     }
   };
 
   return (
     <div className="skills-panel">
       {skillsLoading ? (
-        <div className="skills-loading">로딩...</div>
+        <div className="skills-loading">{t("skills.skillLoading")}</div>
       ) : (
         <>
           {editingSkillName && !isDefault ? (
@@ -112,17 +112,17 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                 <span className="skill-edit-title">{editingSkillName}</span>
                 <div className="skill-edit-actions">
                   <button className="btn-secondary" onClick={() => { setEditingSkillName(null); setEditingSkillContent(""); }}>
-                    <X size={14} /> 취소
+                    <X size={14} /> {t("common:cancel")}
                   </button>
                   <button className="btn-primary" onClick={handleSaveSkill}>
-                    <Check size={14} /> 저장
+                    <Check size={14} /> {t("common:save")}
                   </button>
                 </div>
               </div>
               <textarea
                 className="persona-editor"
                 value={editingSkillContent}
-                placeholder="SKILL.md 내용을 입력하세요"
+                placeholder={t("skills.contentPlaceholder")}
                 spellCheck={false}
                 {...skillContentComposition.compositionProps}
               />
@@ -131,13 +131,13 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
             <>
               <div className="skills-section">
                 <div className="skills-section-header">
-                  <span>{labels.skills}</span>
+                  <span>{t("skills.skills")}</span>
                   {!isDefault && (
                     <button
                       className="btn-secondary skill-add-btn"
                       onClick={() => setShowNewSkill(true)}
                     >
-                      <Plus size={14} /> {labels.newSkill}
+                      <Plus size={14} /> {t("skills.newSkill")}
                     </button>
                   )}
                 </div>
@@ -147,7 +147,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                     <input
                       type="text"
                       value={newSkillName}
-                      placeholder={labels.skillNamePlaceholder}
+                      placeholder={t("skills.skillNamePlaceholder")}
                       onKeyDown={(e) => {
                         if (skillNameComposition.isComposing.current) return;
                         if (e.key === "Enter") handleCreateSkill();
@@ -156,20 +156,20 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                       autoFocus
                       {...skillNameComposition.compositionProps}
                     />
-                    <button className="btn-primary" onClick={handleCreateSkill}>생성</button>
-                    <button className="btn-secondary" onClick={() => setShowNewSkill(false)}>취소</button>
+                    <button className="btn-primary" onClick={handleCreateSkill}>{t("skills.createButton")}</button>
+                    <button className="btn-secondary" onClick={() => setShowNewSkill(false)}>{t("common:cancel")}</button>
                   </div>
                 )}
 
                 {agentSkills.length === 0 && !showNewSkill && (
-                  <div className="skills-empty">{labels.noSkills}</div>
+                  <div className="skills-empty">{t("skills.noSkills")}</div>
                 )}
 
                 {agentSkills.map((skill) => (
                   <div key={skill.name} className="skill-row">
                     <div className="skill-row-info">
                       <span className="skill-row-name">{skill.name}</span>
-                      <span className="skill-row-desc">{skill.description || "(설명 없음)"}</span>
+                      <span className="skill-row-desc">{skill.description || t("common:none")}</span>
                     </div>
                     {skill.diagnostics.length > 0 && (
                       <span className="skill-row-warn" title={skill.diagnostics.join("\n")}>
@@ -178,10 +178,10 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                     )}
                     {!isDefault && (
                       <div className="skill-row-actions">
-                        <button onClick={() => handleEditSkill(skill.name)} title="편집">
+                        <button onClick={() => handleEditSkill(skill.name)} title={t("common:edit")}>
                           <Pencil size={14} />
                         </button>
-                        <button onClick={() => handleDeleteSkill(skill.name)} title="삭제">
+                        <button onClick={() => handleDeleteSkill(skill.name)} title={t("common:delete")}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -193,13 +193,13 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
               {globalSkills.length > 0 && (
                 <div className="skills-section">
                   <div className="skills-section-header">
-                    <span>{labels.sharedSkills}</span>
+                    <span>{t("skills.sharedSkills")}</span>
                   </div>
                   {globalSkills.map((skill) => (
                     <div key={skill.name} className="skill-row skill-row-global">
                       <div className="skill-row-info">
                         <span className="skill-row-name">{skill.name}</span>
-                        <span className="skill-row-desc">{skill.description || "(설명 없음)"}</span>
+                        <span className="skill-row-desc">{skill.description || t("common:none")}</span>
                       </div>
                       {skill.diagnostics.length > 0 && (
                         <span className="skill-row-warn" title={skill.diagnostics.join("\n")}>

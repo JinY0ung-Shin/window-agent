@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
-import { useLabels } from "../../hooks/useLabels";
 import type { CredentialMeta } from "../../services/types";
 import {
   listCredentials,
@@ -40,7 +40,7 @@ const EMPTY_FORM: FormState = {
 };
 
 export default function CredentialManager() {
-  const labels = useLabels();
+  const { t } = useTranslation("agent");
   const [credentials, setCredentials] = useState<CredentialMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState<FormState | null>(null);
@@ -167,14 +167,14 @@ export default function CredentialManager() {
   };
 
   if (loading) {
-    return <div className="cred-manager"><span className="cred-loading">로딩 중...</span></div>;
+    return <div className="cred-manager"><span className="cred-loading">{t("tools.loading")}</span></div>;
   }
 
   return (
     <div className="cred-manager">
       {/* Credential list */}
       {credentials.length === 0 && !form && (
-        <div className="cred-empty">{labels.noCredentials}</div>
+        <div className="cred-empty">{t("credentials.noCredentials")}</div>
       )}
 
       {credentials.map((cred) => (
@@ -195,25 +195,25 @@ export default function CredentialManager() {
             <button
               className="cred-action-btn"
               onClick={() => openEdit(cred)}
-              title={labels.editCredential}
+              title={t("credentials.edit")}
             >
               <Pencil size={14} />
             </button>
             {deleteConfirm === cred.id ? (
               <div className="cred-confirm-delete">
-                <span>{labels.confirmDeleteCredential}</span>
+                <span>{t("credentials.confirmDelete")}</span>
                 <button className="cred-action-btn danger" onClick={() => handleDelete(cred.id)}>
-                  확인
+                  {t("common:confirm")}
                 </button>
                 <button className="cred-action-btn" onClick={() => setDeleteConfirm(null)}>
-                  취소
+                  {t("common:cancel")}
                 </button>
               </div>
             ) : (
               <button
                 className="cred-action-btn danger"
                 onClick={() => setDeleteConfirm(cred.id)}
-                title={labels.deleteCredentialAction}
+                title={t("credentials.delete")}
               >
                 <Trash2 size={14} />
               </button>
@@ -226,24 +226,24 @@ export default function CredentialManager() {
       {form ? (
         <div className="cred-form">
           <div className="cred-form-header">
-            <span>{form.mode === "add" ? labels.addCredential : labels.editCredential}</span>
+            <span>{form.mode === "add" ? t("credentials.add") : t("credentials.edit")}</span>
             <button className="cred-action-btn" onClick={() => setForm(null)}>
               <X size={14} />
             </button>
           </div>
 
           <div className="cred-form-field">
-            <label>{labels.credentialName}</label>
+            <label>{t("credentials.name")}</label>
             <input
               type="text"
               value={form.name}
-              placeholder="예: GitHub Token"
+              placeholder={t("credentials.namePlaceholder")}
               {...nameComposition.compositionProps}
             />
           </div>
 
           <div className="cred-form-field">
-            <label>{labels.credentialId}</label>
+            <label>{t("credentials.id")}</label>
             <input
               type="text"
               value={form.id}
@@ -255,24 +255,24 @@ export default function CredentialManager() {
 
           <div className="cred-form-field">
             <label>
-              {form.mode === "edit" ? labels.changeValue : labels.credentialValue}
+              {form.mode === "edit" ? t("credentials.changeValue") : t("credentials.value")}
             </label>
             <input
               type="password"
               value={form.value}
               onChange={(e) => setForm({ ...form, value: e.target.value })}
-              placeholder={form.mode === "edit" ? "변경하려면 입력" : "비밀 값 입력"}
+              placeholder={form.mode === "edit" ? t("credentials.valuePlaceholderEdit") : t("credentials.valuePlaceholderNew")}
             />
           </div>
 
           <div className="cred-form-field">
-            <label>{labels.allowedHosts}</label>
+            <label>{t("credentials.allowedHosts")}</label>
             <div className="cred-host-input-row">
               <input
                 type="text"
                 value={form.hostInput}
                 onKeyDown={handleHostKeyDown}
-                placeholder={labels.credentialHostPlaceholder}
+                placeholder={t("credentials.hostPlaceholder")}
                 {...hostComposition.compositionProps}
               />
             </div>
@@ -290,20 +290,20 @@ export default function CredentialManager() {
           {error && <div className="cred-form-error">{error}</div>}
 
           <div className="cred-form-actions">
-            <button className="btn-secondary" onClick={() => setForm(null)}>취소</button>
+            <button className="btn-secondary" onClick={() => setForm(null)}>{t("common:cancel")}</button>
             <button
               className="btn-primary"
               onClick={handleSave}
               disabled={!form.name.trim() || !form.id.trim() || form.allowedHosts.length === 0 || (form.mode === "add" && !form.value)}
             >
-              저장
+              {t("common:save")}
             </button>
           </div>
         </div>
       ) : (
         <button className="cred-add-btn" onClick={openAdd}>
           <Plus size={16} />
-          {labels.addCredential}
+          {t("credentials.add")}
         </button>
       )}
     </div>

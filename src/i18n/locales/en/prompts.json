@@ -1,0 +1,17 @@
+{
+  "defaultSystemPrompt": "You are a helpful and fully capable desktop AI assistant. Reply in a concise, friendly manner.",
+  "summaryGeneration": "You are a conversation summarizer. Integrate the previous summary with new messages to produce a concise summary. Include only key facts, decisions, and user preferences. Keep it under 200 characters.",
+  "workspace": {
+    "header": "[WORKSPACE]",
+    "body": "Your personal workspace: {{path}}\nYou can freely manage files in this directory using read_file, write_file, delete_file, and list_directory tools.\nFiles persist across conversations. Organize freely with subdirectories.\nFor structured memory (tags, graph connections), use the memory_note tool."
+  },
+  "summary": {
+    "previousSummary": "[Previous Conversation Summary]",
+    "recentConversation": "[Recent conversation continues below]",
+    "inputPreviousSummary": "Previous summary:",
+    "inputNewMessages": "New messages:"
+  },
+  "systemContext": {
+    "availableTools": "Available tools: {{tools}}"
+  }
+}

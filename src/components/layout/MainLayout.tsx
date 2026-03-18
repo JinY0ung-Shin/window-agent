@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
 import { Bug } from "lucide-react";
 import Sidebar from "./Sidebar";
@@ -15,6 +16,7 @@ import { useNavigationStore } from "../../stores/navigationStore";
 import WindowControls from "./WindowControls";
 
 export default function MainLayout() {
+  const { t } = useTranslation("chat");
   const isDebugOpen = useDebugStore((s) => s.isOpen);
   const setDebugOpen = useDebugStore((s) => s.setOpen);
   const mainView = useNavigationStore((s) => s.mainView);
@@ -84,7 +86,7 @@ export default function MainLayout() {
       <button
         className="debug-toggle-btn"
         onClick={() => setDebugOpen(!isDebugOpen)}
-        title="도구 로그"
+        title={t("layout.toolLog")}
       >
         <Bug size={18} />
       </button>
@@ -109,7 +111,7 @@ export default function MainLayout() {
             {chromiumError ? (
               <>
                 <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-error, #e53e3e)' }}>
-                  Chromium 설치 실패
+                  {t("layout.chromiumFailed")}
                 </div>
                 <div style={{ fontSize: '13px', opacity: 0.7, marginBottom: '12px' }}>
                   {chromiumError}
@@ -125,7 +127,7 @@ export default function MainLayout() {
                     fontSize: '13px',
                   }}
                 >
-                  닫기
+                  {t("layout.close")}
                 </button>
               </>
             ) : (

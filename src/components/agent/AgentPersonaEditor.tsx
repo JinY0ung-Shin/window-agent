@@ -1,7 +1,8 @@
+import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type { PersonaTab } from "../../stores/agentStore";
 import type { PersonaFiles } from "../../services/types";
-import { useLabels } from "../../hooks/useLabels";
 
 const PERSONA_TABS: { key: PersonaTab; label: string }[] = [
   { key: "identity", label: "IDENTITY" },
@@ -20,13 +21,14 @@ interface Props {
 }
 
 export default function AgentPersonaEditor({ personaFiles, personaTab, onFileChange }: Props) {
-  const labels = useLabels();
+  const { t } = useTranslation("glossary");
+  const uiTheme = useSettingsStore((s) => s.uiTheme);
   const { compositionProps } = useCompositionInput((v) => onFileChange(personaTab, v));
   const placeholders: Record<string, string> = {
-    identity: labels.personaIdentityPlaceholder,
-    soul: labels.personaSoulPlaceholder,
-    user: labels.personaUserPlaceholder,
-    agents: labels.personaAgentsPlaceholder,
+    identity: t("personaIdentityPlaceholder", { context: uiTheme }),
+    soul: t("personaSoulPlaceholder", { context: uiTheme }),
+    user: t("personaUserPlaceholder", { context: uiTheme }),
+    agents: t("personaAgentsPlaceholder", { context: uiTheme }),
   };
 
   return (

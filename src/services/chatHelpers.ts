@@ -1,6 +1,7 @@
 import type { ChatMessage, MemoryNote } from "./types";
 import type { VaultNoteSummary } from "./vaultTypes";
 import { MAX_HISTORY_MESSAGES, MAX_CONTEXT_TOKENS } from "../constants";
+import { i18n } from "../i18n";
 import { estimateTokens, estimateMessageTokens } from "./tokenEstimator";
 import { buildPromptReadySlice } from "./memoryAdapter";
 
@@ -174,11 +175,11 @@ export function buildConversationContext(params: {
 
   // Workspace section
   if (params.workspacePath) {
-    systemPrompt += `\n\n[WORKSPACE]\n당신의 개인 작업 공간: ${params.workspacePath}\n이 디렉토리에서 read_file, write_file, delete_file, list_directory 도구로 자유롭게 파일을 관리할 수 있습니다.\n파일은 대화 간에 유지됩니다. 하위 디렉토리로 자유롭게 정리하세요.\n구조화된 메모리(태그, 그래프 연결)가 필요하면 memory_note 도구를 사용하세요.`;
+    systemPrompt += `\n\n${i18n.t("prompts:workspace.header")}\n${i18n.t("prompts:workspace.body", { path: params.workspacePath })}`;
   }
 
   if (params.summary) {
-    systemPrompt += `\n\n[이전 대화 요약]\n${params.summary}\n\n[최근 대화는 아래에 이어집니다]`;
+    systemPrompt += `\n\n${i18n.t("prompts:summary.previousSummary")}\n${params.summary}\n\n${i18n.t("prompts:summary.recentConversation")}`;
   }
 
   const systemTokens = estimateTokens(systemPrompt);

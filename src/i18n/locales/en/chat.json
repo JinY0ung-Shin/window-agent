@@ -1,0 +1,58 @@
+{
+  "input": {
+    "placeholder": {
+      "idle": "Type a message...",
+      "toolWaiting": "Waiting for tool approval...",
+      "toolRunning": "Running tool...",
+      "toolContinuing": "Processing tool results..."
+    },
+    "cancelTitle": "Cancel"
+  },
+  "message": {
+    "copyTitle": "Copy",
+    "regenerateTitle": "Regenerate"
+  },
+  "conversation": {
+    "fallbackTitle": "Conversation"
+  },
+  "tool": {
+    "approve": "Approve",
+    "reject": "Deny",
+    "runSummary": "{{count}} tool(s) executed",
+    "status": {
+      "pending": "Pending",
+      "approved": "Approved",
+      "running": "Running...",
+      "done": "Done",
+      "rejected": "Denied",
+      "error": "Error",
+      "incomplete": "Incomplete"
+    },
+    "browser": {
+      "snapshot": "Accessibility snapshot {{count}} elements",
+      "screenshot": "Browser screenshot created"
+    },
+    "preparing": "Preparing {{name}}"
+  },
+  "thinking": {
+    "label": "Reasoning"
+  },
+  "debug": {
+    "requestHeaders": "Request Headers",
+    "responseHeaders": "Response Headers",
+    "responsePreview": "Response Preview",
+    "toolLog": "Tool Log",
+    "allTools": "All Tools",
+    "noToolLogs": "No tool call history",
+    "clearLogs": "Clear Logs",
+    "noHttpLogs": "No HTTP request history"
+  },
+  "layout": {
+    "toolLog": "Tool Log",
+    "chromiumFailed": "Chromium Installation Failed",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  }
+}

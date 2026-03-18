@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Network, UserPlus, RefreshCw } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import ContactList from "./ContactList";
@@ -7,6 +8,7 @@ import PeerThread from "./PeerThread";
 import InviteDialog from "./InviteDialog";
 
 export default function NetworkPanel() {
+  const { t } = useTranslation("network");
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const status = useNetworkStore((s) => s.status);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
@@ -25,12 +27,12 @@ export default function NetworkPanel() {
       <div className="network-panel">
         <div className="network-panel-header">
           <Network size={20} />
-          <h2>에이전트 네트워크</h2>
+          <h2>{t("panel.title")}</h2>
           <div className="network-panel-actions">
             <button
               className="icon-btn"
               onClick={() => setShowInviteDialog(true)}
-              title="초대"
+              title={t("panel.inviteTitle")}
             >
               <UserPlus size={16} />
             </button>
@@ -38,8 +40,8 @@ export default function NetworkPanel() {
         </div>
         <div className="network-panel-empty">
           <Network size={40} strokeWidth={1.5} />
-          <p>네트워크가 비활성 상태입니다.</p>
-          <p className="text-muted">설정에서 P2P 네트워크를 활성화하세요.</p>
+          <p>{t("panel.inactive")}</p>
+          <p className="text-muted">{t("panel.inactiveHint")}</p>
         </div>
         {showInviteDialog && (
           <InviteDialog onClose={() => setShowInviteDialog(false)} />
@@ -52,19 +54,19 @@ export default function NetworkPanel() {
     <div className="network-panel">
       <div className="network-panel-header">
         <Network size={20} />
-        <h2>에이전트 네트워크</h2>
+        <h2>{t("panel.title")}</h2>
         <div className="network-panel-actions">
           <button
             className="icon-btn"
             onClick={refreshContacts}
-            title="새로고침"
+            title={t("panel.refreshTitle")}
           >
             <RefreshCw size={16} />
           </button>
           <button
             className="icon-btn"
             onClick={() => setShowInviteDialog(true)}
-            title="초대"
+            title={t("panel.inviteTitle")}
           >
             <UserPlus size={16} />
           </button>

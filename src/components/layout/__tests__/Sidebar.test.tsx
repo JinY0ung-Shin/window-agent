@@ -39,6 +39,7 @@ beforeEach(() => {
 
 describe("Sidebar (DM-style)", () => {
   it("renders app title", () => {
+    useSettingsStore.setState({ companyName: "우리 회사" });
     render(<Sidebar />);
     expect(screen.getByText("우리 회사")).toBeInTheDocument();
   });
@@ -169,7 +170,7 @@ describe("Sidebar (DM-style)", () => {
 
   it("clicking settings opens settings modal", () => {
     render(<Sidebar />);
-    fireEvent.click(screen.getByText("설정"));
+    fireEvent.click(screen.getByText("환경 설정"));
     expect(useSettingsStore.getState().isSettingsOpen).toBe(true);
   });
 });

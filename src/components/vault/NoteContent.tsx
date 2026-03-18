@@ -1,4 +1,5 @@
-import { useMemo, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
@@ -25,6 +26,7 @@ function renderWikilinks(
   text: string,
   linkMap: Map<string, string>,
   onClick: (noteId: string) => void,
+  linkNotFoundFn?: (target: string) => string,
 ): ReactNode[] {
   const parts: ReactNode[] = [];
   const re = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
@@ -47,7 +49,7 @@ function renderWikilinks(
         className={`vault-wikilink ${isResolved ? "resolved" : "broken"}`}
         role="link"
         tabIndex={0}
-        title={isResolved ? display : `링크 대상을 찾을 수 없습니다: ${target}`}
+        title={isResolved ? display : (linkNotFoundFn ? linkNotFoundFn(target) : target)}
         onClick={() => {
           if (resolvedId) onClick(resolvedId);
         }}
@@ -68,21 +70,23 @@ function renderWikilinks(
 }
 
 export default function NoteContent({ content, notes, onWikilinkClick }: NoteContentProps) {
+  const { t } = useTranslation("vault");
   const linkMap = useMemo(() => buildLinkMap(notes), [notes]);
+  const linkNotFoundFn = useCallback((target: string) => t("note.linkNotFound", { target }), [t]);
 
   const components = useMemo(
     () => ({
       p: ({ children, ...props }: React.ComponentPropsWithoutRef<"p">) => (
-        <p {...props}>{processChildren(children, linkMap, onWikilinkClick)}</p>
+        <p {...props}>{processChildren(children, linkMap, onWikilinkClick, linkNotFoundFn)}</p>
       ),
       li: ({ children, ...props }: React.ComponentPropsWithoutRef<"li">) => (
-        <li {...props}>{processChildren(children, linkMap, onWikilinkClick)}</li>
+        <li {...props}>{processChildren(children, linkMap, onWikilinkClick, linkNotFoundFn)}</li>
       ),
       td: ({ children, ...props }: React.ComponentPropsWithoutRef<"td">) => (
-        <td {...props}>{processChildren(children, linkMap, onWikilinkClick)}</td>
+        <td {...props}>{processChildren(children, linkMap, onWikilinkClick, linkNotFoundFn)}</td>
       ),
     }),
-    [linkMap, onWikilinkClick],
+    [linkMap, onWikilinkClick, linkNotFoundFn],
   );
 
   return (
@@ -103,16 +107,17 @@ function processChildren(
   children: ReactNode,
   linkMap: Map<string, string>,
   onClick: (noteId: string) => void,
+  linkNotFoundFn?: (target: string) => string,
 ): ReactNode {
   if (!children) return children;
   if (typeof children === "string") {
-    const parts = renderWikilinks(children, linkMap, onClick);
+    const parts = renderWikilinks(children, linkMap, onClick, linkNotFoundFn);
     return parts.length === 1 ? parts[0] : <>{parts}</>;
   }
   if (Array.isArray(children)) {
     return children.map((child, i) =>
       typeof child === "string" ? (
-        <span key={i}>{processChildren(child, linkMap, onClick)}</span>
+        <span key={i}>{processChildren(child, linkMap, onClick, linkNotFoundFn)}</span>
       ) : (
         child
       ),

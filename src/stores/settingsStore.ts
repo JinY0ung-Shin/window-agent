@@ -5,7 +5,10 @@ import {
   DEFAULT_THINKING_BUDGET,
 } from "../constants";
 import { getEnvConfig, hasApiKey as checkApiKey, hasStoredKey as checkStoredKey, setApiConfig } from "../services/tauriCommands";
-import { getLabels, type UITheme } from "../labels";
+import { refreshDefaultManagerPersona } from "../services/commands/agentCommands";
+import { i18n, type Locale } from "../i18n";
+
+export type UITheme = "classic" | "org";
 
 // ── localStorage key constants (non-secret settings only) ──
 const LS_BASE_URL = "openai_base_url";
@@ -15,6 +18,7 @@ const LS_THINKING_BUDGET = "thinking_budget";
 const LS_UI_THEME = "ui_theme";
 const LS_COMPANY_NAME = "company_name";
 const LS_BRANDING_INITIALIZED = "branding_initialized";
+const LS_LOCALE = "locale";
 
 interface SettingsState {
   hasApiKey: boolean;      // API access configured (key OR custom URL)
@@ -30,6 +34,7 @@ interface SettingsState {
   uiTheme: UITheme;
   companyName: string;
   brandingInitialized: boolean;
+  locale: Locale;
   appReady: boolean;
   setIsSettingsOpen: (open: boolean) => void;
   loadSettings: () => void;
@@ -39,7 +44,8 @@ interface SettingsState {
   // ── Branding actions ──
   setUITheme: (theme: UITheme) => void;
   setCompanyName: (name: string) => void;
-  initializeBranding: (companyName: string, theme?: UITheme) => void;
+  setLocale: (locale: Locale) => void;
+  initializeBranding: (companyName: string, theme?: UITheme, locale?: Locale) => void;
 }
 
 export interface SettingValues {
@@ -66,6 +72,7 @@ function readNonSecretSettings() {
     uiTheme: (localStorage.getItem(LS_UI_THEME) || "org") as UITheme,
     companyName: localStorage.getItem(LS_COMPANY_NAME) || "",
     brandingInitialized: localStorage.getItem(LS_BRANDING_INITIALIZED) === "true",
+    locale: (localStorage.getItem(LS_LOCALE) || "ko") as Locale,
   };
 }
 
@@ -141,7 +148,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to set API config:", e);
-      set({ settingsError: getLabels(get().uiTheme).settingsSaveFailed(errorMsg) });
+      set({ settingsError: i18n.t("common:errors.settingsSaveFailed", { error: errorMsg }) });
       return;
     }
 
@@ -171,10 +178,22 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ companyName: name });
   },
 
-  initializeBranding: (companyName, theme = "org") => {
+  setLocale: (locale) => {
+    localStorage.setItem(LS_LOCALE, locale);
+    i18n.changeLanguage(locale);
+    set({ locale });
+    // Refresh default manager persona files asynchronously (don't block UI)
+    refreshDefaultManagerPersona(locale).catch((e) =>
+      console.warn("refreshDefaultManagerPersona:", e),
+    );
+  },
+
+  initializeBranding: (companyName, theme = "org", locale = "ko") => {
     localStorage.setItem(LS_COMPANY_NAME, companyName);
     localStorage.setItem(LS_UI_THEME, theme);
+    localStorage.setItem(LS_LOCALE, locale);
     localStorage.setItem(LS_BRANDING_INITIALIZED, "true");
-    set({ companyName, uiTheme: theme, brandingInitialized: true });
+    i18n.changeLanguage(locale);
+    set({ companyName, uiTheme: theme, locale, brandingInitialized: true });
   },
 }));

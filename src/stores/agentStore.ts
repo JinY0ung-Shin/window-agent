@@ -10,7 +10,7 @@ import {
   writeToolConfig,
   getDefaultToolConfig,
 } from "../services/nativeToolRegistry";
-import { getLabels } from "../labels";
+import { i18n } from "../i18n";
 import { useSettingsStore } from "./settingsStore";
 
 interface AgentState {
@@ -148,7 +148,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         });
       } else {
         // Create new agent — generate folder_name from name
-        const name = (updates.name as string) || getLabels(useSettingsStore.getState().uiTheme).newAgent;
+        const name = (updates.name as string) || i18n.t("glossary:newAgent", { context: useSettingsStore.getState().uiTheme });
         folderName = name.replace(/\s+/g, "-").toLowerCase();
 
         const created = await cmds.createAgent({
@@ -181,7 +181,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       console.error("Failed to save agent:", e);
-      set({ editorError: getLabels(useSettingsStore.getState().uiTheme).agentSaveFailed(errorMsg) });
+      set({ editorError: i18n.t("glossary:agentSaveFailed", { error: errorMsg, context: useSettingsStore.getState().uiTheme }) });
       return;
     }
 

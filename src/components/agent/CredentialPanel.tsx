@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { ToolConfig, CredentialMeta } from "../../services/types";
 import { listCredentials } from "../../services/commands/credentialCommands";
-import { useLabels } from "../../hooks/useLabels";
 
 interface Props {
   toolConfig: ToolConfig | null;
@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function CredentialPanel({ toolConfig, onChange }: Props) {
-  const labels = useLabels();
+  const { t } = useTranslation("agent");
   const [credentials, setCredentials] = useState<CredentialMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -21,13 +21,13 @@ export default function CredentialPanel({ toolConfig, onChange }: Props) {
   }, []);
 
   if (loading) {
-    return <div className="native-tool-panel"><span className="native-tool-loading">로딩 중...</span></div>;
+    return <div className="native-tool-panel"><span className="native-tool-loading">{t("tools.loading")}</span></div>;
   }
 
   if (credentials.length === 0) {
     return (
       <div className="native-tool-panel">
-        <div className="native-tool-empty">{labels.noCredentialsHint}</div>
+        <div className="native-tool-empty">{t("credentials.noCredentialsHint")}</div>
       </div>
     );
   }
@@ -49,7 +49,7 @@ export default function CredentialPanel({ toolConfig, onChange }: Props) {
     <div className="native-tool-panel">
       <div className="native-tool-group">
         <div className="native-tool-group-header">
-          <span>{labels.credentials}</span>
+          <span>{t("credentials.title")}</span>
           <span className="native-tool-group-count">{credentials.length}</span>
         </div>
         {credentials.map((cred) => {

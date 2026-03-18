@@ -33,13 +33,10 @@ import { readToolConfig } from "../services/nativeToolRegistry";
 import { executeToolCalls } from "../services/toolService";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
-  DEFAULT_CONVERSATION_TITLE,
   DEFAULT_SYSTEM_PROMPT,
-  LOADING_MESSAGE,
-  NO_RESPONSE_MESSAGE,
   parseErrorMessage,
 } from "../constants";
-import { getLabels } from "../labels";
+import { i18n } from "../i18n";
 
 // ── Stream event types ────────────────────────────────
 type StreamChunkEvent = { request_id: string; delta: string; reasoning_delta: string | null };
@@ -60,7 +57,7 @@ function createPendingMessage(requestId?: string): { msgId: string; msg: ChatMes
     msg: {
       id: msgId,
       type: "agent",
-      content: LOADING_MESSAGE,
+      content: i18n.t("common:loadingMessage"),
       status: "pending",
       requestId,
     },
@@ -236,7 +233,7 @@ const slashCommands: SlashCommand[] = [
   {
     name: "/skill",
     aliases: [],
-    description: "스킬 관리 (장착/해제/목록)",
+    description: i18n.t("agent:skills.slashDescription"),
     requiresApiKey: false,
     requiresAgent: false,
     handler: handleSkillCommand,
@@ -258,7 +255,7 @@ function matchSlashCommand(input: string): SlashCommand | null {
 
 async function handleSkillCommand(command: string) {
   const skillStore = useSkillStore.getState();
-  const labels = getLabels(useSettingsStore.getState().uiTheme);
+  const theme = useSettingsStore.getState().uiTheme;
   const { currentConversationId, conversations } = conv();
 
   const parts = command.split(/\s+/);
@@ -271,14 +268,14 @@ async function handleSkillCommand(command: string) {
     const available = skillStore.availableSkills;
     const active = skillStore.activeSkillNames;
     resultMessage =
-      `**${labels.slashSkillAvailable}**\n${
+      `**${i18n.t("agent:skills.available")}**\n${
         available
           .map(
             (s: any) =>
               `- ${active.includes(s.name) ? "\u2705" : "\u2B1C"} ${s.name}: ${s.description}`,
           )
-          .join("\n") || "(없음)"
-      }\n\n활성: ${active.length}개 | 토큰: ~${skillStore.activeSkillTokens}/2000`;
+          .join("\n") || i18n.t("common:none")
+      }\n\n${i18n.t("agent:skills.activeCount", { count: active.length })} | ${i18n.t("agent:skills.tokenCount", { tokens: skillStore.activeSkillTokens })}`;
   } else if ((subCommand === "장착" || subCommand === "equip") && skillName) {
     const convObj = conversations.find((c: any) => c.id === currentConversationId);
     const agentId = convObj?.agent_id ?? useAgentStore.getState().selectedAgentId;
@@ -292,19 +289,19 @@ async function handleSkillCommand(command: string) {
         currentConversationId ?? undefined,
       );
       resultMessage = success
-        ? `\u2705 ${labels.slashSkillEquipped(skillName)} (~${skillStore.activeSkillTokens}/2000 토큰)`
-        : `\u274C ${labels.slashSkillFailed(skillName, "토큰 한도 초과 또는 존재하지 않음")}`;
+        ? `\u2705 ${i18n.t("agent:skills.equipped", { name: skillName })} (${i18n.t("agent:skills.tokenCount", { tokens: skillStore.activeSkillTokens })})`
+        : `\u274C ${i18n.t("agent:skills.failed", { name: skillName, error: i18n.t("agent:skills.tokenLimitExceeded") })}`;
     } else {
-      resultMessage = `\u274C ${labels.noAgentForSkill}`;
+      resultMessage = `\u274C ${i18n.t("glossary:noAgentForSkill", { context: theme })}`;
     }
   } else if ((subCommand === "해제" || subCommand === "unequip") && skillName) {
     await skillStore.deactivateSkill(
       skillName,
       currentConversationId ?? undefined,
     );
-    resultMessage = labels.slashSkillUnequipped(skillName);
+    resultMessage = i18n.t("agent:skills.unequipped", { name: skillName });
   } else {
-    resultMessage = labels.slashSkillUsage;
+    resultMessage = i18n.t("agent:skills.slashUsage");
   }
 
   const sysMsg: ChatMessage = {
@@ -358,7 +355,7 @@ async function streamOneTurn(
         m.id === msgId
           ? {
               ...m,
-              content: m.content === LOADING_MESSAGE ? delta : m.content + delta,
+              content: m.content === i18n.t("common:loadingMessage") ? delta : m.content + delta,
               status: "streaming" as const,
             }
           : m,
@@ -458,7 +455,7 @@ async function sendNormalMessage() {
     }
     initialTitle =
       inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) ||
-      DEFAULT_CONVERSATION_TITLE;
+      i18n.t("common:defaultConversationTitle");
     const newConv = await cmds.createConversation(agentId, initialTitle);
     convId = newConv.id;
     useConversationStore.setState({ currentConversationId: convId });
@@ -581,7 +578,7 @@ async function sendNormalMessage() {
       const toolCalls = done.tool_calls;
 
       if (!toolCalls || toolCalls.length === 0) {
-        const finalContent = replyContent || NO_RESPONSE_MESSAGE;
+        const finalContent = replyContent || i18n.t("common:noResponse");
         const savedAssistant = await cmds.saveMessage({
           conversation_id: convId,
           role: "assistant",
@@ -607,10 +604,9 @@ async function sendNormalMessage() {
 
       iterationCount++;
       if (iterationCount > MAX_TOOL_ITERATIONS) {
-        const flowLabels = getLabels(useSettingsStore.getState().uiTheme);
         useMessageStore.setState({
           messages: updateMessageInList(msg().messages, currentMsgId, {
-            content: replyContent || flowLabels.maxToolIterations,
+            content: replyContent || i18n.t("agent:tools.maxIterations"),
             status: "failed",
           }),
         });
@@ -898,7 +894,7 @@ async function regenerateStream(
           m.id === msgId
             ? {
                 ...m,
-                content: m.content === LOADING_MESSAGE ? delta : m.content + delta,
+                content: m.content === i18n.t("common:loadingMessage") ? delta : m.content + delta,
                 status: "streaming" as const,
               }
             : m,
@@ -964,7 +960,7 @@ async function regenerateStream(
           throw new Error(done.error);
         }
       } else {
-        const replyContent = done.full_content || NO_RESPONSE_MESSAGE;
+        const replyContent = done.full_content || i18n.t("common:noResponse");
         const reasoningContent = done.reasoning_content ?? undefined;
 
         const savedAssistant = await cmds.saveMessage({
@@ -1070,16 +1066,17 @@ async function sendBootstrapMessage() {
 async function completeBootstrap() {
   const { bootstrapFolderName } = boot();
   if (!bootstrapFolderName) return;
-  const labels = getLabels(useSettingsStore.getState().uiTheme);
+  const theme = useSettingsStore.getState().uiTheme;
 
   invalidatePersonaCache(bootstrapFolderName);
 
+  const fallbackName = i18n.t("glossary:newAgent", { context: theme });
   let agentName: string;
   try {
     const identity = await cmds.readAgentFile(bootstrapFolderName, "IDENTITY.md");
-    agentName = parseAgentName(identity, labels.newAgent);
+    agentName = parseAgentName(identity, fallbackName);
   } catch {
-    agentName = labels.newAgent;
+    agentName = fallbackName;
   }
 
   try {
@@ -1100,7 +1097,7 @@ async function completeBootstrap() {
     const errorMsg: ChatMessage = {
       id: `error-${Date.now()}`,
       type: "agent",
-      content: labels.bootstrapFailed(String(error)),
+      content: i18n.t("glossary:bootstrapFailed", { error: String(error), context: theme }),
       status: "failed",
     };
     useMessageStore.setState({ messages: [...msg().messages, errorMsg] });

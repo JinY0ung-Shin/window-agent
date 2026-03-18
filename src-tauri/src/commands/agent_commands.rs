@@ -223,30 +223,47 @@ pub fn sync_agents_from_fs(
 
 /// Seed the default manager agent on first run.
 /// Creates the manager agent in DB and its .md files on disk.
+/// The `locale` parameter ("ko" or "en") determines which bundled resources to use.
 #[tauri::command]
 pub fn seed_manager_agent(
     app: AppHandle,
     db: State<'_, Database>,
+    locale: String,
 ) -> Result<Agent, AppError> {
-    // Check if manager already exists
+    // Check if a default manager already exists (by is_default flag).
+    // It may live in legacy "매니저" folder or new "manager" folder.
+    let existing_agents = agent_operations::list_agents_impl(&db)?;
+    if let Some(agent) = existing_agents.iter().find(|a| a.is_default) {
+        // Refresh default persona files (upgrades old defaults, preserves user edits)
+        if let Err(e) = refresh_default_persona_impl(&app, &agent.folder_name, &locale) {
+            eprintln!("Warning: failed to refresh manager persona: {}", e);
+        }
+        return Ok(agent.clone());
+    }
+
+    // Also check for legacy "매니저" folder without is_default flag
     if let Ok(Some(agent)) =
         agent_operations::get_agent_by_folder_impl(&db, "매니저".into())
     {
-        // Refresh default persona files (upgrades old defaults, preserves user edits)
-        if let Err(e) = refresh_default_manager_persona(&app) {
+        if let Err(e) = refresh_default_persona_impl(&app, &agent.folder_name, &locale) {
             eprintln!("Warning: failed to refresh manager persona: {}", e);
         }
-
         return Ok(agent);
     }
+
+    // New install: create with locale-aware content
+    let (name, description) = match locale.as_str() {
+        "en" => ("Team Lead", "The team lead who guides other members and answers user questions"),
+        _ => ("팀장", "다른 직원을 안내하고 사용자의 질문에 답하는 팀장"),
+    };
 
     let agent = agent_operations::create_agent_impl(
         &db,
         CreateAgentRequest {
-            folder_name: "매니저".into(),
-            name: "팀장".into(),
+            folder_name: "manager".into(),
+            name: name.into(),
             avatar: None,
-            description: Some("다른 직원을 안내하고 사용자의 질문에 답하는 팀장".into()),
+            description: Some(description.into()),
             model: None,
             temperature: None,
             thinking_enabled: None,
@@ -256,29 +273,41 @@ pub fn seed_manager_agent(
         },
     )?;
 
-    // Create .md files from bundled resources
+    // Create .md files from locale-specific bundled resources
     let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
-    let manager_dir = agents_dir.join("매니저");
+    let manager_dir = agents_dir.join("manager");
     std::fs::create_dir_all(&manager_dir)
         .map_err(|e| AppError::Io(format!("Failed to create manager directory: {}", e)))?;
 
+    let identity_content = match locale.as_str() {
+        "en" => include_str!("../../resources/en/default-agent/IDENTITY.md"),
+        _ => include_str!("../../resources/ko/default-agent/IDENTITY.md"),
+    };
+    let soul_content = match locale.as_str() {
+        "en" => include_str!("../../resources/en/default-agent/SOUL.md"),
+        _ => include_str!("../../resources/ko/default-agent/SOUL.md"),
+    };
+    let user_content = match locale.as_str() {
+        "en" => include_str!("../../resources/en/default-agent/USER.md"),
+        _ => include_str!("../../resources/ko/default-agent/USER.md"),
+    };
+    let agents_content = match locale.as_str() {
+        "en" => include_str!("../../resources/en/default-agent/AGENTS.md"),
+        _ => include_str!("../../resources/ko/default-agent/AGENTS.md"),
+    };
+    let tool_config_content = include_str!("../../resources/shared/default-agent/TOOL_CONFIG.json");
+
     let files = [
-        ("IDENTITY.md", include_str!("../../resources/default-agent/IDENTITY.md")),
-        ("SOUL.md", include_str!("../../resources/default-agent/SOUL.md")),
-        ("USER.md", include_str!("../../resources/default-agent/USER.md")),
-        ("AGENTS.md", include_str!("../../resources/default-agent/AGENTS.md")),
-        ("TOOL_CONFIG.json", include_str!("../../resources/default-agent/TOOL_CONFIG.json")),
+        ("IDENTITY.md", identity_content),
+        ("SOUL.md", soul_content),
+        ("USER.md", user_content),
+        ("AGENTS.md", agents_content),
+        ("TOOL_CONFIG.json", tool_config_content),
     ];
 
     for (filename, content) in &files {
         std::fs::write(manager_dir.join(filename), content)
             .map_err(|e| AppError::Io(format!("Failed to write {}: {}", filename, e)))?;
-    }
-
-    // Refresh persona files — for fresh installs this is a no-op since files
-    // are already the latest version, but ensures consistency.
-    if let Err(e) = refresh_default_manager_persona(&app) {
-        eprintln!("Warning: failed to refresh manager persona: {}", e);
     }
 
     Ok(agent)
@@ -416,10 +445,45 @@ const OLD_AGENTS_MD: &str = "\
 - 사용자가 직원 추천을 원하지 않으면 그냥 직접 답변하기.
 ";
 
-/// New default persona contents (v2) — bundled at compile time.
-const NEW_IDENTITY_MD: &str = include_str!("../../resources/default-agent/IDENTITY.md");
-const NEW_SOUL_MD: &str = include_str!("../../resources/default-agent/SOUL.md");
-const NEW_AGENTS_MD: &str = include_str!("../../resources/default-agent/AGENTS.md");
+// ---------------------------------------------------------------------------
+// Locale-specific bundled defaults (v2) — used for both seeding and refresh.
+// ---------------------------------------------------------------------------
+const KO_IDENTITY_MD: &str = include_str!("../../resources/ko/default-agent/IDENTITY.md");
+const KO_SOUL_MD: &str = include_str!("../../resources/ko/default-agent/SOUL.md");
+const KO_USER_MD: &str = include_str!("../../resources/ko/default-agent/USER.md");
+const KO_AGENTS_MD: &str = include_str!("../../resources/ko/default-agent/AGENTS.md");
+
+const EN_IDENTITY_MD: &str = include_str!("../../resources/en/default-agent/IDENTITY.md");
+const EN_SOUL_MD: &str = include_str!("../../resources/en/default-agent/SOUL.md");
+const EN_USER_MD: &str = include_str!("../../resources/en/default-agent/USER.md");
+const EN_AGENTS_MD: &str = include_str!("../../resources/en/default-agent/AGENTS.md");
+
+/// All known bundled defaults for a given file (legacy v1 + v2 ko + v2 en).
+/// Used to detect whether a file is still at a default state (unmodified by user).
+fn all_known_defaults(filename: &str) -> Vec<&'static str> {
+    match filename {
+        "IDENTITY.md" => vec![OLD_IDENTITY_MD, KO_IDENTITY_MD, EN_IDENTITY_MD],
+        "SOUL.md" => vec![OLD_SOUL_MD, KO_SOUL_MD, EN_SOUL_MD],
+        "AGENTS.md" => vec![OLD_AGENTS_MD, KO_AGENTS_MD, EN_AGENTS_MD],
+        "USER.md" => vec![KO_USER_MD, EN_USER_MD],
+        _ => vec![],
+    }
+}
+
+/// Target default content for a given file and locale.
+fn target_default(filename: &str, locale: &str) -> Option<&'static str> {
+    match (filename, locale) {
+        ("IDENTITY.md", "en") => Some(EN_IDENTITY_MD),
+        ("IDENTITY.md", _) => Some(KO_IDENTITY_MD),
+        ("SOUL.md", "en") => Some(EN_SOUL_MD),
+        ("SOUL.md", _) => Some(KO_SOUL_MD),
+        ("USER.md", "en") => Some(EN_USER_MD),
+        ("USER.md", _) => Some(KO_USER_MD),
+        ("AGENTS.md", "en") => Some(EN_AGENTS_MD),
+        ("AGENTS.md", _) => Some(KO_AGENTS_MD),
+        _ => None,
+    }
+}
 
 /// Normalize content for comparison: collapse \r\n → \n, trim trailing whitespace per line,
 /// and trim trailing whitespace from the whole string.
@@ -433,29 +497,33 @@ fn normalize_content(s: &str) -> String {
         .to_string()
 }
 
-/// Refresh default manager persona files on startup.
+/// Refresh default manager persona files with locale-aware content.
 ///
-/// For each of IDENTITY.md, SOUL.md, AGENTS.md:
-///   - If the on-disk content matches the OLD default (v1), replace with the NEW default (v2).
-///   - If the content already matches the NEW default, do nothing (idempotent).
-///   - If the user has customised the file, leave it untouched.
+/// For each of IDENTITY.md, SOUL.md, USER.md, AGENTS.md:
+///   - Read the current file content from disk.
+///   - Compare against ALL known bundled defaults (legacy v1, ko v2, en v2).
+///   - If the file matches ANY known default → overwrite with the target locale's version.
+///   - If the file does NOT match any known default (user has customized) → preserve as-is.
 ///
-/// USER.md is always preserved — never compared or replaced.
-pub fn refresh_default_manager_persona(app: &AppHandle) -> Result<(), String> {
+/// This ensures that:
+/// - Old unmodified defaults get upgraded on app update.
+/// - Switching locale replaces untouched defaults with the new locale's content.
+/// - User-edited files are never overwritten.
+fn refresh_default_persona_impl(
+    app: &AppHandle,
+    folder_name: &str,
+    locale: &str,
+) -> Result<(), String> {
     let agents_dir = get_agents_dir(app)?;
-    let manager_dir = agents_dir.join("매니저");
+    let manager_dir = agents_dir.join(folder_name);
 
     if !manager_dir.exists() {
         return Ok(()); // No manager directory yet — nothing to refresh
     }
 
-    let files_to_check: &[(&str, &str, &str)] = &[
-        ("IDENTITY.md", OLD_IDENTITY_MD, NEW_IDENTITY_MD),
-        ("SOUL.md", OLD_SOUL_MD, NEW_SOUL_MD),
-        ("AGENTS.md", OLD_AGENTS_MD, NEW_AGENTS_MD),
-    ];
+    let filenames = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"];
 
-    for &(filename, old_default, new_default) in files_to_check {
+    for filename in &filenames {
         let file_path = manager_dir.join(filename);
 
         let current_content = match std::fs::read_to_string(&file_path) {
@@ -463,24 +531,62 @@ pub fn refresh_default_manager_persona(app: &AppHandle) -> Result<(), String> {
             Err(_) => continue, // File doesn't exist — skip
         };
 
-        let normalized_current = normalize_content(&current_content);
-        let normalized_old = normalize_content(old_default);
-        let normalized_new = normalize_content(new_default);
+        let target = match target_default(filename, locale) {
+            Some(t) => t,
+            None => continue,
+        };
 
-        // Already up to date — skip
-        if normalized_current == normalized_new {
+        let normalized_current = normalize_content(&current_content);
+        let normalized_target = normalize_content(target);
+
+        // Already matches target locale — skip
+        if normalized_current == normalized_target {
             continue;
         }
 
-        // Matches old default — upgrade to new
-        if normalized_current == normalized_old {
-            std::fs::write(&file_path, new_default)
-                .map_err(|e| format!("Failed to upgrade {}: {}", filename, e))?;
+        // Check if current content matches ANY known bundled default
+        let known_defaults = all_known_defaults(filename);
+        let matches_any_default = known_defaults.iter().any(|default| {
+            normalize_content(default) == normalized_current
+        });
+
+        if matches_any_default {
+            // Unmodified default → replace with target locale's version
+            std::fs::write(&file_path, target)
+                .map_err(|e| format!("Failed to refresh {}: {}", filename, e))?;
         }
         // Otherwise: user has customised — leave untouched
     }
 
     Ok(())
+}
+
+/// Tauri command: refresh the default manager's persona files for the given locale.
+/// Finds the default manager by `is_default` flag (works with both "매니저" and "manager" folders).
+#[tauri::command]
+pub fn refresh_default_manager_persona(
+    app: AppHandle,
+    db: State<'_, Database>,
+    locale: String,
+) -> Result<(), AppError> {
+    let agents = agent_operations::list_agents_impl(&db)?;
+
+    // Find default manager by is_default flag
+    let default_agent = agents.iter().find(|a| a.is_default);
+
+    // Fallback: check for legacy "매니저" folder
+    let folder_name = match default_agent {
+        Some(agent) => agent.folder_name.clone(),
+        None => {
+            match agents.iter().find(|a| a.folder_name == "매니저") {
+                Some(agent) => agent.folder_name.clone(),
+                None => return Ok(()), // No default manager found — nothing to refresh
+            }
+        }
+    };
+
+    refresh_default_persona_impl(&app, &folder_name, &locale)
+        .map_err(|e| AppError::Io(format!("Failed to refresh manager persona: {}", e)))
 }
 
 /// Resize avatar image to 128x128 and return as Base64 string.
@@ -510,9 +616,13 @@ pub fn resize_avatar(image_base64: String) -> Result<String, AppError> {
 }
 
 /// Return the bootstrap prompt content (bundled at compile time).
+/// The `locale` parameter ("ko" or "en") determines which version to return.
 #[tauri::command]
-pub fn get_bootstrap_prompt() -> String {
-    include_str!("../../resources/bootstrap.md").to_string()
+pub fn get_bootstrap_prompt(locale: String) -> String {
+    match locale.as_str() {
+        "en" => include_str!("../../resources/en/bootstrap.md").to_string(),
+        _ => include_str!("../../resources/ko/bootstrap.md").to_string(),
+    }
 }
 
 fn get_agents_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
@@ -555,119 +665,160 @@ mod tests {
     }
 
     // -----------------------------------------------------------------------
-    // Tests for refresh_default_manager_persona (file-level, no AppHandle)
+    // Tests for locale-aware refresh logic (file-level, no AppHandle)
     // -----------------------------------------------------------------------
 
-    /// Helper: simulate per-file refresh logic without needing AppHandle.
-    /// Returns Some(new_content) if the file should be updated, None otherwise.
-    fn should_upgrade(current: &str, old_default: &str, new_default: &str) -> Option<String> {
+    /// Helper: simulate per-file locale-aware refresh logic without needing AppHandle.
+    /// Returns Some(target_content) if the file should be updated, None otherwise.
+    fn should_refresh(current: &str, filename: &str, locale: &str) -> Option<&'static str> {
+        let target = target_default(filename, locale)?;
         let normalized_current = normalize_content(current);
-        let normalized_old = normalize_content(old_default);
-        let normalized_new = normalize_content(new_default);
+        let normalized_target = normalize_content(target);
 
-        if normalized_current == normalized_new {
-            return None; // Already up to date
+        if normalized_current == normalized_target {
+            return None; // Already matches target
         }
-        if normalized_current == normalized_old {
-            return Some(new_default.to_string()); // Upgrade
-        }
-        None // User customised — preserve
+
+        let known = all_known_defaults(filename);
+        let matches_any = known.iter().any(|d| normalize_content(d) == normalized_current);
+
+        if matches_any { Some(target) } else { None }
     }
 
     #[test]
-    fn refresh_upgrades_untouched_old_default() {
-        // File matches old default → should be upgraded to new default
-        let result = should_upgrade(OLD_IDENTITY_MD, OLD_IDENTITY_MD, NEW_IDENTITY_MD);
-        assert!(result.is_some(), "Untouched old default should be upgraded");
-        assert_eq!(result.unwrap(), NEW_IDENTITY_MD);
+    fn refresh_upgrades_old_v1_to_ko() {
+        let result = should_refresh(OLD_IDENTITY_MD, "IDENTITY.md", "ko");
+        assert!(result.is_some(), "Old v1 default should be upgraded to ko");
+        assert_eq!(result.unwrap(), KO_IDENTITY_MD);
+    }
+
+    #[test]
+    fn refresh_upgrades_old_v1_to_en() {
+        let result = should_refresh(OLD_IDENTITY_MD, "IDENTITY.md", "en");
+        assert!(result.is_some(), "Old v1 default should be upgraded to en");
+        assert_eq!(result.unwrap(), EN_IDENTITY_MD);
+    }
+
+    #[test]
+    fn refresh_switches_ko_to_en() {
+        let result = should_refresh(KO_SOUL_MD, "SOUL.md", "en");
+        assert!(result.is_some(), "ko default should switch to en");
+        assert_eq!(result.unwrap(), EN_SOUL_MD);
+    }
+
+    #[test]
+    fn refresh_switches_en_to_ko() {
+        let result = should_refresh(EN_AGENTS_MD, "AGENTS.md", "ko");
+        assert!(result.is_some(), "en default should switch to ko");
+        assert_eq!(result.unwrap(), KO_AGENTS_MD);
     }
 
     #[test]
     fn refresh_preserves_user_modified_file() {
-        // File has been customised by user → should NOT be upgraded
         let user_content = "# My Custom Agent\n\nI changed this file.\n";
-        let result = should_upgrade(user_content, OLD_IDENTITY_MD, NEW_IDENTITY_MD);
+        let result = should_refresh(user_content, "IDENTITY.md", "ko");
         assert!(result.is_none(), "User-modified file should be preserved");
     }
 
     #[test]
-    fn refresh_idempotent_when_already_new_default() {
-        // File already matches new default → no upgrade needed
-        let result = should_upgrade(NEW_IDENTITY_MD, OLD_IDENTITY_MD, NEW_IDENTITY_MD);
-        assert!(result.is_none(), "Already new default should be left alone");
+    fn refresh_idempotent_when_already_target() {
+        let result = should_refresh(KO_IDENTITY_MD, "IDENTITY.md", "ko");
+        assert!(result.is_none(), "Already at target locale should be left alone");
     }
 
     #[test]
-    fn refresh_upgrades_old_soul_md() {
-        let result = should_upgrade(OLD_SOUL_MD, OLD_SOUL_MD, NEW_SOUL_MD);
-        assert!(result.is_some(), "Old SOUL.md should be upgraded");
-        assert_eq!(result.unwrap(), NEW_SOUL_MD);
+    fn refresh_handles_user_md() {
+        // USER.md: ko default → should switch to en
+        let result = should_refresh(KO_USER_MD, "USER.md", "en");
+        assert!(result.is_some(), "ko USER.md should switch to en");
+        assert_eq!(result.unwrap(), EN_USER_MD);
     }
 
     #[test]
-    fn refresh_upgrades_old_agents_md() {
-        let result = should_upgrade(OLD_AGENTS_MD, OLD_AGENTS_MD, NEW_AGENTS_MD);
-        assert!(result.is_some(), "Old AGENTS.md should be upgraded");
-        assert_eq!(result.unwrap(), NEW_AGENTS_MD);
+    fn refresh_preserves_custom_user_md() {
+        let custom = "# My Profile\nName: Alice\n";
+        let result = should_refresh(custom, "USER.md", "en");
+        assert!(result.is_none(), "Custom USER.md should be preserved");
     }
 
     #[test]
     fn refresh_handles_crlf_old_default() {
-        // Old default with Windows line endings should still match
         let crlf_old = OLD_IDENTITY_MD.replace('\n', "\r\n");
-        let result = should_upgrade(&crlf_old, OLD_IDENTITY_MD, NEW_IDENTITY_MD);
-        assert!(result.is_some(), "CRLF variant of old default should be upgraded");
+        let result = should_refresh(&crlf_old, "IDENTITY.md", "en");
+        assert!(result.is_some(), "CRLF variant of old default should be refreshed");
     }
 
     #[test]
-    fn refresh_handles_trailing_whitespace_in_old_default() {
-        // Old default with trailing spaces should still match
+    fn refresh_handles_trailing_whitespace() {
         let with_spaces = OLD_IDENTITY_MD
             .lines()
             .map(|l| format!("{}   ", l))
             .collect::<Vec<_>>()
             .join("\n");
-        let result = should_upgrade(&with_spaces, OLD_IDENTITY_MD, NEW_IDENTITY_MD);
-        assert!(result.is_some(), "Trailing whitespace variant should be upgraded");
+        let result = should_refresh(&with_spaces, "IDENTITY.md", "ko");
+        assert!(result.is_some(), "Trailing whitespace variant should be refreshed");
     }
 
     // -----------------------------------------------------------------------
-    // Tests for refresh using temp directory (integration-style, no AppHandle)
+    // Integration tests using temp directory (no AppHandle)
     // -----------------------------------------------------------------------
 
+    /// Helper: simulate full refresh_default_persona_impl for a temp directory
+    fn simulate_refresh(dir: &std::path::Path, locale: &str) {
+        let filenames = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"];
+        for filename in &filenames {
+            let file_path = dir.join(filename);
+            let current = match std::fs::read_to_string(&file_path) {
+                Ok(c) => c,
+                Err(_) => continue,
+            };
+            if let Some(target) = should_refresh(&current, filename, locale) {
+                std::fs::write(&file_path, target).unwrap();
+            }
+        }
+    }
+
     #[test]
-    fn refresh_integration_upgrade_on_disk() {
-        let tmp = std::env::temp_dir().join(format!("wa_test_upgrade_{}", std::process::id()));
+    fn refresh_integration_old_v1_to_ko() {
+        let tmp = std::env::temp_dir().join(format!("wa_test_v1_ko_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        // Write old defaults
         std::fs::write(tmp.join("IDENTITY.md"), OLD_IDENTITY_MD).unwrap();
         std::fs::write(tmp.join("SOUL.md"), OLD_SOUL_MD).unwrap();
         std::fs::write(tmp.join("AGENTS.md"), OLD_AGENTS_MD).unwrap();
         std::fs::write(tmp.join("USER.md"), "custom user notes").unwrap();
 
-        let files_to_check: &[(&str, &str, &str)] = &[
-            ("IDENTITY.md", OLD_IDENTITY_MD, NEW_IDENTITY_MD),
-            ("SOUL.md", OLD_SOUL_MD, NEW_SOUL_MD),
-            ("AGENTS.md", OLD_AGENTS_MD, NEW_AGENTS_MD),
-        ];
+        simulate_refresh(&tmp, "ko");
 
-        // Simulate refresh logic
-        for &(filename, old_default, new_default) in files_to_check {
-            let file_path = tmp.join(filename);
-            let current = std::fs::read_to_string(&file_path).unwrap();
-            if let Some(upgraded) = should_upgrade(&current, old_default, new_default) {
-                std::fs::write(&file_path, upgraded).unwrap();
-            }
-        }
-
-        // Verify upgrades
-        assert_eq!(std::fs::read_to_string(tmp.join("IDENTITY.md")).unwrap(), NEW_IDENTITY_MD);
-        assert_eq!(std::fs::read_to_string(tmp.join("SOUL.md")).unwrap(), NEW_SOUL_MD);
-        assert_eq!(std::fs::read_to_string(tmp.join("AGENTS.md")).unwrap(), NEW_AGENTS_MD);
-        // USER.md preserved
+        assert_eq!(std::fs::read_to_string(tmp.join("IDENTITY.md")).unwrap(), KO_IDENTITY_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("SOUL.md")).unwrap(), KO_SOUL_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("AGENTS.md")).unwrap(), KO_AGENTS_MD);
+        // Custom USER.md preserved
         assert_eq!(std::fs::read_to_string(tmp.join("USER.md")).unwrap(), "custom user notes");
+
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn refresh_integration_ko_to_en_locale_switch() {
+        let tmp = std::env::temp_dir().join(format!("wa_test_ko_en_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        // Start with ko defaults
+        std::fs::write(tmp.join("IDENTITY.md"), KO_IDENTITY_MD).unwrap();
+        std::fs::write(tmp.join("SOUL.md"), KO_SOUL_MD).unwrap();
+        std::fs::write(tmp.join("AGENTS.md"), KO_AGENTS_MD).unwrap();
+        std::fs::write(tmp.join("USER.md"), KO_USER_MD).unwrap();
+
+        // Switch to en
+        simulate_refresh(&tmp, "en");
+
+        assert_eq!(std::fs::read_to_string(tmp.join("IDENTITY.md")).unwrap(), EN_IDENTITY_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("SOUL.md")).unwrap(), EN_SOUL_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("AGENTS.md")).unwrap(), EN_AGENTS_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("USER.md")).unwrap(), EN_USER_MD);
 
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -678,48 +829,28 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         std::fs::create_dir_all(&tmp).unwrap();
 
-        // IDENTITY.md: user customised
         let custom_identity = "# Custom Identity\nMy own content.\n";
         std::fs::write(tmp.join("IDENTITY.md"), custom_identity).unwrap();
-        // SOUL.md: already new default
-        std::fs::write(tmp.join("SOUL.md"), NEW_SOUL_MD).unwrap();
-        // AGENTS.md: old default → should upgrade
+        std::fs::write(tmp.join("SOUL.md"), KO_SOUL_MD).unwrap();
         std::fs::write(tmp.join("AGENTS.md"), OLD_AGENTS_MD).unwrap();
+        std::fs::write(tmp.join("USER.md"), KO_USER_MD).unwrap();
 
-        let files_to_check: &[(&str, &str, &str)] = &[
-            ("IDENTITY.md", OLD_IDENTITY_MD, NEW_IDENTITY_MD),
-            ("SOUL.md", OLD_SOUL_MD, NEW_SOUL_MD),
-            ("AGENTS.md", OLD_AGENTS_MD, NEW_AGENTS_MD),
-        ];
+        simulate_refresh(&tmp, "en");
 
-        for &(filename, old_default, new_default) in files_to_check {
-            let file_path = tmp.join(filename);
-            let current = std::fs::read_to_string(&file_path).unwrap();
-            if let Some(upgraded) = should_upgrade(&current, old_default, new_default) {
-                std::fs::write(&file_path, upgraded).unwrap();
-            }
-        }
-
-        // Custom file preserved
+        // Custom preserved
         assert_eq!(std::fs::read_to_string(tmp.join("IDENTITY.md")).unwrap(), custom_identity);
-        // Already-new file left alone
-        assert_eq!(std::fs::read_to_string(tmp.join("SOUL.md")).unwrap(), NEW_SOUL_MD);
-        // Old default upgraded
-        assert_eq!(std::fs::read_to_string(tmp.join("AGENTS.md")).unwrap(), NEW_AGENTS_MD);
+        // Defaults switched to en
+        assert_eq!(std::fs::read_to_string(tmp.join("SOUL.md")).unwrap(), EN_SOUL_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("AGENTS.md")).unwrap(), EN_AGENTS_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("USER.md")).unwrap(), EN_USER_MD);
 
         // Run again — idempotent
-        for &(filename, old_default, new_default) in files_to_check {
-            let file_path = tmp.join(filename);
-            let current = std::fs::read_to_string(&file_path).unwrap();
-            if let Some(upgraded) = should_upgrade(&current, old_default, new_default) {
-                std::fs::write(&file_path, upgraded).unwrap();
-            }
-        }
+        simulate_refresh(&tmp, "en");
 
-        // Everything unchanged after second run
         assert_eq!(std::fs::read_to_string(tmp.join("IDENTITY.md")).unwrap(), custom_identity);
-        assert_eq!(std::fs::read_to_string(tmp.join("SOUL.md")).unwrap(), NEW_SOUL_MD);
-        assert_eq!(std::fs::read_to_string(tmp.join("AGENTS.md")).unwrap(), NEW_AGENTS_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("SOUL.md")).unwrap(), EN_SOUL_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("AGENTS.md")).unwrap(), EN_AGENTS_MD);
+        assert_eq!(std::fs::read_to_string(tmp.join("USER.md")).unwrap(), EN_USER_MD);
 
         let _ = std::fs::remove_dir_all(&tmp);
     }

@@ -1,0 +1,42 @@
+{
+  "save": "Save",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "add": "Add",
+  "edit": "Edit",
+  "close": "Close",
+  "copy": "Copy",
+  "copied": "Copied",
+  "loading": "Loading...",
+  "saving": "Saving...",
+  "saved": "Saved",
+  "none": "(none)",
+  "confirm": "Confirm",
+  "create": "Create",
+  "newConversation": "New Conversation",
+  "clearChat": "Clear Chat",
+  "defaultConversationTitle": "New Conversation",
+  "loadingMessage": "Thinking...",
+  "noResponse": "No response received.",
+  "apiError": "An error occurred during API call. Please check your API key.",
+  "serverResponse": "Server response: {{detail}}",
+  "date": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "thisWeek": "This Week",
+    "other": "Other",
+    "monthDay": "{{month}}/{{day}}"
+  },
+  "errors": {
+    "http401": "Invalid API key. Please check your settings.",
+    "http403": "API access denied.",
+    "http429": "Too many requests. Please try again later.",
+    "http500": "Server error. Please try again later.",
+    "http502": "Cannot connect to server. Please try again later.",
+    "http503": "Service temporarily unavailable.",
+    "parseError": "Unable to process response.",
+    "emptyResponse": "Empty response received.",
+    "network": "Please check your network connection.",
+    "settingsSaveFailed": "Failed to save settings: {{error}}"
+  }
+}

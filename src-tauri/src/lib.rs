@@ -90,6 +90,7 @@ pub fn run() {
             commands::read_agent_file,
             commands::sync_agents_from_fs,
             commands::seed_manager_agent,
+            commands::refresh_default_manager_persona,
             commands::resize_avatar,
             commands::get_bootstrap_prompt,
             commands::get_env_config,
