@@ -7,6 +7,7 @@ export interface ConversationListItem {
   id: string;
   title: string;
   agent_id: string;
+  team_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -31,6 +32,9 @@ export interface DbMessage {
   tool_call_id?: string | null;
   tool_name?: string | null;
   tool_input?: string | null;
+  sender_agent_id?: string | null;
+  team_run_id?: string | null;
+  team_task_id?: string | null;
   created_at: string;
 }
 
@@ -41,6 +45,9 @@ export interface SaveMessageRequest {
   tool_call_id?: string | null;
   tool_name?: string | null;
   tool_input?: string | null;
+  sender_agent_id?: string | null;
+  team_run_id?: string | null;
+  team_task_id?: string | null;
 }
 
 export interface MemoryNote {
@@ -165,6 +172,11 @@ export interface ChatMessage {
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   tool_name?: string;
+  senderAgentId?: string;
+  senderAgentName?: string;
+  senderAgentAvatar?: string | null;
+  teamRunId?: string;
+  teamTaskId?: string;
 }
 
 export interface ActiveRun {
@@ -173,6 +185,54 @@ export interface ActiveRun {
   targetMessageId: string;
   status: MessageStatus;
 }
+
+// ── Team types ───────────────────────────────────────
+export interface Team {
+  id: string;
+  name: string;
+  description: string;
+  leader_agent_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamMember {
+  id: string;
+  team_id: string;
+  agent_id: string;
+  role: 'leader' | 'member';
+  joined_at: string;
+}
+
+export interface TeamDetail {
+  team: Team;
+  members: TeamMember[];
+}
+
+export interface TeamRun {
+  id: string;
+  team_id: string;
+  conversation_id: string;
+  leader_agent_id: string;
+  status: 'running' | 'waiting_reports' | 'done' | 'failed' | 'cancelled';
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface TeamTask {
+  id: string;
+  run_id: string;
+  agent_id: string;
+  request_id: string | null;
+  task_description: string;
+  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  parent_message_id: string | null;
+  result_summary: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export type ExecutionRole = 'dm' | 'team_leader' | 'team_member';
 
 // ── Skill types ──────────────────────────────────────
 export interface SkillMetadata {

@@ -14,6 +14,7 @@ use api::{ApiState, RunRegistry};
 use commands::vault_commands::VaultState;
 use db::Database;
 use memory::SystemMemoryManager;
+use services::team_orchestrator::TeamOrchestrator;
 use tauri::Manager;
 use vault::VaultManager;
 
@@ -67,6 +68,14 @@ pub fn run() {
             // Initialize SystemMemoryManager
             app.manage(SystemMemoryManager::new(&app_dir));
 
+            // Recover stale team runs from previous sessions
+            let db_ref = app.state::<Database>();
+            if let Ok(recovered) = TeamOrchestrator::recover_runs(&db_ref) {
+                if recovered > 0 {
+                    eprintln!("Recovered {recovered} stale team run(s) on startup");
+                }
+            }
+
             let browser_manager = browser::BrowserManager::new(app_dir.clone(), Some(app.handle().clone()));
             let bm_clone = browser_manager.clone();
             app.manage(browser_manager);
@@ -78,6 +87,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::create_conversation,
+            commands::create_team_conversation,
             commands::get_conversations,
             commands::get_messages,
             commands::save_message,
@@ -183,6 +193,24 @@ pub fn run() {
             commands::update_conversation_digest,
             commands::update_conversation_consolidated,
             commands::archive_conversation_notes,
+            // Team commands
+            commands::create_team,
+            commands::get_team_detail,
+            commands::list_teams,
+            commands::update_team,
+            commands::delete_team,
+            commands::add_team_member,
+            commands::remove_team_member,
+            commands::create_team_run,
+            commands::update_team_run_status,
+            commands::get_team_run,
+            commands::get_running_runs,
+            commands::create_team_task,
+            commands::update_team_task,
+            commands::get_team_tasks,
+            commands::abort_team_run,
+            commands::execute_delegation,
+            commands::handle_team_report,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

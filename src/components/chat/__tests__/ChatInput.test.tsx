@@ -19,15 +19,15 @@ beforeEach(() => {
 
 describe("ChatInput", () => {
   it("renders input field and send button", () => {
-    render(<ChatInput />);
+    const { container } = render(<ChatInput />);
     expect(screen.getByPlaceholderText("메시지를 입력하세요...")).toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeInTheDocument();
+    expect(container.querySelector(".send-button")).toBeInTheDocument();
   });
 
   it("send button is disabled when input is empty", () => {
     useMessageStore.setState({ inputValue: "" });
-    render(<ChatInput />);
-    expect(screen.getByRole("button")).toBeDisabled();
+    const { container } = render(<ChatInput />);
+    expect(container.querySelector(".send-button")).toBeDisabled();
   });
 
   it("shows cancel button while sending", () => {
@@ -35,8 +35,8 @@ describe("ChatInput", () => {
       inputValue: "test",
       messages: [{ id: "1", type: "agent", content: "...", status: "pending" as const }],
     });
-    render(<ChatInput />);
-    const btn = screen.getByRole("button");
+    const { container } = render(<ChatInput />);
+    const btn = container.querySelector(".send-button")!;
     expect(btn).toHaveClass("cancel");
     expect(btn).not.toBeDisabled();
   });
@@ -70,8 +70,8 @@ describe("ChatInput", () => {
 
   it("send button enabled when input has content and not loading", () => {
     useMessageStore.setState({ inputValue: "hello", messages: [] });
-    render(<ChatInput />);
-    expect(screen.getByRole("button")).not.toBeDisabled();
+    const { container } = render(<ChatInput />);
+    expect(container.querySelector(".send-button")).not.toBeDisabled();
   });
 
   // ── IME composition tests ──
@@ -112,14 +112,14 @@ describe("ChatInput", () => {
   it("flushes localValue to store before sending via button click", () => {
     const sendSpy = vi.fn();
     useChatFlowStore.setState({ sendMessage: sendSpy });
-    render(<ChatInput />);
+    const { container } = render(<ChatInput />);
     const input = screen.getByPlaceholderText("메시지를 입력하세요...");
 
     // Type normally (not composing)
     fireEvent.change(input, { target: { value: "테스트" } });
     expect(useMessageStore.getState().inputValue).toBe("테스트");
 
-    const sendBtn = screen.getByRole("button");
+    const sendBtn = container.querySelector(".send-button")!;
     fireEvent.click(sendBtn);
     expect(sendSpy).toHaveBeenCalled();
     // Store should have the value before send

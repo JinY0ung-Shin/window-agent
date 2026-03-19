@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type MainView = "chat" | "network" | "vault";
+export type MainView = "chat" | "network" | "vault" | "team";
 
 const LS_KEY = "main_view";
 
@@ -10,7 +10,7 @@ interface NavigationState {
   toggleView: (view: MainView) => void;
 }
 
-const VALID_VIEWS: MainView[] = ["chat", "network", "vault"];
+const VALID_VIEWS: MainView[] = ["chat", "network", "vault", "team"];
 
 function loadMainView(): MainView {
   const stored = localStorage.getItem(LS_KEY);

@@ -219,6 +219,120 @@ fn run_incremental_migrations(conn: &Connection) -> Result<(), rusqlite::Error> 
         )?;
     }
 
+    // ── Team tables ──────────────────────────────────────────
+    // Check if teams table exists (first team migration marker)
+    let has_teams: bool = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='teams'")?
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            Ok(name)
+        })?
+        .filter_map(|r| r.ok())
+        .any(|_| true);
+
+    if !has_teams {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS teams (
+                id               TEXT PRIMARY KEY,
+                name             TEXT NOT NULL,
+                description      TEXT NOT NULL DEFAULT '',
+                leader_agent_id  TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS team_members (
+                id        TEXT PRIMARY KEY,
+                team_id   TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+                agent_id  TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                role      TEXT NOT NULL DEFAULT 'member',
+                joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(team_id, agent_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
+            CREATE INDEX IF NOT EXISTS idx_team_members_agent ON team_members(agent_id);
+
+            CREATE TABLE IF NOT EXISTS team_runs (
+                id               TEXT PRIMARY KEY,
+                team_id          TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+                conversation_id  TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                leader_agent_id  TEXT NOT NULL,
+                status           TEXT NOT NULL DEFAULT 'running',
+                started_at       TEXT NOT NULL DEFAULT (datetime('now')),
+                finished_at      TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_team_runs_team ON team_runs(team_id);
+            CREATE INDEX IF NOT EXISTS idx_team_runs_conversation ON team_runs(conversation_id);
+            CREATE INDEX IF NOT EXISTS idx_team_runs_status ON team_runs(status);
+
+            CREATE TABLE IF NOT EXISTS team_tasks (
+                id                TEXT PRIMARY KEY,
+                run_id            TEXT NOT NULL REFERENCES team_runs(id) ON DELETE CASCADE,
+                agent_id          TEXT NOT NULL,
+                request_id        TEXT,
+                task_description  TEXT NOT NULL DEFAULT '',
+                status            TEXT NOT NULL DEFAULT 'queued',
+                parent_message_id TEXT,
+                result_summary    TEXT,
+                started_at        TEXT,
+                finished_at       TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_team_tasks_run ON team_tasks(run_id);
+            CREATE INDEX IF NOT EXISTS idx_team_tasks_status ON team_tasks(status);
+            ",
+        )?;
+    }
+
+    // ── Add team_id to conversations ──
+    if !columns.contains(&"team_id".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE conversations ADD COLUMN team_id TEXT REFERENCES teams(id) ON DELETE SET NULL;"
+        )?;
+    }
+
+    // ── Add sender_agent_id, team_run_id, team_task_id to messages ──
+    let msg_columns: Vec<String> = conn
+        .prepare("PRAGMA table_info(messages)")?
+        .query_map([], |row| {
+            let name: String = row.get(1)?;
+            Ok(name)
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if !msg_columns.contains(&"sender_agent_id".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE messages ADD COLUMN sender_agent_id TEXT;"
+        )?;
+    }
+    if !msg_columns.contains(&"team_run_id".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE messages ADD COLUMN team_run_id TEXT;"
+        )?;
+    }
+    if !msg_columns.contains(&"team_task_id".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE messages ADD COLUMN team_task_id TEXT;"
+        )?;
+    }
+
+    // ── Add agent_id to tool_call_logs ──
+    let tcl_columns: Vec<String> = conn
+        .prepare("PRAGMA table_info(tool_call_logs)")?
+        .query_map([], |row| {
+            let name: String = row.get(1)?;
+            Ok(name)
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if !tcl_columns.contains(&"agent_id".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE tool_call_logs ADD COLUMN agent_id TEXT;"
+        )?;
+    }
+
     Ok(())
 }
 
@@ -408,7 +522,14 @@ mod tests {
         let conn = setup_conn();
         // Create schema without learning_mode (simulate old DB)
         conn.execute_batch(
-            "CREATE TABLE IF NOT EXISTS conversations (
+            "CREATE TABLE IF NOT EXISTS agents (
+                id TEXT PRIMARY KEY,
+                folder_name TEXT NOT NULL,
+                name TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS conversations (
                 id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
                 agent_id TEXT NOT NULL,
@@ -417,6 +538,20 @@ mod tests {
                 active_skills TEXT,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS tool_call_logs (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT NOT NULL,
+                tool_name TEXT NOT NULL,
+                tool_input TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );"
         ).unwrap();
 

@@ -18,6 +18,16 @@ pub fn create_conversation(
 }
 
 #[tauri::command]
+pub fn create_team_conversation(
+    db: State<'_, Database>,
+    team_id: String,
+    leader_agent_id: String,
+    title: Option<String>,
+) -> Result<ConversationListItem, AppError> {
+    Ok(operations::create_team_conversation_impl(&db, team_id, leader_agent_id, title)?)
+}
+
+#[tauri::command]
 pub fn get_conversations(db: State<'_, Database>) -> Result<Vec<ConversationListItem>, AppError> {
     Ok(operations::get_conversations_impl(&db)?)
 }

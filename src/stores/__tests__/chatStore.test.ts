@@ -31,6 +31,7 @@ vi.mock("../../services/commands/vaultCommands", () => ({
 vi.mock("../../services/personaService", () => ({
   FILE_NAME_MAP: { identity: "IDENTITY.md", soul: "SOUL.md", user: "USER.md", agents: "AGENTS.md", tools: "TOOLS.md" },
   readPersonaFiles: vi.fn().mockResolvedValue({ identity: "", soul: "", user: "", agents: "", tools: "" }),
+  readBootFile: vi.fn().mockResolvedValue(null),
   assembleSystemPrompt: vi.fn().mockReturnValue("mock prompt"),
   assembleManagerPrompt: vi.fn().mockReturnValue("mock prompt"),
   invalidatePersonaCache: vi.fn(),

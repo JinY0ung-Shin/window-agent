@@ -11,6 +11,7 @@ import koChat from "./locales/ko/chat.json";
 import koNetwork from "./locales/ko/network.json";
 import koVault from "./locales/ko/vault.json";
 import koPrompts from "./locales/ko/prompts.json";
+import koTeam from "./locales/ko/team.json";
 
 import enCommon from "./locales/en/common.json";
 import enGlossary from "./locales/en/glossary.json";
@@ -21,6 +22,7 @@ import enChat from "./locales/en/chat.json";
 import enNetwork from "./locales/en/network.json";
 import enVault from "./locales/en/vault.json";
 import enPrompts from "./locales/en/prompts.json";
+import enTeam from "./locales/en/team.json";
 
 export const SUPPORTED_LOCALES = ["ko", "en"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
@@ -38,6 +40,7 @@ const resources = {
     network: koNetwork,
     vault: koVault,
     prompts: koPrompts,
+    team: koTeam,
   },
   en: {
     common: enCommon,
@@ -49,6 +52,7 @@ const resources = {
     network: enNetwork,
     vault: enVault,
     prompts: enPrompts,
+    team: enTeam,
   },
 };
 
@@ -66,6 +70,7 @@ i18n.use(initReactI18next).init({
     "network",
     "vault",
     "prompts",
+    "team",
   ],
   defaultNS: "common",
   interpolation: { escapeValue: false },

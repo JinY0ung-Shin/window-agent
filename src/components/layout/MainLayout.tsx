@@ -7,12 +7,15 @@ import ChatWindow from "../chat/ChatWindow";
 import DebugPanel from "../debug/DebugPanel";
 import NetworkPanel from "../network/NetworkPanel";
 import VaultPanel from "../vault/VaultPanel";
+import TeamPanel from "../team/TeamPanel";
+import TeamChatWindow from "../team/TeamChatWindow";
 
 import { useDebugStore } from "../../stores/debugStore";
 import { useMemoryStore } from "../../stores/memoryStore";
 import { useVaultStore } from "../../stores/vaultStore";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useNavigationStore } from "../../stores/navigationStore";
+import { useTeamStore } from "../../stores/teamStore";
 import WindowControls from "./WindowControls";
 
 export default function MainLayout() {
@@ -20,6 +23,7 @@ export default function MainLayout() {
   const isDebugOpen = useDebugStore((s) => s.isOpen);
   const setDebugOpen = useDebugStore((s) => s.setOpen);
   const mainView = useNavigationStore((s) => s.mainView);
+  const selectedTeamId = useTeamStore((s) => s.selectedTeamId);
 
   const initializeNetwork = useNetworkStore((s) => s.initialize);
   const setupEventListeners = useNetworkStore((s) => s.setupEventListeners);
@@ -76,7 +80,13 @@ export default function MainLayout() {
     <div className="app-container">
       <Sidebar />
       <WindowControls />
-      {mainView === "vault" ? (
+      {mainView === "team" ? (
+        selectedTeamId ? (
+          <TeamChatWindow />
+        ) : (
+          <TeamPanel />
+        )
+      ) : mainView === "vault" ? (
         <VaultPanel />
       ) : mainView === "network" ? (
         <NetworkPanel />

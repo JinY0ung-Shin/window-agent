@@ -26,6 +26,7 @@ pub fn create_conversation_impl(
             id: Uuid::new_v4().to_string(),
             title: title.unwrap_or_else(|| "새 대화".to_string()),
             agent_id: agent_id.clone(),
+            team_id: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -39,18 +40,45 @@ pub fn create_conversation_impl(
     })
 }
 
+pub fn create_team_conversation_impl(
+    db: &Database,
+    team_id: String,
+    leader_agent_id: String,
+    title: Option<String>,
+) -> Result<ConversationListItem, DbError> {
+    db.with_conn(|conn| {
+        let now = Utc::now().to_rfc3339();
+        let conv = ConversationListItem {
+            id: Uuid::new_v4().to_string(),
+            title: title.unwrap_or_else(|| "팀 대화".to_string()),
+            agent_id: leader_agent_id,
+            team_id: Some(team_id.clone()),
+            created_at: now.clone(),
+            updated_at: now,
+        };
+
+        conn.execute(
+            "INSERT INTO conversations (id, title, agent_id, team_id, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            rusqlite::params![conv.id, conv.title, conv.agent_id, conv.team_id, conv.created_at, conv.updated_at],
+        )?;
+
+        Ok(conv)
+    })
+}
+
 pub fn get_conversations_impl(db: &Database) -> Result<Vec<ConversationListItem>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn
-            .prepare("SELECT id, title, agent_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
+            .prepare("SELECT id, title, agent_id, team_id, created_at, updated_at FROM conversations ORDER BY updated_at DESC")?;
 
         let rows = stmt.query_map([], |row| {
             Ok(ConversationListItem {
                 id: row.get(0)?,
                 title: row.get(1)?,
                 agent_id: row.get(2)?,
-                created_at: row.get(3)?,
-                updated_at: row.get(4)?,
+                team_id: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
             })
         })?;
 
@@ -64,25 +92,26 @@ pub fn get_conversation_detail_impl(
 ) -> Result<ConversationDetail, DbError> {
     db.with_conn(|conn| {
         let detail = conn.query_row(
-            "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, learning_mode, digest_id, consolidated_at, created_at, updated_at FROM conversations WHERE id = ?1",
+            "SELECT id, title, agent_id, team_id, summary, summary_up_to_message_id, active_skills, learning_mode, digest_id, consolidated_at, created_at, updated_at FROM conversations WHERE id = ?1",
             rusqlite::params![id],
             |row| {
-                let active_skills_raw: Option<String> = row.get(5)?;
+                let active_skills_raw: Option<String> = row.get(6)?;
                 let active_skills: Option<Vec<String>> = active_skills_raw
                     .and_then(|s| serde_json::from_str(&s).ok());
-                let learning_mode_raw: i64 = row.get::<_, Option<i64>>(6)?.unwrap_or(0);
+                let learning_mode_raw: i64 = row.get::<_, Option<i64>>(7)?.unwrap_or(0);
                 Ok(ConversationDetail {
                     id: row.get(0)?,
                     title: row.get(1)?,
                     agent_id: row.get(2)?,
-                    summary: row.get(3)?,
-                    summary_up_to_message_id: row.get(4)?,
+                    team_id: row.get(3)?,
+                    summary: row.get(4)?,
+                    summary_up_to_message_id: row.get(5)?,
                     active_skills,
                     learning_mode: learning_mode_raw != 0,
-                    digest_id: row.get(7)?,
-                    consolidated_at: row.get(8)?,
-                    created_at: row.get(9)?,
-                    updated_at: row.get(10)?,
+                    digest_id: row.get(8)?,
+                    consolidated_at: row.get(9)?,
+                    created_at: row.get(10)?,
+                    updated_at: row.get(11)?,
                 })
             },
         )?;
@@ -96,7 +125,7 @@ pub fn get_messages_impl(
 ) -> Result<Vec<Message>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
+            "SELECT id, conversation_id, role, content, tool_call_id, tool_name, tool_input, sender_agent_id, team_run_id, team_task_id, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
         )?;
 
         let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
@@ -108,7 +137,10 @@ pub fn get_messages_impl(
                 tool_call_id: row.get(4)?,
                 tool_name: row.get(5)?,
                 tool_input: row.get(6)?,
-                created_at: row.get(7)?,
+                sender_agent_id: row.get(7)?,
+                team_run_id: row.get(8)?,
+                team_task_id: row.get(9)?,
+                created_at: row.get(10)?,
             })
         })?;
 
@@ -130,12 +162,15 @@ pub fn save_message_impl(
             tool_call_id: request.tool_call_id,
             tool_name: request.tool_name,
             tool_input: request.tool_input,
+            sender_agent_id: request.sender_agent_id,
+            team_run_id: request.team_run_id,
+            team_task_id: request.team_task_id,
             created_at: now.clone(),
         };
 
         conn.execute(
-            "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            rusqlite::params![msg.id, msg.conversation_id, msg.role, msg.content, msg.tool_call_id, msg.tool_name, msg.tool_input, msg.created_at],
+            "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, sender_agent_id, team_run_id, team_task_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            rusqlite::params![msg.id, msg.conversation_id, msg.role, msg.content, msg.tool_call_id, msg.tool_name, msg.tool_input, msg.sender_agent_id, msg.team_run_id, msg.team_task_id, msg.created_at],
         )?;
 
         conn.execute(
@@ -358,6 +393,7 @@ pub fn create_tool_call_log_impl(
             status: "pending".to_string(),
             duration_ms: None,
             artifact_id: None,
+            agent_id: None,
             created_at: now,
         };
 
@@ -376,7 +412,7 @@ pub fn list_tool_call_logs_impl(
 ) -> Result<Vec<ToolCallLog>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, conversation_id, message_id, tool_name, tool_input, tool_output, status, duration_ms, artifact_id, created_at FROM tool_call_logs WHERE conversation_id = ?1 ORDER BY created_at ASC",
+            "SELECT id, conversation_id, message_id, tool_name, tool_input, tool_output, status, duration_ms, artifact_id, agent_id, created_at FROM tool_call_logs WHERE conversation_id = ?1 ORDER BY created_at ASC",
         )?;
 
         let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
@@ -390,7 +426,8 @@ pub fn list_tool_call_logs_impl(
                 status: row.get(6)?,
                 duration_ms: row.get(7)?,
                 artifact_id: row.get(8)?,
-                created_at: row.get(9)?,
+                agent_id: row.get(9)?,
+                created_at: row.get(10)?,
             })
         })?;
 
@@ -605,6 +642,9 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 tool_input: None,
+                sender_agent_id: None,
+                team_run_id: None,
+                team_task_id: None,
             },
         )
         .unwrap();
@@ -634,6 +674,9 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 tool_input: None,
+                sender_agent_id: None,
+                team_run_id: None,
+                team_task_id: None,
             },
         )
         .unwrap();
@@ -666,6 +709,9 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 tool_input: None,
+                sender_agent_id: None,
+                team_run_id: None,
+                team_task_id: None,
             },
         )
         .unwrap();
@@ -696,6 +742,9 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 tool_input: None,
+                sender_agent_id: None,
+                team_run_id: None,
+                team_task_id: None,
             },
         );
         assert!(result.is_err());
@@ -722,6 +771,9 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 tool_input: None,
+                sender_agent_id: None,
+                team_run_id: None,
+                team_task_id: None,
             },
         )
         .unwrap();
@@ -734,6 +786,9 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 tool_input: None,
+                sender_agent_id: None,
+                team_run_id: None,
+                team_task_id: None,
             },
         )
         .unwrap();
@@ -807,6 +862,9 @@ mod tests {
                 tool_call_id: None,
                 tool_name: None,
                 tool_input: None,
+                sender_agent_id: None,
+                team_run_id: None,
+                team_task_id: None,
             },
         );
         assert!(result.is_err(), "FK constraint should reject nonexistent conversation_id");
@@ -836,9 +894,12 @@ mod tests {
             conversation_id: conv.id.clone(),
             role: "user".into(),
             content: "hello".into(),
-                tool_call_id: None,
-                tool_name: None,
-                tool_input: None,
+            tool_call_id: None,
+            tool_name: None,
+            tool_input: None,
+            sender_agent_id: None,
+            team_run_id: None,
+            team_task_id: None,
         }).unwrap();
 
         let affected = update_conversation_summary_impl(
@@ -911,9 +972,12 @@ mod tests {
             conversation_id: conv.id.clone(),
             role: "user".into(),
             content: "hello".into(),
-                tool_call_id: None,
-                tool_name: None,
-                tool_input: None,
+            tool_call_id: None,
+            tool_name: None,
+            tool_input: None,
+            sender_agent_id: None,
+            team_run_id: None,
+            team_task_id: None,
         }).unwrap();
 
         // First update: expected_previous is None (NULL)

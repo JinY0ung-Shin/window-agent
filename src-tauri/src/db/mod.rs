@@ -4,6 +4,7 @@ pub mod migrations;
 pub mod models;
 pub mod operations;
 pub mod schema;
+pub mod team_operations;
 
 use error::DbError;
 use rusqlite::Connection;

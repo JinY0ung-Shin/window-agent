@@ -1,6 +1,7 @@
 import { useSettingsStore } from "../stores/settingsStore";
 import { useConversationStore } from "../stores/conversationStore";
 import { useAgentStore } from "../stores/agentStore";
+import { useTeamStore } from "../stores/teamStore";
 import * as cmds from "./tauriCommands";
 import { refreshDefaultManagerPersona } from "./commands/agentCommands";
 import { emitLifecycleEvent } from "./lifecycleEvents";
@@ -71,6 +72,13 @@ export async function initializeApp(): Promise<void> {
     await loadConversations();
   } catch (e) {
     console.warn("loadConversations:", e);
+  }
+
+  // Step 6b: Load teams
+  try {
+    await useTeamStore.getState().loadTeams();
+  } catch (e) {
+    console.warn("loadTeams:", e);
   }
 
   // Step 7: Auto-initialize branding for upgraded users.

@@ -20,6 +20,14 @@ export async function getConversations(): Promise<Conversation[]> {
   return invoke("get_conversations");
 }
 
+export async function createTeamConversation(
+  teamId: string,
+  leaderAgentId: string,
+  title?: string,
+): Promise<Conversation> {
+  return invoke("create_team_conversation", { teamId, leaderAgentId, title: title ?? null });
+}
+
 export async function getConversationDetail(id: string): Promise<ConversationDetail> {
   return invoke("get_conversation_detail", { id });
 }
@@ -138,4 +146,10 @@ export async function updateConversationConsolidated(conversationId: string): Pr
 
 export async function archiveConversationNotes(conversationId: string, agentId: string): Promise<number> {
   return invoke("archive_conversation_notes", { conversationId, agentId });
+}
+
+// ── Team Run ──
+
+export async function abortTeamRun(runId: string): Promise<void> {
+  return invoke("abort_team_run", { runId });
 }

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { BookOpen, Bot, Check, Eraser, Network, Plus, Settings, Users, X } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useTeamStore } from "../../stores/teamStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useNavigationStore } from "../../stores/navigationStore";
@@ -20,8 +21,10 @@ export default function Sidebar() {
   const openEditor = useAgentStore((s) => s.openEditor);
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
+  const teams = useTeamStore((s) => s.teams);
   const { mainView, toggleView, setMainView } = useNavigationStore();
   const { t } = useTranslation("glossary");
+  const tt = useTranslation("team").t;
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const companyName = useSettingsStore((s) => s.companyName);
   const onDrag = useDragRegion();
@@ -186,6 +189,16 @@ export default function Sidebar() {
         >
           <BookOpen size={20} />
           <span>{t("vault:title")}</span>
+        </div>
+        <div
+          className={`menu-item ${mainView === "team" ? "active" : ""}`}
+          onClick={() => toggleView("team")}
+        >
+          <Users size={20} />
+          <span>{tt("title")}</span>
+          {teams.length > 0 && (
+            <span className="sidebar-badge">{teams.length}</span>
+          )}
         </div>
         <div
           className="menu-item settings-btn"

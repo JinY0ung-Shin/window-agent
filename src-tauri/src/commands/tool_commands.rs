@@ -33,11 +33,12 @@ pub fn get_native_tools() -> Result<Vec<NativeToolDef>, String> {
 }
 
 /// Generates default TOOL_CONFIG.json from native tool definitions (all enabled, default tiers).
+/// Orchestration tools (delegate, report) are excluded — they are managed by the team orchestrator.
 #[tauri::command]
 pub fn get_default_tool_config() -> Result<String, String> {
     let defs = native_tool_definitions();
     let mut native = serde_json::Map::new();
-    for def in &defs {
+    for def in defs.iter().filter(|d| d.category != "orchestration") {
         native.insert(
             def.name.clone(),
             serde_json::json!({ "enabled": true, "tier": def.default_tier }),
@@ -95,8 +96,8 @@ fn get_agents_dir_for_tools(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir.join("agents"))
 }
 
-fn native_tool_definitions() -> Vec<NativeToolDef> {
-    vec![
+pub fn native_tool_definitions() -> Vec<NativeToolDef> {
+    let mut defs = vec![
         NativeToolDef {
             name: "read_file".into(),
             description: "지정 경로의 파일 내용을 읽습니다".into(),
@@ -281,7 +282,58 @@ fn native_tool_definitions() -> Vec<NativeToolDef> {
                 "required": ["url"]
             }),
         },
-    ]
+    ];
+
+    // Orchestration tools — these are not directly executed by execute_tool;
+    // they are intercepted by the frontend/orchestrator layer.
+    defs.push(NativeToolDef {
+        name: "delegate".into(),
+        description: "팀 멤버들에게 작업을 위임합니다 (팀 리더 전용)".into(),
+        category: "orchestration".into(),
+        default_tier: "auto".into(),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "agents": {
+                    "type": "array",
+                    "items": { "type": "string" },
+                    "description": "작업을 위임할 에이전트 ID 목록"
+                },
+                "task": {
+                    "type": "string",
+                    "description": "위임할 작업 설명"
+                },
+                "context": {
+                    "type": "string",
+                    "description": "추가 컨텍스트 정보 (선택)"
+                }
+            },
+            "required": ["agents", "task"]
+        }),
+    });
+
+    defs.push(NativeToolDef {
+        name: "report".into(),
+        description: "팀 리더에게 작업 결과를 보고합니다 (팀 멤버 전용)".into(),
+        category: "orchestration".into(),
+        default_tier: "auto".into(),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "summary": {
+                    "type": "string",
+                    "description": "작업 결과 요약"
+                },
+                "details": {
+                    "type": "string",
+                    "description": "상세 설명 (선택)"
+                }
+            },
+            "required": ["summary"]
+        }),
+    });
+
+    defs
 }
 
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
@@ -885,6 +937,17 @@ async fn execute_tool_inner(
 
         "http_request" => {
             tool_http_request(app, input, conversation_id, db).await
+        }
+
+        // ── Orchestration tools ──
+        // These are not executed directly — the frontend/orchestrator intercepts them.
+        // If they reach here, return a structured result indicating orchestration action.
+        "delegate" | "report" => {
+            Ok(serde_json::json!({
+                "orchestration": true,
+                "tool": tool_name,
+                "input": input,
+            }))
         }
 
         _ => Err(format!("Unknown tool: '{}'", tool_name)),

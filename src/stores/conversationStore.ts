@@ -32,6 +32,8 @@ interface ConversationState {
   triggerConsolidation: (conversationId: string, agentId: string) => void;
   initConsolidationRecovery: () => void;
 
+  dmConversations: () => Conversation[];
+  teamConversations: () => Conversation[];
   loadConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<{ messages: ChatMessage[] }>;
   createNewConversation: () => void;
@@ -50,6 +52,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   currentLearningMode: false,
   draftLearningMode: false,
   learningModeWarning: false,
+
+  // Computed getters
+  dmConversations: () => get().conversations.filter((c) => !c.team_id),
+  teamConversations: () => get().conversations.filter((c) => !!c.team_id),
 
   // Consolidated memory
   consolidatedMemory: null,
@@ -150,24 +156,38 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     ]);
     if (get().currentConversationId !== id) return { messages: [] }; // stale guard
 
-    const messages: ChatMessage[] = dbMessages.map((m) => {
-      if (m.role === "user") {
-        return { id: m.id, dbMessageId: m.id, type: "user" as const, content: m.content, status: "complete" as const };
-      }
-      if (m.tool_call_id) {
-        return {
-          id: m.id, dbMessageId: m.id, type: "tool" as const, content: m.content, status: "complete" as const,
-          tool_call_id: m.tool_call_id, tool_name: m.tool_name ?? undefined,
-        };
-      }
-      const chatMsg: ChatMessage = { id: m.id, dbMessageId: m.id, type: "agent" as const, content: m.content, status: "complete" as const };
-      if (m.tool_name && m.tool_input) {
-        try {
-          chatMsg.tool_calls = JSON.parse(m.tool_input);
-        } catch { /* ignore parse errors */ }
-      }
-      return chatMsg;
-    });
+    const messages: ChatMessage[] = dbMessages
+      .filter((m) => !(m.role === "tool" && m.tool_name === "__team_synthesis_context"))
+      .map((m) => {
+        let chatMsg: ChatMessage;
+        if (m.role === "user") {
+          chatMsg = { id: m.id, dbMessageId: m.id, type: "user" as const, content: m.content, status: "complete" as const };
+        } else if (m.tool_call_id) {
+          chatMsg = {
+            id: m.id, dbMessageId: m.id, type: "tool" as const, content: m.content, status: "complete" as const,
+            tool_call_id: m.tool_call_id, tool_name: m.tool_name ?? undefined,
+          };
+        } else {
+          chatMsg = { id: m.id, dbMessageId: m.id, type: "agent" as const, content: m.content, status: "complete" as const };
+          if (m.tool_name && m.tool_input) {
+            try {
+              chatMsg.tool_calls = JSON.parse(m.tool_input);
+            } catch { /* ignore parse errors */ }
+          }
+        }
+        // Map team sender metadata
+        if (m.sender_agent_id) {
+          chatMsg.senderAgentId = m.sender_agent_id;
+          chatMsg.teamRunId = m.team_run_id ?? undefined;
+          chatMsg.teamTaskId = m.team_task_id ?? undefined;
+          const agent = useAgentStore.getState().agents.find((a) => a.id === m.sender_agent_id);
+          if (agent) {
+            chatMsg.senderAgentName = agent.name;
+            chatMsg.senderAgentAvatar = agent.avatar;
+          }
+        }
+        return chatMsg;
+      });
 
     // Sync messages to messageStore
     useMessageStore.setState({ messages });
