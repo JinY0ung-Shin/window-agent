@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Conversation, ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { readToolConfig } from "../services/nativeToolRegistry";
+import { consolidateConversation, recoverPendingConsolidations } from "../services/consolidationService";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
 import { useVaultStore } from "./vaultStore";
@@ -24,6 +25,12 @@ interface ConversationState {
   resetLearningModeState: () => void;
   dismissLearningModeWarning: () => void;
 
+  // Consolidated memory
+  consolidatedMemory: string | null;
+  loadConsolidatedMemory: (agentId: string) => Promise<void>;
+  triggerConsolidation: (conversationId: string, agentId: string) => void;
+  initConsolidationRecovery: () => void;
+
   loadConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<{ messages: ChatMessage[] }>;
   createNewConversation: () => void;
@@ -42,6 +49,32 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   currentLearningMode: false,
   draftLearningMode: false,
   learningModeWarning: false,
+
+  // Consolidated memory
+  consolidatedMemory: null,
+
+  loadConsolidatedMemory: async (agentId: string) => {
+    try {
+      const content = await cmds.readConsolidatedMemory(agentId);
+      set({ consolidatedMemory: content ?? null });
+    } catch {
+      set({ consolidatedMemory: null });
+    }
+  },
+
+  triggerConsolidation: (conversationId: string, agentId: string) => {
+    // Fire and forget — don't block UI
+    consolidateConversation(conversationId, agentId)
+      .then(() => {
+        // Reload consolidated memory after consolidation completes
+        get().loadConsolidatedMemory(agentId);
+      })
+      .catch(() => {});
+  },
+
+  initConsolidationRecovery: () => {
+    recoverPendingConsolidations().catch(() => {});
+  },
 
   getCurrentLearningMode: () => {
     const { currentConversationId, currentLearningMode, draftLearningMode } = get();
@@ -85,7 +118,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
-  resetLearningModeState: () => set({ currentLearningMode: false, draftLearningMode: false, learningModeWarning: false }),
+  resetLearningModeState: () => set({ currentLearningMode: false, draftLearningMode: false, learningModeWarning: false, consolidatedMemory: null }),
 
   dismissLearningModeWarning: () => set({ learningModeWarning: false }),
 
@@ -97,7 +130,16 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   selectConversation: async (id) => {
-    set({ currentConversationId: id, draftLearningMode: false, learningModeWarning: false });
+    // Trigger consolidation for the previous conversation (fire-and-forget)
+    const prevConvId = get().currentConversationId;
+    if (prevConvId && prevConvId !== id) {
+      const prevConv = get().conversations.find((c) => c.id === prevConvId);
+      if (prevConv) {
+        get().triggerConsolidation(prevConvId, prevConv.agent_id);
+      }
+    }
+
+    set({ currentConversationId: id, draftLearningMode: false, learningModeWarning: false, consolidatedMemory: null });
     resetTransientChatState();
 
     const [detail, dbMessages] = await Promise.all([
@@ -133,6 +175,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     // Sync learning mode from DB
     set({ currentLearningMode: detail.learning_mode ?? false });
 
+    // Load consolidated memory for prompt injection (awaited to ensure it's ready before first send)
+    await get().loadConsolidatedMemory(detail.agent_id);
+
     // Sync agent selection and load memory/skills/debug
     if (detail.agent_id) {
       useAgentStore.getState().selectAgent(detail.agent_id);
@@ -152,6 +197,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   createNewConversation: () => {
+    // Trigger consolidation for previous conversation
+    const prevConvId = get().currentConversationId;
+    if (prevConvId) {
+      const prevConv = get().conversations.find((c) => c.id === prevConvId);
+      if (prevConv) get().triggerConsolidation(prevConvId, prevConv.agent_id);
+    }
     resetChatContext();
   },
 
@@ -172,9 +223,16 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (agentConv) {
       await get().selectConversation(agentConv.id);
     } else {
+      // Trigger consolidation for previous conversation
+      const prevConvId = get().currentConversationId;
+      if (prevConvId) {
+        const prevConv = get().conversations.find((c) => c.id === prevConvId);
+        if (prevConv) get().triggerConsolidation(prevConvId, prevConv.agent_id);
+      }
       // No conversation exists — prepare empty DM for this agent
       resetChatContext();
       useAgentStore.getState().selectAgent(agentId);
+      await get().loadConsolidatedMemory(agentId);
       const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
       if (agent) {
         useMemoryStore.getState().loadNotes(agentId);
@@ -211,12 +269,17 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   startNewAgentConversation: async (agentId) => {
-    // Prepare empty DM for the agent — reuses the same path as openAgentChat's "no conversation" branch
-    // so memory, skills, and agent selection are correctly loaded.
+    // Trigger consolidation for previous conversation
+    const prevConvId = get().currentConversationId;
+    if (prevConvId) {
+      const prevConv = get().conversations.find((c) => c.id === prevConvId);
+      if (prevConv) get().triggerConsolidation(prevConvId, prevConv.agent_id);
+    }
     set({ currentConversationId: null });
     get().resetLearningModeState();
     resetTransientChatState();
     useAgentStore.getState().selectAgent(agentId);
+    await get().loadConsolidatedMemory(agentId);
     const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
     if (agent) {
       useMemoryStore.getState().loadNotes(agentId);

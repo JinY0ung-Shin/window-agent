@@ -492,6 +492,7 @@ fn tool_memory_note(
     vault: &VaultState,
     input: &serde_json::Value,
     auto_agent_id: &str,
+    conversation_id: &str,
 ) -> Result<serde_json::Value, String> {
     let action = input["action"]
         .as_str()
@@ -524,7 +525,7 @@ fn tool_memory_note(
                 .unwrap_or_default();
 
             let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-            let note = vm.create_note(
+            let note = vm.create_note_with_provenance(
                 agent_id,
                 scope,
                 category,
@@ -532,6 +533,7 @@ fn tool_memory_note(
                 content,
                 tags,
                 related_ids,
+                if conversation_id.is_empty() { None } else { Some(conversation_id) },
             ).map_err(|e| format!("memory_note create failed: {}", e))?;
 
             // Return legacy-compatible JSON: { id, agent_id, title, content, created_at, updated_at }
@@ -802,7 +804,7 @@ async fn execute_tool_inner(
                 .map(|c| c.agent_id)
                 .unwrap_or_default();
             let vault = app.state::<VaultState>();
-            tool_memory_note(&vault, input, &agent_id)
+            tool_memory_note(&vault, input, &agent_id, conversation_id)
         }
 
         // ── Browser automation tools ──
@@ -1506,7 +1508,7 @@ mod tests {
     fn test_memory_note_unknown_action() {
         let (_tmp, vault) = make_test_vault();
         let input = serde_json::json!({ "action": "fly" });
-        let result = tool_memory_note(&vault, &input, "test-agent-id");
+        let result = tool_memory_note(&vault, &input, "test-agent-id", "");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("unknown action"));
     }
@@ -1515,7 +1517,7 @@ mod tests {
     fn test_memory_note_create_missing_fields() {
         let (_tmp, vault) = make_test_vault();
         let input = serde_json::json!({ "action": "create" });
-        let result = tool_memory_note(&vault, &input, "test-agent-id");
+        let result = tool_memory_note(&vault, &input, "test-agent-id", "");
         assert!(result.is_err());
     }
 
@@ -1530,7 +1532,7 @@ mod tests {
             "title": "Test Note",
             "content": "Note body"
         });
-        let created = tool_memory_note(&vault, &create_input, agent_id).unwrap();
+        let created = tool_memory_note(&vault, &create_input, agent_id, "").unwrap();
         assert_eq!(created["title"], "Test Note");
         assert_eq!(created["agent_id"], agent_id);
 
@@ -1540,7 +1542,7 @@ mod tests {
         let read_input = serde_json::json!({
             "action": "read"
         });
-        let notes = tool_memory_note(&vault, &read_input, agent_id).unwrap();
+        let notes = tool_memory_note(&vault, &read_input, agent_id, "").unwrap();
         let arr = notes.as_array().unwrap();
         assert_eq!(arr.len(), 1);
 
@@ -1550,7 +1552,7 @@ mod tests {
             "id": note_id,
             "content": "Updated body"
         });
-        let updated = tool_memory_note(&vault, &update_input, agent_id).unwrap();
+        let updated = tool_memory_note(&vault, &update_input, agent_id, "").unwrap();
         assert!(updated["content"].as_str().unwrap().contains("Updated body"));
 
         // Delete
@@ -1558,11 +1560,11 @@ mod tests {
             "action": "delete",
             "id": note_id
         });
-        let deleted = tool_memory_note(&vault, &delete_input, agent_id).unwrap();
+        let deleted = tool_memory_note(&vault, &delete_input, agent_id, "").unwrap();
         assert_eq!(deleted["success"], true);
 
         // Verify empty
-        let notes_after = tool_memory_note(&vault, &read_input, agent_id).unwrap();
+        let notes_after = tool_memory_note(&vault, &read_input, agent_id, "").unwrap();
         assert_eq!(notes_after.as_array().unwrap().len(), 0);
     }
 
@@ -1577,14 +1579,14 @@ mod tests {
             "title": "Rust Programming",
             "content": "Rust is a systems language"
         });
-        tool_memory_note(&vault, &create_input, agent_id).unwrap();
+        tool_memory_note(&vault, &create_input, agent_id, "").unwrap();
 
         // Search
         let search_input = serde_json::json!({
             "action": "search",
             "query": "Rust"
         });
-        let results = tool_memory_note(&vault, &search_input, agent_id).unwrap();
+        let results = tool_memory_note(&vault, &search_input, agent_id, "").unwrap();
         assert!(!results.as_array().unwrap().is_empty());
     }
 
@@ -1600,7 +1602,7 @@ mod tests {
                 "title": format!("Note {i}"),
                 "content": format!("Content {i}")
             });
-            tool_memory_note(&vault, &input, agent_id).unwrap();
+            tool_memory_note(&vault, &input, agent_id, "").unwrap();
         }
 
         // Recall
@@ -1608,7 +1610,7 @@ mod tests {
             "action": "recall",
             "limit": 2
         });
-        let results = tool_memory_note(&vault, &recall_input, agent_id).unwrap();
+        let results = tool_memory_note(&vault, &recall_input, agent_id, "").unwrap();
         assert_eq!(results.as_array().unwrap().len(), 2);
     }
 

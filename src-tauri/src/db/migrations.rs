@@ -31,6 +31,8 @@ fn create_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
             summary_up_to_message_id TEXT,
             active_skills   TEXT,
             learning_mode   INTEGER DEFAULT 0,
+            digest_id       TEXT,
+            consolidated_at TEXT,
             created_at      TEXT NOT NULL,
             updated_at      TEXT NOT NULL
         );
@@ -193,6 +195,27 @@ fn run_incremental_migrations(conn: &Connection) -> Result<(), rusqlite::Error> 
     if !has_learning_mode {
         conn.execute_batch(
             "ALTER TABLE conversations ADD COLUMN learning_mode INTEGER DEFAULT 0;"
+        )?;
+    }
+
+    // Check for consolidation checkpoint columns
+    let columns: Vec<String> = conn
+        .prepare("PRAGMA table_info(conversations)")?
+        .query_map([], |row| {
+            let name: String = row.get(1)?;
+            Ok(name)
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    if !columns.contains(&"digest_id".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE conversations ADD COLUMN digest_id TEXT;"
+        )?;
+    }
+    if !columns.contains(&"consolidated_at".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE conversations ADD COLUMN consolidated_at TEXT;"
         )?;
     }
 

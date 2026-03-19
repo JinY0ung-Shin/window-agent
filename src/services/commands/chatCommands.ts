@@ -100,3 +100,42 @@ export async function executeTool(
 ): Promise<ToolExecutionResult> {
   return invoke("execute_tool", { toolName, toolInput, conversationId });
 }
+
+// ── System Memory (Consolidation) ──
+
+export interface PendingConsolidation {
+  conversation_id: string;
+  agent_id: string;
+}
+
+export async function readConsolidatedMemory(agentId: string): Promise<string | null> {
+  return invoke("read_consolidated_memory", { agentId });
+}
+
+export async function listPendingConsolidations(): Promise<PendingConsolidation[]> {
+  return invoke("list_pending_consolidations");
+}
+
+export async function readDigest(agentId: string, conversationId: string): Promise<string | null> {
+  return invoke("read_digest", { agentId, conversationId });
+}
+
+export async function writeDigest(agentId: string, conversationId: string, content: string): Promise<string> {
+  return invoke("write_digest", { agentId, conversationId, content });
+}
+
+export async function writeConsolidatedMemory(agentId: string, content: string, version: number): Promise<void> {
+  return invoke("write_consolidated_memory", { agentId, content, version });
+}
+
+export async function updateConversationDigest(conversationId: string, digestId: string | null): Promise<void> {
+  return invoke("update_conversation_digest", { conversationId, digestId });
+}
+
+export async function updateConversationConsolidated(conversationId: string): Promise<void> {
+  return invoke("update_conversation_consolidated", { conversationId });
+}
+
+export async function archiveConversationNotes(conversationId: string, agentId: string): Promise<number> {
+  return invoke("archive_conversation_notes", { conversationId, agentId });
+}

@@ -3,6 +3,7 @@ mod browser;
 mod commands;
 mod db;
 mod error;
+pub mod memory;
 mod models;
 mod p2p;
 mod services;
@@ -12,6 +13,7 @@ pub mod vault;
 use api::{ApiState, RunRegistry};
 use commands::vault_commands::VaultState;
 use db::Database;
+use memory::SystemMemoryManager;
 use tauri::Manager;
 use vault::VaultManager;
 
@@ -61,6 +63,9 @@ pub fn run() {
             let p2p_manager = p2p::manager::P2PManager::new(&p2p_identity);
             app.manage(p2p_identity);
             app.manage(p2p_manager);
+
+            // Initialize SystemMemoryManager
+            app.manage(SystemMemoryManager::new(&app_dir));
 
             let browser_manager = browser::BrowserManager::new(app_dir.clone(), Some(app.handle().clone()));
             let bm_clone = browser_manager.clone();
@@ -168,6 +173,14 @@ pub fn run() {
             commands::p2p_get_listen_port,
             commands::p2p_set_listen_port,
             commands::p2p_dial_peer,
+            commands::read_consolidated_memory,
+            commands::list_pending_consolidations,
+            commands::read_digest,
+            commands::write_digest,
+            commands::write_consolidated_memory,
+            commands::update_conversation_digest,
+            commands::update_conversation_consolidated,
+            commands::archive_conversation_notes,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

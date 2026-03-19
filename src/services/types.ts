@@ -16,6 +16,8 @@ export interface ConversationDetail extends ConversationListItem {
   summary_up_to_message_id?: string;
   active_skills?: string[];
   learning_mode?: boolean;
+  digest_id?: string | null;
+  consolidated_at?: string | null;
 }
 
 // Backward-compatible alias
@@ -46,6 +48,7 @@ export interface MemoryNote {
   agent_id: string;
   title: string;
   content: string;
+  source_conversation?: string | null;
   created_at: string;
   updated_at: string;
 }

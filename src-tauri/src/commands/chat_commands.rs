@@ -3,7 +3,9 @@ use crate::db::models::{ConversationDetail, ConversationListItem, DeleteMessages
 use crate::db::operations;
 use crate::db::Database;
 use crate::error::AppError;
+use crate::memory::SystemMemoryManager;
 use crate::vault::strip_title_heading;
+use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -159,6 +161,7 @@ pub fn list_memory_notes(
                 "agent_id": full.agent,
                 "title": full.title,
                 "content": strip_title_heading(&full.content),
+                "source_conversation": full.source_conversation,
                 "created_at": full.created,
                 "updated_at": full.updated,
             }))
@@ -232,4 +235,121 @@ pub fn update_tool_call_log_status(
     duration_ms: Option<i64>,
 ) -> Result<(), AppError> {
     Ok(operations::update_tool_call_log_status_impl(&db, id, status, tool_output, duration_ms, None)?)
+}
+
+// ── System Memory (Consolidated) ──
+
+#[tauri::command]
+pub fn read_consolidated_memory(
+    memory: State<'_, SystemMemoryManager>,
+    agent_id: String,
+) -> Option<String> {
+    memory.read_consolidated(&agent_id)
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingConsolidation {
+    pub conversation_id: String,
+    pub agent_id: String,
+}
+
+#[tauri::command]
+pub fn list_pending_consolidations(
+    db: State<'_, Database>,
+) -> Result<Vec<PendingConsolidation>, AppError> {
+    db.with_conn(|conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT c.id, c.agent_id
+                 FROM conversations c
+                 WHERE (c.digest_id IS NULL OR c.consolidated_at IS NULL)
+                   AND (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) >= 3
+                 ORDER BY c.updated_at DESC",
+            )
+            .map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(PendingConsolidation {
+                    conversation_id: row.get(0)?,
+                    agent_id: row.get(1)?,
+                })
+            })
+            .map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))?;
+
+        let mut result = Vec::new();
+        for row in rows {
+            result.push(row.map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))?);
+        }
+        Ok(result)
+    })
+    .map_err(AppError::from)
+}
+
+#[tauri::command]
+pub fn read_digest(
+    memory: State<'_, SystemMemoryManager>,
+    agent_id: String,
+    conversation_id: String,
+) -> Option<String> {
+    memory.read_digest(&agent_id, &conversation_id)
+}
+
+#[tauri::command]
+pub fn write_digest(
+    memory: State<'_, SystemMemoryManager>,
+    agent_id: String,
+    conversation_id: String,
+    content: String,
+) -> Result<String, AppError> {
+    memory.write_digest(&agent_id, &conversation_id, &content)
+        .map_err(AppError::Io)
+}
+
+#[tauri::command]
+pub fn write_consolidated_memory(
+    memory: State<'_, SystemMemoryManager>,
+    agent_id: String,
+    content: String,
+    version: u32,
+) -> Result<(), AppError> {
+    memory.write_consolidated(&agent_id, &content, version)
+        .map_err(AppError::Io)
+}
+
+#[tauri::command]
+pub fn update_conversation_digest(
+    db: State<'_, Database>,
+    conversation_id: String,
+    digest_id: Option<String>,
+) -> Result<(), AppError> {
+    Ok(operations::update_conversation_digest_impl(&db, conversation_id, digest_id)?)
+}
+
+#[tauri::command]
+pub fn update_conversation_consolidated(
+    db: State<'_, Database>,
+    conversation_id: String,
+) -> Result<(), AppError> {
+    let now = chrono::Utc::now().to_rfc3339();
+    Ok(operations::update_conversation_consolidated_at_impl(&db, conversation_id, Some(now))?)
+}
+
+#[tauri::command]
+pub fn archive_conversation_notes(
+    vault: State<'_, VaultState>,
+    conversation_id: String,
+    agent_id: String,
+) -> Result<u32, AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Io("Vault lock failed".to_string()))?;
+    let notes = vm.list_notes(Some(&agent_id), None, None);
+    let mut archived = 0u32;
+    for note in &notes {
+        if note.source_conversation.as_deref() == Some(&conversation_id) {
+            if let Ok(()) = vm.archive_note(&note.id, &agent_id) {
+                archived += 1;
+            }
+        }
+    }
+    Ok(archived)
 }

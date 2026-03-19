@@ -211,6 +211,7 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
   prepareForAgent: (agentId: string) => {
     resetChatContext();
     useAgentStore.getState().selectAgent(agentId);
+    useConversationStore.getState().loadConsolidatedMemory(agentId);
     const agent = useAgentStore.getState().agents.find((a: any) => a.id === agentId);
     if (agent) {
       useSkillStore.getState().loadSkills(agent.folder_name);
@@ -332,6 +333,7 @@ async function streamOneTurn(
   // so memoryNotes provides full content with shared notes excluded.
   // No need for a separate vaultNotes path.
   const learningMode = useConversationStore.getState().getCurrentLearningMode();
+  const consolidatedMemory = useConversationStore.getState().consolidatedMemory;
   const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
     messages: msg().messages,
     summary: summary().currentSummary,
@@ -340,6 +342,7 @@ async function streamOneTurn(
     memoryNotes: useMemoryStore.getState().notes,
     workspacePath,
     learningMode,
+    consolidatedMemory,
   });
 
   let pendingDelta = "";
@@ -880,6 +883,7 @@ async function regenerateStream(
     } catch { /* non-fatal */ }
 
     const learningModeRegen = useConversationStore.getState().getCurrentLearningMode();
+    const consolidatedMemoryRegen = useConversationStore.getState().consolidatedMemory;
     const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
       messages: msg().messages,
       summary: summary().currentSummary,
@@ -888,6 +892,7 @@ async function regenerateStream(
       memoryNotes: useMemoryStore.getState().notes,
       workspacePath,
       learningMode: learningModeRegen,
+      consolidatedMemory: consolidatedMemoryRegen,
     });
 
     let pendingDelta = "";

@@ -26,6 +26,8 @@ pub struct Frontmatter {
     pub scope: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_edited_by: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_conversation: Option<String>,
 }
 
 fn default_confidence() -> f64 {
@@ -204,6 +206,7 @@ This is the body.
             legacy_id: None,
             scope: None,
             last_edited_by: None,
+            source_conversation: None,
         };
         let body = "# Title\n\nSome content.\n";
         let serialized = serialize_note(&fm, body);

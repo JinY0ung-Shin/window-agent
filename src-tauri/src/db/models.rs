@@ -72,6 +72,10 @@ pub struct ConversationDetail {
     pub active_skills: Option<Vec<String>>,
     #[serde(default)]
     pub learning_mode: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub digest_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub consolidated_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }

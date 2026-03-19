@@ -79,13 +79,14 @@ pub fn search(
                 continue;
             }
             // Skip agent workspace directories (agents/*/workspace/**)
+            // Skip archived notes (agents/*/archive/**)
             if let Ok(rel) = path.strip_prefix(vault_path) {
                 let components: Vec<_> = rel.components()
                     .map(|c| c.as_os_str().to_string_lossy().to_string())
                     .collect();
                 if components.len() >= 3
                     && components[0] == "agents"
-                    && components[2] == "workspace"
+                    && (components[2] == "workspace" || components[2] == "archive")
                 {
                     continue;
                 }

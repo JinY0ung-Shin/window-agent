@@ -158,6 +158,7 @@ export function buildConversationContext(params: {
   vaultNotes?: VaultNoteSummary[];
   workspacePath?: string;
   learningMode?: boolean;
+  consolidatedMemory?: string | null;
 }): { systemPrompt: string; apiMessages: OpenAIMessage[] } {
   let systemPrompt = params.baseSystemPrompt;
 
@@ -173,13 +174,28 @@ export function buildConversationContext(params: {
     systemPrompt += `\n\n${header}\n${body}`;
   }
 
-  // Vault notes take priority; fall back to legacy memory notes
-  const memoryMaxTokens = params.learningMode ? 1500 : 500;
-  const memorySection = params.vaultNotes && params.vaultNotes.length > 0
-    ? buildVaultMemorySection(params.vaultNotes, memoryMaxTokens)
-    : buildMemorySection(params.memoryNotes ?? [], memoryMaxTokens);
-  if (memorySection) {
-    systemPrompt += `\n\n${memorySection}`;
+  // Memory injection: consolidated memory takes priority over raw notes
+  if (params.consolidatedMemory) {
+    systemPrompt += `\n\n[CONSOLIDATED MEMORY]\n${params.consolidatedMemory}`;
+
+    // In learning mode, also include raw notes alongside consolidated memory
+    if (params.learningMode) {
+      const rawMemorySection = params.vaultNotes && params.vaultNotes.length > 0
+        ? buildVaultMemorySection(params.vaultNotes, 700)
+        : buildMemorySection(params.memoryNotes ?? [], 700);
+      if (rawMemorySection) {
+        systemPrompt += `\n\n[CURRENT SESSION NOTES]\n${rawMemorySection.replace("[MEMORY NOTES]\n", "")}`;
+      }
+    }
+  } else {
+    // Fallback: use raw notes (legacy behavior)
+    const memoryMaxTokens = params.learningMode ? 1500 : 500;
+    const memorySection = params.vaultNotes && params.vaultNotes.length > 0
+      ? buildVaultMemorySection(params.vaultNotes, memoryMaxTokens)
+      : buildMemorySection(params.memoryNotes ?? [], memoryMaxTokens);
+    if (memorySection) {
+      systemPrompt += `\n\n${memorySection}`;
+    }
   }
 
   // Workspace section

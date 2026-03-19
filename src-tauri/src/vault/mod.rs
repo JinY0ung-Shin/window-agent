@@ -36,6 +36,7 @@ pub struct VaultNote {
     pub legacy_id: Option<String>,
     pub scope: Option<String>,
     pub last_edited_by: Option<String>,
+    pub source_conversation: Option<String>,
     pub title: String,
     pub content: String,
     pub path: String,
@@ -53,6 +54,7 @@ pub struct VaultNoteSummary {
     pub tags: Vec<String>,
     pub confidence: f64,
     pub scope: Option<String>,
+    pub source_conversation: Option<String>,
     pub created: String,
     pub updated: String,
 }
@@ -299,6 +301,21 @@ impl VaultManager {
         tags: Vec<String>,
         related_ids: Vec<String>,
     ) -> Result<VaultNote, String> {
+        self.create_note_with_provenance(agent_id, scope, category, title, content, tags, related_ids, None)
+    }
+
+    /// Create a new note with optional conversation provenance.
+    pub fn create_note_with_provenance(
+        &mut self,
+        agent_id: &str,
+        scope: Option<&str>,
+        category: &str,
+        title: &str,
+        content: &str,
+        tags: Vec<String>,
+        related_ids: Vec<String>,
+        source_conversation: Option<&str>,
+    ) -> Result<VaultNote, String> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().to_rfc3339();
         let is_shared = scope == Some("shared");
@@ -336,6 +353,7 @@ impl VaultManager {
             } else {
                 None
             },
+            source_conversation: source_conversation.map(|s| s.to_string()),
         };
 
         let file_content = serialize_note(&frontmatter, &body);
@@ -403,6 +421,7 @@ impl VaultManager {
             legacy_id: None,
             scope: frontmatter.scope,
             last_edited_by: frontmatter.last_edited_by,
+            source_conversation: frontmatter.source_conversation,
             title: title.to_string(),
             content: content.to_string(),
             path: final_path.to_string_lossy().to_string(),
@@ -438,6 +457,7 @@ impl VaultManager {
             legacy_id: fm.legacy_id,
             scope: fm.scope,
             last_edited_by: fm.last_edited_by,
+            source_conversation: fm.source_conversation,
             title,
             content: body,
             path: path.to_string_lossy().to_string(),
@@ -587,6 +607,7 @@ impl VaultManager {
             legacy_id: fm.legacy_id,
             scope: fm.scope,
             last_edited_by: fm.last_edited_by,
+            source_conversation: fm.source_conversation,
             title: resolved_title,
             content: body,
             path: final_path.to_string_lossy().to_string(),
@@ -637,6 +658,13 @@ impl VaultManager {
         let mut summaries = Vec::new();
 
         for (id, path) in &self.registry.id_to_path {
+            // Skip archived notes
+            if let Ok(rel) = path.strip_prefix(&self.vault_path) {
+                if rel.components().any(|c| c.as_os_str() == "archive") {
+                    continue;
+                }
+            }
+
             let content = match std::fs::read_to_string(path) {
                 Ok(c) => c,
                 Err(_) => continue,
@@ -688,6 +716,7 @@ impl VaultManager {
                 tags: fm.tags,
                 confidence: fm.confidence,
                 scope: fm.scope,
+                source_conversation: fm.source_conversation,
                 created: fm.created,
                 updated: fm.updated,
             });
@@ -697,6 +726,54 @@ impl VaultManager {
         summaries.sort_by(|a, b| b.updated.cmp(&a.updated));
 
         summaries
+    }
+
+    /// Archive a note by moving it from knowledge/ to archive/.
+    ///
+    /// Archived notes are excluded from `list_notes()`, `search()`, and `recall()`,
+    /// but can still be read directly via `read_note()`.
+    pub fn archive_note(&mut self, note_id: &str, agent_id: &str) -> Result<(), String> {
+        let path = self
+            .registry
+            .id_to_path
+            .get(note_id)
+            .ok_or_else(|| format!("Note not found: {note_id}"))?
+            .clone();
+
+        // Check if already archived
+        if let Ok(rel) = path.strip_prefix(&self.vault_path) {
+            if rel.components().any(|c| c.as_os_str() == "archive") {
+                return Err(format!("Note already archived: {note_id}"));
+            }
+        }
+
+        // Build archive destination preserving category subdirectory to avoid collisions.
+        // e.g., agents/<id>/knowledge/note.md → agents/<id>/archive/knowledge/note.md
+        let agent_base = self.vault_path.join("agents").join(agent_id);
+        let relative = path.strip_prefix(&agent_base)
+            .map_err(|_| format!("Note path not under agent directory: {}", path.display()))?;
+        let archive_dest = agent_base.join("archive").join(relative);
+
+        if let Some(parent) = archive_dest.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create archive dir: {e}"))?;
+        }
+
+        let dest = archive_dest;
+
+        // Validate destination is within vault
+        self.security.validate_within_vault(&dest)?;
+
+        // Move the file
+        std::fs::rename(&path, &dest)
+            .map_err(|e| format!("Failed to move note to archive: {e}"))?;
+
+        // Update registry
+        self.registry.id_to_path.insert(note_id.to_string(), dest.clone());
+        self.registry.path_to_id.remove(&path);
+        self.registry.path_to_id.insert(dest, note_id.to_string());
+
+        Ok(())
     }
 
     /// Search the vault for notes matching a query.
@@ -1031,6 +1108,73 @@ mod tests {
         assert!(manager.registry.id_to_path.contains_key(&note.id));
         assert!(!manager.registry.id_to_path.contains_key("ws-note-1"));
         assert!(!manager.registry.id_to_path.contains_key("ws-note-2"));
+    }
+
+    #[test]
+    fn test_archive_note() {
+        let (_tmp, mut manager) = create_test_manager();
+        let note = manager
+            .create_note("manager", None, "knowledge", "To Archive", "Archive me.", vec!["test".into()], vec![])
+            .unwrap();
+
+        // Archive the note
+        manager.archive_note(&note.id, "manager").unwrap();
+
+        // Note should still be readable directly
+        let read = manager.read_note(&note.id).unwrap();
+        assert_eq!(read.title, "To Archive");
+
+        // Note path should now be in archive/
+        let path = manager.registry.id_to_path.get(&note.id).unwrap();
+        assert!(path.to_string_lossy().contains("archive"));
+
+        // Note should NOT appear in list_notes
+        let listed = manager.list_notes(Some("manager"), None, None);
+        assert!(listed.iter().all(|n| n.id != note.id), "Archived note should not appear in list_notes");
+
+        // Note should NOT appear in recall
+        let recalled = manager.recall("manager", 100);
+        assert!(recalled.iter().all(|n| n.id != note.id), "Archived note should not appear in recall");
+    }
+
+    #[test]
+    fn test_archive_note_not_found() {
+        let (_tmp, mut manager) = create_test_manager();
+        let result = manager.archive_note("nonexistent", "manager");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not found"));
+    }
+
+    #[test]
+    fn test_archive_note_already_archived() {
+        let (_tmp, mut manager) = create_test_manager();
+        let note = manager
+            .create_note("manager", None, "knowledge", "Double Archive", "Test.", vec![], vec![])
+            .unwrap();
+
+        manager.archive_note(&note.id, "manager").unwrap();
+        let result = manager.archive_note(&note.id, "manager");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("already archived"));
+    }
+
+    #[test]
+    fn test_archive_excluded_from_search() {
+        let (_tmp, mut manager) = create_test_manager();
+        let note = manager
+            .create_note("manager", None, "knowledge", "Searchable Note", "Unique keyword xyzzy.", vec![], vec![])
+            .unwrap();
+
+        // Before archiving, search should find it
+        let results = manager.search("xyzzy", Some("manager"), None);
+        assert!(!results.is_empty(), "Note should be searchable before archiving");
+
+        // Archive it
+        manager.archive_note(&note.id, "manager").unwrap();
+
+        // After archiving, search should NOT find it
+        let results = manager.search("xyzzy", Some("manager"), None);
+        assert!(results.iter().all(|r| r.note_id != note.id), "Archived note should not appear in search");
     }
 
     #[test]

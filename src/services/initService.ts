@@ -83,7 +83,10 @@ export async function initializeApp(): Promise<void> {
     }
   }
 
-  // Step 8: Mark app as ready (onboarding gate can now make an informed decision).
+  // Step 8: Start consolidation recovery for pending conversations (non-blocking)
+  useConversationStore.getState().initConsolidationRecovery();
+
+  // Step 9: Mark app as ready (onboarding gate can now make an informed decision).
   useSettingsStore.setState({ appReady: true });
 }
 

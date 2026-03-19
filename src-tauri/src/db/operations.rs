@@ -64,7 +64,7 @@ pub fn get_conversation_detail_impl(
 ) -> Result<ConversationDetail, DbError> {
     db.with_conn(|conn| {
         let detail = conn.query_row(
-            "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, learning_mode, created_at, updated_at FROM conversations WHERE id = ?1",
+            "SELECT id, title, agent_id, summary, summary_up_to_message_id, active_skills, learning_mode, digest_id, consolidated_at, created_at, updated_at FROM conversations WHERE id = ?1",
             rusqlite::params![id],
             |row| {
                 let active_skills_raw: Option<String> = row.get(5)?;
@@ -79,8 +79,10 @@ pub fn get_conversation_detail_impl(
                     summary_up_to_message_id: row.get(4)?,
                     active_skills,
                     learning_mode: learning_mode_raw != 0,
-                    created_at: row.get(7)?,
-                    updated_at: row.get(8)?,
+                    digest_id: row.get(7)?,
+                    consolidated_at: row.get(8)?,
+                    created_at: row.get(9)?,
+                    updated_at: row.get(10)?,
                 })
             },
         )?;
@@ -283,6 +285,55 @@ pub fn set_learning_mode_impl(
             rusqlite::params![enabled as i64, id],
         )?;
         Ok(())
+    })
+}
+
+// ── Consolidation Checkpoint ──
+
+pub fn update_conversation_digest_impl(
+    db: &Database,
+    id: String,
+    digest_id: Option<String>,
+) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE conversations SET digest_id = ?1 WHERE id = ?2",
+            rusqlite::params![digest_id, id],
+        )?;
+        Ok(())
+    })
+}
+
+pub fn update_conversation_consolidated_at_impl(
+    db: &Database,
+    id: String,
+    consolidated_at: Option<String>,
+) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE conversations SET consolidated_at = ?1 WHERE id = ?2",
+            rusqlite::params![consolidated_at, id],
+        )?;
+        Ok(())
+    })
+}
+
+/// List conversations that need consolidation (digest or consolidation incomplete, have messages >= min_messages).
+pub fn list_pending_consolidations_impl(
+    db: &Database,
+    min_messages: i64,
+) -> Result<Vec<(String, String)>, DbError> {
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT c.id, c.agent_id FROM conversations c
+             WHERE (c.digest_id IS NULL OR c.consolidated_at IS NULL)
+             AND (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) >= ?1
+             ORDER BY c.updated_at DESC",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![min_messages], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
 
