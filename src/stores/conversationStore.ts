@@ -3,6 +3,7 @@ import type { Conversation, ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { readToolConfig } from "../services/nativeToolRegistry";
 import { consolidateConversation, recoverPendingConsolidations } from "../services/consolidationService";
+import { emitLifecycleEvent } from "../services/lifecycleEvents";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
 import { useVaultStore } from "./vaultStore";
@@ -135,6 +136,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (prevConvId && prevConvId !== id) {
       const prevConv = get().conversations.find((c) => c.id === prevConvId);
       if (prevConv) {
+        emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
         get().triggerConsolidation(prevConvId, prevConv.agent_id);
       }
     }
@@ -193,6 +195,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
     useDebugStore.getState().loadLogs(id);
 
+    emitLifecycleEvent({ type: "session:start", conversationId: id, agentId: detail.agent_id });
+
     return { messages, summary: detail.summary, summaryUpToMessageId: detail.summary_up_to_message_id };
   },
 
@@ -201,17 +205,25 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const prevConvId = get().currentConversationId;
     if (prevConvId) {
       const prevConv = get().conversations.find((c) => c.id === prevConvId);
-      if (prevConv) get().triggerConsolidation(prevConvId, prevConv.agent_id);
+      if (prevConv) {
+        emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
+        get().triggerConsolidation(prevConvId, prevConv.agent_id);
+      }
     }
     resetChatContext();
   },
 
   deleteConversation: async (id) => {
-    await cmds.deleteConversation(id);
+    // Emit session:end if deleting the active conversation
     const { currentConversationId } = get();
     if (currentConversationId === id) {
+      const conv = get().conversations.find((c) => c.id === id);
+      if (conv) {
+        emitLifecycleEvent({ type: "session:end", conversationId: id, agentId: conv.agent_id });
+      }
       resetChatContext();
     }
+    await cmds.deleteConversation(id);
     await get().loadConversations();
   },
 
@@ -227,7 +239,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       const prevConvId = get().currentConversationId;
       if (prevConvId) {
         const prevConv = get().conversations.find((c) => c.id === prevConvId);
-        if (prevConv) get().triggerConsolidation(prevConvId, prevConv.agent_id);
+        if (prevConv) {
+          emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
+          get().triggerConsolidation(prevConvId, prevConv.agent_id);
+        }
       }
       // No conversation exists — prepare empty DM for this agent
       resetChatContext();
@@ -246,9 +261,14 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const { conversations, currentConversationId } = get();
     // Delete ALL conversations for this agent
     const agentConvs = conversations.filter((c) => c.agent_id === agentId);
-    await Promise.all(agentConvs.map((c) => cmds.deleteConversation(c.id)));
 
+    // Emit session:end if the active conversation is being cleared
     const wasActive = agentConvs.some((c) => c.id === currentConversationId);
+    if (wasActive && currentConversationId) {
+      emitLifecycleEvent({ type: "session:end", conversationId: currentConversationId, agentId });
+    }
+
+    await Promise.all(agentConvs.map((c) => cmds.deleteConversation(c.id)));
 
     await get().loadConversations();
 
@@ -273,7 +293,10 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const prevConvId = get().currentConversationId;
     if (prevConvId) {
       const prevConv = get().conversations.find((c) => c.id === prevConvId);
-      if (prevConv) get().triggerConsolidation(prevConvId, prevConv.agent_id);
+      if (prevConv) {
+        emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
+        get().triggerConsolidation(prevConvId, prevConv.agent_id);
+      }
     }
     set({ currentConversationId: null });
     get().resetLearningModeState();

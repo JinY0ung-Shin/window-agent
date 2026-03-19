@@ -150,6 +150,8 @@ pub fn run() {
             commands::vault_get_path,
             commands::vault_open_in_obsidian,
             commands::vault_rebuild_index,
+            commands::vault_archive_note,
+            commands::vault_list_notes_with_decay,
             commands::p2p_start,
             commands::p2p_stop,
             commands::p2p_status,

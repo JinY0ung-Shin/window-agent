@@ -77,7 +77,7 @@ export async function consolidateConversation(
 /**
  * Generate a digest from conversation messages + tool call logs + captured notes.
  */
-async function generateDigest(
+export async function generateDigest(
   conversationId: string,
   agentId: string,
   messages: { role: string; content: string }[],
@@ -148,10 +148,25 @@ async function generateDigest(
 }
 
 /**
+ * Lock-guarded wrapper for consolidateMemory.
+ * Use this from external callers (e.g., preCompactService) to prevent
+ * racing with consolidateConversation on the same agent.
+ */
+export async function lockedConsolidateMemory(agentId: string, digestContent: string): Promise<boolean> {
+  if (activeJobs.has(agentId)) return false; // Another job is running
+  activeJobs.add(agentId);
+  try {
+    return await consolidateMemory(agentId, digestContent);
+  } finally {
+    activeJobs.delete(agentId);
+  }
+}
+
+/**
  * Consolidation function F: m(n+1) = F(m(n), d(n))
  * Takes current consolidated memory + actual digest content → merges via LLM.
  */
-async function consolidateMemory(agentId: string, digestContent: string): Promise<boolean> {
+export async function consolidateMemory(agentId: string, digestContent: string): Promise<boolean> {
   const settings = useSettingsStore.getState();
 
   const currentMemory = await cmds.readConsolidatedMemory(agentId);

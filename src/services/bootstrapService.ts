@@ -3,6 +3,9 @@ import * as cmds from "./tauriCommands";
 /** The 4 core persona file names that must be written for bootstrap to complete. */
 const REQUIRED_BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"] as const;
 
+/** Optional lifecycle files the agent can create during bootstrap. */
+export const OPTIONAL_BOOTSTRAP_FILES = ["BOOT.md", "HEARTBEAT.md"] as const;
+
 /** OpenAI function-calling tool definitions for bootstrap. */
 const BOOTSTRAP_TOOLS = [
   {
@@ -10,13 +13,13 @@ const BOOTSTRAP_TOOLS = [
     function: {
       name: "write_file",
       description:
-        "Write content to a persona file. Valid paths: IDENTITY.md, SOUL.md, USER.md, AGENTS.md",
+        "Write content to a persona file. Valid paths: IDENTITY.md, SOUL.md, USER.md, AGENTS.md, BOOT.md, HEARTBEAT.md",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "File name (IDENTITY.md, SOUL.md, USER.md, or AGENTS.md)",
+            description: "File name (IDENTITY.md, SOUL.md, USER.md, AGENTS.md, or optionally BOOT.md, HEARTBEAT.md)",
           },
           content: { type: "string", description: "File content in Markdown" },
         },
@@ -29,13 +32,13 @@ const BOOTSTRAP_TOOLS = [
     function: {
       name: "read_file",
       description:
-        "Read content from a persona file. Valid paths: IDENTITY.md, SOUL.md, USER.md, AGENTS.md",
+        "Read content from a persona file. Valid paths: IDENTITY.md, SOUL.md, USER.md, AGENTS.md, BOOT.md, HEARTBEAT.md",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "File name (IDENTITY.md, SOUL.md, USER.md, or AGENTS.md)",
+            description: "File name (IDENTITY.md, SOUL.md, USER.md, AGENTS.md, or optionally BOOT.md, HEARTBEAT.md)",
           },
         },
         required: ["path"],

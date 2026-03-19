@@ -123,6 +123,21 @@ export function assembleManagerPrompt(
 }
 
 /**
+ * Read the optional BOOT.md file for an agent.
+ * Returns null if the file does not exist or on error.
+ * Truncates at 20,000 characters.
+ */
+export async function readBootFile(folderName: string): Promise<string | null> {
+  try {
+    const content = await cmds.readAgentFile(folderName, "BOOT.md");
+    if (!content) return null;
+    return content.length > 20_000 ? content.slice(0, 20_000) : content;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Get effective settings for an agent, falling back to global settings.
  */
 export function getEffectiveSettings(agent: Agent) {

@@ -1,7 +1,7 @@
 use std::path::{Component, Path, PathBuf};
 
 /// Allowed persona file names for agent directories.
-pub const ALLOWED_AGENT_FILES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json"];
+pub const ALLOWED_AGENT_FILES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json", "BOOT.md", "HEARTBEAT.md"];
 
 // ── Common internal helpers ──
 

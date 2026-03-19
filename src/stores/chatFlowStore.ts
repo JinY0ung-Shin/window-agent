@@ -18,6 +18,7 @@ import { resetChatContext } from "./resetHelper";
 import { buildConversationContext } from "../services/chatHelpers";
 import {
   readPersonaFiles,
+  readBootFile,
   assembleSystemPrompt,
   assembleManagerPrompt,
   getEffectiveSettings,
@@ -37,6 +38,9 @@ import {
   parseErrorMessage,
 } from "../constants";
 import { i18n } from "../i18n";
+import { emitLifecycleEvent, onLifecycleEvent } from "../services/lifecycleEvents";
+import { shouldFlush, preCompactFlush } from "../services/preCompactService";
+import { estimateTokens } from "../services/tokenEstimator";
 
 // ── Stream event types ────────────────────────────────
 type StreamChunkEvent = { request_id: string; delta: string; reasoning_delta: string | null };
@@ -93,6 +97,16 @@ function isWorkspacePath(tc: ToolCall, workspacePath: string | undefined): boole
   const pSegments = normalized.split("/").filter(Boolean);
   return wsSegments.every((seg, i) => pSegments[i] === seg);
 }
+
+// ── Per-conversation BOOT.md cache (for regenerate) ──
+const bootContentCache = new Map<string, string>();
+
+// Evict boot cache on session end to prevent unbounded growth
+onLifecycleEvent((event) => {
+  if (event.type === "session:end") {
+    bootContentCache.delete(event.conversationId);
+  }
+});
 
 // ── Browser domain approval (per conversation) ──
 
@@ -325,9 +339,39 @@ async function streamOneTurn(
     tools?: object[];
     skillsSection?: string;
     workspacePath?: string;
+    bootContent?: string | null;
   },
 ): Promise<StreamDoneEvent> {
-  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection, workspacePath } = params;
+  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection, workspacePath, bootContent } = params;
+
+  // Pre-compaction check: flush if approaching context limit
+  // Include all system prompt components for accurate estimate
+  const currentMessages = msg().messages;
+  const consolidatedMem = conv().consolidatedMemory;
+  const isLearning = conv().getCurrentLearningMode();
+  const memNotes = useMemoryStore.getState().notes;
+  const systemOverhead =
+    estimateTokens(baseSystemPrompt) +
+    (skillsSection ? estimateTokens(skillsSection) : 0) +
+    (bootContent ? estimateTokens(bootContent) : 0) +
+    (consolidatedMem ? estimateTokens(consolidatedMem) : 0) +
+    (consolidatedMem && isLearning ? Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), 700) :
+     !consolidatedMem ? Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), isLearning ? 1500 : 500) : 0) +
+    (workspacePath ? 200 : 0) + // workspace section
+    (isLearning ? 300 : 0) + // learning mode instructions
+    500; // summary + formatting buffer
+  const totalTokenEstimate = systemOverhead + currentMessages.reduce(
+    (sum: number, m: ChatMessage) => sum + estimateTokens(m.content) + 4,
+    0,
+  );
+  const currentConvId = conv().currentConversationId;
+  if (shouldFlush(totalTokenEstimate, effective.model) && currentConvId) {
+    const convObj = conv().conversations.find((c: any) => c.id === currentConvId);
+    const flushAgentId = convObj?.agent_id;
+    if (flushAgentId) {
+      await preCompactFlush(currentConvId, flushAgentId, effective.model, totalTokenEstimate);
+    }
+  }
 
   // memoryStore is already vault-backed (chat_commands.rs → VaultManager),
   // so memoryNotes provides full content with shared notes excluded.
@@ -339,6 +383,7 @@ async function streamOneTurn(
     summary: summary().currentSummary,
     baseSystemPrompt,
     skillsSection,
+    bootContent,
     memoryNotes: useMemoryStore.getState().notes,
     workspacePath,
     learningMode,
@@ -451,6 +496,7 @@ async function sendNormalMessage() {
     await useSkillStore.getState().loadSkills(agent.folder_name);
   }
 
+  const isNewConversation = !currentConversationId;
   let convId = currentConversationId;
   let initialTitle: string | null = null;
   if (!convId) {
@@ -465,6 +511,12 @@ async function sendNormalMessage() {
     convId = newConv.id;
     useConversationStore.setState({ currentConversationId: convId });
 
+    // Emit lifecycle events for the new session
+    emitLifecycleEvent({ type: "session:start", conversationId: convId, agentId });
+    if (agent) {
+      emitLifecycleEvent({ type: "agent:boot", agentId, folderName: agent.folder_name });
+    }
+
     // Propagate draft learning mode to the new conversation
     const { draftLearningMode } = useConversationStore.getState();
     if (draftLearningMode) {
@@ -475,6 +527,15 @@ async function sendNormalMessage() {
     const skillNames = useSkillStore.getState().activeSkillNames;
     if (skillNames.length > 0) {
       await cmds.updateConversationSkills(convId, skillNames);
+    }
+  }
+
+  // Load BOOT.md for new conversations (cached for regenerate)
+  let bootContent: string | null | undefined;
+  if (isNewConversation && agent) {
+    bootContent = await readBootFile(agent.folder_name);
+    if (bootContent && convId) {
+      bootContentCache.set(convId, bootContent);
     }
   }
 
@@ -571,6 +632,7 @@ async function sendNormalMessage() {
         tools: openAITools,
         skillsSection,
         workspacePath,
+        bootContent,
       });
 
       if (done.error) {
@@ -882,6 +944,47 @@ async function regenerateStream(
       workspacePath = await cmds.getWorkspacePath(convId);
     } catch { /* non-fatal */ }
 
+    // Retrieve BOOT.md only if regenerating the first assistant reply.
+    // First turn = only one user message in truncated (tool-call agent messages don't count).
+    let cachedBoot: string | undefined;
+    const isFirstAssistantTurn = truncated.filter((m) => m.type === "user").length <= 1;
+    if (isFirstAssistantTurn) {
+      if (bootContentCache.has(convId)) {
+        cachedBoot = bootContentCache.get(convId);
+      } else if (agent) {
+        try {
+          const bootFromDisk = await readBootFile(agent.folder_name);
+          if (bootFromDisk) {
+            cachedBoot = bootFromDisk;
+            bootContentCache.set(convId, bootFromDisk);
+          }
+        } catch { /* non-fatal */ }
+      }
+    }
+
+    // Pre-compaction check for regeneration path (include all system prompt components)
+    const regenMessages = msg().messages;
+    const regenConsolidatedMem = useConversationStore.getState().consolidatedMemory;
+    const regenLearningMode = useConversationStore.getState().getCurrentLearningMode();
+    const regenMemNotes = useMemoryStore.getState().notes;
+    const regenSystemOverhead =
+      estimateTokens(baseSystemPrompt) +
+      (skillsSection ? estimateTokens(skillsSection) : 0) +
+      (cachedBoot ? estimateTokens(cachedBoot) : 0) +
+      (regenConsolidatedMem ? estimateTokens(regenConsolidatedMem) : 0) +
+      (regenConsolidatedMem && regenLearningMode ? Math.min(regenMemNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), 700) :
+       !regenConsolidatedMem ? Math.min(regenMemNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), regenLearningMode ? 1500 : 500) : 0) +
+      (workspacePath ? 200 : 0) +
+      (regenLearningMode ? 300 : 0) +
+      500;
+    const regenTokenEstimate = regenSystemOverhead + regenMessages.reduce(
+      (sum: number, m: ChatMessage) => sum + estimateTokens(m.content) + 4,
+      0,
+    );
+    if (shouldFlush(regenTokenEstimate, effective.model) && agentId) {
+      await preCompactFlush(convId, agentId, effective.model, regenTokenEstimate);
+    }
+
     const learningModeRegen = useConversationStore.getState().getCurrentLearningMode();
     const consolidatedMemoryRegen = useConversationStore.getState().consolidatedMemory;
     const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
@@ -889,6 +992,7 @@ async function regenerateStream(
       summary: summary().currentSummary,
       baseSystemPrompt,
       skillsSection,
+      bootContent: cachedBoot,
       memoryNotes: useMemoryStore.getState().notes,
       workspacePath,
       learningMode: learningModeRegen,

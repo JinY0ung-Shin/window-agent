@@ -3,8 +3,12 @@ import { useConversationStore } from "../stores/conversationStore";
 import { useAgentStore } from "../stores/agentStore";
 import * as cmds from "./tauriCommands";
 import { refreshDefaultManagerPersona } from "./commands/agentCommands";
+import { emitLifecycleEvent } from "./lifecycleEvents";
+import { registerHeartbeatLifecycle } from "./heartbeatService";
 
 export async function initializeApp(): Promise<void> {
+  emitLifecycleEvent({ type: "app:init" });
+
   const loadSettings = useSettingsStore.getState().loadSettings;
   const loadEnvDefaults = useSettingsStore.getState().loadEnvDefaults;
   const loadAgents = useAgentStore.getState().loadAgents;
@@ -83,11 +87,16 @@ export async function initializeApp(): Promise<void> {
     }
   }
 
-  // Step 8: Start consolidation recovery for pending conversations (non-blocking)
+  // Step 8: Register heartbeat lifecycle (listens for session:start/end)
+  registerHeartbeatLifecycle();
+
+  // Step 9: Start consolidation recovery for pending conversations (non-blocking)
   useConversationStore.getState().initConsolidationRecovery();
 
-  // Step 9: Mark app as ready (onboarding gate can now make an informed decision).
+  // Step 10: Mark app as ready (onboarding gate can now make an informed decision).
   useSettingsStore.setState({ appReady: true });
+
+  emitLifecycleEvent({ type: "app:ready" });
 }
 
 /**

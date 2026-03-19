@@ -92,6 +92,30 @@ export async function vaultRebuildIndex(): Promise<IndexStats> {
   return invoke("vault_rebuild_index");
 }
 
+// ── Decay (compute-on-read) ─────────────────────────
+
+export interface VaultNoteSummaryWithDecay extends VaultNoteSummary {
+  effectiveConfidence: number;
+  ageDays: number;
+  isStale: boolean;
+}
+
+export async function vaultListNotesWithDecay(
+  agentId: string | null,
+  category: string | null,
+  lambda: number,
+  minConfidence: number,
+  staleDays: number,
+): Promise<VaultNoteSummaryWithDecay[]> {
+  return invoke("vault_list_notes_with_decay", {
+    agentId,
+    category,
+    lambda,
+    minConfidence,
+    staleDays,
+  });
+}
+
 // ── Export / Import ──────────────────────────────────
 // vault export/import는 기존 exportAgent/importAgent에 통합되어 있으므로
 // 별도 커맨드 등록 없음 — 기존 exportAgent/importAgent가 vault를 자동으로 처리

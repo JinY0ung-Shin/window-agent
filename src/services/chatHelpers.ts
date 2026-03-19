@@ -154,6 +154,7 @@ export function buildConversationContext(params: {
   summary: string | null;
   baseSystemPrompt: string;
   skillsSection?: string;
+  bootContent?: string | null;
   memoryNotes?: MemoryNote[];
   vaultNotes?: VaultNoteSummary[];
   workspacePath?: string;
@@ -161,6 +162,11 @@ export function buildConversationContext(params: {
   consolidatedMemory?: string | null;
 }): { systemPrompt: string; apiMessages: OpenAIMessage[] } {
   let systemPrompt = params.baseSystemPrompt;
+
+  // Boot content goes right after the base system prompt
+  if (params.bootContent) {
+    systemPrompt += `\n\n${i18n.t("prompts:boot.header")}\n${params.bootContent}`;
+  }
 
   // Skills go between persona and memory
   if (params.skillsSection) {

@@ -2,9 +2,22 @@ use crate::vault::links::LinkRef;
 use crate::vault::graph::GraphData;
 use crate::vault::search::SearchResult;
 use crate::vault::{IndexStats, VaultManager, VaultNote, VaultNoteSummary};
+use chrono::Utc;
+use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
+
+/// VaultNoteSummary enriched with compute-on-read confidence decay.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultNoteSummaryWithDecay {
+    #[serde(flatten)]
+    pub base: VaultNoteSummary,
+    pub effective_confidence: f64,
+    pub age_days: f64,
+    pub is_stale: bool,
+}
 
 /// Thread-safe wrapper for VaultManager used as Tauri managed state.
 pub type VaultState = Mutex<VaultManager>;
@@ -168,5 +181,54 @@ pub fn vault_rebuild_index(
 ) -> Result<IndexStats, String> {
     let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
     vm.rebuild_index()
+}
+
+/// Archive a single note by ID.
+#[tauri::command]
+pub fn vault_archive_note(
+    vault: State<'_, VaultState>,
+    note_id: String,
+    agent_id: String,
+) -> Result<(), String> {
+    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    vm.archive_note(&note_id, &agent_id)
+}
+
+/// List notes with compute-on-read confidence decay.
+/// Does NOT modify any notes — pure read operation.
+#[tauri::command]
+pub fn vault_list_notes_with_decay(
+    vault: State<'_, VaultState>,
+    agent_id: Option<String>,
+    category: Option<String>,
+    lambda: f64,
+    min_confidence: f64,
+    stale_days: f64,
+) -> Result<Vec<VaultNoteSummaryWithDecay>, String> {
+    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    let notes = vm.list_notes(agent_id.as_deref(), category.as_deref(), None);
+    let now = Utc::now();
+
+    let result = notes
+        .into_iter()
+        .map(|note| {
+            let age_days = chrono::DateTime::parse_from_rfc3339(&note.updated)
+                .map(|dt| (now - dt.with_timezone(&Utc)).num_seconds() as f64 / 86400.0)
+                .unwrap_or(0.0);
+
+            let effective_confidence =
+                (note.confidence * (-lambda * age_days).exp()).max(min_confidence);
+            let is_stale = age_days > stale_days;
+
+            VaultNoteSummaryWithDecay {
+                base: note,
+                effective_confidence,
+                age_days,
+                is_stale,
+            }
+        })
+        .collect();
+
+    Ok(result)
 }
 
