@@ -11,7 +11,6 @@ export function useCompositionInput(onChange: (value: string) => void) {
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<InputEl>) => {
-      if (isComposing.current) return;
       onChange(e.target.value);
     },
     [onChange],
