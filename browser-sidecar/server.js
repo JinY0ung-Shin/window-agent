@@ -431,7 +431,8 @@ if (require.main === module) {
 
       try {
         const { execSync } = require('node:child_process');
-        const playwrightCli = require.resolve('playwright/cli');
+        const path = require('node:path');
+        const playwrightCli = path.join(path.dirname(require.resolve('playwright/package.json')), 'cli.js');
         execSync(`"${process.execPath}" "${playwrightCli}" install chromium`, {
           cwd: __dirname,
           stdio: ['ignore', 'pipe', 'pipe'],
