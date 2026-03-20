@@ -5,7 +5,7 @@ mod db;
 mod error;
 pub mod memory;
 mod models;
-mod p2p;
+pub mod p2p;
 mod services;
 mod utils;
 pub mod vault;
