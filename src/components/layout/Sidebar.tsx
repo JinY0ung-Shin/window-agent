@@ -154,7 +154,7 @@ export default function Sidebar() {
                   </div>
                 ) : (
                   <button
-                    className="delete-btn"
+                    className="icon-btn icon-btn-sm delete-btn"
                     onClick={(e) => {
                       e.stopPropagation();
                       setConfirmDeleteId(agent.id);

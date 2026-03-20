@@ -295,6 +295,12 @@ body {
   background-color: var(--border);
 }
 
+.icon-btn-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
 /* ── Buttons ── */
 .btn-secondary {
   padding: 10px 20px;

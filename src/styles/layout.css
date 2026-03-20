@@ -80,13 +80,6 @@
 
 .delete-btn {
   display: none;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-  line-height: 0;
 }
 
 .conversation-item:hover .delete-btn {

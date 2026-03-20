@@ -74,7 +74,7 @@ export default function TeamChatWindow() {
     <main className="main-area">
       <header className="chat-header team-chat-header" onMouseDown={onDrag}>
         <button
-          className="team-back-btn"
+          className="icon-btn team-back-btn"
           onClick={() => {
             selectTeam(null);
             useConversationStore.getState().setCurrentConversationId(null);
