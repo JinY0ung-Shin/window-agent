@@ -8,6 +8,7 @@ import { useMessageStore } from "../../stores/messageStore";
 import { useNavigationStore } from "../../stores/navigationStore";
 import TeamEditor from "./TeamEditor";
 import type { TeamDetail } from "../../services/types";
+import { logger } from "../../services/logger";
 
 export default function TeamPanel() {
   const { t } = useTranslation("team");
@@ -52,7 +53,7 @@ export default function TeamPanel() {
       for (const team of teams) {
         try {
           details[team.id] = await getTeamDetail(team.id);
-        } catch { /* skip */ }
+        } catch (e) { logger.debug(`Failed to load team detail for ${team.id}`, e); }
       }
       setTeamDetails(details);
     };

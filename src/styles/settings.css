@@ -1,0 +1,522 @@
+/* ── Settings Tabs ── */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  background-color: var(--bg-color);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 20px;
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.settings-tab {
+  flex: 1;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.settings-tab:hover {
+  color: var(--text-main);
+}
+
+.settings-tab.active {
+  background-color: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Model Refresh ── */
+.model-refresh-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  margin-left: 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.model-refresh-btn:hover {
+  color: var(--primary);
+}
+
+/* ── Locale Selector ── */
+.locale-selector {
+  display: flex;
+  gap: 8px;
+}
+
+.locale-option {
+  flex: 1;
+  padding: 8px 12px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: border-color 0.15s, background-color 0.15s, color 0.15s;
+}
+
+.locale-option:hover {
+  border-color: var(--primary);
+}
+
+.locale-option.selected {
+  border-color: var(--primary);
+  background-color: #eef2ff;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ── Settings Inline Action ── */
+.settings-inline-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-inline-action-row .form-text {
+  margin: 0;
+}
+
+.settings-inline-action {
+  background: none;
+  border: none;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-inline-action:hover {
+  text-decoration: underline;
+}
+
+.settings-inline-action.danger {
+  color: #dc2626;
+}
+
+/* ── Health Check ── */
+.settings-health-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.settings-health-row .form-text {
+  margin: 0;
+}
+
+.settings-health-btn {
+  white-space: nowrap;
+}
+
+.settings-health-result {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-color);
+  font-size: 0.82rem;
+}
+
+.settings-health-result.success {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.settings-health-result.error {
+  border-color: rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.settings-health-result p {
+  margin: 4px 0;
+}
+
+.settings-health-title {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* ── Export/Import Section ── */
+.export-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.export-agent-select {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.export-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  padding: 8px 14px !important;
+  font-size: 0.82rem;
+}
+
+.export-error {
+  color: var(--error);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.export-result {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.export-result p {
+  margin: 2px 0;
+}
+
+.export-warning {
+  color: var(--warning, #e6a817);
+  font-size: 0.75rem;
+}
+
+/* ── Credential Manager ── */
+.cred-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cred-loading {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 12px 0;
+}
+
+.cred-empty {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 16px 0;
+  text-align: center;
+}
+
+.cred-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-color);
+}
+
+.cred-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cred-item-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.cred-item-id {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.cred-item-value {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+}
+
+.cred-item-hosts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.cred-host-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  background: #e0e7ff;
+  color: var(--primary);
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.cred-host-tag.removable {
+  cursor: pointer;
+}
+
+.cred-host-tag.removable:hover {
+  background: #c7d2fe;
+}
+
+.cred-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cred-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cred-action-btn:hover {
+  background: var(--bg-color);
+  color: var(--text-main);
+}
+
+.cred-action-btn.danger {
+  color: #ef4444;
+}
+
+.cred-action-btn.danger:hover {
+  background: #fef2f2;
+}
+
+.cred-confirm-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: #ef4444;
+}
+
+.cred-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.cred-add-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.cred-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.cred-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.cred-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cred-form-field label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.cred-form-field input {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: var(--bg-color);
+  color: var(--text-main);
+}
+
+.cred-form-field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cred-host-input-row {
+  display: flex;
+  gap: 6px;
+}
+
+.cred-host-input-row input {
+  flex: 1;
+}
+
+.cred-host-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.cred-form-error {
+  font-size: 0.8rem;
+  color: #ef4444;
+  padding: 4px 0;
+}
+
+.cred-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* ── Network Settings ── */
+.network-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.network-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.network-status-dormant {
+  background-color: #94a3b8;
+}
+
+.network-status-starting,
+.network-status-stopping {
+  background-color: #f59e0b;
+}
+
+.network-status-active {
+  background-color: #22c55e;
+}
+
+.network-peer-count {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.peer-id-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-color);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.peer-id-display code {
+  font-family: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-main);
+  word-break: break-all;
+  flex: 1;
+  min-width: 0;
+}
+
+.peer-id-copy-btn {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+.network-consent {
+  background-color: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.network-consent p + p {
+  margin-top: 8px;
+}
+
+.network-consent-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}

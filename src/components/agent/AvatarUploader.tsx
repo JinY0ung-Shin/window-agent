@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { Camera, Bot } from "lucide-react";
+import { logger } from "../../services/logger";
 
 interface AvatarUploaderProps {
   avatar: string | null;
@@ -44,7 +45,7 @@ export default function AvatarUploader({ avatar, onChange, size = 80 }: AvatarUp
       const base64 = await resizeImage(file, 128);
       onChange(base64);
     } catch (err) {
-      console.error("Failed to resize image:", err);
+      logger.error("Failed to resize image:", err);
     }
     // Reset input so same file can be selected again
     e.target.value = "";

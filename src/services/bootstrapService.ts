@@ -1,4 +1,5 @@
 import * as cmds from "./tauriCommands";
+import type { OpenAIMessage, OpenAITool } from "./commands/apiCommands";
 
 /** The 4 core persona file names that must be written for bootstrap to complete. */
 const REQUIRED_BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"] as const;
@@ -7,7 +8,7 @@ const REQUIRED_BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.m
 export const OPTIONAL_BOOTSTRAP_FILES = ["BOOT.md", "HEARTBEAT.md"] as const;
 
 /** OpenAI function-calling tool definitions for bootstrap. */
-const BOOTSTRAP_TOOLS = [
+const BOOTSTRAP_TOOLS: OpenAITool[] = [
   {
     type: "function",
     function: {
@@ -48,7 +49,7 @@ const BOOTSTRAP_TOOLS = [
 ];
 
 export interface BootstrapTurnResult {
-  apiMessages: any[];
+  apiMessages: OpenAIMessage[];
   responseText: string;
   filesWritten: string[];
 }
@@ -61,12 +62,12 @@ export interface BootstrapTurnResult {
  *   4. Return when the model produces a text-only response
  */
 export async function executeBootstrapTurn(
-  apiMessages: any[],
+  apiMessages: OpenAIMessage[],
   userMessage: string,
   folderName: string,
   model: string,
 ): Promise<BootstrapTurnResult> {
-  const messages = [...apiMessages, { role: "user", content: userMessage }];
+  const messages: OpenAIMessage[] = [...apiMessages, { role: "user", content: userMessage }];
   const filesWritten: string[] = [];
 
   // Tool-call loop (max 5 iterations as safety net)

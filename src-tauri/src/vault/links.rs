@@ -56,7 +56,7 @@ pub struct LinkIndex {
 }
 
 static WIKILINK_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").unwrap());
+    LazyLock::new(|| Regex::new(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]").expect("WIKILINK_RE: hardcoded regex must compile"));
 
 /// Parse all wikilinks from markdown content.
 pub fn parse_wikilinks(content: &str) -> Vec<WikiLink> {

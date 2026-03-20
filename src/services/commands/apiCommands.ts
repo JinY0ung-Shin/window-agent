@@ -78,14 +78,45 @@ export async function chatCompletion(
   return invoke("chat_completion", { request });
 }
 
+// ── OpenAI-compatible types for bootstrap API ──
+
+export interface OpenAIFunctionCall {
+  name: string;
+  arguments: string;
+}
+
+export interface OpenAIToolCall {
+  id: string;
+  type: "function";
+  function: OpenAIFunctionCall;
+}
+
+export interface OpenAIMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content?: string | null;
+  tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
+}
+
+export interface OpenAIToolFunction {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface OpenAITool {
+  type: "function";
+  function: OpenAIToolFunction;
+}
+
 export interface BootstrapCompletionRequest {
-  messages: any[];
+  messages: OpenAIMessage[];
   model: string;
-  tools: any[];
+  tools: OpenAITool[];
 }
 
 export interface BootstrapCompletionResponse {
-  message: any;
+  message: OpenAIMessage;
 }
 
 export async function bootstrapCompletion(

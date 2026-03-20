@@ -107,18 +107,12 @@ fn process_events<R: tauri::Runtime>(
     // Update VaultManager registry/link_index for each changed file
     if let Some(vault_state) = app.try_state::<crate::commands::vault_commands::VaultState>() {
         if let Ok(mut vm) = vault_state.inner().lock() {
-            for path in paths {
-                let kind = kinds.get(path).copied();
-                match kind {
-                    _ => {
-                        // Any file change — rebuild full index for correctness.
-                        // This is simpler and avoids borrow checker issues with
-                        // incremental updates in the watcher context. Since external
-                        // edits are infrequent, full rebuild is acceptable here.
-                        let _ = vm.rebuild_index();
-                        break; // One rebuild covers all pending paths
-                    }
-                }
+            if !paths.is_empty() {
+                // Any file change — rebuild full index for correctness.
+                // This is simpler and avoids borrow checker issues with
+                // incremental updates in the watcher context. Since external
+                // edits are infrequent, full rebuild is acceptable here.
+                let _ = vm.rebuild_index();
             }
         }
     }

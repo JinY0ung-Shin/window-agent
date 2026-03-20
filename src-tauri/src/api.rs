@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -103,40 +104,40 @@ impl ApiState {
     }
 
     /// Toggle proxy bypass and rebuild the HTTP client.
-    pub fn set_no_proxy(&self, enabled: bool, app: &tauri::AppHandle) -> Result<(), String> {
+    pub fn set_no_proxy(&self, enabled: bool, app: &tauri::AppHandle) -> Result<(), AppError> {
         // Persist
-        let store = app.store(STORE_FILE).map_err(|e| e.to_string())?;
+        let store = app.store(STORE_FILE).map_err(|e| AppError::Config(e.to_string()))?;
         store.set(STORE_KEY_NO_PROXY, serde_json::json!(enabled));
-        store.save().map_err(|e| e.to_string())?;
+        store.save().map_err(|e| AppError::Config(e.to_string()))?;
 
         // Update in-memory
-        let mut cfg = self.inner.lock().unwrap();
+        let mut cfg = self.inner.lock().map_err(|_| AppError::Lock("API config lock poisoned".into()))?;
         cfg.no_proxy = enabled;
         drop(cfg);
 
         // Rebuild client with new proxy setting
-        *self.client.lock().unwrap() = Self::build_client(enabled);
+        *self.client.lock().map_err(|_| AppError::Lock("API client lock poisoned".into()))? = Self::build_client(enabled);
         Ok(())
     }
 
     /// Get current no_proxy setting.
-    pub fn get_no_proxy(&self) -> bool {
-        self.inner.lock().unwrap().no_proxy
+    pub fn get_no_proxy(&self) -> Result<bool, AppError> {
+        Ok(self.inner.lock().map_err(|_| AppError::Lock("API config lock poisoned".into()))?.no_proxy)
     }
 
     /// Returns true if the user has configured API access.
     /// Either an API key is set, or a custom base URL is configured
     /// (for keyless proxies like LiteLLM, vLLM, local servers).
-    pub fn has_api_access(&self) -> bool {
-        let cfg = self.inner.lock().unwrap();
-        !cfg.api_key.is_empty() || !is_default_url(&cfg.base_url)
+    pub fn has_api_access(&self) -> Result<bool, AppError> {
+        let cfg = self.inner.lock().map_err(|_| AppError::Lock("API config lock poisoned".into()))?;
+        Ok(!cfg.api_key.is_empty() || !is_default_url(&cfg.base_url))
     }
 
     /// Returns true only if an actual API key string is stored (non-empty).
     /// Use this when the UI needs to distinguish "key exists" from "proxy-only access".
-    pub fn has_stored_key(&self) -> bool {
-        let cfg = self.inner.lock().unwrap();
-        !cfg.api_key.is_empty()
+    pub fn has_stored_key(&self) -> Result<bool, AppError> {
+        let cfg = self.inner.lock().map_err(|_| AppError::Lock("API config lock poisoned".into()))?;
+        Ok(!cfg.api_key.is_empty())
     }
 
     /// Update API configuration and persist to store.
@@ -147,8 +148,8 @@ impl ApiState {
         key: Option<String>,
         url: Option<String>,
         app: &tauri::AppHandle,
-    ) -> Result<(), String> {
-        let cfg = self.inner.lock().unwrap();
+    ) -> Result<(), AppError> {
+        let cfg = self.inner.lock().map_err(|_| AppError::Lock("API config lock poisoned".into()))?;
         // Compute new values without mutating yet (trim whitespace from key/URL)
         let new_key = key.map(|k| k.trim().to_string()).unwrap_or_else(|| cfg.api_key.clone());
         let new_url = match url {
@@ -161,29 +162,29 @@ impl ApiState {
         // Persist FIRST — if this fails, in-memory state stays unchanged
         let store = app
             .store(STORE_FILE)
-            .map_err(|e| format!("Failed to open config store: {e}"))?;
+            .map_err(|e| AppError::Config(format!("Failed to open config store: {e}")))?;
         store.set(STORE_KEY_API_KEY, serde_json::json!(&new_key));
         store.set(STORE_KEY_BASE_URL, serde_json::json!(&new_url));
         store
             .save()
-            .map_err(|e| format!("Failed to persist config: {e}"))?;
+            .map_err(|e| AppError::Config(format!("Failed to persist config: {e}")))?;
 
         // Persistence succeeded — now update in-memory state
-        let mut cfg = self.inner.lock().unwrap();
+        let mut cfg = self.inner.lock().map_err(|_| AppError::Lock("API config lock poisoned".into()))?;
         cfg.api_key = new_key;
         cfg.base_url = new_url;
         Ok(())
     }
 
     /// Return a clone of the shared reqwest::Client (cheap – internally Arc'd).
-    pub fn client(&self) -> reqwest::Client {
-        self.client.lock().unwrap().clone()
+    pub fn client(&self) -> Result<reqwest::Client, AppError> {
+        Ok(self.client.lock().map_err(|_| AppError::Lock("API client lock poisoned".into()))?.clone())
     }
 
     /// Get the API key and base URL from backend state only.
-    pub fn effective(&self) -> (String, String) {
-        let cfg = self.inner.lock().unwrap();
-        (cfg.api_key.clone(), cfg.base_url.clone())
+    pub fn effective(&self) -> Result<(String, String), AppError> {
+        let cfg = self.inner.lock().map_err(|_| AppError::Lock("API config lock poisoned".into()))?;
+        Ok((cfg.api_key.clone(), cfg.base_url.clone()))
     }
 }
 

@@ -1,19 +1,16 @@
 import { create } from "zustand";
-import { listen } from "@tauri-apps/api/event";
-import type { ChatMessage, ToolCall } from "../services/types";
+import type { Agent, ChatMessage, Conversation, SkillMetadata, ToolCall } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
-// useVaultStore is loaded in conversationStore; prompt injection uses
-// memoryStore which is already vault-backed via chat_commands.rs.
 import { useSkillStore } from "./skillStore";
-import { useSummaryStore } from "./summaryStore";
 import { useBootstrapStore } from "./bootstrapStore";
 import { useToolRunStore } from "./toolRunStore";
 import { useConversationStore } from "./conversationStore";
 import { useMessageStore } from "./messageStore";
 import { useStreamStore } from "./streamStore";
+import { useSummaryStore } from "./summaryStore";
 import { resetChatContext } from "./resetHelper";
 import { buildConversationContext } from "../services/chatHelpers";
 import {
@@ -29,9 +26,8 @@ import {
   parseAgentName,
   isBootstrapComplete,
 } from "../services/bootstrapService";
-import { getEffectiveTools, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
+import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
 import { readToolConfig } from "../services/nativeToolRegistry";
-import { executeToolCalls } from "../services/toolService";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
   DEFAULT_SYSTEM_PROMPT,
@@ -41,62 +37,21 @@ import { i18n } from "../i18n";
 import { emitLifecycleEvent, onLifecycleEvent } from "../services/lifecycleEvents";
 import { shouldFlush, preCompactFlush } from "../services/preCompactService";
 import { estimateTokens } from "../services/tokenEstimator";
-
-// ── Stream event types ────────────────────────────────
-type StreamChunkEvent = { request_id: string; delta: string; reasoning_delta: string | null };
-type StreamDoneEvent = {
-  request_id: string;
-  full_content: string;
-  reasoning_content: string | null;
-  tool_calls: { id: string; type: string; function: { name: string; arguments: string } }[] | null;
-  error: string | null;
-};
-
-// ── Helpers ────────────────────────────────────────────
-
-function createPendingMessage(requestId?: string): { msgId: string; msg: ChatMessage } {
-  const msgId = `pending-${Date.now()}`;
-  return {
-    msgId,
-    msg: {
-      id: msgId,
-      type: "agent",
-      content: i18n.t("common:loadingMessage"),
-      status: "pending",
-      requestId,
-    },
-  };
-}
-
-function updateMessageInList(
-  messages: ChatMessage[],
-  targetId: string,
-  updates: Partial<ChatMessage>,
-): ChatMessage[] {
-  return messages.map((msg) =>
-    msg.id === targetId ? { ...msg, ...updates } : msg,
-  );
-}
-
-const MAX_TOOL_ITERATIONS = 10;
-
-// ── Workspace path auto-approve ──
-
-function isWorkspacePath(tc: ToolCall, workspacePath: string | undefined): boolean {
-  if (!workspacePath) return false;
-  if (!["write_file", "delete_file"].includes(tc.name)) return false;
-  let p: string | undefined;
-  try {
-    const args = JSON.parse(tc.arguments);
-    p = args?.path;
-  } catch { return false; }
-  if (!p || typeof p !== "string") return false;
-  if (p.includes("..")) return false;
-  const normalized = p.startsWith("/") ? p : `${workspacePath}/${p}`;
-  const wsSegments = workspacePath.split("/").filter(Boolean);
-  const pSegments = normalized.split("/").filter(Boolean);
-  return wsSegments.every((seg, i) => pSegments[i] === seg);
-}
+import {
+  type StreamDoneEvent,
+  MAX_TOOL_ITERATIONS,
+  msg, conv, stream, boot, summary,
+  createPendingMessage,
+  updateMessageInList,
+  executeStreamCall,
+  classifyToolCalls,
+  executeToolPipeline,
+} from "../services/streamHelpers";
+import {
+  extractBrowserDomain,
+  approveBrowserDomain,
+} from "../services/browserApprovalService";
+import { logger } from "../services/logger";
 
 // ── Per-conversation BOOT.md cache (for regenerate) ──
 const bootContentCache = new Map<string, string>();
@@ -107,56 +62,6 @@ onLifecycleEvent((event) => {
     bootContentCache.delete(event.conversationId);
   }
 });
-
-// ── Browser domain approval (per conversation) ──
-
-const browserApprovedDomains = new Map<string, Set<string>>();
-
-function hasCredentialRefs(tc: { name: string; arguments: string }): boolean {
-  if (tc.name !== "http_request") return false;
-  return /\{\{credential:[^}]+\}\}/.test(tc.arguments);
-}
-
-function extractBrowserDomain(toolName: string, toolArgs: string): string | null {
-  if (!toolName.startsWith("browser_")) return null;
-  try {
-    const args = JSON.parse(toolArgs);
-    if (args.url) {
-      const url = new URL(args.url);
-      return url.hostname;
-    }
-  } catch { /* ignore */ }
-  return null; // non-navigate browser tools don't change domain
-}
-
-function isBrowserDomainApproved(conversationId: string, domain: string | null): boolean {
-  if (!domain) return false;
-  const approved = browserApprovedDomains.get(conversationId);
-  return approved?.has(domain) ?? false;
-}
-
-function approveBrowserDomain(conversationId: string, domain: string) {
-  if (!browserApprovedDomains.has(conversationId)) {
-    browserApprovedDomains.set(conversationId, new Set());
-  }
-  browserApprovedDomains.get(conversationId)!.add(domain);
-  // Sync approval to backend so Rust security policy also allows this domain
-  cmds.approveBrowserDomain(conversationId, domain).catch(() => {
-    // Backend session may not exist yet; approval will apply on next tool call
-  });
-}
-
-function clearBrowserApprovals(conversationId: string) {
-  browserApprovedDomains.delete(conversationId);
-}
-
-// ── Store accessors (shorthand) ──
-
-const msg = () => useMessageStore.getState();
-const conv = () => useConversationStore.getState();
-const stream = () => useStreamStore.getState();
-const boot = () => useBootstrapStore.getState();
-const summary = () => useSummaryStore.getState();
 
 // ── ChatFlowStore ─────────────────────────────────────
 
@@ -225,8 +130,8 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
   prepareForAgent: (agentId: string) => {
     resetChatContext();
     useAgentStore.getState().selectAgent(agentId);
-    useConversationStore.getState().loadConsolidatedMemory(agentId);
-    const agent = useAgentStore.getState().agents.find((a: any) => a.id === agentId);
+    conv().loadConsolidatedMemory(agentId);
+    const agent = useAgentStore.getState().agents.find((a: Agent) => a.id === agentId);
     if (agent) {
       useSkillStore.getState().loadSkills(agent.folder_name);
     }
@@ -286,16 +191,16 @@ async function handleSkillCommand(command: string) {
       `**${i18n.t("agent:skills.available")}**\n${
         available
           .map(
-            (s: any) =>
+            (s: SkillMetadata) =>
               `- ${active.includes(s.name) ? "\u2705" : "\u2B1C"} ${s.name}: ${s.description}`,
           )
           .join("\n") || i18n.t("common:none")
       }\n\n${i18n.t("agent:skills.activeCount", { count: active.length })} | ${i18n.t("agent:skills.tokenCount", { tokens: skillStore.activeSkillTokens })}`;
   } else if ((subCommand === "장착" || subCommand === "equip") && skillName) {
-    const convObj = conversations.find((c: any) => c.id === currentConversationId);
+    const convObj = conversations.find((c: Conversation) => c.id === currentConversationId);
     const agentId = convObj?.agent_id ?? useAgentStore.getState().selectedAgentId;
     const agent = agentId
-      ? useAgentStore.getState().agents.find((a: any) => a.id === agentId)
+      ? useAgentStore.getState().agents.find((a: Agent) => a.id === agentId)
       : null;
     if (agent) {
       const success = await skillStore.activateSkill(
@@ -345,7 +250,6 @@ async function streamOneTurn(
   const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection, workspacePath, bootContent } = params;
 
   // Pre-compaction check: flush if approaching context limit
-  // Include all system prompt components for accurate estimate
   const currentMessages = msg().messages;
   const consolidatedMem = conv().consolidatedMemory;
   const isLearning = conv().getCurrentLearningMode();
@@ -357,27 +261,24 @@ async function streamOneTurn(
     (consolidatedMem ? estimateTokens(consolidatedMem) : 0) +
     (consolidatedMem && isLearning ? Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), 700) :
      !consolidatedMem ? Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), isLearning ? 1500 : 500) : 0) +
-    (workspacePath ? 200 : 0) + // workspace section
-    (isLearning ? 300 : 0) + // learning mode instructions
-    500; // summary + formatting buffer
+    (workspacePath ? 200 : 0) +
+    (isLearning ? 300 : 0) +
+    500;
   const totalTokenEstimate = systemOverhead + currentMessages.reduce(
     (sum: number, m: ChatMessage) => sum + estimateTokens(m.content) + 4,
     0,
   );
   const currentConvId = conv().currentConversationId;
   if (shouldFlush(totalTokenEstimate, effective.model) && currentConvId) {
-    const convObj = conv().conversations.find((c: any) => c.id === currentConvId);
+    const convObj = conv().conversations.find((c: Conversation) => c.id === currentConvId);
     const flushAgentId = convObj?.agent_id;
     if (flushAgentId) {
       await preCompactFlush(currentConvId, flushAgentId, effective.model, totalTokenEstimate);
     }
   }
 
-  // memoryStore is already vault-backed (chat_commands.rs → VaultManager),
-  // so memoryNotes provides full content with shared notes excluded.
-  // No need for a separate vaultNotes path.
-  const learningMode = useConversationStore.getState().getCurrentLearningMode();
-  const consolidatedMemory = useConversationStore.getState().consolidatedMemory;
+  const learningMode = conv().getCurrentLearningMode();
+  const consolidatedMemory = conv().consolidatedMemory;
   const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
     messages: msg().messages,
     summary: summary().currentSummary,
@@ -390,82 +291,17 @@ async function streamOneTurn(
     consolidatedMemory,
   });
 
-  let pendingDelta = "";
-  let pendingReasoning = "";
-  let rafId: number | null = null;
-
-  const flushDelta = () => {
-    if (!pendingDelta && !pendingReasoning) return;
-    const delta = pendingDelta;
-    pendingDelta = "";
-    pendingReasoning = "";
-
-    useMessageStore.setState({
-      messages: msg().messages.map((m: ChatMessage) =>
-        m.id === msgId
-          ? {
-              ...m,
-              content: m.content === i18n.t("common:loadingMessage") ? delta : m.content + delta,
-              status: "streaming" as const,
-            }
-          : m,
-      ),
-    });
-    const activeRun = stream().activeRun;
-    if (activeRun) {
-      useStreamStore.setState({ activeRun: { ...activeRun, status: "streaming" } });
-    }
-  };
-
-  let doneResolve: (v: StreamDoneEvent) => void;
-  const donePromise = new Promise<StreamDoneEvent>((r) => { doneResolve = r; });
-
-  const unlistenChunk = await listen<StreamChunkEvent>(
-    "chat-stream-chunk",
-    (event) => {
-      if (event.payload.request_id !== requestId) return;
-      pendingDelta += event.payload.delta;
-      if (event.payload.reasoning_delta) {
-        pendingReasoning += event.payload.reasoning_delta;
-      }
-      if (rafId === null) {
-        rafId = requestAnimationFrame(() => {
-          flushDelta();
-          rafId = null;
-        });
-      }
-    },
-  );
-
-  const unlistenDone = await listen<StreamDoneEvent>(
-    "chat-stream-done",
-    (event) => {
-      if (event.payload.request_id !== requestId) return;
-      doneResolve(event.payload);
-    },
-  );
-
-  try {
-    await cmds.chatCompletionStream({
-      messages: chatMessages as Record<string, unknown>[],
-      system_prompt: systemPrompt,
-      model: effective.model,
-      temperature: effective.temperature,
-      thinking_enabled: effective.thinkingEnabled,
-      thinking_budget: effective.thinkingBudget,
-      request_id: requestId,
-      tools: tools && tools.length > 0 ? tools : null,
-    });
-
-    const done = await donePromise;
-    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-    flushDelta();
-    return done;
-  } finally {
-    unlistenChunk();
-    unlistenDone();
-    if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-  }
+  return executeStreamCall({
+    requestId,
+    msgId,
+    messages: chatMessages as Record<string, unknown>[],
+    systemPrompt,
+    model: effective.model,
+    temperature: effective.temperature,
+    thinkingEnabled: effective.thinkingEnabled,
+    thinkingBudget: effective.thinkingBudget,
+    tools: tools ?? null,
+  });
 }
 
 // ── Normal message flow ────────────────────────────────
@@ -482,14 +318,14 @@ async function sendNormalMessage() {
   let agent = null;
 
   if (currentConversationId) {
-    const convObj = conversations.find((c: any) => c.id === currentConversationId);
+    const convObj = conversations.find((c: Conversation) => c.id === currentConversationId);
     agentId = convObj?.agent_id ?? null;
   } else {
     agentId = agentStore.selectedAgentId;
   }
 
   if (agentId) {
-    agent = agentStore.agents.find((a: any) => a.id === agentId) ?? null;
+    agent = agentStore.agents.find((a: Agent) => a.id === agentId) ?? null;
   }
 
   if (agent && useSkillStore.getState().availableSkills.length === 0) {
@@ -501,7 +337,7 @@ async function sendNormalMessage() {
   let initialTitle: string | null = null;
   if (!convId) {
     if (!agentId) {
-      console.error("No agent selected for new conversation");
+      logger.error("No agent selected for new conversation");
       return;
     }
     initialTitle =
@@ -518,7 +354,7 @@ async function sendNormalMessage() {
     }
 
     // Propagate draft learning mode to the new conversation
-    const { draftLearningMode } = useConversationStore.getState();
+    const { draftLearningMode } = conv();
     if (draftLearningMode) {
       await cmds.setLearningMode(convId, true);
       useConversationStore.setState({ currentLearningMode: true, draftLearningMode: false });
@@ -585,11 +421,11 @@ async function sendNormalMessage() {
     if (agent) {
       try {
         toolDefinitions = await getEffectiveTools(agent.folder_name);
-      } catch { /* no tools */ }
+      } catch (e) { logger.debug("No tools for agent", e); }
       try {
         const tc = await readToolConfig(agent.folder_name);
         autoApproveEnabled = tc?.auto_approve ?? false;
-      } catch { /* default false */ }
+      } catch (e) { logger.debug("No tool config, using defaults", e); }
     }
     const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
 
@@ -608,8 +444,8 @@ async function sendNormalMessage() {
         } else {
           baseSystemPrompt = assembleSystemPrompt(files);
         }
-      } catch {
-        // Fallback to default
+      } catch (e) {
+        logger.debug("Persona read failed, using default prompt", e);
       }
     }
 
@@ -619,7 +455,7 @@ async function sendNormalMessage() {
     let workspacePath: string | undefined;
     try {
       workspacePath = await cmds.getWorkspacePath(convId);
-    } catch { /* non-fatal */ }
+    } catch (e) { logger.debug("Workspace path unavailable", e); }
 
     let iterationCount = 0;
 
@@ -712,125 +548,23 @@ async function sendNormalMessage() {
           status: "complete",
         }),
       });
-      let savedToolMsgs: ChatMessage[] = [];
-      const autoTools: ToolCall[] = [];
-      const confirmTools: ToolCall[] = [];
-      const denyTools: ToolCall[] = [];
 
-      for (const tc of parsedToolCalls) {
-        const tier = getToolTier(toolDefinitions, tc.name);
-        if (tier === "deny") {
-          denyTools.push(tc);
-        } else if (tier === "confirm") {
-          // Workspace write/delete auto-approve
-          if (isWorkspacePath(tc, workspacePath)) {
-            autoTools.push(tc);
-          // Browser tools with already-approved domains skip confirmation
-          } else if (extractBrowserDomain(tc.name, tc.arguments) && isBrowserDomainApproved(convId, extractBrowserDomain(tc.name, tc.arguments))) {
-            autoTools.push(tc);
-          } else if (autoApproveEnabled && !hasCredentialRefs(tc)) {
-            // auto_approve: skip confirmation for non-credential tools
-            autoTools.push(tc);
-          } else {
-            confirmTools.push(tc);
-          }
-        } else {
-          autoTools.push(tc);
-        }
-      }
+      const classification = classifyToolCalls(parsedToolCalls, toolDefinitions, {
+        workspacePath,
+        convId,
+        autoApproveEnabled,
+      });
 
-      // Set pending state: only confirmTools need user approval UI
-      if (confirmTools.length > 0) {
-        useToolRunStore.setState({
-          toolRunState: "tool_pending",
-          pendingToolCalls: confirmTools,
-          toolIterationCount: iterationCount,
-        });
-      } else {
-        useToolRunStore.setState({
-          toolRunState: "tool_running",
-          pendingToolCalls: [],
-          toolIterationCount: iterationCount,
-        });
-      }
-
-      for (const tc of denyTools) {
-        const saved = await cmds.saveMessage({
-          conversation_id: convId,
-          role: "tool",
-          content: "Tool denied by policy.",
-          tool_call_id: tc.id,
-          tool_name: tc.name,
-        });
-        savedToolMsgs.push({
-          id: saved.id,
-          type: "tool" as const,
-          content: "Tool denied by policy.",
-          status: "complete" as const,
-          tool_call_id: tc.id,
-          tool_name: tc.name,
-        });
-      }
-
-      if (autoTools.length > 0) {
-        useToolRunStore.setState({ toolRunState: "tool_running" });
-        const autoResults = await executeToolCalls(autoTools, convId);
-        for (const toolMsg of autoResults) {
-          const saved = await cmds.saveMessage({
-            conversation_id: convId,
-            role: "tool",
-            content: toolMsg.content,
-            tool_call_id: toolMsg.tool_call_id,
-            tool_name: toolMsg.tool_name,
-          });
-          savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
-          // Clear frontend approval cache when browser session is closed
-          if (toolMsg.tool_name === "browser_close") clearBrowserApprovals(convId);
-        }
-      }
-
-      if (confirmTools.length > 0) {
-        useToolRunStore.setState({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
-        const confirmApproved = await useToolRunStore.getState().waitForToolApproval();
-        if (confirmApproved) {
+      const savedToolMsgs = await executeToolPipeline(classification, convId, {
+        iterationCount,
+        onConfirmApproved: (tools) => {
           // Record approved browser domains for this conversation
-          for (const tc of confirmTools) {
+          for (const tc of tools) {
             const domain = extractBrowserDomain(tc.name, tc.arguments);
             if (domain) approveBrowserDomain(convId, domain);
           }
-          useToolRunStore.setState({ toolRunState: "tool_running" });
-          const confirmResults = await executeToolCalls(confirmTools, convId);
-          for (const toolMsg of confirmResults) {
-            const saved = await cmds.saveMessage({
-              conversation_id: convId,
-              role: "tool",
-              content: toolMsg.content,
-              tool_call_id: toolMsg.tool_call_id,
-              tool_name: toolMsg.tool_name,
-            });
-            savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
-            if (toolMsg.tool_name === "browser_close") clearBrowserApprovals(convId);
-          }
-        } else {
-          for (const tc of confirmTools) {
-            const saved = await cmds.saveMessage({
-              conversation_id: convId,
-              role: "tool",
-              content: "Tool call rejected by user.",
-              tool_call_id: tc.id,
-              tool_name: tc.name,
-            });
-            savedToolMsgs.push({
-              id: saved.id,
-              type: "tool" as const,
-              content: "Tool call rejected by user.",
-              status: "complete" as const,
-              tool_call_id: tc.id,
-              tool_name: tc.name,
-            });
-          }
-        }
-      }
+        },
+      });
 
       // Refresh memory store after tool execution so the next turn's prompt
       // includes any notes the agent just created/updated/deleted via memory_note tool.
@@ -857,7 +591,7 @@ async function sendNormalMessage() {
       });
     }
   } catch (error) {
-    console.error("API Error:", error);
+    logger.error("API Error:", error);
     useMessageStore.setState({
       messages: updateMessageInList(msg().messages, currentMsgId, {
         content: parseErrorMessage(error),
@@ -883,10 +617,10 @@ async function regenerateStream(
   const agentStore = useAgentStore.getState();
   const conversations = conv().conversations;
 
-  const convObj = conversations.find((c: any) => c.id === convId);
+  const convObj = conversations.find((c: Conversation) => c.id === convId);
   const agentId = convObj?.agent_id ?? null;
   const agent = agentId
-    ? agentStore.agents.find((a: any) => a.id === agentId) ?? null
+    ? agentStore.agents.find((a: Agent) => a.id === agentId) ?? null
     : null;
 
   const requestId = `req-${Date.now()}`;
@@ -921,7 +655,7 @@ async function regenerateStream(
           try {
             const toolDefs = await getEffectiveTools(agent.folder_name);
             enabledToolNames = toolDefs.map((t) => t.name);
-          } catch { /* no tools */ }
+          } catch (e) { logger.debug("No tools for regenerate agent", e); }
           baseSystemPrompt = assembleManagerPrompt(
             files,
             agentStore.agents,
@@ -931,8 +665,8 @@ async function regenerateStream(
         } else {
           baseSystemPrompt = assembleSystemPrompt(files);
         }
-      } catch {
-        // Fallback to default
+      } catch (e) {
+        logger.debug("Persona read failed during regenerate, using default", e);
       }
     }
 
@@ -942,10 +676,9 @@ async function regenerateStream(
     let workspacePath: string | undefined;
     try {
       workspacePath = await cmds.getWorkspacePath(convId);
-    } catch { /* non-fatal */ }
+    } catch (e) { logger.debug("Workspace path unavailable for regenerate", e); }
 
     // Retrieve BOOT.md only if regenerating the first assistant reply.
-    // First turn = only one user message in truncated (tool-call agent messages don't count).
     let cachedBoot: string | undefined;
     const isFirstAssistantTurn = truncated.filter((m) => m.type === "user").length <= 1;
     if (isFirstAssistantTurn) {
@@ -958,158 +691,56 @@ async function regenerateStream(
             cachedBoot = bootFromDisk;
             bootContentCache.set(convId, bootFromDisk);
           }
-        } catch { /* non-fatal */ }
+        } catch (e) { logger.debug("BOOT.md read failed for regenerate", e); }
       }
     }
 
-    // Pre-compaction check for regeneration path (include all system prompt components)
-    const regenMessages = msg().messages;
-    const regenConsolidatedMem = useConversationStore.getState().consolidatedMemory;
-    const regenLearningMode = useConversationStore.getState().getCurrentLearningMode();
-    const regenMemNotes = useMemoryStore.getState().notes;
-    const regenSystemOverhead =
-      estimateTokens(baseSystemPrompt) +
-      (skillsSection ? estimateTokens(skillsSection) : 0) +
-      (cachedBoot ? estimateTokens(cachedBoot) : 0) +
-      (regenConsolidatedMem ? estimateTokens(regenConsolidatedMem) : 0) +
-      (regenConsolidatedMem && regenLearningMode ? Math.min(regenMemNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), 700) :
-       !regenConsolidatedMem ? Math.min(regenMemNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), regenLearningMode ? 1500 : 500) : 0) +
-      (workspacePath ? 200 : 0) +
-      (regenLearningMode ? 300 : 0) +
-      500;
-    const regenTokenEstimate = regenSystemOverhead + regenMessages.reduce(
-      (sum: number, m: ChatMessage) => sum + estimateTokens(m.content) + 4,
-      0,
-    );
-    if (shouldFlush(regenTokenEstimate, effective.model) && agentId) {
-      await preCompactFlush(convId, agentId, effective.model, regenTokenEstimate);
-    }
-
-    const learningModeRegen = useConversationStore.getState().getCurrentLearningMode();
-    const consolidatedMemoryRegen = useConversationStore.getState().consolidatedMemory;
-    const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
-      messages: msg().messages,
-      summary: summary().currentSummary,
+    // Use streamOneTurn which handles pre-compaction, context building, and streaming
+    const done = await streamOneTurn({
       baseSystemPrompt,
+      effective,
+      requestId,
+      msgId,
       skillsSection,
-      bootContent: cachedBoot,
-      memoryNotes: useMemoryStore.getState().notes,
       workspacePath,
-      learningMode: learningModeRegen,
-      consolidatedMemory: consolidatedMemoryRegen,
+      bootContent: cachedBoot,
     });
 
-    let pendingDelta = "";
-    let pendingReasoning = "";
-    let rafId: number | null = null;
-
-    const flushDelta = () => {
-      if (!pendingDelta && !pendingReasoning) return;
-      const delta = pendingDelta;
-      pendingDelta = "";
-      pendingReasoning = "";
-
-      useMessageStore.setState({
-        messages: msg().messages.map((m: ChatMessage) =>
-          m.id === msgId
-            ? {
-                ...m,
-                content: m.content === i18n.t("common:loadingMessage") ? delta : m.content + delta,
-                status: "streaming" as const,
-              }
-            : m,
-        ),
-      });
-      const activeRun = stream().activeRun;
-      if (activeRun) {
-        useStreamStore.setState({ activeRun: { ...activeRun, status: "streaming" } });
-      }
-    };
-
-    let doneResolve: (v: StreamDoneEvent) => void;
-    const donePromise = new Promise<StreamDoneEvent>((r) => { doneResolve = r; });
-
-    const unlistenChunk = await listen<StreamChunkEvent>(
-      "chat-stream-chunk",
-      (event) => {
-        if (event.payload.request_id !== requestId) return;
-        pendingDelta += event.payload.delta;
-        if (event.payload.reasoning_delta) {
-          pendingReasoning += event.payload.reasoning_delta;
-        }
-        if (rafId === null) {
-          rafId = requestAnimationFrame(() => {
-            flushDelta();
-            rafId = null;
-          });
-        }
-      },
-    );
-
-    const unlistenDone = await listen<StreamDoneEvent>(
-      "chat-stream-done",
-      (event) => {
-        if (event.payload.request_id !== requestId) return;
-        doneResolve(event.payload);
-      },
-    );
-
-    try {
-      await cmds.chatCompletionStream({
-        messages: chatMessages,
-        system_prompt: systemPrompt,
-        model: effective.model,
-        temperature: effective.temperature,
-        thinking_enabled: effective.thinkingEnabled,
-        thinking_budget: effective.thinkingBudget,
-        request_id: requestId,
-      });
-
-      const done = await donePromise;
-
-      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
-      flushDelta();
-
-      if (done.error) {
-        if (done.error === "aborted") {
-          useMessageStore.setState({
-            messages: updateMessageInList(msg().messages, msgId, { status: "aborted" }),
-          });
-          useStreamStore.setState({ activeRun: null });
-        } else {
-          throw new Error(done.error);
-        }
-      } else {
-        const replyContent = done.full_content || i18n.t("common:noResponse");
-        const reasoningContent = done.reasoning_content ?? undefined;
-
-        const savedAssistant = await cmds.saveMessage({
-          conversation_id: convId,
-          role: "assistant",
-          content: replyContent,
-        });
-
+    if (done.error) {
+      if (done.error === "aborted") {
         useMessageStore.setState({
-          messages: updateMessageInList(msg().messages, msgId, {
-            dbMessageId: savedAssistant.id,
-            content: replyContent,
-            reasoningContent,
-            status: "complete",
-          }),
+          messages: updateMessageInList(msg().messages, msgId, { status: "aborted" }),
         });
         useStreamStore.setState({ activeRun: null });
-
-        summary().maybeGenerateSummary(
-          convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
-        );
+      } else {
+        throw new Error(done.error);
       }
-    } finally {
-      unlistenChunk();
-      unlistenDone();
-      if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+    } else {
+      const replyContent = done.full_content || i18n.t("common:noResponse");
+      const reasoningContent = done.reasoning_content ?? undefined;
+
+      const savedAssistant = await cmds.saveMessage({
+        conversation_id: convId,
+        role: "assistant",
+        content: replyContent,
+      });
+
+      useMessageStore.setState({
+        messages: updateMessageInList(msg().messages, msgId, {
+          dbMessageId: savedAssistant.id,
+          content: replyContent,
+          reasoningContent,
+          status: "complete",
+        }),
+      });
+      useStreamStore.setState({ activeRun: null });
+
+      summary().maybeGenerateSummary(
+        convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
+      );
     }
   } catch (error) {
-    console.error("Regenerate Error:", error);
+    logger.error("Regenerate Error:", error);
     useMessageStore.setState({
       messages: updateMessageInList(msg().messages, msgId, {
         content: parseErrorMessage(error),
@@ -1172,7 +803,7 @@ async function sendBootstrapMessage() {
       await completeBootstrap();
     }
   } catch (error) {
-    console.error("Bootstrap API Error:", error);
+    logger.error("Bootstrap API Error:", error);
     useMessageStore.setState({
       messages: updateMessageInList(msg().messages, msgId, {
         content: parseErrorMessage(error),
@@ -1195,12 +826,13 @@ async function completeBootstrap() {
   try {
     const identity = await cmds.readAgentFile(bootstrapFolderName, "IDENTITY.md");
     agentName = parseAgentName(identity, fallbackName);
-  } catch {
+  } catch (e) {
+    logger.debug("IDENTITY.md read failed, using fallback name", e);
     agentName = fallbackName;
   }
 
   try {
-    const agent = await cmds.createAgent({
+    const agentResult = await cmds.createAgent({
       folder_name: bootstrapFolderName,
       name: agentName,
     });
@@ -1211,9 +843,9 @@ async function completeBootstrap() {
 
     const agentStoreRef = useAgentStore.getState();
     await agentStoreRef.loadAgents();
-    agentStoreRef.selectAgent(agent.id);
+    agentStoreRef.selectAgent(agentResult.id);
   } catch (error) {
-    console.error("Failed to complete bootstrap:", error);
+    logger.error("Failed to complete bootstrap:", error);
     const errorMsg: ChatMessage = {
       id: `error-${Date.now()}`,
       type: "agent",

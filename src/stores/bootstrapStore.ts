@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
+import type { OpenAIMessage } from "../services/commands/apiCommands";
+import { logger } from "../services/logger";
 
 interface BootstrapState {
   isBootstrapping: boolean;
   bootstrapFolderName: string | null;
-  bootstrapApiHistory: any[];
+  bootstrapApiHistory: OpenAIMessage[];
   bootstrapFilesWritten: string[];
 
   startBootstrap: () => Promise<void>;
@@ -16,7 +18,7 @@ interface BootstrapState {
 const BOOTSTRAP_INITIAL = {
   isBootstrapping: false,
   bootstrapFolderName: null as string | null,
-  bootstrapApiHistory: [] as any[],
+  bootstrapApiHistory: [] as OpenAIMessage[],
   bootstrapFilesWritten: [] as string[],
 };
 
@@ -29,8 +31,8 @@ export const useBootstrapStore = create<BootstrapState>((set, _get) => ({
     let prompt: string;
     try {
       prompt = await cmds.getBootstrapPrompt(locale);
-    } catch {
-      console.error("Failed to load bootstrap prompt");
+    } catch (e) {
+      logger.error("Failed to load bootstrap prompt:", e);
       return;
     }
     set({

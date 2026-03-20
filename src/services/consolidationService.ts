@@ -15,6 +15,7 @@ import { useSettingsStore } from "../stores/settingsStore";
 import * as cmds from "./tauriCommands";
 import type { ChatCompletionRequest } from "./commands/apiCommands";
 import { chatCompletion } from "./commands/apiCommands";
+import { logger } from "./logger";
 
 // ── Per-agent mutex ──
 const activeJobs = new Set<string>();
@@ -57,7 +58,7 @@ export async function consolidateConversation(
       // Digest already exists but consolidation incomplete — read the digest
       try {
         digestContent = await cmds.readDigest(agentId, conversationId);
-      } catch { /* proceed without digest */ }
+      } catch (e) { logger.debug("[consolidation] Digest read failed, proceeding without", e); }
     }
 
     // Step 2: Consolidate — only mark as consolidated if F succeeds
@@ -68,7 +69,7 @@ export async function consolidateConversation(
       await cmds.updateConversationConsolidated(conversationId);
     }
   } catch (err) {
-    console.error("[consolidation] Failed:", err);
+    logger.error("[consolidation] Failed:", err);
   } finally {
     activeJobs.delete(agentId);
   }
@@ -103,7 +104,7 @@ export async function generateDigest(
       );
       capturedNotesText = `\n\n--- CAPTURED MEMORY NOTES ---\n${noteSummaries.join("\n")}`;
     }
-  } catch { /* non-fatal */ }
+  } catch (e) { logger.debug("[consolidation] Memory notes fetch failed", e); }
 
   // Also collect memory_note tool call activity for additional context
   let toolActivity = "";
@@ -119,7 +120,7 @@ export async function generateDigest(
       });
       toolActivity = `\n\n--- MEMORY TOOL ACTIVITY ---\n${logSummaries.join("\n")}`;
     }
-  } catch { /* non-fatal */ }
+  } catch (e) { logger.debug("[consolidation] Tool call logs fetch failed", e); }
 
   const systemPrompt = i18n.t("prompts:digest.system");
   const instruction = i18n.t("prompts:digest.instruction", { conversationId });
@@ -142,7 +143,7 @@ export async function generateDigest(
     const response = await chatCompletion(request);
     return response.content || null;
   } catch (err) {
-    console.error("[consolidation] Digest generation failed:", err);
+    logger.error("[consolidation] Digest generation failed:", err);
     return null;
   }
 }
@@ -207,7 +208,7 @@ export async function consolidateMemory(agentId: string, digestContent: string):
     }
     return false;
   } catch (err) {
-    console.error("[consolidation] Memory consolidation failed:", err);
+    logger.error("[consolidation] Memory consolidation failed:", err);
     return false;
   }
 }
@@ -222,7 +223,7 @@ export async function recoverPendingConsolidations(): Promise<void> {
     for (const item of pending) {
       consolidateConversation(item.conversation_id, item.agent_id).catch(() => {});
     }
-  } catch {
-    // Non-fatal
+  } catch (e) {
+    logger.debug("[consolidation] Recovery enumeration failed", e);
   }
 }

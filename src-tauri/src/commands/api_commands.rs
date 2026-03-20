@@ -6,18 +6,18 @@ use tauri::{Emitter, State};
 
 /// Returns true if API access is configured (key set OR custom URL).
 #[tauri::command]
-pub fn has_api_key(api: State<'_, ApiState>) -> bool {
+pub fn has_api_key(api: State<'_, ApiState>) -> Result<bool, AppError> {
     api.has_api_access()
 }
 
 /// Returns true only if an actual API key string is stored.
 #[tauri::command]
-pub fn has_stored_key(api: State<'_, ApiState>) -> bool {
+pub fn has_stored_key(api: State<'_, ApiState>) -> Result<bool, AppError> {
     api.has_stored_key()
 }
 
 #[tauri::command]
-pub fn get_no_proxy(api: State<'_, ApiState>) -> bool {
+pub fn get_no_proxy(api: State<'_, ApiState>) -> Result<bool, AppError> {
     api.get_no_proxy()
 }
 
@@ -26,7 +26,7 @@ pub fn set_no_proxy(
     app: tauri::AppHandle,
     api: State<'_, ApiState>,
     enabled: bool,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     api.set_no_proxy(enabled, &app)
 }
 
@@ -37,7 +37,6 @@ pub fn set_api_config(
     request: SetApiConfigRequest,
 ) -> Result<(), AppError> {
     api.set_config(request.api_key, request.base_url, &app)
-        .map_err(AppError::Io)
 }
 
 #[tauri::command]
@@ -46,8 +45,8 @@ pub async fn chat_completion(
     api: State<'_, ApiState>,
     request: ChatCompletionRequest,
 ) -> Result<ChatCompletionResponse, AppError> {
-    let (api_key, base_url) = api.effective();
-    let client = api.client();
+    let (api_key, base_url) = api.effective()?;
+    let client = api.client()?;
 
     if crate::api::requires_api_key(&api_key, &base_url) {
         return Err(AppError::Validation("API key not configured".into()));
@@ -111,8 +110,8 @@ pub async fn bootstrap_completion(
     api: State<'_, ApiState>,
     request: BootstrapCompletionRequest,
 ) -> Result<BootstrapCompletionResponse, AppError> {
-    let (api_key, base_url) = api.effective();
-    let client = api.client();
+    let (api_key, base_url) = api.effective()?;
+    let client = api.client()?;
 
     if crate::api::requires_api_key(&api_key, &base_url) {
         return Err(AppError::Validation("API key not configured".into()));
@@ -150,8 +149,8 @@ pub async fn bootstrap_completion(
 
 #[tauri::command]
 pub async fn list_models(api: State<'_, ApiState>) -> Result<Vec<String>, AppError> {
-    let (api_key, base_url) = api.effective();
-    let client = api.client();
+    let (api_key, base_url) = api.effective()?;
+    let client = api.client()?;
 
     // Allow keyless access for local/proxy servers (LiteLLM, vLLM etc.)
     if crate::api::requires_api_key(&api_key, &base_url) {
@@ -201,8 +200,8 @@ pub async fn check_api_health(
     api: State<'_, ApiState>,
     request: ApiHealthCheckRequest,
 ) -> Result<ApiHealthCheckResponse, AppError> {
-    let (stored_api_key, stored_base_url) = api.effective();
-    let client = api.client();
+    let (stored_api_key, stored_base_url) = api.effective()?;
+    let client = api.client()?;
 
     let api_key = request.api_key.map(|k| k.trim().to_string()).unwrap_or(stored_api_key);
     let base_url = match request.base_url {
@@ -364,8 +363,8 @@ pub async fn chat_completion_stream(
     request: ChatCompletionRequest,
     request_id: String,
 ) -> Result<(), AppError> {
-    let (api_key, base_url) = api.effective();
-    let client = api.client();
+    let (api_key, base_url) = api.effective()?;
+    let client = api.client()?;
 
     if crate::api::requires_api_key(&api_key, &base_url) {
         let _ = app.emit(

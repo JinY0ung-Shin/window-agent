@@ -13,7 +13,12 @@ export async function getNativeTools(): Promise<NativeToolDef[]> {
 
 export async function getDefaultToolConfig(): Promise<ToolConfig> {
   const json = await cmds.getDefaultToolConfig();
-  return JSON.parse(json);
+  try {
+    return JSON.parse(json);
+  } catch {
+    const preview = typeof json === "string" ? json.slice(0, 100) : String(json);
+    throw new Error(`Failed to parse default tool config: ${preview}`);
+  }
 }
 
 export async function readToolConfig(folderName: string): Promise<ToolConfig | null> {

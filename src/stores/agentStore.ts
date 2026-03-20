@@ -12,6 +12,7 @@ import {
 } from "../services/nativeToolRegistry";
 import { i18n } from "../i18n";
 import { useSettingsStore } from "./settingsStore";
+import { logger } from "../services/logger";
 
 interface AgentState {
   agents: Agent[];
@@ -58,7 +59,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     try {
       const agents = await cmds.listAgents();
       set({ agents });
-    } catch {
+    } catch (e) {
+      logger.debug("Failed to load agents", e);
       set({ agents: [] });
     }
   },
@@ -80,7 +82,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         try {
           const files = await readPersonaFiles(agent.folder_name);
           set({ personaFiles: files });
-        } catch {
+        } catch (e) {
+          logger.debug("Persona files read failed, using empty", e);
           set({ personaFiles: { ...EMPTY_PERSONA } });
         }
 
@@ -92,8 +95,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
             // TOOL_CONFIG.json missing — fall back to defaults
             const defaultConfig = await getDefaultToolConfig();
             set({ toolConfig: defaultConfig });
-          } catch {
-            // Keep the editor usable even if tool config defaults fail to load.
+          } catch (e) {
+            logger.debug("Failed to load default tool config", e);
           }
         }
       } else {
@@ -105,8 +108,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       try {
         const defaultConfig = await getDefaultToolConfig();
         set({ toolConfig: defaultConfig });
-      } catch {
-        // fallback: null means no tools
+      } catch (e) {
+        logger.debug("Failed to load default tool config for new agent", e);
       }
     }
   },
@@ -173,14 +176,14 @@ export const useAgentStore = create<AgentState>((set, get) => ({
       // Write tool config separately (if null for new agent, write defaults)
       let { toolConfig } = get();
       if (!toolConfig && !editingAgentId) {
-        try { toolConfig = await getDefaultToolConfig(); } catch { /* proceed without */ }
+        try { toolConfig = await getDefaultToolConfig(); } catch (e) { logger.debug("Default tool config unavailable", e); }
       }
       if (toolConfig) {
         await writeToolConfig(folderName, toolConfig);
       }
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error("Failed to save agent:", e);
+      logger.error("Failed to save agent:", e);
       set({ editorError: i18n.t("glossary:agentSaveFailed", { error: errorMsg, context: useSettingsStore.getState().uiTheme }) });
       return;
     }
@@ -194,7 +197,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     try {
       await cmds.deleteAgent(id);
     } catch (e) {
-      console.error("Failed to delete agent:", e);
+      logger.error("Failed to delete agent:", e);
     }
     const { selectedAgentId } = get();
     if (selectedAgentId === id) {

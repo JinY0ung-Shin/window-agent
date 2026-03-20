@@ -180,7 +180,7 @@ pub fn sync_agents_from_fs(
         if !existing_folders.contains(folder) {
             // Skip folders with invalid names (e.g. hidden dirs, path traversal)
             if validate_folder_name(folder).is_err() {
-                eprintln!("Warning: skipping invalid agent folder name: '{}'", folder);
+                tracing::warn!(folder = %folder, "Skipping invalid agent folder name");
                 continue;
             }
 
@@ -210,10 +210,7 @@ pub fn sync_agents_from_fs(
     // already removes the DB row) or may be temporarily missing.
     for agent in &existing_agents {
         if !fs_folders.contains(&agent.folder_name) && !agent.is_default {
-            eprintln!(
-                "Warning: agent folder missing for '{}', keeping DB record",
-                agent.folder_name
-            );
+            tracing::warn!(folder = %agent.folder_name, "Agent folder missing, keeping DB record");
         }
     }
 
@@ -236,7 +233,7 @@ pub fn seed_manager_agent(
     if let Some(agent) = existing_agents.iter().find(|a| a.is_default) {
         // Refresh default persona files (upgrades old defaults, preserves user edits)
         if let Err(e) = refresh_default_persona_impl(&app, &agent.folder_name, &locale) {
-            eprintln!("Warning: failed to refresh manager persona: {}", e);
+            tracing::warn!(error = %e, "Failed to refresh manager persona");
         }
         return Ok(agent.clone());
     }
@@ -246,7 +243,7 @@ pub fn seed_manager_agent(
         agent_operations::get_agent_by_folder_impl(&db, "매니저".into())
     {
         if let Err(e) = refresh_default_persona_impl(&app, &agent.folder_name, &locale) {
-            eprintln!("Warning: failed to refresh manager persona: {}", e);
+            tracing::warn!(error = %e, "Failed to refresh manager persona");
         }
         return Ok(agent);
     }

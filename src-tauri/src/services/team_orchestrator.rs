@@ -1,5 +1,6 @@
 use crate::api::{ApiState, RunRegistry};
 use crate::commands::tool_commands::native_tool_definitions;
+use crate::db::models::{TaskStatus, TeamRunStatus};
 use crate::db::team_operations;
 use crate::db::Database;
 use crate::services::actor_context::{self, ExecutionRole, ExecutionScope, ExecutionTrigger};
@@ -10,6 +11,7 @@ use tauri::{AppHandle, Emitter, Manager};
 // ── Team-specific event payloads ──────────────────────────
 
 #[derive(Serialize, Clone)]
+#[allow(dead_code)] // TODO: emit via Tauri event for real-time team task streaming
 pub struct TeamStreamChunkPayload {
     pub run_id: String,
     pub task_id: String,
@@ -106,8 +108,8 @@ impl TeamOrchestrator {
             // 4. Update task status to running
             let _ = team_operations::update_team_task_impl(
                 db,
-                team_task.id.clone(),
-                Some("running".to_string()),
+                &team_task.id,
+                Some(TaskStatus::Running),
                 None,
                 None,
                 None,
@@ -189,8 +191,10 @@ impl TeamOrchestrator {
             let agent_id_clone = agent_id.clone();
 
             let api_state = app.state::<ApiState>();
-            let (api_key, base_url) = api_state.effective();
-            let client = api_state.client();
+            let (api_key, base_url) = api_state.effective()
+                .map_err(|e| format!("API state error: {e}"))?;
+            let client = api_state.client()
+                .map_err(|e| format!("API client error: {e}"))?;
             let registry = app.state::<RunRegistry>();
             let registry_clone: RunRegistry = (*registry).clone();
 
@@ -200,7 +204,7 @@ impl TeamOrchestrator {
             // Store request_id in the task
             let _ = team_operations::update_team_task_impl(
                 db,
-                team_task.id.clone(),
+                &team_task.id,
                 None,
                 Some(request_id.clone()),
                 None,
@@ -245,8 +249,8 @@ impl TeamOrchestrator {
                         // Update task as failed
                         let _ = team_operations::update_team_task_impl(
                             &db_ref,
-                            task_id_clone.clone(),
-                            Some("failed".to_string()),
+                            &task_id_clone,
+                            Some(TaskStatus::Failed),
                             None,
                             Some(format!("LLM error: {error_msg}")),
                             Some(Utc::now().to_rfc3339()),
@@ -278,8 +282,8 @@ impl TeamOrchestrator {
         // Update run status to waiting_reports
         let _ = team_operations::update_team_run_status_impl(
             db,
-            run_id.to_string(),
-            "waiting_reports".to_string(),
+            run_id,
+            TeamRunStatus::WaitingReports,
             None,
         );
 
@@ -303,8 +307,8 @@ impl TeamOrchestrator {
 
         team_operations::update_team_task_impl(
             db,
-            task_id.to_string(),
-            Some("done".to_string()),
+            task_id,
+            Some(TaskStatus::Completed),
             None,
             Some(result_text),
             Some(Utc::now().to_rfc3339()),
@@ -312,26 +316,26 @@ impl TeamOrchestrator {
         .map_err(|e| format!("Failed to update task: {e}"))?;
 
         // 2. Check if all tasks for this run are done
-        let all_tasks = team_operations::get_team_tasks_impl(db, run_id.to_string())
+        let all_tasks = team_operations::get_team_tasks_impl(db, run_id)
             .map_err(|e| format!("Failed to get tasks: {e}"))?;
 
         let all_done = all_tasks
             .iter()
-            .all(|t| t.status == "done" || t.status == "failed" || t.status == "cancelled");
+            .all(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled));
 
         if all_done {
             // 3. Update run status to synthesizing
             let _ = team_operations::update_team_run_status_impl(
                 db,
-                run_id.to_string(),
-                "synthesizing".to_string(),
+                run_id,
+                TeamRunStatus::Synthesizing,
                 None,
             );
 
             // 4. Assemble all reports
             let reports: Vec<TaskReport> = all_tasks
                 .iter()
-                .filter(|t| t.status == "done")
+                .filter(|t| t.status == TaskStatus::Completed)
                 .map(|t| TaskReport {
                     task_id: t.id.clone(),
                     agent_id: t.agent_id.clone(),
@@ -340,17 +344,8 @@ impl TeamOrchestrator {
                 })
                 .collect();
 
-            // Emit reports-in event (informational for frontend)
-            let _ = app.emit(
-                "team-all-reports-in",
-                TeamAllReportsPayload {
-                    run_id: run_id.to_string(),
-                    reports: reports.clone(),
-                },
-            );
-
             // 5. Trigger backend leader synthesis
-            let run = team_operations::get_team_run_impl(db, run_id.to_string())
+            let run = team_operations::get_team_run_impl(db, run_id)
                 .map_err(|e| format!("Failed to get run: {e}"))?;
 
             let app_data_dir = app
@@ -371,7 +366,7 @@ impl TeamOrchestrator {
             let leader_ctx = actor_context::resolve(&leader_scope, db, &app_data_dir)
                 .map_err(|e| format!("Failed to resolve leader context: {e}"))?;
 
-            // Build reports text for synthesis prompt
+            // Build reports text for synthesis prompt (before moving reports into emit)
             let mut reports_text = String::from("## Team Member Reports\n\n");
             for report in &reports {
                 reports_text.push_str(&format!(
@@ -379,6 +374,15 @@ impl TeamOrchestrator {
                     report.agent_id, report.summary
                 ));
             }
+
+            // Emit reports-in event (informational for frontend)
+            let _ = app.emit(
+                "team-all-reports-in",
+                TeamAllReportsPayload {
+                    run_id: run_id.to_string(),
+                    reports,
+                },
+            );
 
             // Build leader system prompt
             let mut system_parts = Vec::new();
@@ -419,8 +423,10 @@ impl TeamOrchestrator {
             let run_id_owned = run_id.to_string();
 
             let api_state = app.state::<ApiState>();
-            let (api_key, base_url) = api_state.effective();
-            let client = api_state.client();
+            let (api_key, base_url) = api_state.effective()
+                .map_err(|e| format!("API state error: {e}"))?;
+            let client = api_state.client()
+                .map_err(|e| format!("API client error: {e}"))?;
             let registry = app.state::<RunRegistry>();
             let registry_clone: RunRegistry = (*registry).clone();
 
@@ -447,23 +453,27 @@ impl TeamOrchestrator {
                     Err(e) => Some(e.to_string()),
                 };
 
-                // Emit synthesis done event
+                // Update run status to completed (or failed)
+                let final_status = if result.is_ok() {
+                    TeamRunStatus::Completed
+                } else {
+                    TeamRunStatus::Failed
+                };
+                let _ = team_operations::update_team_run_status_impl(
+                    &db_ref,
+                    &run_id_owned,
+                    final_status,
+                    Some(Utc::now().to_rfc3339()),
+                );
+
+                // Emit synthesis done event (move values — no clones needed)
                 let _ = app_clone.emit(
                     "team-leader-synthesis-done",
                     TeamSynthesisDonePayload {
-                        run_id: run_id_owned.clone(),
-                        request_id: req_id_for_spawn.clone(),
+                        run_id: run_id_owned,
+                        request_id: req_id_for_spawn,
                         error,
                     },
-                );
-
-                // Update run status to done (or failed)
-                let final_status = if result.is_ok() { "done" } else { "failed" };
-                let _ = team_operations::update_team_run_status_impl(
-                    &db_ref,
-                    run_id_owned,
-                    final_status.to_string(),
-                    Some(Utc::now().to_rfc3339()),
                 );
             });
 
@@ -486,12 +496,12 @@ impl TeamOrchestrator {
         run_id: &str,
     ) -> Result<(), String> {
         // 1. Get all tasks for this run
-        let tasks = team_operations::get_team_tasks_impl(db, run_id.to_string())
+        let tasks = team_operations::get_team_tasks_impl(db, run_id)
             .map_err(|e| format!("Failed to get tasks: {e}"))?;
 
         // 2. For each running/queued task: abort via RunRegistry if request_id exists
         for task in &tasks {
-            if task.status == "running" || task.status == "queued" {
+            if matches!(task.status, TaskStatus::Running | TaskStatus::Queued) {
                 if let Some(ref request_id) = task.request_id {
                     run_registry.abort(request_id).await;
                 }
@@ -499,8 +509,8 @@ impl TeamOrchestrator {
                 // 3. Update task status → cancelled
                 let _ = team_operations::update_team_task_impl(
                     db,
-                    task.id.clone(),
-                    Some("cancelled".to_string()),
+                    &task.id,
+                    Some(TaskStatus::Cancelled),
                     None,
                     None,
                     Some(Utc::now().to_rfc3339()),
@@ -511,8 +521,8 @@ impl TeamOrchestrator {
         // 4. Update run status → cancelled
         let _ = team_operations::update_team_run_status_impl(
             db,
-            run_id.to_string(),
-            "cancelled".to_string(),
+            run_id,
+            TeamRunStatus::Cancelled,
             Some(Utc::now().to_rfc3339()),
         );
 
@@ -537,13 +547,13 @@ impl TeamOrchestrator {
 
         for run in &running_runs {
             // Mark all tasks for this run as failed
-            if let Ok(tasks) = team_operations::get_team_tasks_impl(db, run.id.clone()) {
+            if let Ok(tasks) = team_operations::get_team_tasks_impl(db, &run.id) {
                 for task in &tasks {
-                    if task.status == "running" || task.status == "queued" {
+                    if matches!(task.status, TaskStatus::Running | TaskStatus::Queued) {
                         let _ = team_operations::update_team_task_impl(
                             db,
-                            task.id.clone(),
-                            Some("failed".to_string()),
+                            &task.id,
+                            Some(TaskStatus::Failed),
                             None,
                             Some("Recovered on startup — previous run interrupted".to_string()),
                             Some(now.clone()),
@@ -555,8 +565,8 @@ impl TeamOrchestrator {
             // Mark run as failed
             let _ = team_operations::update_team_run_status_impl(
                 db,
-                run.id.clone(),
-                "failed".to_string(),
+                &run.id,
+                TeamRunStatus::Failed,
                 Some(now.clone()),
             );
             recovered += 1;
@@ -632,8 +642,8 @@ mod tests {
         .unwrap();
         let _ = update_team_task_impl(
             &db,
-            task.id.clone(),
-            Some("running".into()),
+            &task.id,
+            Some(TaskStatus::Running),
             None,
             None,
             None,
@@ -644,13 +654,13 @@ mod tests {
         assert_eq!(recovered, 1);
 
         // Verify run is now failed
-        let updated_run = get_team_run_impl(&db, run.id).unwrap();
-        assert_eq!(updated_run.status, "failed");
+        let updated_run = get_team_run_impl(&db, &run.id).unwrap();
+        assert_eq!(updated_run.status, TeamRunStatus::Failed);
         assert!(updated_run.finished_at.is_some());
 
         // Verify task is now failed
-        let updated_tasks = get_team_tasks_impl(&db, updated_run.id).unwrap();
-        assert_eq!(updated_tasks[0].status, "failed");
+        let updated_tasks = get_team_tasks_impl(&db, &updated_run.id).unwrap();
+        assert_eq!(updated_tasks[0].status, TaskStatus::Failed);
         assert!(updated_tasks[0]
             .result_summary
             .as_ref()
@@ -710,53 +720,53 @@ mod tests {
         // Mark both as running
         let _ = update_team_task_impl(
             &db,
-            task1.id.clone(),
-            Some("running".into()),
+            &task1.id,
+            Some(TaskStatus::Running),
             None,
             None,
             None,
         );
         let _ = update_team_task_impl(
             &db,
-            task2.id.clone(),
-            Some("running".into()),
+            &task2.id,
+            Some(TaskStatus::Running),
             None,
             None,
             None,
         );
 
-        // Directly update task1 to done (simulating report without app handle)
+        // Directly update task1 to completed (simulating report without app handle)
         let _ = update_team_task_impl(
             &db,
-            task1.id.clone(),
-            Some("done".into()),
+            &task1.id,
+            Some(TaskStatus::Completed),
             None,
             Some("Task 1 completed".into()),
             Some(Utc::now().to_rfc3339()),
         );
 
         // Check: not all done yet
-        let tasks = get_team_tasks_impl(&db, run.id.clone()).unwrap();
+        let tasks = get_team_tasks_impl(&db, &run.id).unwrap();
         let all_done = tasks
             .iter()
-            .all(|t| t.status == "done" || t.status == "failed" || t.status == "cancelled");
+            .all(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled));
         assert!(!all_done);
 
         // Complete task2
         let _ = update_team_task_impl(
             &db,
-            task2.id.clone(),
-            Some("done".into()),
+            &task2.id,
+            Some(TaskStatus::Completed),
             None,
             Some("Task 2 completed".into()),
             Some(Utc::now().to_rfc3339()),
         );
 
         // Now all done
-        let tasks = get_team_tasks_impl(&db, run.id.clone()).unwrap();
+        let tasks = get_team_tasks_impl(&db, &run.id).unwrap();
         let all_done = tasks
             .iter()
-            .all(|t| t.status == "done" || t.status == "failed" || t.status == "cancelled");
+            .all(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled));
         assert!(all_done);
     }
 }

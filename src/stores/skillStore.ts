@@ -3,6 +3,7 @@ import type { SkillMetadata } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { estimateTokens } from "../services/tokenEstimator";
 import { i18n } from "../i18n";
+import { logger } from "../services/logger";
 
 export const SKILL_TOKEN_HARD_CAP = 3000;
 
@@ -55,8 +56,9 @@ export const useSkillStore = create<SkillState>((set, get) => ({
         catalogPrompt: buildCatalogPrompt(skills),
         isLoading: false,
       });
-    } catch {
+    } catch (e) {
       if (get()._loadVersion !== version) return;
+      logger.debug("Failed to load skills", e);
       set({ availableSkills: [], catalogPrompt: "", isLoading: false });
     }
   },
@@ -84,7 +86,7 @@ export const useSkillStore = create<SkillState>((set, get) => ({
         try {
           await cmds.updateConversationSkills(convId, newNames);
         } catch (e) {
-          console.warn("Failed to persist skill activation:", e);
+          logger.warn("Failed to persist skill activation:", e);
           // Don't update local state if DB persistence failed
           return false;
         }
@@ -97,7 +99,8 @@ export const useSkillStore = create<SkillState>((set, get) => ({
       });
 
       return true;
-    } catch {
+    } catch (e) {
+      logger.debug("Skill activation failed", e);
       return false;
     }
   },
@@ -117,7 +120,7 @@ export const useSkillStore = create<SkillState>((set, get) => ({
       try {
         await cmds.updateConversationSkills(convId, newNames);
       } catch (e) {
-        console.warn("Failed to persist skill deactivation:", e);
+        logger.warn("Failed to persist skill deactivation:", e);
         return false; // Don't update local state if DB persistence failed
       }
     }
@@ -150,8 +153,8 @@ export const useSkillStore = create<SkillState>((set, get) => ({
         bodies[name] = skillContent.body;
         restored.push(name);
         totalTokens += bodyTokens;
-      } catch {
-        console.warn(`Skill "${name}" not found, skipping restore`);
+      } catch (e) {
+        logger.warn(`Skill "${name}" not found, skipping restore`, e);
       }
     }
 

@@ -20,7 +20,7 @@ impl Database {
         // Check schema compatibility before opening the final connection.
         // If the DB file exists but has an incompatible schema, delete it.
         if Path::new(db_path).exists() && migrations::needs_reset(db_path) {
-            eprintln!("Schema mismatch detected, recreating database");
+            tracing::warn!("Schema mismatch detected, recreating database");
             // Remove DB file and WAL/SHM sidecars — fail loudly if unable
             std::fs::remove_file(db_path).map_err(|e| {
                 rusqlite::Error::SqliteFailure(

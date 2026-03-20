@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { ToolCallLog } from "../services/types";
 import * as cmds from "../services/tauriCommands";
+import { logger } from "../services/logger";
 
 export interface HttpLogEntry {
   id: string;
@@ -52,7 +53,8 @@ export const useDebugStore = create<DebugState>((set, get) => ({
     try {
       const logs = await cmds.listToolCallLogs(conversationId);
       set({ logs });
-    } catch {
+    } catch (e) {
+      logger.debug("Debug logs load failed", e);
       set({ logs: [] });
     }
   },

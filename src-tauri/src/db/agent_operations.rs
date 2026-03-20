@@ -56,7 +56,7 @@ pub fn get_agent_impl(db: &Database, id: String) -> Result<Agent, DbError> {
         let agent = conn.query_row(
             &format!("{AGENT_COLUMNS} WHERE id = ?1"),
             rusqlite::params![id],
-            |row| row_to_agent(row),
+            row_to_agent,
         )?;
         Ok(agent)
     })
@@ -84,7 +84,7 @@ pub fn list_agents_impl(db: &Database) -> Result<Vec<Agent>, DbError> {
             &format!("{AGENT_COLUMNS} ORDER BY sort_order ASC, created_at ASC"),
         )?;
 
-        let rows = stmt.query_map([], |row| row_to_agent(row))?;
+        let rows = stmt.query_map([], row_to_agent)?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
@@ -100,7 +100,7 @@ pub fn update_agent_impl(
         let current = conn.query_row(
             &format!("{AGENT_COLUMNS} WHERE id = ?1"),
             rusqlite::params![id],
-            |row| row_to_agent(row),
+            row_to_agent,
         )?;
 
         let name = request.name.unwrap_or(current.name);
@@ -132,7 +132,7 @@ pub fn update_agent_impl(
         let updated = conn.query_row(
             &format!("{AGENT_COLUMNS} WHERE id = ?1"),
             rusqlite::params![id],
-            |row| row_to_agent(row),
+            row_to_agent,
         )?;
         Ok(updated)
     })

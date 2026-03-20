@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::vault::links::LinkRef;
 use crate::vault::graph::GraphData;
 use crate::vault::search::SearchResult;
@@ -25,6 +26,7 @@ pub type VaultState = Mutex<VaultManager>;
 // ── Note CRUD ──
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn vault_create_note(
     vault: State<'_, VaultState>,
     agent_id: String,
@@ -34,8 +36,8 @@ pub fn vault_create_note(
     content: String,
     tags: Vec<String>,
     related_ids: Vec<String>,
-) -> Result<VaultNote, String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<VaultNote, AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     vm.create_note(
         &agent_id,
         scope.as_deref(),
@@ -44,19 +46,20 @@ pub fn vault_create_note(
         &content,
         tags,
         related_ids,
-    )
+    ).map_err(AppError::Vault)
 }
 
 #[tauri::command]
 pub fn vault_read_note(
     vault: State<'_, VaultState>,
     note_id: String,
-) -> Result<VaultNote, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    vm.read_note(&note_id)
+) -> Result<VaultNote, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
+    vm.read_note(&note_id).map_err(AppError::Vault)
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub fn vault_update_note(
     vault: State<'_, VaultState>,
     note_id: String,
@@ -66,8 +69,8 @@ pub fn vault_update_note(
     tags: Option<Vec<String>>,
     confidence: Option<f64>,
     add_links: Option<Vec<String>>,
-) -> Result<VaultNote, String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<VaultNote, AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     vm.update_note(
         &note_id,
         &caller_agent_id,
@@ -76,7 +79,7 @@ pub fn vault_update_note(
         tags,
         confidence,
         add_links,
-    )
+    ).map_err(AppError::Vault)
 }
 
 #[tauri::command]
@@ -84,9 +87,9 @@ pub fn vault_delete_note(
     vault: State<'_, VaultState>,
     note_id: String,
     caller: String,
-) -> Result<(), String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    vm.delete_note(&note_id, &caller)
+) -> Result<(), AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
+    vm.delete_note(&note_id, &caller).map_err(AppError::Vault)
 }
 
 #[tauri::command]
@@ -95,8 +98,8 @@ pub fn vault_list_notes(
     agent_id: Option<String>,
     category: Option<String>,
     tags: Option<Vec<String>>,
-) -> Result<Vec<VaultNoteSummary>, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<Vec<VaultNoteSummary>, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     Ok(vm.list_notes(
         agent_id.as_deref(),
         category.as_deref(),
@@ -113,8 +116,8 @@ pub fn vault_search(
     agent_id: Option<String>,
     scope: Option<String>,
     limit: Option<usize>,
-) -> Result<Vec<SearchResult>, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<Vec<SearchResult>, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     let mut results = vm.search(&query, agent_id.as_deref(), scope.as_deref());
     if let Some(max) = limit {
         results.truncate(max);
@@ -128,8 +131,8 @@ pub fn vault_get_graph(
     agent_id: Option<String>,
     depth: Option<u32>,
     include_shared: bool,
-) -> Result<GraphData, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<GraphData, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     Ok(vm.get_graph(agent_id.as_deref(), depth, include_shared))
 }
 
@@ -137,8 +140,8 @@ pub fn vault_get_graph(
 pub fn vault_get_backlinks(
     vault: State<'_, VaultState>,
     note_id: String,
-) -> Result<Vec<LinkRef>, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<Vec<LinkRef>, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     Ok(vm.get_backlinks(&note_id))
 }
 
@@ -147,8 +150,8 @@ pub fn vault_get_backlinks(
 #[tauri::command]
 pub fn vault_get_path(
     vault: State<'_, VaultState>,
-) -> Result<String, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<String, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     Ok(vm.get_vault_path().to_string_lossy().to_string())
 }
 
@@ -156,8 +159,8 @@ pub fn vault_get_path(
 pub fn vault_open_in_obsidian(
     app: AppHandle,
     vault: State<'_, VaultState>,
-) -> Result<(), String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<(), AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     let vault_path = vm.get_vault_path();
 
     // Derive vault name from directory name
@@ -171,16 +174,16 @@ pub fn vault_open_in_obsidian(
 
     app.opener()
         .open_url(&uri, None::<&str>)
-        .map_err(|e| format!("Failed to open Obsidian: {e}"))?;
+        .map_err(|e| AppError::Io(format!("Failed to open Obsidian: {e}")))?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn vault_rebuild_index(
     vault: State<'_, VaultState>,
-) -> Result<IndexStats, String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    vm.rebuild_index()
+) -> Result<IndexStats, AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
+    vm.rebuild_index().map_err(AppError::Vault)
 }
 
 /// Archive a single note by ID.
@@ -189,9 +192,9 @@ pub fn vault_archive_note(
     vault: State<'_, VaultState>,
     note_id: String,
     agent_id: String,
-) -> Result<(), String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    vm.archive_note(&note_id, &agent_id)
+) -> Result<(), AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
+    vm.archive_note(&note_id, &agent_id).map_err(AppError::Vault)
 }
 
 /// List notes with compute-on-read confidence decay.
@@ -204,8 +207,8 @@ pub fn vault_list_notes_with_decay(
     lambda: f64,
     min_confidence: f64,
     stale_days: f64,
-) -> Result<Vec<VaultNoteSummaryWithDecay>, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<Vec<VaultNoteSummaryWithDecay>, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     let notes = vm.list_notes(agent_id.as_deref(), category.as_deref(), None);
     let now = Utc::now();
 
@@ -231,4 +234,3 @@ pub fn vault_list_notes_with_decay(
 
     Ok(result)
 }
-

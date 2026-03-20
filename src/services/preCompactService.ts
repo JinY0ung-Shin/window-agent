@@ -16,6 +16,7 @@ import { emitLifecycleEvent, onLifecycleEvent } from "./lifecycleEvents";
 import { generateDigest, lockedConsolidateMemory } from "./consolidationService";
 import { useConversationStore } from "../stores/conversationStore";
 import * as cmds from "./tauriCommands";
+import { logger } from "./logger";
 
 // Model-specific context window sizes (tokens)
 const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
@@ -89,7 +90,7 @@ export async function preCompactFlush(
     // Mark as flushed ONLY after full success
     flushedConversations.add(conversationId);
   } catch (e) {
-    console.warn("[pre-compact] flush failed:", e);
+    logger.warn("[pre-compact] flush failed:", e);
     // Don't mark as flushed — allow retry on next turn
   }
 }

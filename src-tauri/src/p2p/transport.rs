@@ -14,7 +14,7 @@ pub fn build_swarm(
             libp2p::noise::Config::new,
             libp2p::yamux::Config::default,
         )?
-        .with_behaviour(|key| AgentBehaviour::new(key))?
+        .with_behaviour(AgentBehaviour::new)?
         .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
         .build();
 

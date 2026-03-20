@@ -6,6 +6,7 @@ import * as cmds from "./tauriCommands";
 import { refreshDefaultManagerPersona } from "./commands/agentCommands";
 import { emitLifecycleEvent } from "./lifecycleEvents";
 import { registerHeartbeatLifecycle } from "./heartbeatService";
+import { logger } from "./logger";
 
 export async function initializeApp(): Promise<void> {
   emitLifecycleEvent({ type: "app:init" });
@@ -19,14 +20,14 @@ export async function initializeApp(): Promise<void> {
   try {
     loadSettings();
   } catch (e) {
-    console.warn("loadSettings:", e);
+    logger.warn("loadSettings:", e);
   }
 
   // Step 2: Load env defaults (best-effort)
   try {
     loadEnvDefaults();
   } catch (e) {
-    console.warn("loadEnvDefaults:", e);
+    logger.warn("loadEnvDefaults:", e);
   }
 
   // Step 3: Determine if this is a fresh install or existing install.
@@ -42,14 +43,14 @@ export async function initializeApp(): Promise<void> {
     try {
       await cmds.seedManagerAgent(settings.locale);
     } catch (e) {
-      console.warn("seedManagerAgent:", e);
+      logger.warn("seedManagerAgent:", e);
     }
     // Refresh default manager persona with current locale
     // (upgrades old defaults, switches locale on untouched files, preserves user edits)
     try {
       await refreshDefaultManagerPersona(settings.locale);
     } catch (e) {
-      console.warn("refreshDefaultManagerPersona:", e);
+      logger.warn("refreshDefaultManagerPersona:", e);
     }
   }
 
@@ -57,28 +58,28 @@ export async function initializeApp(): Promise<void> {
   try {
     await cmds.syncAgentsFromFs();
   } catch (e) {
-    console.warn("syncAgentsFromFs:", e);
+    logger.warn("syncAgentsFromFs:", e);
   }
 
   // Step 5: Load agents into store
   try {
     await loadAgents();
   } catch (e) {
-    console.warn("loadAgents:", e);
+    logger.warn("loadAgents:", e);
   }
 
   // Step 6: Load conversations
   try {
     await loadConversations();
   } catch (e) {
-    console.warn("loadConversations:", e);
+    logger.warn("loadConversations:", e);
   }
 
   // Step 6b: Load teams
   try {
     await useTeamStore.getState().loadTeams();
   } catch (e) {
-    console.warn("loadTeams:", e);
+    logger.warn("loadTeams:", e);
   }
 
   // Step 7: Auto-initialize branding for upgraded users.
@@ -120,12 +121,12 @@ export async function seedManagerAfterOnboarding(locale: string): Promise<void> 
   try {
     await cmds.syncAgentsFromFs();
   } catch (e) {
-    console.warn("syncAgentsFromFs:", e);
+    logger.warn("syncAgentsFromFs:", e);
   }
 
   try {
     await loadAgents();
   } catch (e) {
-    console.warn("loadAgents:", e);
+    logger.warn("loadAgents:", e);
   }
 }

@@ -23,6 +23,8 @@ import { i18n } from "../i18n";
 
 type NetworkStatus = "dormant" | "starting" | "active" | "stopping";
 
+import { logger } from "../services/logger";
+
 // Event payload types emitted by the Rust backend
 interface ConnectionStatePayload {
   status: string;
@@ -100,16 +102,16 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     let enabled: boolean;
     try {
       enabled = await p2pGetNetworkEnabled();
-    } catch {
-      // Tauri not available (e.g. tests) — fall back to localStorage
+    } catch (e) {
+      logger.debug("Network enabled check failed, using localStorage", e);
       enabled = localStorage.getItem(STORAGE_KEY) === "true";
     }
     set({ networkEnabled: enabled });
     if (enabled) {
       try {
         await get().startNetwork();
-      } catch {
-        // Network may not be available yet; stay dormant
+      } catch (e) {
+        logger.debug("Network start deferred, staying dormant", e);
       }
     }
   },
@@ -125,7 +127,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       ]);
       try {
         await p2pSetNetworkEnabled(true);
-      } catch {
+      } catch (e) {
+        logger.debug("Persist network enabled failed, using localStorage", e);
         localStorage.setItem(STORAGE_KEY, "true");
       }
       set({
@@ -146,7 +149,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       await p2pStop();
       try {
         await p2pSetNetworkEnabled(false);
-      } catch {
+      } catch (e) {
+        logger.debug("Persist network disabled failed, using localStorage", e);
         localStorage.setItem(STORAGE_KEY, "false");
       }
       set({

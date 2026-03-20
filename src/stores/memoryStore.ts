@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { MemoryNote } from "../services/types";
 import * as cmds from "../services/tauriCommands";
+import { logger } from "../services/logger";
 
 interface MemoryState {
   notes: MemoryNote[];
@@ -21,7 +22,8 @@ export const useMemoryStore = create<MemoryState>((set, get) => ({
     try {
       const notes = await cmds.listMemoryNotes(agentId);
       set({ notes, currentAgentId: agentId });
-    } catch {
+    } catch (e) {
+      logger.debug("Memory notes load failed", e);
       set({ notes: [], currentAgentId: agentId });
     }
   },

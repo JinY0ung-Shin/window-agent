@@ -127,14 +127,20 @@ async fn generate_summary(api_state: &ApiState, content: &str) -> String {
         return content.to_string();
     }
 
-    let (api_key, base_url) = api_state.effective();
+    let (api_key, base_url) = match api_state.effective() {
+        Ok(v) => v,
+        Err(_) => return truncate_preview(content, 200),
+    };
 
     // If no API access, fall back immediately
     if crate::api::requires_api_key(&api_key, &base_url) {
         return truncate_preview(content, 200);
     }
 
-    let client = api_state.client();
+    let client = match api_state.client() {
+        Ok(c) => c,
+        Err(_) => return truncate_preview(content, 200),
+    };
     let url = api_service::completions_url(&base_url);
 
     let body = serde_json::json!({
@@ -280,7 +286,7 @@ pub async fn generate_draft_response(
     const FALLBACK_DRAFT: &str = "감사합니다. 확인했습니다.";
 
     let api_state = app_handle.state::<ApiState>();
-    let (api_key, base_url) = api_state.effective();
+    let (api_key, base_url) = api_state.effective()?;
 
     // If no API access, return the basic fallback
     if crate::api::requires_api_key(&api_key, &base_url) {

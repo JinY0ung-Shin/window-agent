@@ -261,7 +261,7 @@ The project involves building an auth system.
         let results = search("auth", tmp.path(), Some("manager"), Some("all"));
         assert!(!results.is_empty());
         // Both notes mention "auth"
-        assert!(results.len() >= 1);
+        assert!(!results.is_empty());
     }
 
     #[test]

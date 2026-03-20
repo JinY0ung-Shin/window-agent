@@ -16,10 +16,10 @@ export default function TeamStatusBar() {
 
   const latestRunId = runIds[runIds.length - 1];
   const run = activeRuns[latestRunId];
-  if (!run || run.status === "done" || run.status === "cancelled") return null;
+  if (!run || run.status === "completed" || run.status === "cancelled") return null;
 
   const tasks = tasksByRun[latestRunId] ?? [];
-  const completedTasks = tasks.filter((t) => t.status === "done").length;
+  const completedTasks = tasks.filter((t) => t.status === "completed").length;
 
   // Find agents involved in this run from messages
   const runAgentIds = new Set<string>();

@@ -239,11 +239,6 @@ impl HandshakeState {
         self.phase == HandshakePhase::Complete
     }
 
-    /// Current phase of the handshake.
-    #[allow(dead_code)]
-    pub fn phase(&self) -> &HandshakePhase {
-        &self.phase
-    }
 }
 
 /// Generate a random 32-byte hex nonce (64 hex characters) using two UUID v4 values.

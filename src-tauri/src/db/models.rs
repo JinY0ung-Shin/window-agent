@@ -1,4 +1,150 @@
 use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::str::FromStr;
+
+// ── Status parse error ─────────────────────────────────────
+
+#[derive(Debug)]
+pub struct ParseStatusError(String);
+
+impl fmt::Display for ParseStatusError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown status: {}", self.0)
+    }
+}
+
+impl std::error::Error for ParseStatusError {}
+
+// ── TeamRunStatus ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TeamRunStatus {
+    Running,
+    WaitingReports,
+    Synthesizing,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl fmt::Display for TeamRunStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Running => write!(f, "running"),
+            Self::WaitingReports => write!(f, "waiting_reports"),
+            Self::Synthesizing => write!(f, "synthesizing"),
+            Self::Completed => write!(f, "completed"),
+            Self::Failed => write!(f, "failed"),
+            Self::Cancelled => write!(f, "cancelled"),
+        }
+    }
+}
+
+impl FromStr for TeamRunStatus {
+    type Err = ParseStatusError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "running" => Ok(Self::Running),
+            "waiting_reports" => Ok(Self::WaitingReports),
+            "synthesizing" => Ok(Self::Synthesizing),
+            "completed" | "done" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            other => Err(ParseStatusError(other.to_string())),
+        }
+    }
+}
+
+impl Serialize for TeamRunStatus {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for TeamRunStatus {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl rusqlite::types::FromSql for TeamRunStatus {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        let s = value.as_str()?;
+        s.parse()
+            .map_err(|e| rusqlite::types::FromSqlError::Other(Box::new(e)))
+    }
+}
+
+impl rusqlite::types::ToSql for TeamRunStatus {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(rusqlite::types::ToSqlOutput::from(self.to_string()))
+    }
+}
+
+// ── TaskStatus ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskStatus {
+    Queued,
+    Running,
+    Completed,
+    Failed,
+    Cancelled,
+}
+
+impl fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Queued => write!(f, "queued"),
+            Self::Running => write!(f, "running"),
+            Self::Completed => write!(f, "completed"),
+            Self::Failed => write!(f, "failed"),
+            Self::Cancelled => write!(f, "cancelled"),
+        }
+    }
+}
+
+impl FromStr for TaskStatus {
+    type Err = ParseStatusError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "queued" => Ok(Self::Queued),
+            "running" => Ok(Self::Running),
+            "completed" | "done" => Ok(Self::Completed),
+            "failed" => Ok(Self::Failed),
+            "cancelled" => Ok(Self::Cancelled),
+            other => Err(ParseStatusError(other.to_string())),
+        }
+    }
+}
+
+impl Serialize for TaskStatus {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for TaskStatus {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl rusqlite::types::FromSql for TaskStatus {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        let s = value.as_str()?;
+        s.parse()
+            .map_err(|e| rusqlite::types::FromSqlError::Other(Box::new(e)))
+    }
+}
+
+impl rusqlite::types::ToSql for TaskStatus {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(rusqlite::types::ToSqlOutput::from(self.to_string()))
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Agent {
@@ -202,7 +348,7 @@ pub struct TeamRun {
     pub team_id: String,
     pub conversation_id: String,
     pub leader_agent_id: String,
-    pub status: String,
+    pub status: TeamRunStatus,
     pub started_at: String,
     pub finished_at: Option<String>,
 }
@@ -214,7 +360,7 @@ pub struct TeamTask {
     pub agent_id: String,
     pub request_id: Option<String>,
     pub task_description: String,
-    pub status: String,
+    pub status: TaskStatus,
     pub parent_message_id: Option<String>,
     pub result_summary: Option<String>,
     pub started_at: Option<String>,

@@ -366,7 +366,7 @@ pub fn redact_output(output: &str, credentials: &[(String, String)]) -> String {
 
 /// Recursively scrub all string values in a JSON messages array.
 pub fn scrub_messages(
-    messages: &mut Vec<serde_json::Value>,
+    messages: &mut [serde_json::Value],
     credentials: &[(String, String)],
 ) {
     if credentials.is_empty() {

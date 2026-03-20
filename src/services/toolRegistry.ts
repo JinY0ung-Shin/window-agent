@@ -4,7 +4,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   tier: ToolPermissionTier;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
 }
 
 /**

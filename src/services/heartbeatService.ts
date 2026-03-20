@@ -15,6 +15,7 @@ import { emitLifecycleEvent, onLifecycleEvent } from "./lifecycleEvents";
 import { vaultListNotesWithDecay } from "./commands/vaultCommands";
 import { readAgentFile } from "./tauriCommands";
 import { invoke } from "@tauri-apps/api/core";
+import { logger } from "./logger";
 
 // ── Types ────────────────────────────────────────────
 
@@ -85,26 +86,26 @@ async function runHeartbeat(agentId: string, folderName: string): Promise<void> 
     for (const note of archiveCandidates) {
       try {
         await invoke("vault_archive_note", { noteId: note.id, agentId });
-      } catch {
-        // Archive may fail if note is already archived or missing
+      } catch (e) {
+        logger.debug(`[heartbeat] Archive note ${note.id} failed`, e);
       }
     }
 
     // Log stale warnings
     const staleNotes = notes.filter((n) => n.isStale);
     if (staleNotes.length > 0) {
-      console.warn(
+      logger.warn(
         `[heartbeat] ${agentId}: ${staleNotes.length} stale note(s) (>${config.staleDaysThreshold} days)`,
       );
     }
 
     if (archiveCandidates.length > 0) {
-      console.info(
+      logger.info(
         `[heartbeat] ${agentId}: auto-archived ${archiveCandidates.length} note(s) below confidence ${config.autoArchiveBelow}`,
       );
     }
   } catch (e) {
-    console.warn("[heartbeat] tick failed:", e);
+    logger.warn("[heartbeat] tick failed:", e);
   }
 }
 
@@ -115,8 +116,9 @@ async function loadHeartbeatConfig(folderName: string): Promise<HeartbeatConfig 
     const content = await readAgentFile(folderName, "HEARTBEAT.md");
     if (!content) return null;
     return parseHeartbeatConfig(content);
-  } catch {
-    return null; // HEARTBEAT.md not found → no heartbeat
+  } catch (e) {
+    logger.debug("[heartbeat] HEARTBEAT.md not found, skipping", e);
+    return null;
   }
 }
 

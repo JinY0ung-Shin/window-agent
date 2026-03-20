@@ -7,6 +7,7 @@ import type { ChatMessage } from "../services/types";
 import { useConversationStore } from "./conversationStore";
 import { MAX_CONTEXT_TOKENS } from "../constants";
 import { i18n } from "../i18n";
+import { logger } from "../services/logger";
 
 interface SummaryState {
   currentSummary: string | null;
@@ -109,8 +110,8 @@ export const useSummaryStore = create<SummaryState>((set, get) => ({
         if (affected > 0) {
           set({ currentSummary: newSummary, summaryUpToMessageId: newUpToId });
         }
-      } catch {
-        // Silently ignore — retry on next turn
+      } catch (e) {
+        logger.debug("Summary update failed, will retry on next turn", e);
       }
     })();
   },

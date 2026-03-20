@@ -1,3 +1,4 @@
+use crate::error::AppError;
 use crate::services::credential_service::{self, CredentialMeta};
 use serde::Deserialize;
 use tauri::AppHandle;
@@ -20,8 +21,8 @@ pub struct UpdateCredentialRequest {
 
 /// List all credential metadata. Values are never returned.
 #[tauri::command]
-pub fn list_credentials(app: AppHandle) -> Result<Vec<CredentialMeta>, String> {
-    credential_service::list_credentials(&app)
+pub fn list_credentials(app: AppHandle) -> Result<Vec<CredentialMeta>, AppError> {
+    credential_service::list_credentials(&app).map_err(AppError::Config)
 }
 
 /// Add a new credential with its secret value and allowed hosts.
@@ -29,14 +30,14 @@ pub fn list_credentials(app: AppHandle) -> Result<Vec<CredentialMeta>, String> {
 pub fn add_credential(
     app: AppHandle,
     request: AddCredentialRequest,
-) -> Result<CredentialMeta, String> {
+) -> Result<CredentialMeta, AppError> {
     credential_service::add_credential(
         &app,
         &request.id,
         &request.name,
         &request.value,
         request.allowed_hosts,
-    )
+    ).map_err(AppError::Config)
 }
 
 /// Update an existing credential. Only provided fields are changed.
@@ -44,18 +45,18 @@ pub fn add_credential(
 pub fn update_credential(
     app: AppHandle,
     request: UpdateCredentialRequest,
-) -> Result<CredentialMeta, String> {
+) -> Result<CredentialMeta, AppError> {
     credential_service::update_credential(
         &app,
         &request.id,
         request.name.as_deref(),
         request.value.as_deref(),
         request.allowed_hosts,
-    )
+    ).map_err(AppError::Config)
 }
 
 /// Remove a credential and its secret.
 #[tauri::command]
-pub fn remove_credential(app: AppHandle, id: String) -> Result<(), String> {
-    credential_service::remove_credential(&app, &id)
+pub fn remove_credential(app: AppHandle, id: String) -> Result<(), AppError> {
+    credential_service::remove_credential(&app, &id).map_err(AppError::Config)
 }

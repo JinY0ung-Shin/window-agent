@@ -10,6 +10,7 @@ import type {
   NoteUpdates,
 } from "../services/vaultTypes";
 import * as vault from "../services/commands/vaultCommands";
+import { logger } from "../services/logger";
 
 type NotesStatus = "idle" | "loading" | "loaded" | "error";
 
@@ -73,8 +74,9 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       if (version === _loadVersion) {
         set({ notes, notesStatus: "loaded" });
       }
-    } catch {
+    } catch (e) {
       if (version === _loadVersion) {
+        logger.debug("Vault notes load failed", e);
         set({ notes: [], notesStatus: "error" });
       }
     }
@@ -84,7 +86,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     try {
       const graph = await vault.vaultGetGraph(agentId, depth);
       set({ graph });
-    } catch {
+    } catch (e) {
+      logger.debug("Vault graph load failed", e);
       set({ graph: null });
     }
   },
@@ -120,7 +123,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       const agentId = scope === "self" ? get().activeAgent : null;
       const searchResults = await vault.vaultSearch(query, scope, agentId);
       set({ searchResults });
-    } catch {
+    } catch (e) {
+      logger.debug("Vault search failed", e);
       set({ searchResults: [] });
     }
   },
@@ -129,7 +133,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
     try {
       const note = await vault.vaultReadNote(noteId);
       set({ selectedNote: note });
-    } catch {
+    } catch (e) {
+      logger.debug(`Vault note ${noteId} read failed`, e);
       set({ selectedNote: null });
     }
   },
@@ -153,7 +158,8 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       try {
         const note = await vault.vaultReadNote(noteId);
         set({ selectedNote: note });
-      } catch {
+      } catch (e) {
+        logger.debug(`Vault note ${noteId} reload after conflict failed`, e);
         set({ selectedNote: null });
       }
     }

@@ -23,7 +23,7 @@ impl CapabilitySet {
     }
 
     /// Maximum restriction — block everything.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // TODO: wire into P2P message handler for untrusted peers
     pub fn deny_all() -> Self {
         Self {
             can_send_messages: false,
@@ -35,7 +35,7 @@ impl CapabilitySet {
     }
 
     /// Check if a specific action is allowed.
-    #[allow(dead_code)]
+    #[allow(dead_code)] // TODO: call from P2P message handler to gate actions
     pub fn is_allowed(&self, action: &CapabilityAction) -> bool {
         match action {
             CapabilityAction::SendMessage => self.can_send_messages,
@@ -48,7 +48,7 @@ impl CapabilitySet {
 }
 
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
+#[allow(dead_code)] // TODO: used by CapabilitySet::is_allowed — wire into P2P handler
 pub enum CapabilityAction {
     SendMessage,
     ReadAgentInfo,

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { ChatMessage } from "../services/types";
+import type { ChatMessage, ToolCall } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import * as teamCmds from "../services/commands/teamCommands";
 import { useMessageStore } from "./messageStore";
@@ -10,39 +10,34 @@ import { useTeamStore } from "./teamStore";
 import { useTeamRunStore } from "./teamRunStore";
 import { useAgentStore } from "./agentStore";
 import { useSettingsStore } from "./settingsStore";
+import { useToolRunStore } from "./toolRunStore";
 import {
   readPersonaFiles,
   assembleManagerPrompt,
   getEffectiveSettings,
 } from "../services/personaService";
 import { buildConversationContext } from "../services/chatHelpers";
-import { getEffectiveTools, toOpenAITools, getToolTier, type ToolDefinition } from "../services/toolRegistry";
+import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
 import { readToolConfig } from "../services/nativeToolRegistry";
-import { executeToolCalls } from "../services/toolService";
-import { useToolRunStore } from "./toolRunStore";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
   DEFAULT_SYSTEM_PROMPT,
   parseErrorMessage,
 } from "../constants";
 import { i18n } from "../i18n";
-import type { ToolCall } from "../services/types";
+import {
+  type StreamChunkEvent,
+  type StreamDoneEvent,
+  msg, conv, stream,
+  createPendingMessage,
+  updateMessageInList,
+  executeStreamCall,
+  classifyToolCalls,
+  executeToolPipeline,
+} from "../services/streamHelpers";
+import { logger } from "../services/logger";
 
-// ── Stream event types ────────────────────────────────
-type StreamChunkEvent = {
-  request_id: string;
-  delta: string;
-  reasoning_delta: string | null;
-};
-type StreamDoneEvent = {
-  request_id: string;
-  full_content: string;
-  reasoning_content: string | null;
-  tool_calls:
-    | { id: string; type: string; function: { name: string; arguments: string } }[]
-    | null;
-  error: string | null;
-};
+// ── Team-specific event types ─────────────────────────
 type TeamAllReportsPayload = {
   run_id: string;
   reports: { task_id: string; agent_id: string; summary: string; details: string | null }[];
@@ -50,33 +45,7 @@ type TeamAllReportsPayload = {
 type TeamRunCancelledPayload = { run_id: string };
 type TeamSynthesisDonePayload = { run_id: string; request_id: string; error: string | null };
 
-// ── Helpers ───────────────────────────────────────────
-
-const msg = () => useMessageStore.getState();
-const conv = () => useConversationStore.getState();
-const stream = () => useStreamStore.getState();
-
-function createPendingMessage(requestId?: string): { msgId: string; msg: ChatMessage } {
-  const msgId = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  return {
-    msgId,
-    msg: {
-      id: msgId,
-      type: "agent",
-      content: i18n.t("common:loadingMessage"),
-      status: "pending",
-      requestId,
-    },
-  };
-}
-
-function updateMessageInList(
-  messages: ChatMessage[],
-  targetId: string,
-  updates: Partial<ChatMessage>,
-): ChatMessage[] {
-  return messages.map((m) => (m.id === targetId ? { ...m, ...updates } : m));
-}
+// ── Team-specific helpers ─────────────────────────────
 
 function resolveAgentInfo(agentId: string): {
   name: string;
@@ -129,7 +98,7 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
     try {
       await cmds.abortTeamRun(latestRunId);
     } catch (e) {
-      console.error("Failed to abort team run:", e);
+      logger.error("Failed to abort team run:", e);
     }
   },
 
@@ -137,8 +106,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
     const unlisteners: UnlistenFn[] = [];
 
     // ── team-agent-stream-chunk: route to per-agent message bubbles ──
-    // The backend uses chat-stream-chunk with request_id = "team-{run_id}-{task_id}"
-    // We intercept these and route them to the correct agent message bubble.
     unlisteners.push(
       await listen<StreamChunkEvent>("chat-stream-chunk", (event) => {
         const { request_id, delta } = event.payload;
@@ -146,7 +113,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
         if (!mapping) return; // Not a team stream event
 
         const { msgId } = mapping;
-        // Use rAF batching: accumulate into the message
         useMessageStore.setState({
           messages: msg().messages.map((m) =>
             m.id === msgId
@@ -196,7 +162,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
               }),
             });
           }
-          // Don't delete from agentStreamMap — team-leader-synthesis-done handles it
           return;
         }
 
@@ -217,13 +182,12 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
           let reportArgs: { summary?: string; details?: string } = {};
           try {
             reportArgs = JSON.parse(reportCall.function.arguments);
-          } catch {
-            /* use empty */
+          } catch (e) {
+            logger.debug("Failed to parse report arguments", e);
           }
-          const summary = reportArgs.summary ?? full_content;
+          const summaryText = reportArgs.summary ?? full_content;
 
-          // Save the completed agent message
-          const finalContent = full_content || summary;
+          const finalContent = full_content || summaryText;
           useMessageStore.setState({
             messages: updateMessageInList(msg().messages, msgId, {
               content: finalContent,
@@ -231,10 +195,9 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
             }),
           });
 
-          // Submit report to backend (fire-and-forget — backend emits team-all-reports-in when all done)
           teamCmds
-            .handleTeamReport(runId, taskId, summary, reportArgs.details)
-            .catch((e) => console.error("Failed to submit report:", e));
+            .handleTeamReport(runId, taskId, summaryText, reportArgs.details)
+            .catch((e) => logger.error("Failed to submit report:", e));
         } else {
           // Normal completion (no report tool) — treat content as implicit report
           const finalContent = full_content || i18n.t("common:noResponse");
@@ -245,10 +208,9 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
             }),
           });
 
-          // Submit implicit report
           teamCmds
             .handleTeamReport(runId, taskId, finalContent)
-            .catch((e) => console.error("Failed to submit implicit report:", e));
+            .catch((e) => logger.error("Failed to submit implicit report:", e));
         }
 
         // Save agent message to DB
@@ -274,7 +236,7 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
                 }),
               });
             })
-            .catch((e) => console.error("Failed to save agent message:", e));
+            .catch((e) => logger.error("Failed to save agent message:", e));
         }
 
         agentStreamMap.delete(request_id);
@@ -282,8 +244,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
     );
 
     // ── team-all-reports-in: create pending leader synthesis bubble ──
-    // Backend handles synthesis LLM call; we just prepare the UI bubble and
-    // register the synthesis request_id so chat-stream-chunk events route here.
     unlisteners.push(
       await listen<TeamAllReportsPayload>("team-all-reports-in", (event) => {
         const { run_id } = event.payload;
@@ -291,7 +251,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
         const synthesisRequestId = `synthesis-${run_id}`;
         const { msgId: synthMsgId, msg: synthPending } = createPendingMessage(synthesisRequestId);
 
-        // Resolve leader info from the active run
         const run = useTeamRunStore.getState().activeRuns[run_id];
         if (run) {
           const leaderInfo = resolveAgentInfo(run.leader_agent_id);
@@ -305,7 +264,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
           messages: [...msg().messages, synthPending],
         });
 
-        // Register so chat-stream-chunk/done events route to this bubble
         agentStreamMap.set(synthesisRequestId, {
           agentId: run?.leader_agent_id ?? "",
           taskId: "__synthesis__",
@@ -318,12 +276,11 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
     // ── team-leader-synthesis-done: finalize synthesis bubble ──
     unlisteners.push(
       await listen<TeamSynthesisDonePayload>("team-leader-synthesis-done", (event) => {
-        const { run_id, request_id, error } = event.payload;
+        const { run_id, request_id, error: synthError } = event.payload;
         const mapping = agentStreamMap.get(request_id);
         if (!mapping) return;
 
-        if (!error) {
-          // Content was already finalized by chat-stream-done; save to DB
+        if (!synthError) {
           const currentMsg = msg().messages.find((m) => m.id === mapping.msgId);
           const finalContent = currentMsg?.content || i18n.t("common:noResponse");
           const currentConvId = conv().currentConversationId;
@@ -348,20 +305,16 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
                   }),
                 });
               })
-              .catch((e) => console.error("Failed to save synthesis message:", e));
+              .catch((e) => logger.error("Failed to save synthesis message:", e));
           }
         }
-        // Error case already handled by chat-stream-done
 
         agentStreamMap.delete(request_id);
 
-        // Mark run as done
-        useTeamRunStore.getState().updateRunStatus(run_id, "done");
+        useTeamRunStore.getState().updateRunStatus(run_id, "completed");
         teamCmds
-          .updateTeamRunStatus(run_id, "done", new Date().toISOString())
-          .catch(() => {
-            /* non-fatal */
-          });
+          .updateTeamRunStatus(run_id, "completed", new Date().toISOString())
+          .catch((e) => logger.debug("Failed to persist team run status", e));
         stream().removeRun(run_id);
         conv().loadConversations();
       }),
@@ -372,7 +325,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
       await listen<TeamRunCancelledPayload>("team-run-cancelled", (event) => {
         const { run_id } = event.payload;
 
-        // Mark all agent stream messages for this run as aborted
         for (const [reqId, mapping] of agentStreamMap.entries()) {
           if (mapping.runId === run_id) {
             useMessageStore.setState({
@@ -384,7 +336,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
           }
         }
 
-        // Clean up stream store
         stream().removeRun(run_id);
       }),
     );
@@ -408,25 +359,23 @@ async function sendTeamMessageFlow() {
   const teamStore = useTeamStore.getState();
   const teamId = teamStore.selectedTeamId;
   if (!teamId) {
-    console.error("No team selected for team message");
+    logger.error("No team selected for team message");
     return;
   }
 
   const agentStore = useAgentStore.getState();
 
-  // Resolve team detail to get leader
   let teamDetail;
   try {
     teamDetail = await teamStore.getTeamDetail(teamId);
   } catch (e) {
-    console.error("Failed to get team detail:", e);
+    logger.error("Failed to get team detail:", e);
     return;
   }
 
   const leaderAgentId = teamDetail.team.leader_agent_id;
   const leaderAgent = agentStore.agents.find((a) => a.id === leaderAgentId) ?? null;
 
-  // Create or reuse conversation
   let convId = currentConversationId;
 
   if (!convId) {
@@ -438,7 +387,6 @@ async function sendTeamMessageFlow() {
     useConversationStore.setState({ currentConversationId: convId });
   }
 
-  // Save user message
   const savedUser = await cmds.saveMessage({
     conversation_id: convId,
     role: "user",
@@ -453,7 +401,6 @@ async function sendTeamMessageFlow() {
     status: "complete",
   };
 
-  // Create pending leader message
   const leaderRequestId = `req-team-leader-${Date.now()}`;
   const { msgId: leaderMsgId, msg: leaderPending } = createPendingMessage(leaderRequestId);
 
@@ -469,13 +416,12 @@ async function sendTeamMessageFlow() {
     inputValue: "",
   });
 
-  // Create a team run
   let teamRun;
   try {
     teamRun = await teamCmds.createTeamRun(teamId, convId, leaderAgentId);
     useTeamRunStore.getState().addRun(teamRun);
   } catch (e) {
-    console.error("Failed to create team run:", e);
+    logger.error("Failed to create team run:", e);
     useMessageStore.setState({
       messages: updateMessageInList(msg().messages, leaderMsgId, {
         content: parseErrorMessage(e),
@@ -485,7 +431,6 @@ async function sendTeamMessageFlow() {
     return;
   }
 
-  // Track leader run in streamStore.runsById
   useStreamStore.getState().addRun(teamRun.id, {
     requestId: leaderRequestId,
     conversationId: convId,
@@ -494,7 +439,6 @@ async function sendTeamMessageFlow() {
   });
 
   try {
-    // Build leader system prompt
     const effective = leaderAgent
       ? getEffectiveSettings(leaderAgent)
       : {
@@ -504,17 +448,16 @@ async function sendTeamMessageFlow() {
           thinkingBudget: settings.thinkingBudget,
         };
 
-    // Load the leader's configured tools + delegate
     let toolDefinitions: ToolDefinition[] = [];
     let autoApproveEnabled = false;
     if (leaderAgent) {
       try {
         toolDefinitions = await getEffectiveTools(leaderAgent.folder_name);
-      } catch { /* no tools */ }
+      } catch (e) { logger.debug("No tools for leader agent", e); }
       try {
         const tc = await readToolConfig(leaderAgent.folder_name);
         autoApproveEnabled = tc?.auto_approve ?? false;
-      } catch { /* default false */ }
+      } catch (e) { logger.debug("No leader tool config, using defaults", e); }
     }
 
     const enabledToolNames = [...toolDefinitions.map((t) => t.name), "delegate"];
@@ -523,15 +466,14 @@ async function sendTeamMessageFlow() {
     if (leaderAgent) {
       try {
         const files = await readPersonaFiles(leaderAgent.folder_name);
-        // Leader uses manager prompt with agent list
         baseSystemPrompt = assembleManagerPrompt(
           files,
           agentStore.agents,
           settings.companyName,
           enabledToolNames,
         );
-      } catch {
-        // Fallback to default
+      } catch (e) {
+        logger.debug("Leader persona read failed, using default prompt", e);
       }
     }
 
@@ -541,7 +483,6 @@ async function sendTeamMessageFlow() {
     let currentMsgId = leaderMsgId;
 
     while (iterationCount <= MAX_LEADER_TOOL_ITERATIONS) {
-      // Stream leader's response
       const done = await streamLeaderTurn({
         baseSystemPrompt,
         effective,
@@ -570,19 +511,17 @@ async function sendTeamMessageFlow() {
       const delegateCall = toolCalls?.find((tc) => tc.function.name === "delegate");
 
       if (delegateCall) {
-        // Parse delegate arguments
         let delegateArgs: { agents?: string[]; task?: string; context?: string } = {};
         try {
           delegateArgs = JSON.parse(delegateCall.function.arguments);
-        } catch {
-          /* ignore */
+        } catch (e) {
+          logger.debug("Failed to parse delegate arguments", e);
         }
 
         const agentIds = delegateArgs.agents ?? [];
         const taskDescription = delegateArgs.task ?? inputValue;
         const taskContext = delegateArgs.context;
 
-        // Save leader's response (with tool call info)
         const savedLeader = await cmds.saveMessage({
           conversation_id: convId,
           role: "assistant",
@@ -621,8 +560,6 @@ async function sendTeamMessageFlow() {
             messages: [...msg().messages, agentPending],
           });
 
-          // Store a temporary mapping — will be updated with real request_id after delegation
-          // We use agentId as a temp key
           agentStreamMap.set(`temp-${teamRun.id}-${agentId}`, {
             agentId,
             taskId: "",
@@ -631,7 +568,7 @@ async function sendTeamMessageFlow() {
           });
         }
 
-        // Execute delegation — backend creates tasks and spawns parallel LLM streams
+        // Execute delegation
         try {
           const taskIds = await teamCmds.executeDelegation(
             convId,
@@ -641,7 +578,6 @@ async function sendTeamMessageFlow() {
             taskContext,
           );
 
-          // Register tasks in teamRunStore for tracking
           for (let i = 0; i < agentIds.length && i < taskIds.length; i++) {
             useTeamRunStore.getState().addTask({
               id: taskIds[i],
@@ -657,7 +593,7 @@ async function sendTeamMessageFlow() {
             });
           }
 
-          // Update mappings with real request_ids (format: team-{run_id}-{task_id})
+          // Update mappings with real request_ids
           for (let i = 0; i < agentIds.length && i < taskIds.length; i++) {
             const agentId = agentIds[i];
             const taskId = taskIds[i];
@@ -672,7 +608,6 @@ async function sendTeamMessageFlow() {
                 taskId,
               });
 
-              // Update message with teamTaskId
               useMessageStore.setState({
                 messages: updateMessageInList(msg().messages, existing.msgId, {
                   teamTaskId: taskId,
@@ -683,8 +618,7 @@ async function sendTeamMessageFlow() {
             }
           }
         } catch (e) {
-          console.error("Delegation failed:", e);
-          // Clean up temp mappings
+          logger.error("Delegation failed:", e);
           for (const agentId of agentIds) {
             const tempKey = `temp-${teamRun.id}-${agentId}`;
             const existing = agentStreamMap.get(tempKey);
@@ -721,7 +655,6 @@ async function sendTeamMessageFlow() {
           arguments: tc.function.arguments,
         }));
 
-        // Save leader's assistant message with tool calls
         const savedAssistant = await cmds.saveMessage({
           conversation_id: convId,
           role: "assistant",
@@ -741,99 +674,11 @@ async function sendTeamMessageFlow() {
           }),
         });
 
-        // Classify tool calls by tier
-        let savedToolMsgs: ChatMessage[] = [];
-        const autoTools: ToolCall[] = [];
-        const confirmTools: ToolCall[] = [];
-        const denyTools: ToolCall[] = [];
+        const classification = classifyToolCalls(parsedToolCalls, toolDefinitions, {
+          autoApproveEnabled,
+        });
 
-        for (const tc of parsedToolCalls) {
-          const tier = getToolTier(toolDefinitions, tc.name);
-          if (tier === "deny") {
-            denyTools.push(tc);
-          } else if (tier === "confirm") {
-            if (autoApproveEnabled) {
-              autoTools.push(tc);
-            } else {
-              confirmTools.push(tc);
-            }
-          } else {
-            autoTools.push(tc);
-          }
-        }
-
-        // Execute denied tools
-        for (const tc of denyTools) {
-          const saved = await cmds.saveMessage({
-            conversation_id: convId,
-            role: "tool",
-            content: "Tool denied by policy.",
-            tool_call_id: tc.id,
-            tool_name: tc.name,
-          });
-          savedToolMsgs.push({
-            id: saved.id,
-            type: "tool" as const,
-            content: "Tool denied by policy.",
-            status: "complete" as const,
-            tool_call_id: tc.id,
-            tool_name: tc.name,
-          });
-        }
-
-        // Execute auto-approved tools
-        if (autoTools.length > 0) {
-          const autoResults = await executeToolCalls(autoTools, convId);
-          for (const toolMsg of autoResults) {
-            const saved = await cmds.saveMessage({
-              conversation_id: convId,
-              role: "tool",
-              content: toolMsg.content,
-              tool_call_id: toolMsg.tool_call_id,
-              tool_name: toolMsg.tool_name,
-            });
-            savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
-          }
-        }
-
-        // Execute confirm-tier tools with user approval
-        if (confirmTools.length > 0) {
-          useToolRunStore.setState({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
-          const approved = await useToolRunStore.getState().waitForToolApproval();
-          if (approved) {
-            useToolRunStore.setState({ toolRunState: "tool_running" });
-            const confirmResults = await executeToolCalls(confirmTools, convId);
-            for (const toolMsg of confirmResults) {
-              const saved = await cmds.saveMessage({
-                conversation_id: convId,
-                role: "tool",
-                content: toolMsg.content,
-                tool_call_id: toolMsg.tool_call_id,
-                tool_name: toolMsg.tool_name,
-              });
-              savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
-            }
-          } else {
-            for (const tc of confirmTools) {
-              const saved = await cmds.saveMessage({
-                conversation_id: convId,
-                role: "tool",
-                content: "Tool call rejected by user.",
-                tool_call_id: tc.id,
-                tool_name: tc.name,
-              });
-              savedToolMsgs.push({
-                id: saved.id,
-                type: "tool" as const,
-                content: "Tool call rejected by user.",
-                status: "complete" as const,
-                tool_call_id: tc.id,
-                tool_name: tc.name,
-              });
-            }
-          }
-        }
-
+        const savedToolMsgs = await executeToolPipeline(classification, convId);
         useToolRunStore.getState().resetToolState();
 
         // Create next pending message for continued loop
@@ -852,7 +697,6 @@ async function sendTeamMessageFlow() {
           messages: [...msg().messages, ...savedToolMsgs, nextPending],
         });
 
-        // Update stream tracking
         useStreamStore.getState().addRun(teamRun.id, {
           requestId: currentRequestId,
           conversationId: convId,
@@ -860,7 +704,7 @@ async function sendTeamMessageFlow() {
           status: "pending",
         });
 
-        continue; // next iteration of tool loop
+        continue;
       } else {
         // Leader responded with normal text (no delegation, no tools)
         const finalContent = replyContent || i18n.t("common:noResponse");
@@ -880,19 +724,18 @@ async function sendTeamMessageFlow() {
           }),
         });
 
-        // Mark run as done (no delegation needed)
         try {
-          await teamCmds.updateTeamRunStatus(teamRun.id, "done", new Date().toISOString());
-          useTeamRunStore.getState().updateRunStatus(teamRun.id, "done");
-        } catch {
-          /* non-fatal */
+          await teamCmds.updateTeamRunStatus(teamRun.id, "completed", new Date().toISOString());
+          useTeamRunStore.getState().updateRunStatus(teamRun.id, "completed");
+        } catch (e) {
+          logger.debug("Failed to persist team run completed status", e);
         }
         stream().removeRun(teamRun.id);
-        break; // no more tools — exit loop
+        break;
       }
     }
   } catch (error) {
-    console.error("Team message error:", error);
+    logger.error("Team message error:", error);
     useMessageStore.setState({
       messages: updateMessageInList(msg().messages, leaderMsgId, {
         content: parseErrorMessage(error),
@@ -906,7 +749,7 @@ async function sendTeamMessageFlow() {
   await conv().loadConversations();
 }
 
-// ── Stream leader turn (reuses chatFlowStore pattern) ──
+// ── Stream leader turn ──────────────────────────────────
 
 async function streamLeaderTurn(params: {
   baseSystemPrompt: string;
@@ -962,75 +805,15 @@ async function streamLeaderTurn(params: {
     baseSystemPrompt,
   });
 
-  let pendingDelta = "";
-  let rafId: number | null = null;
-
-  const flushDelta = () => {
-    if (!pendingDelta) return;
-    const delta = pendingDelta;
-    pendingDelta = "";
-
-    useMessageStore.setState({
-      messages: msg().messages.map((m: ChatMessage) =>
-        m.id === msgId
-          ? {
-              ...m,
-              content:
-                m.content === i18n.t("common:loadingMessage") ? delta : m.content + delta,
-              status: "streaming" as const,
-            }
-          : m,
-      ),
-    });
-  };
-
-  let doneResolve: (v: StreamDoneEvent) => void;
-  const donePromise = new Promise<StreamDoneEvent>((r) => {
-    doneResolve = r;
+  return executeStreamCall({
+    requestId,
+    msgId,
+    messages: chatMessages as Record<string, unknown>[],
+    systemPrompt,
+    model: effective.model,
+    temperature: effective.temperature,
+    thinkingEnabled: effective.thinkingEnabled,
+    thinkingBudget: effective.thinkingBudget,
+    tools,
   });
-
-  const unlistenChunk = await listen<StreamChunkEvent>("chat-stream-chunk", (event) => {
-    if (event.payload.request_id !== requestId) return;
-    pendingDelta += event.payload.delta;
-    if (rafId === null) {
-      rafId = requestAnimationFrame(() => {
-        flushDelta();
-        rafId = null;
-      });
-    }
-  });
-
-  const unlistenDone = await listen<StreamDoneEvent>("chat-stream-done", (event) => {
-    if (event.payload.request_id !== requestId) return;
-    doneResolve(event.payload);
-  });
-
-  try {
-    await cmds.chatCompletionStream({
-      messages: chatMessages as Record<string, unknown>[],
-      system_prompt: systemPrompt,
-      model: effective.model,
-      temperature: effective.temperature,
-      thinking_enabled: effective.thinkingEnabled,
-      thinking_budget: effective.thinkingBudget,
-      request_id: requestId,
-      tools,
-    });
-
-    const done = await donePromise;
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-    flushDelta();
-    return done;
-  } finally {
-    unlistenChunk();
-    unlistenDone();
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-  }
 }
-

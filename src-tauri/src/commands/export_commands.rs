@@ -68,7 +68,7 @@ pub fn export_agent(
         };
         let meta_json = serde_json::to_string_pretty(&meta)
             .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
-        zip.start_file("agent.json", options.clone())
+        zip.start_file("agent.json", options)
             .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
         zip.write_all(meta_json.as_bytes())
             .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
@@ -87,7 +87,7 @@ pub fn export_agent(
             if path.exists() {
                 let content = std::fs::read_to_string(&path)
                     .map_err(|e| AppError::Io(format!("Failed to read {fname}: {e}")))?;
-                zip.start_file(format!("persona/{fname}"), options.clone())
+                zip.start_file(format!("persona/{fname}"), options)
                     .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
                 zip.write_all(content.as_bytes())
                     .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
@@ -116,7 +116,7 @@ pub fn export_agent(
                     } else if path.is_file() {
                         let content = std::fs::read(&path)
                             .map_err(|e| AppError::Io(format!("Failed to read skill file: {e}")))?;
-                        zip.start_file(zip_path, options.clone())
+                        zip.start_file(zip_path, *options)
                             .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
                         zip.write_all(&content)
                             .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
@@ -147,7 +147,7 @@ pub fn export_agent(
                                 let shared_root = vm.get_vault_path().join("shared");
                                 if let Ok(relative) = path.strip_prefix(&shared_root) {
                                     let zip_path = format!("shared_refs/{}", relative.to_string_lossy().replace('\\', "/"));
-                                    zip.start_file(zip_path, options.clone())
+                                    zip.start_file(zip_path, options)
                                         .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
                                     zip.write_all(content.as_bytes())
                                         .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
@@ -182,7 +182,7 @@ pub fn export_agent(
                 let conv_json = serde_json::to_string_pretty(&conv_export)
                     .map_err(|e| AppError::Io(format!("JSON error: {e}")))?;
 
-                zip.start_file(format!("conversations/{}.json", conv.id), options.clone())
+                zip.start_file(format!("conversations/{}.json", conv.id), options)
                     .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
                 zip.write_all(conv_json.as_bytes())
                     .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
@@ -649,7 +649,7 @@ fn export_dir_recursive(
         } else if path.is_file() {
             let content = std::fs::read(&path)
                 .map_err(|e| AppError::Io(format!("Failed to read file: {e}")))?;
-            zip.start_file(zip_path, options.clone())
+            zip.start_file(zip_path, *options)
                 .map_err(|e| AppError::Io(format!("ZIP error: {e}")))?;
             zip.write_all(&content)
                 .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;

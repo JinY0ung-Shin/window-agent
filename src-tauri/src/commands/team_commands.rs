@@ -1,6 +1,7 @@
 use crate::api::RunRegistry;
 use crate::db::models::{
-    CreateTeamRequest, Team, TeamDetail, TeamMember, TeamRun, TeamTask, UpdateTeamRequest,
+    CreateTeamRequest, TaskStatus, Team, TeamDetail, TeamMember, TeamRun, TeamRunStatus, TeamTask,
+    UpdateTeamRequest,
 };
 use crate::db::team_operations;
 use crate::db::Database;
@@ -23,7 +24,7 @@ pub fn get_team_detail(
     db: State<'_, Database>,
     team_id: String,
 ) -> Result<TeamDetail, AppError> {
-    Ok(team_operations::get_team_detail_impl(&db, team_id)?)
+    Ok(team_operations::get_team_detail_impl(&db, &team_id)?)
 }
 
 #[tauri::command]
@@ -37,7 +38,7 @@ pub fn update_team(
     team_id: String,
     request: UpdateTeamRequest,
 ) -> Result<Team, AppError> {
-    Ok(team_operations::update_team_impl(&db, team_id, request)?)
+    Ok(team_operations::update_team_impl(&db, &team_id, request)?)
 }
 
 #[tauri::command]
@@ -45,7 +46,7 @@ pub fn delete_team(
     db: State<'_, Database>,
     team_id: String,
 ) -> Result<(), AppError> {
-    Ok(team_operations::delete_team_impl(&db, team_id)?)
+    Ok(team_operations::delete_team_impl(&db, &team_id)?)
 }
 
 // ── Team Members ────────────────────────────────────────────
@@ -66,7 +67,7 @@ pub fn remove_team_member(
     team_id: String,
     agent_id: String,
 ) -> Result<(), AppError> {
-    Ok(team_operations::remove_team_member_impl(&db, team_id, agent_id)?)
+    Ok(team_operations::remove_team_member_impl(&db, &team_id, &agent_id)?)
 }
 
 // ── Team Runs ───────────────────────────────────────────────
@@ -90,12 +91,12 @@ pub fn create_team_run(
 pub fn update_team_run_status(
     db: State<'_, Database>,
     run_id: String,
-    status: String,
+    status: TeamRunStatus,
     finished_at: Option<String>,
 ) -> Result<(), AppError> {
     Ok(team_operations::update_team_run_status_impl(
         &db,
-        run_id,
+        &run_id,
         status,
         finished_at,
     )?)
@@ -106,7 +107,7 @@ pub fn get_team_run(
     db: State<'_, Database>,
     run_id: String,
 ) -> Result<TeamRun, AppError> {
-    Ok(team_operations::get_team_run_impl(&db, run_id)?)
+    Ok(team_operations::get_team_run_impl(&db, &run_id)?)
 }
 
 #[tauri::command]
@@ -139,14 +140,14 @@ pub fn create_team_task(
 pub fn update_team_task(
     db: State<'_, Database>,
     task_id: String,
-    status: Option<String>,
+    status: Option<TaskStatus>,
     request_id: Option<String>,
     result_summary: Option<String>,
     finished_at: Option<String>,
 ) -> Result<TeamTask, AppError> {
     Ok(team_operations::update_team_task_impl(
         &db,
-        task_id,
+        &task_id,
         status,
         request_id,
         result_summary,
@@ -159,7 +160,7 @@ pub fn get_team_tasks(
     db: State<'_, Database>,
     run_id: String,
 ) -> Result<Vec<TeamTask>, AppError> {
-    Ok(team_operations::get_team_tasks_impl(&db, run_id)?)
+    Ok(team_operations::get_team_tasks_impl(&db, &run_id)?)
 }
 
 // ── Orchestration ────────────────────────────────────────────

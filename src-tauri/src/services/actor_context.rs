@@ -2,12 +2,12 @@ use crate::db::agent_operations;
 use crate::db::models::Agent;
 use crate::db::Database;
 use crate::error::AppError;
-use std::path::PathBuf;
 use serde_json;
 
 // ── Enums ──────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)] // TODO: wire into stream handler to branch DM vs team execution paths
 pub enum ExecutionRole {
     /// Single-agent (direct message) mode
     Dm,
@@ -18,6 +18,7 @@ pub enum ExecutionRole {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)] // TODO: use in execution scope to determine context injection strategy
 pub enum ExecutionTrigger {
     /// Initiated by a user message
     UserInitiated,
@@ -29,6 +30,7 @@ pub enum ExecutionTrigger {
 
 /// Describes *who* is acting and *why*, before any DB lookups.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // TODO: consume fields in unified stream handler to replace ad-hoc arg passing
 pub struct ExecutionScope {
     pub actor_agent_id: String,
     pub conversation_id: String,
@@ -43,6 +45,7 @@ pub struct ExecutionScope {
 
 /// Fully resolved execution context ready for an LLM turn.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // TODO: pass to LLM call site to replace individual parameter threading
 pub struct ResolvedContext {
     pub agent: Agent,
     pub system_prompt: String,
@@ -70,7 +73,7 @@ const TOOL_REPORT: &str = "report";
 pub fn resolve(
     scope: &ExecutionScope,
     db: &Database,
-    app_data_dir: &PathBuf,
+    app_data_dir: &std::path::Path,
 ) -> Result<ResolvedContext, AppError> {
     // 1. Load agent record
     let agent = agent_operations::get_agent_impl(db, scope.actor_agent_id.clone())?;
@@ -117,7 +120,7 @@ pub fn resolve(
 /// Read and concatenate persona markdown files from the agent's directory.
 /// Missing files are silently skipped — this is intentional so that agents
 /// work even before persona files are created.
-fn assemble_system_prompt(agent_dir: &PathBuf) -> String {
+fn assemble_system_prompt(agent_dir: &std::path::Path) -> String {
     let files = ["IDENTITY.md", "SOUL.md"];
     let mut parts: Vec<String> = Vec::new();
 
@@ -139,7 +142,7 @@ fn assemble_system_prompt(agent_dir: &PathBuf) -> String {
 /// Read TOOL_CONFIG.json from the agent's directory and return enabled native
 /// tools as `(tool_name, tier)` pairs.  Orchestration tools ("delegate",
 /// "report") are excluded — they are added explicitly based on role.
-fn read_tool_config(agent_dir: &PathBuf) -> Vec<(String, String)> {
+fn read_tool_config(agent_dir: &std::path::Path) -> Vec<(String, String)> {
     let config_path = agent_dir.join("TOOL_CONFIG.json");
     let raw = match std::fs::read_to_string(&config_path) {
         Ok(s) => s,
@@ -184,7 +187,7 @@ fn read_tool_config(agent_dir: &PathBuf) -> Vec<(String, String)> {
 fn resolve_tool_names(
     role: &ExecutionRole,
     trigger: &ExecutionTrigger,
-    agent_dir: &PathBuf,
+    agent_dir: &std::path::Path,
 ) -> Vec<String> {
     match role {
         // DM — full tool access; empty vec signals "use default frontend config"
@@ -297,7 +300,7 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let ctx = resolve(&scope, &db, &tmp.path().to_path_buf()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
 
         assert_eq!(ctx.agent.name, "Test Agent");
         assert_eq!(ctx.model, "gpt-4o");
@@ -326,7 +329,7 @@ mod tests {
             trigger: ExecutionTrigger::BackendTriggered,
         };
 
-        let ctx = resolve(&scope, &db, &tmp.path().to_path_buf()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
 
         // v1: TeamMember only gets "report" — no auto-tier tools yet
         assert_eq!(ctx.enabled_tool_names, vec!["report".to_string()]);
@@ -345,7 +348,7 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let ctx = resolve(&scope, &db, &tmp.path().to_path_buf()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
 
         // User-initiated leader: all enabled tools (any tier) + delegate
         assert!(ctx.enabled_tool_names.contains(&"delegate".to_string()));
@@ -371,7 +374,7 @@ mod tests {
             trigger: ExecutionTrigger::BackendTriggered,
         };
 
-        let ctx = resolve(&scope, &db, &tmp.path().to_path_buf()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
 
         // Backend-triggered leader: auto-tier tools only + delegate
         assert!(ctx.enabled_tool_names.contains(&"delegate".to_string()));
@@ -415,7 +418,7 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let ctx = resolve(&scope, &db, &tmp.path().to_path_buf()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
 
         // No persona files → empty prompt, but no error
         assert!(ctx.system_prompt.is_empty());
@@ -441,7 +444,7 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let result = resolve(&scope, &db, &tmp.path().to_path_buf());
+        let result = resolve(&scope, &db, tmp.path());
         assert!(result.is_err());
     }
 }

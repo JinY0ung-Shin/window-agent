@@ -1,0 +1,415 @@
+/* ── Sidebar ── */
+.sidebar {
+  width: 280px;
+  background-color: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.sidebar-header {
+  height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sidebar-header h1 {
+  font-size: 1.125rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.logo-icon {
+  color: var(--primary);
+  background: #e0e7ff;
+  padding: 8px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.menu-item:hover {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+}
+
+.menu-item.active {
+  background-color: #eef2ff;
+  color: var(--primary);
+}
+
+/* ── Conversation List ── */
+.conversation-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.conversation-item {
+  position: relative;
+}
+
+.conversation-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.delete-btn {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  line-height: 0;
+}
+
+.conversation-item:hover .delete-btn {
+  display: flex;
+}
+
+.delete-btn:hover {
+  color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.delete-confirm-inline {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.delete-confirm-inline button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  line-height: 0;
+}
+
+.delete-confirm-yes {
+  color: #ef4444;
+}
+
+.delete-confirm-yes:hover {
+  background-color: #fef2f2;
+}
+
+.delete-confirm-no {
+  color: var(--text-muted);
+}
+
+.delete-confirm-no:hover {
+  background-color: var(--bg-hover);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-btn {
+  margin-top: auto;
+}
+
+/* ── Main Area ── */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-color);
+  position: relative;
+}
+
+/* ── Chat Header ── */
+.chat-header {
+  height: 48px;
+  background-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 120px 0 16px;
+  position: absolute;
+  top: 0;
+  width: 100%;
+  z-index: 10;
+}
+
+/* ── Window Controls ── */
+.window-controls {
+  position: fixed;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 40;
+  -webkit-app-region: no-drag;
+}
+
+.window-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.window-control-btn:hover {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+}
+
+.window-control-close:hover {
+  background-color: #ef4444;
+  color: white;
+}
+
+.header-title {
+  font-weight: 600;
+  font-size: 1rem;
+  flex: 1;
+}
+
+/* ── Conversation Switcher ── */
+.conversation-switcher {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.conversation-switcher-trigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-color);
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.conversation-switcher-trigger.clickable {
+  cursor: pointer;
+}
+
+.conversation-switcher-trigger.clickable:hover {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.conversation-switcher-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-switcher-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.conversation-switcher-chevron.open {
+  transform: rotate(180deg);
+}
+
+.conversation-switcher-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 280px;
+  max-width: 360px;
+  max-height: 400px;
+  overflow-y: auto;
+  background: var(--bg-color, #fff);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.conv-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.conv-new-btn:hover:not(.disabled) {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.conv-new-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.conv-list {
+  padding: 4px 0;
+}
+
+.conv-date-header {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 8px 16px 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.conv-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.conv-item:hover:not(.disabled) {
+  background: var(--bg-hover, rgba(0, 0, 0, 0.04));
+}
+
+.conv-item.active {
+  color: var(--primary);
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.conv-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.conv-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-agent-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-color);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.header-agent-btn:hover {
+  background-color: #eef2ff;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.header-agent-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.bootstrap-cancel-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+}
+.bootstrap-cancel-btn:hover {
+  background-color: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+/* ── Sidebar Conversation Agent Info ── */
+.conversation-agent-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.conversation-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-agent-name {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, ArrowLeft } from "lucide-react";
 import { useMessageStore } from "../../stores/messageStore";
@@ -10,6 +10,7 @@ import { useAgentStore } from "../../stores/agentStore";
 import AgentMessageBubble from "./AgentMessageBubble";
 import TeamChatInput from "./TeamChatInput";
 import { useDragRegion } from "../../hooks/useDragRegion";
+import { useMessageScroll } from "../../hooks/useMessageScroll";
 
 export default function TeamChatWindow() {
   const { t } = useTranslation("team");
@@ -21,11 +22,6 @@ export default function TeamChatWindow() {
   const agents = useAgentStore((s) => s.agents);
   const activeRuns = useTeamRunStore((s) => s.activeRuns);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const shouldAutoScrollRef = useRef(true);
-  const lastScrollTopRef = useRef(0);
-  const touchStartYRef = useRef<number | null>(null);
   const onDrag = useDragRegion();
 
   const team = teams.find((t) => t.id === selectedTeamId) ?? null;
@@ -49,86 +45,10 @@ export default function TeamChatWindow() {
     };
   }, []);
 
-  const isNearBottom = useCallback(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 150;
-  }, []);
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
-  }, []);
-
-  // Scroll tracking
-  useEffect(() => {
-    const el = messagesContainerRef.current;
-    if (!el) return;
-    lastScrollTopRef.current = el.scrollTop;
-
-    const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < -2) {
-        shouldAutoScrollRef.current = false;
-      } else if (event.deltaY > 2 && isNearBottom()) {
-        shouldAutoScrollRef.current = true;
-      }
-    };
-
-    const onTouchStart = (event: TouchEvent) => {
-      touchStartYRef.current = event.touches[0]?.clientY ?? null;
-    };
-
-    const onTouchMove = (event: TouchEvent) => {
-      const currentY = event.touches[0]?.clientY;
-      if (currentY == null || touchStartYRef.current == null) return;
-      if (currentY > touchStartYRef.current + 4) {
-        shouldAutoScrollRef.current = false;
-      } else if (currentY < touchStartYRef.current - 4 && isNearBottom()) {
-        shouldAutoScrollRef.current = true;
-      }
-    };
-
-    const onScroll = () => {
-      const currentScrollTop = el.scrollTop;
-      const scrollingUp = currentScrollTop < lastScrollTopRef.current - 4;
-      const nearBottom = isNearBottom();
-      if (scrollingUp) {
-        shouldAutoScrollRef.current = false;
-      } else if (nearBottom) {
-        shouldAutoScrollRef.current = true;
-      }
-      lastScrollTopRef.current = currentScrollTop;
-    };
-
-    const onTouchEnd = () => {
-      touchStartYRef.current = null;
-    };
-
-    el.addEventListener("wheel", onWheel, { passive: true });
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: true });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => {
-      el.removeEventListener("wheel", onWheel);
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("scroll", onScroll);
-    };
-  }, [isNearBottom]);
-
-  // Reset auto-scroll on conversation change
-  useEffect(() => {
-    shouldAutoScrollRef.current = true;
-    lastScrollTopRef.current = 0;
-  }, [currentConversationId, selectedTeamId]);
-
-  // Auto-scroll on new messages
-  useEffect(() => {
-    if (shouldAutoScrollRef.current) {
-      scrollToBottom();
-    }
-  }, [messages, scrollToBottom]);
+  const { messagesEndRef, messagesContainerRef } = useMessageScroll(
+    [currentConversationId, selectedTeamId],
+    [messages],
+  );
 
   // Member count for header
   const memberCount = team

@@ -7,6 +7,7 @@ import {
 import { getEnvConfig, hasApiKey as checkApiKey, hasStoredKey as checkStoredKey, setApiConfig } from "../services/tauriCommands";
 import { refreshDefaultManagerPersona } from "../services/commands/agentCommands";
 import { i18n, type Locale } from "../i18n";
+import { logger } from "../services/logger";
 
 export type UITheme = "classic" | "org";
 
@@ -114,8 +115,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const storedKeyExists = await checkStoredKey();
 
       set({ ...updates, hasApiKey: apiKeyExists, hasStoredKey: storedKeyExists, envLoaded: true });
-    } catch {
-      // Tauri not available (e.g. tests) — silently ignore
+    } catch (e) {
+      logger.debug("Env defaults unavailable (expected in tests)", e);
       set({ envLoaded: true });
     } finally {
       envReadyResolve();
@@ -147,7 +148,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({ hasApiKey: keyExists, hasStoredKey: storedExists });
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
-      console.error("Failed to set API config:", e);
+      logger.error("Failed to set API config:", e);
       set({ settingsError: i18n.t("common:errors.settingsSaveFailed", { error: errorMsg }) });
       return;
     }
@@ -184,7 +185,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     set({ locale });
     // Refresh default manager persona files asynchronously (don't block UI)
     refreshDefaultManagerPersona(locale).catch((e) =>
-      console.warn("refreshDefaultManagerPersona:", e),
+      logger.warn("refreshDefaultManagerPersona:", e),
     );
   },
 

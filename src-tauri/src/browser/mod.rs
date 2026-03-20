@@ -1,8 +1,11 @@
+mod commands;
+mod screenshot;
+
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::io::BufRead;
@@ -13,15 +16,15 @@ use tauri::Manager;
 
 #[derive(Clone)]
 pub struct BrowserManager {
-    pub(crate) sessions: Arc<Mutex<HashMap<String, BrowserSession>>>,
+    pub(crate) sessions: Arc<RwLock<HashMap<String, BrowserSession>>>,
     sidecar: Arc<Mutex<Option<SidecarProcess>>>,
     /// Pending domain approvals for conversations that don't have a session yet.
     /// Applied when the session is created.
     pending_approvals: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     idle_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
-    app_data_dir: PathBuf,
-    app_handle: Option<tauri::AppHandle>,
-    client: Client,
+    pub(crate) app_data_dir: PathBuf,
+    pub(crate) app_handle: Option<tauri::AppHandle>,
+    pub(crate) client: Client,
 }
 
 struct SidecarProcess {
@@ -32,12 +35,12 @@ struct SidecarProcess {
 
 pub struct BrowserSession {
     pub session_id: String,
-    #[allow(dead_code)] // Used as HashMap key context; may be needed for logging
+    #[allow(dead_code)] // TODO: use for session logging/debugging; key is duplicated in HashMap
     pub conversation_id: String,
     pub last_url: String,
     pub last_title: String,
     pub last_ref_map: HashMap<u32, ElementRef>,
-    #[allow(dead_code)] // Retained for future session analytics
+    #[allow(dead_code)] // TODO: expose via session analytics endpoint
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_active: chrono::DateTime<chrono::Utc>,
     pub security_policy: SessionSecurityPolicy,
@@ -56,21 +59,22 @@ pub struct ElementRef {
 pub struct SessionSecurityPolicy {
     pub blocked_origins: Vec<String>,
     pub approved_domains: HashSet<String>,
-    #[allow(dead_code)] // Reserved for per-session snapshot size control
+    #[allow(dead_code)] // TODO: enforce in build_tool_result to limit snapshot payload size
     pub max_snapshot_size: usize,
 }
 
 #[derive(Deserialize)]
-struct SidecarResponse {
-    success: bool,
-    url: Option<String>,
-    title: Option<String>,
-    snapshot: Option<String>,
-    ref_map: Option<HashMap<String, ElementRef>>,
-    element_count: Option<usize>,
-    error: Option<String>,
-    screenshot: Option<String>, // base64 PNG
+pub(crate) struct SidecarResponse {
+    pub(crate) success: bool,
+    pub(crate) url: Option<String>,
+    pub(crate) title: Option<String>,
+    pub(crate) snapshot: Option<String>,
+    pub(crate) ref_map: Option<HashMap<String, ElementRef>>,
+    pub(crate) element_count: Option<usize>,
+    pub(crate) error: Option<String>,
+    pub(crate) screenshot: Option<String>, // base64 PNG
 }
+
 
 // === Implementation ===
 
@@ -80,7 +84,7 @@ impl BrowserManager {
         std::fs::create_dir_all(&screenshots_dir).ok();
 
         Self {
-            sessions: Arc::new(Mutex::new(HashMap::new())),
+            sessions: Arc::new(RwLock::new(HashMap::new())),
             sidecar: Arc::new(Mutex::new(None)),
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
             idle_task: Arc::new(Mutex::new(None)),
@@ -90,14 +94,14 @@ impl BrowserManager {
         }
     }
 
-    fn emit_event(&self, event: &str, payload: &str) {
+    pub(crate) fn emit_event(&self, event: &str, payload: &str) {
         if let Some(ref handle) = self.app_handle {
             let _ = handle.emit(event, payload);
         }
     }
 
     /// Ensure sidecar is running, spawn if needed
-    async fn ensure_sidecar(&self) -> Result<u16, String> {
+    pub(crate) async fn ensure_sidecar(&self) -> Result<u16, String> {
         let mut sidecar = self.sidecar.lock().await;
         if let Some(ref s) = *sidecar {
             // Health check
@@ -178,7 +182,7 @@ impl BrowserManager {
     }
 
     /// Send command to sidecar
-    async fn send_command(
+    pub(crate) async fn send_command(
         &self,
         method: &str,
         session_id: &str,
@@ -224,19 +228,19 @@ impl BrowserManager {
 
     /// Get or create a session for a conversation
     pub async fn get_or_create_session(&self, conversation_id: &str) -> Result<String, String> {
-        let mut sessions = self.sessions.lock().await;
-        if let Some(session) = sessions.get_mut(conversation_id) {
-            session.last_active = chrono::Utc::now();
-            return Ok(session.session_id.clone());
+        // Fast path: check if session exists (write needed for last_active update)
+        {
+            let mut sessions = self.sessions.write().await;
+            if let Some(session) = sessions.get_mut(conversation_id) {
+                session.last_active = chrono::Utc::now();
+                return Ok(session.session_id.clone());
+            }
         }
 
         let session_id = format!(
             "session_{}",
             &uuid::Uuid::new_v4().to_string().replace('-', "")[..12]
         );
-
-        // Release lock before async call
-        drop(sessions);
 
         // Create session in sidecar
         self.send_command("create_session", &session_id, serde_json::json!({}))
@@ -263,7 +267,7 @@ impl BrowserManager {
             security_policy: policy,
         };
 
-        let mut sessions = self.sessions.lock().await;
+        let mut sessions = self.sessions.write().await;
         sessions.insert(conversation_id.to_string(), session);
         Ok(session_id)
     }
@@ -307,13 +311,11 @@ impl BrowserManager {
             || host.ends_with(".local")
             || host.ends_with(".internal");
 
-        if is_loopback || is_private {
-            if !policy.approved_domains.contains(host) {
-                return Err(format!(
-                    "blocked: private/loopback address '{}' requires explicit approval",
-                    host
-                ));
-            }
+        if (is_loopback || is_private) && !policy.approved_domains.contains(host) {
+            return Err(format!(
+                "blocked: private/loopback address '{}' requires explicit approval",
+                host
+            ));
         }
 
         // Check custom blocklist
@@ -323,140 +325,6 @@ impl BrowserManager {
             }
         }
 
-        Ok(())
-    }
-
-    /// Navigate to URL
-    pub async fn navigate(
-        &self,
-        conversation_id: &str,
-        url: &str,
-    ) -> Result<BrowserToolResult, String> {
-        let session_id = self.get_or_create_session(conversation_id).await?;
-
-        // Validate URL security
-        {
-            let sessions = self.sessions.lock().await;
-            if let Some(session) = sessions.get(conversation_id) {
-                Self::validate_url(url, &session.security_policy)?;
-            }
-        }
-
-        let resp = self
-            .send_command("navigate", &session_id, serde_json::json!({ "url": url }))
-            .await?;
-        self.update_session_from_response(conversation_id, &resp)
-            .await?;
-        self.build_tool_result(&resp)
-    }
-
-    /// Take snapshot of current page
-    pub async fn snapshot(
-        &self,
-        conversation_id: &str,
-    ) -> Result<BrowserToolResult, String> {
-        let session_id = self.get_or_create_session(conversation_id).await?;
-        let resp = self
-            .send_command("snapshot", &session_id, serde_json::json!({}))
-            .await?;
-        self.update_session_from_response(conversation_id, &resp)
-            .await?;
-        self.build_tool_result(&resp)
-    }
-
-    /// Click element by ref number
-    pub async fn click(
-        &self,
-        conversation_id: &str,
-        ref_num: u32,
-    ) -> Result<BrowserToolResult, String> {
-        let session_id = self.get_or_create_session(conversation_id).await?;
-        let resp = self
-            .send_command("click", &session_id, serde_json::json!({ "ref": ref_num }))
-            .await?;
-        self.update_session_from_response(conversation_id, &resp)
-            .await?;
-        self.build_tool_result(&resp)
-    }
-
-    /// Type text into element by ref number
-    pub async fn type_text(
-        &self,
-        conversation_id: &str,
-        ref_num: u32,
-        text: &str,
-    ) -> Result<BrowserToolResult, String> {
-        // Check if target is password field
-        {
-            let sessions = self.sessions.lock().await;
-            if let Some(session) = sessions.get(conversation_id) {
-                if let Some(elem) = session.last_ref_map.get(&ref_num) {
-                    if elem.is_password {
-                        return Err(
-                            "cannot type into password fields for security reasons".to_string()
-                        );
-                    }
-                }
-            }
-        }
-
-        let session_id = self.get_or_create_session(conversation_id).await?;
-        let resp = self
-            .send_command(
-                "type",
-                &session_id,
-                serde_json::json!({ "ref": ref_num, "text": text }),
-            )
-            .await?;
-        self.update_session_from_response(conversation_id, &resp)
-            .await?;
-        self.build_tool_result(&resp)
-    }
-
-    /// Wait for specified seconds (clamped to 0.5..10.0)
-    pub async fn wait(
-        &self,
-        conversation_id: &str,
-        seconds: f64,
-    ) -> Result<BrowserToolResult, String> {
-        let seconds = seconds.clamp(0.5, 10.0);
-        let session_id = self.get_or_create_session(conversation_id).await?;
-        let resp = self
-            .send_command(
-                "wait",
-                &session_id,
-                serde_json::json!({ "seconds": seconds }),
-            )
-            .await?;
-        self.update_session_from_response(conversation_id, &resp)
-            .await?;
-        self.build_tool_result(&resp)
-    }
-
-    /// Go back in history
-    pub async fn back(
-        &self,
-        conversation_id: &str,
-    ) -> Result<BrowserToolResult, String> {
-        let session_id = self.get_or_create_session(conversation_id).await?;
-        let resp = self
-            .send_command("back", &session_id, serde_json::json!({}))
-            .await?;
-        self.update_session_from_response(conversation_id, &resp)
-            .await?;
-        self.build_tool_result(&resp)
-    }
-
-    /// Close browser session for a conversation
-    pub async fn close_session(&self, conversation_id: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.lock().await;
-        if let Some(session) = sessions.remove(conversation_id) {
-            let session_id = session.session_id.clone();
-            drop(sessions); // release lock before async call
-            let _ = self
-                .send_command("close_session", &session_id, serde_json::json!({}))
-                .await;
-        }
         Ok(())
     }
 
@@ -471,7 +339,7 @@ impl BrowserManager {
 
         // Close all sessions
         let conversation_ids: Vec<String> = {
-            let sessions = self.sessions.lock().await;
+            let sessions = self.sessions.read().await;
             sessions.keys().cloned().collect()
         };
         for conv_id in conversation_ids {
@@ -503,7 +371,7 @@ impl BrowserManager {
                 loop {
                     interval.tick().await;
                     let idle_convs: Vec<String> = {
-                        let sessions = manager.sessions.lock().await;
+                        let sessions = manager.sessions.read().await;
                         sessions
                             .iter()
                             .filter(|(_, s)| {
@@ -528,7 +396,7 @@ impl BrowserManager {
     /// Approve a domain for a conversation's session (called from frontend via Tauri command).
     /// If the session doesn't exist yet, stores as pending and applies when session is created.
     pub async fn approve_domain(&self, conversation_id: &str, domain: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.lock().await;
+        let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.get_mut(conversation_id) {
             session.security_policy.approved_domains.insert(domain.to_string());
         } else {
@@ -547,7 +415,7 @@ impl BrowserManager {
 
     /// Validate the final URL after any navigation-producing action.
     /// If the browser ended up on a blocked URL (via redirect/click), return error.
-    fn validate_response_url(resp: &SidecarResponse, policy: &SessionSecurityPolicy) -> Result<(), String> {
+    pub(crate) fn validate_response_url(resp: &SidecarResponse, policy: &SessionSecurityPolicy) -> Result<(), String> {
         if let Some(url) = &resp.url {
             if url.is_empty() || url == "about:blank" {
                 return Ok(()); // Initial blank page is fine
@@ -560,12 +428,12 @@ impl BrowserManager {
         }
     }
 
-    async fn update_session_from_response(
+    pub(crate) async fn update_session_from_response(
         &self,
         conversation_id: &str,
         resp: &SidecarResponse,
     ) -> Result<(), String> {
-        let mut sessions = self.sessions.lock().await;
+        let mut sessions = self.sessions.write().await;
         if let Some(session) = sessions.get_mut(conversation_id) {
             // Validate final URL against security policy
             Self::validate_response_url(resp, &session.security_policy)?;
@@ -586,62 +454,6 @@ impl BrowserManager {
         }
         Ok(())
     }
-
-    fn build_tool_result(&self, resp: &SidecarResponse) -> Result<BrowserToolResult, String> {
-        let snapshot_full = resp.snapshot.clone().unwrap_or_default();
-        // Truncate snapshot for model context (4KB max, UTF-8 safe)
-        let snapshot = if snapshot_full.len() > 4000 {
-            let mut end = 4000;
-            while end > 0 && !snapshot_full.is_char_boundary(end) {
-                end -= 1;
-            }
-            format!(
-                "{}...\n--- truncated ({} total elements) ---",
-                &snapshot_full[..end],
-                resp.element_count.unwrap_or(0)
-            )
-        } else {
-            snapshot_full.clone()
-        };
-
-        let artifact_id = uuid::Uuid::new_v4().to_string();
-
-        // Save screenshot if present
-        let screenshot_path = if let Some(ref b64) = resp.screenshot {
-            match self.save_screenshot(&artifact_id, b64) {
-                Ok(path) => Some(path),
-                Err(_) => None,
-            }
-        } else {
-            None
-        };
-
-        Ok(BrowserToolResult {
-            success: true,
-            url: resp.url.clone().unwrap_or_default(),
-            title: resp.title.clone().unwrap_or_default(),
-            snapshot,
-            snapshot_full,
-            element_count: resp.element_count.unwrap_or(0),
-            artifact_id,
-            screenshot_path,
-        })
-    }
-
-    /// Decode base64 screenshot and save to disk.
-    /// Returns the absolute file path on success.
-    pub fn save_screenshot(&self, artifact_id: &str, screenshot_base64: &str) -> Result<String, String> {
-        use base64::Engine;
-        let bytes = base64::engine::general_purpose::STANDARD
-            .decode(screenshot_base64)
-            .map_err(|e| format!("base64 decode failed: {}", e))?;
-        let path = self.app_data_dir
-            .join("browser_screenshots")
-            .join(format!("{}.png", artifact_id));
-        std::fs::write(&path, &bytes)
-            .map_err(|e| format!("failed to write screenshot: {}", e))?;
-        Ok(path.to_string_lossy().to_string())
-    }
 }
 
 impl Default for SessionSecurityPolicy {
@@ -652,19 +464,6 @@ impl Default for SessionSecurityPolicy {
             max_snapshot_size: 4096,
         }
     }
-}
-
-#[derive(Serialize)]
-pub struct BrowserToolResult {
-    pub success: bool,
-    pub url: String,
-    pub title: String,
-    pub snapshot: String,
-    #[serde(skip_serializing)] // Not sent to LLM — only used for artifact storage
-    pub snapshot_full: String,
-    pub element_count: usize,
-    pub artifact_id: String,
-    pub screenshot_path: Option<String>,
 }
 
 /// Resolve the Node.js executable path.
@@ -856,69 +655,6 @@ mod tests {
         assert!(result.unwrap_err().contains("invalid URL"));
     }
 
-    fn test_manager() -> BrowserManager {
-        BrowserManager::new(std::env::temp_dir().join("window-agent-test"), None)
-    }
-
-    #[test]
-    fn test_build_tool_result_truncates_large_snapshot() {
-        let manager = test_manager();
-        let resp = SidecarResponse {
-            success: true,
-            url: Some("https://example.com".to_string()),
-            title: Some("Example".to_string()),
-            snapshot: Some("x".repeat(5000)),
-            ref_map: None,
-            element_count: Some(100),
-            error: None,
-            screenshot: None,
-        };
-        let result = manager.build_tool_result(&resp).unwrap();
-        assert!(result.snapshot.len() < 5000);
-        assert!(result.snapshot.contains("truncated"));
-        assert!(result.snapshot.contains("100"));
-    }
-
-    #[test]
-    fn test_build_tool_result_small_snapshot_not_truncated() {
-        let manager = test_manager();
-        let resp = SidecarResponse {
-            success: true,
-            url: Some("https://example.com".to_string()),
-            title: Some("Example".to_string()),
-            snapshot: Some("small content".to_string()),
-            ref_map: None,
-            element_count: Some(5),
-            error: None,
-            screenshot: None,
-        };
-        let result = manager.build_tool_result(&resp).unwrap();
-        assert_eq!(result.snapshot, "small content");
-        assert!(!result.snapshot.contains("truncated"));
-    }
-
-    #[test]
-    fn test_build_tool_result_utf8_safe_truncation() {
-        let manager = test_manager();
-        // Create a string with multi-byte characters that crosses the 4000 byte boundary
-        // Korean characters are 3 bytes each in UTF-8
-        let korean = "가".repeat(1500); // 4500 bytes
-        let resp = SidecarResponse {
-            success: true,
-            url: Some("https://example.com".to_string()),
-            title: Some("Example".to_string()),
-            snapshot: Some(korean),
-            ref_map: None,
-            element_count: Some(50),
-            error: None,
-            screenshot: None,
-        };
-        let result = manager.build_tool_result(&resp).unwrap();
-        assert!(result.snapshot.contains("truncated"));
-        // Should not panic and should be valid UTF-8
-        assert!(result.snapshot.is_char_boundary(0));
-    }
-
     #[test]
     fn test_default_security_policy() {
         let policy = SessionSecurityPolicy::default();
@@ -934,36 +670,8 @@ mod tests {
         drop(manager);
     }
 
-    #[test]
-    fn test_save_screenshot() {
-        let tmp = std::env::temp_dir().join("window-agent-test-screenshot");
-        let manager = BrowserManager::new(tmp.clone(), None);
-        // A minimal valid base64 payload
-        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, b"fake-png-data");
-        let path = manager.save_screenshot("test-artifact-id", &b64).unwrap();
-        assert!(std::path::Path::new(&path).exists());
-        let content = std::fs::read(&path).unwrap();
-        assert_eq!(content, b"fake-png-data");
-        // Cleanup
-        let _ = std::fs::remove_dir_all(&tmp);
-    }
-
-    #[test]
-    fn test_build_tool_result_includes_artifact_id() {
-        let manager = test_manager();
-        let resp = SidecarResponse {
-            success: true,
-            url: Some("https://example.com".to_string()),
-            title: Some("Example".to_string()),
-            snapshot: Some("content".to_string()),
-            ref_map: None,
-            element_count: Some(1),
-            error: None,
-            screenshot: None,
-        };
-        let result = manager.build_tool_result(&resp).unwrap();
-        assert!(!result.artifact_id.is_empty());
-        assert!(result.screenshot_path.is_none());
+    fn test_manager() -> BrowserManager {
+        BrowserManager::new(std::env::temp_dir().join("window-agent-test"), None)
     }
 
     #[test]

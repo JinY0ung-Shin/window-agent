@@ -1,0 +1,359 @@
+/* ── CSS Variables ── */
+:root {
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --bg-color: #f8fafc;
+  --surface: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border: #e2e8f0;
+
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* Vault node type colors */
+  --vault-knowledge: #6366f1;
+  --vault-decision: #f59e0b;
+  --vault-conversation: #10b981;
+  --vault-reflection: #8b5cf6;
+  --vault-shared-border: #94a3b8;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.5;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
+}
+
+.app-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Modal (shared) ── */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal-content {
+  background-color: var(--surface);
+  width: 100%;
+  max-width: 480px;
+  max-height: calc(100vh - 32px);
+  border-radius: 24px;
+  padding: 32px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  animation: scaleIn 0.2s ease-out;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.close-button:hover {
+  background-color: var(--bg-color);
+  color: var(--text-main);
+}
+
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.modal-error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #ef4444;
+  font-size: 13px;
+}
+
+.modal-footer {
+  margin-top: 32px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Form Elements ── */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.form-group input,
+.form-group select {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background-color: var(--surface);
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px #eef2ff;
+}
+
+.form-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.form-text.text-success {
+  color: #16a34a;
+}
+
+.form-text.text-error {
+  color: #ef4444;
+}
+
+/* ── Toggle Switch ── */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toggle-switch {
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  border: none;
+  background-color: #cbd5e1;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.toggle-switch.on {
+  background-color: var(--primary);
+}
+
+.toggle-knob {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: white;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.2s;
+  box-shadow: var(--shadow-sm);
+}
+
+.toggle-switch.on .toggle-knob {
+  transform: translateX(20px);
+}
+
+/* Budget Slider */
+.budget-slider {
+  width: 100%;
+  margin-top: 8px;
+  accent-color: var(--primary);
+}
+
+/* ── Spinning Utility ── */
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* ── Buttons ── */
+.btn-secondary {
+  padding: 10px 20px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background-color: var(--surface);
+  color: var(--text-main);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-color);
+}
+
+.btn-primary {
+  padding: 10px 24px;
+  border-radius: 12px;
+  border: none;
+  background-color: var(--primary);
+  color: white;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-primary:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.btn-danger:hover {
+  background: #fee2e2;
+}
+
+.btn-danger-sm {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid #ef4444;
+  background: #fef2f2;
+  color: #ef4444;
+  cursor: pointer;
+}
+
+.btn-danger-sm:hover {
+  background: #fee2e2;
+}
+
+.btn-secondary-sm {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.btn-secondary-sm:hover {
+  background: var(--bg-color);
+}
+
+/* ── Skeleton States ── */
+.skeleton-line {
+  background: linear-gradient(90deg, var(--border) 25%, var(--bg-color) 50%, var(--border) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeleton-title {
+  height: 14px;
+  width: 70%;
+}
+
+.skeleton-preview {
+  height: 10px;
+  width: 90%;
+}
+
+.skeleton-meta {
+  height: 10px;
+  width: 50%;
+}
+
+/* ── Confirm Delete Row ── */
+.confirm-delete-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.confirm-delete-row .btn-danger,
+.confirm-delete-row .btn-secondary {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+}
+
+/* ── Sidebar Badge ── */
+.sidebar-badge {
+  margin-left: auto;
+  background: var(--primary);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  line-height: 1.4;
+}

@@ -25,6 +25,20 @@ pub fn run() {
     // Also try parent directory (handles src-tauri/ as CWD)
     dotenvy::from_filename("../.env").ok();
 
+    // Initialize tracing subscriber — respects RUST_LOG env var if set
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| {
+            if cfg!(debug_assertions) {
+                tracing_subscriber::EnvFilter::new("debug")
+            } else {
+                tracing_subscriber::EnvFilter::new("info")
+            }
+        });
+    tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .compact()
+        .init();
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
@@ -55,7 +69,7 @@ pub fn run() {
             let watcher = vault::watcher::VaultWatcher::new(vault_path, 300);
             match watcher.start(app.handle().clone()) {
                 Ok(w) => { app.manage(w); } // keep watcher alive via managed state
-                Err(e) => { eprintln!("Warning: vault watcher failed to start: {e}"); }
+                Err(e) => { tracing::warn!("Vault watcher failed to start: {e}"); }
             }
 
             // Initialize P2P identity and manager (dormant until user opts in)
@@ -72,7 +86,7 @@ pub fn run() {
             let db_ref = app.state::<Database>();
             if let Ok(recovered) = TeamOrchestrator::recover_runs(&db_ref) {
                 if recovered > 0 {
-                    eprintln!("Recovered {recovered} stale team run(s) on startup");
+                    tracing::info!(recovered, "Recovered stale team run(s) on startup");
                 }
             }
 

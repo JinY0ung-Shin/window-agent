@@ -60,10 +60,10 @@ pub fn parse_frontmatter(content: &str) -> Result<(Frontmatter, String), String>
     let body = if body_start < after_open.len() {
         // Skip the newline after closing ---
         let rest = &after_open[body_start..];
-        if rest.starts_with('\n') {
-            rest[1..].to_string()
-        } else if rest.starts_with("\r\n") {
-            rest[2..].to_string()
+        if let Some(stripped) = rest.strip_prefix("\r\n") {
+            stripped.to_string()
+        } else if let Some(stripped) = rest.strip_prefix('\n') {
+            stripped.to_string()
         } else {
             rest.to_string()
         }

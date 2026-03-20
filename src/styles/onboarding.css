@@ -1,0 +1,140 @@
+/* ── Onboarding Screen ── */
+.onboarding-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-color);
+}
+
+.onboarding-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 40px;
+  max-width: 480px;
+  width: 100%;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.onboarding-icon {
+  color: var(--primary);
+  margin-bottom: 16px;
+}
+
+.onboarding-title {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-main);
+}
+
+.onboarding-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 32px;
+}
+
+.onboarding-field {
+  text-align: left;
+  margin-bottom: 24px;
+}
+
+.onboarding-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 8px;
+}
+
+.onboarding-field input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.onboarding-field input:focus {
+  border-color: var(--primary);
+}
+
+.onboarding-theme-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.onboarding-theme-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 12px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+  color: var(--text-muted);
+}
+
+.onboarding-theme-btn:hover {
+  border-color: var(--primary);
+}
+
+.onboarding-theme-btn.selected {
+  border-color: var(--primary);
+  background-color: #eef2ff;
+  color: var(--primary);
+}
+
+.theme-btn-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.onboarding-theme-btn.selected .theme-btn-title {
+  color: var(--primary);
+}
+
+.theme-btn-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.onboarding-start-btn {
+  width: 100%;
+  padding: 12px;
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  margin-top: 8px;
+}
+
+.onboarding-start-btn:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+}
+
+.onboarding-start-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.onboarding-error {
+  color: #e53e3e;
+  font-size: 13px;
+  margin: 0;
+  text-align: center;
+}

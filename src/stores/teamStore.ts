@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Team, TeamDetail } from "../services/types";
 import * as teamCmds from "../services/commands/teamCommands";
+import { logger } from "../services/logger";
 
 interface TeamState {
   teams: Team[];
@@ -39,7 +40,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       const teams = await teamCmds.listTeams();
       set({ teams });
     } catch (e) {
-      console.error("Failed to load teams:", e);
+      logger.error("Failed to load teams:", e);
       set({ teams: [] });
     }
   },
@@ -60,7 +61,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       await teamCmds.updateTeam(id, updates);
       await get().loadTeams();
     } catch (e) {
-      console.error("Failed to update team:", e);
+      logger.error("Failed to update team:", e);
     }
   },
 
@@ -73,7 +74,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       }
       await get().loadTeams();
     } catch (e) {
-      console.error("Failed to delete team:", e);
+      logger.error("Failed to delete team:", e);
     }
   },
 
@@ -81,7 +82,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     try {
       await teamCmds.addTeamMember(teamId, agentId, role);
     } catch (e) {
-      console.error("Failed to add team member:", e);
+      logger.error("Failed to add team member:", e);
     }
   },
 
@@ -89,7 +90,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     try {
       await teamCmds.removeTeamMember(teamId, agentId);
     } catch (e) {
-      console.error("Failed to remove team member:", e);
+      logger.error("Failed to remove team member:", e);
     }
   },
 

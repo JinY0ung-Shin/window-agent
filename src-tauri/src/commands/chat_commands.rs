@@ -141,9 +141,10 @@ pub fn create_memory_note(
     agent_id: String,
     title: String,
     content: String,
-) -> Result<serde_json::Value, String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    let note = vm.create_note(&agent_id, None, "knowledge", &title, &content, vec![], vec![])?;
+) -> Result<serde_json::Value, AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
+    let note = vm.create_note(&agent_id, None, "knowledge", &title, &content, vec![], vec![])
+        .map_err(AppError::Vault)?;
     Ok(serde_json::json!({
         "id": note.id,
         "agent_id": note.agent,
@@ -158,8 +159,8 @@ pub fn create_memory_note(
 pub fn list_memory_notes(
     vault: State<'_, VaultState>,
     agent_id: String,
-) -> Result<Vec<serde_json::Value>, String> {
-    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<Vec<serde_json::Value>, AppError> {
+    let vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     let summaries = vm.list_notes(Some(&agent_id), None, None);
     Ok(summaries
         .into_iter()
@@ -185,8 +186,8 @@ pub fn update_memory_note(
     id: String,
     title: Option<String>,
     content: Option<String>,
-) -> Result<serde_json::Value, String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+) -> Result<serde_json::Value, AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
     let note = vm.update_note(
         &id,
         "user",
@@ -195,7 +196,7 @@ pub fn update_memory_note(
         None,
         None,
         None,
-    )?;
+    ).map_err(AppError::Vault)?;
     Ok(serde_json::json!({
         "id": note.id,
         "agent_id": note.agent,
@@ -210,9 +211,9 @@ pub fn update_memory_note(
 pub fn delete_memory_note(
     vault: State<'_, VaultState>,
     id: String,
-) -> Result<(), String> {
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    vm.delete_note(&id, "user")
+) -> Result<(), AppError> {
+    let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
+    vm.delete_note(&id, "user").map_err(AppError::Vault)
 }
 
 // ── Tool Call Logs ──

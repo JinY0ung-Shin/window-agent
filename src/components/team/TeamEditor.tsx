@@ -4,6 +4,7 @@ import { X, Bot } from "lucide-react";
 import { useTeamStore } from "../../stores/teamStore";
 import { useAgentStore } from "../../stores/agentStore";
 import type { TeamDetail } from "../../services/types";
+import { logger } from "../../services/logger";
 
 export default function TeamEditor() {
   const { t } = useTranslation("team");
@@ -38,7 +39,7 @@ export default function TeamEditor() {
             .map((m) => m.agent_id),
         );
         setMemberIds(ids);
-      }).catch(() => {});
+      }).catch((e) => logger.debug("Failed to load team detail for editing", e));
     } else {
       setName("");
       setDescription("");
@@ -102,7 +103,7 @@ export default function TeamEditor() {
 
       closeTeamEditor();
     } catch (e) {
-      console.error("Failed to save team:", e);
+      logger.error("Failed to save team:", e);
     } finally {
       setSaving(false);
     }

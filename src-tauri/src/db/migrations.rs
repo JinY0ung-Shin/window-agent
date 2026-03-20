@@ -173,10 +173,7 @@ pub fn needs_reset(db_path: &str) -> bool {
         Ok(c) => c,
         Err(_) => return true,
     };
-    match get_schema_version(&conn) {
-        Some(v) if v == SCHEMA_VERSION => false,
-        _ => true,
-    }
+    !matches!(get_schema_version(&conn), Some(v) if v == SCHEMA_VERSION)
 }
 
 /// Run idempotent incremental migrations for columns added after SCHEMA_VERSION 1.

@@ -144,7 +144,7 @@ export interface NativeToolDef {
   description: string;
   category: string;
   default_tier: ToolPermissionTier;
-  parameters: Record<string, any>;
+  parameters: Record<string, unknown>;
 }
 
 // ── Tool calling types ──────────────────────────────
@@ -214,7 +214,7 @@ export interface TeamRun {
   team_id: string;
   conversation_id: string;
   leader_agent_id: string;
-  status: 'running' | 'waiting_reports' | 'done' | 'failed' | 'cancelled';
+  status: 'running' | 'waiting_reports' | 'synthesizing' | 'completed' | 'failed' | 'cancelled';
   started_at: string;
   finished_at: string | null;
 }
@@ -225,7 +225,7 @@ export interface TeamTask {
   agent_id: string;
   request_id: string | null;
   task_description: string;
-  status: 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
   parent_message_id: string | null;
   result_summary: string | null;
   started_at: string | null;

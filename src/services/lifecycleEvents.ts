@@ -19,6 +19,8 @@ export type LifecycleEvent =
   | { type: "pre-compact"; conversationId: string; agentId: string; tokensUsed: number; tokenLimit: number }
   | { type: "heartbeat:tick"; agentId: string };
 
+import { logger } from "./logger";
+
 export type LifecycleListener = (event: LifecycleEvent) => void | Promise<void>;
 
 // ── Internal state ───────────────────────────────────
@@ -49,10 +51,10 @@ export function emitLifecycleEvent(event: LifecycleEvent): void {
       const result = listener(event);
       // Swallow async errors to prevent cascading failures
       if (result instanceof Promise) {
-        result.catch((e) => console.warn(`[lifecycle] ${event.type} listener error:`, e));
+        result.catch((e) => logger.warn(`[lifecycle] ${event.type} listener error:`, e));
       }
     } catch (e) {
-      console.warn(`[lifecycle] ${event.type} listener error:`, e);
+      logger.warn(`[lifecycle] ${event.type} listener error:`, e);
     }
   }
 }

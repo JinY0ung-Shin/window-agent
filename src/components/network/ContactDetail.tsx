@@ -9,6 +9,7 @@ import {
   p2pRemoveContact,
   p2pDialPeer,
 } from "../../services/commands/p2pCommands";
+import { logger } from "../../services/logger";
 
 export default function ContactDetail() {
   const { t } = useTranslation("network");
@@ -143,7 +144,8 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
     setDialState("dialing");
     try {
       await p2pDialPeer(contact.id);
-    } catch {
+    } catch (e) {
+      logger.debug("Dial peer failed", e);
       setDialState("idle");
       return;
     }

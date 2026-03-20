@@ -116,9 +116,9 @@ impl SystemMemoryManager {
                 let created_at = metadata
                     .modified()
                     .ok()
-                    .and_then(|t| {
+                    .map(|t| {
                         let datetime: chrono::DateTime<chrono::Utc> = t.into();
-                        Some(datetime.format("%Y-%m-%dT%H:%M:%S").to_string())
+                        datetime.format("%Y-%m-%dT%H:%M:%S").to_string()
                     })
                     .unwrap_or_default();
                 Some(DigestMeta {

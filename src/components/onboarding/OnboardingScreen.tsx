@@ -6,6 +6,7 @@ import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { seedManagerAfterOnboarding } from "../../services/initService";
 import type { UITheme } from "../../stores/settingsStore";
 import type { Locale } from "../../i18n";
+import { logger } from "../../services/logger";
 
 type OnboardingStep = "language" | "setup";
 
@@ -37,7 +38,8 @@ export default function OnboardingScreen() {
     try {
       await seedManagerAfterOnboarding(selectedLocale);
       initializeBranding(companyName.trim(), selectedTheme, selectedLocale);
-    } catch {
+    } catch (e) {
+      logger.error("Onboarding seed failed:", e);
       setSeedError(true);
       setSeeding(false);
     }

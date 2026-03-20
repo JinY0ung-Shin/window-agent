@@ -106,7 +106,7 @@ export const useTeamRunStore = create<TeamRunState>((set, get) => ({
         (event) => {
           get().updateTaskStatus(
             event.payload.task_id,
-            "done",
+            "completed",
             event.payload.result_summary,
           );
         },

@@ -1,6 +1,7 @@
 use super::error::DbError;
 use super::models::{
-    CreateTeamRequest, Team, TeamDetail, TeamMember, TeamRun, TeamTask, UpdateTeamRequest,
+    CreateTeamRequest, TaskStatus, Team, TeamDetail, TeamMember, TeamRun, TeamRunStatus, TeamTask,
+    UpdateTeamRequest,
 };
 use super::Database;
 use chrono::Utc;
@@ -124,19 +125,19 @@ pub fn create_team_impl(
     })
 }
 
-pub fn get_team_detail_impl(db: &Database, team_id: String) -> Result<TeamDetail, DbError> {
+pub fn get_team_detail_impl(db: &Database, team_id: &str) -> Result<TeamDetail, DbError> {
     db.with_conn(|conn| {
         let team = conn.query_row(
             &format!("{TEAM_COLUMNS} WHERE id = ?1"),
             rusqlite::params![team_id],
-            |row| row_to_team(row),
+            row_to_team,
         )?;
 
         let mut stmt = conn.prepare(
             &format!("{MEMBER_COLUMNS} WHERE team_id = ?1 ORDER BY joined_at ASC"),
         )?;
         let members = stmt
-            .query_map(rusqlite::params![team_id], |row| row_to_member(row))?
+            .query_map(rusqlite::params![team_id], row_to_member)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(TeamDetail { team, members })
@@ -148,14 +149,14 @@ pub fn list_teams_impl(db: &Database) -> Result<Vec<Team>, DbError> {
         let mut stmt = conn.prepare(
             &format!("{TEAM_COLUMNS} ORDER BY created_at ASC"),
         )?;
-        let rows = stmt.query_map([], |row| row_to_team(row))?;
+        let rows = stmt.query_map([], row_to_team)?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
 
 pub fn update_team_impl(
     db: &Database,
-    team_id: String,
+    team_id: &str,
     request: UpdateTeamRequest,
 ) -> Result<Team, DbError> {
     db.with_conn(|conn| {
@@ -164,7 +165,7 @@ pub fn update_team_impl(
         let current = conn.query_row(
             &format!("{TEAM_COLUMNS} WHERE id = ?1"),
             rusqlite::params![team_id],
-            |row| row_to_team(row),
+            row_to_team,
         )?;
 
         let name = request.name.unwrap_or(current.name);
@@ -179,13 +180,13 @@ pub fn update_team_impl(
         let updated = conn.query_row(
             &format!("{TEAM_COLUMNS} WHERE id = ?1"),
             rusqlite::params![team_id],
-            |row| row_to_team(row),
+            row_to_team,
         )?;
         Ok(updated)
     })
 }
 
-pub fn delete_team_impl(db: &Database, team_id: String) -> Result<(), DbError> {
+pub fn delete_team_impl(db: &Database, team_id: &str) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute("DELETE FROM teams WHERE id = ?1", rusqlite::params![team_id])?;
         Ok(())
@@ -227,8 +228,8 @@ pub fn add_team_member_impl(
 
 pub fn remove_team_member_impl(
     db: &Database,
-    team_id: String,
-    agent_id: String,
+    team_id: &str,
+    agent_id: &str,
 ) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute(
@@ -254,7 +255,7 @@ pub fn create_team_run_impl(
             team_id,
             conversation_id,
             leader_agent_id,
-            status: "running".to_string(),
+            status: TeamRunStatus::Running,
             started_at: now,
             finished_at: None,
         };
@@ -277,8 +278,8 @@ pub fn create_team_run_impl(
 
 pub fn update_team_run_status_impl(
     db: &Database,
-    run_id: String,
-    status: String,
+    run_id: &str,
+    status: TeamRunStatus,
     finished_at: Option<String>,
 ) -> Result<(), DbError> {
     db.with_conn(|conn| {
@@ -290,12 +291,12 @@ pub fn update_team_run_status_impl(
     })
 }
 
-pub fn get_team_run_impl(db: &Database, run_id: String) -> Result<TeamRun, DbError> {
+pub fn get_team_run_impl(db: &Database, run_id: &str) -> Result<TeamRun, DbError> {
     db.with_conn(|conn| {
         let run = conn.query_row(
             &format!("{RUN_COLUMNS} WHERE id = ?1"),
             rusqlite::params![run_id],
-            |row| row_to_run(row),
+            row_to_run,
         )?;
         Ok(run)
     })
@@ -306,7 +307,7 @@ pub fn get_running_runs_impl(db: &Database) -> Result<Vec<TeamRun>, DbError> {
         let mut stmt = conn.prepare(
             &format!("{RUN_COLUMNS} WHERE status = 'running' ORDER BY started_at ASC"),
         )?;
-        let rows = stmt.query_map([], |row| row_to_run(row))?;
+        let rows = stmt.query_map([], row_to_run)?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
@@ -328,7 +329,7 @@ pub fn create_team_task_impl(
             agent_id,
             request_id: None,
             task_description,
-            status: "queued".to_string(),
+            status: TaskStatus::Queued,
             parent_message_id,
             result_summary: None,
             started_at: Some(now),
@@ -354,8 +355,8 @@ pub fn create_team_task_impl(
 
 pub fn update_team_task_impl(
     db: &Database,
-    task_id: String,
-    status: Option<String>,
+    task_id: &str,
+    status: Option<TaskStatus>,
     request_id: Option<String>,
     result_summary: Option<String>,
     finished_at: Option<String>,
@@ -364,7 +365,7 @@ pub fn update_team_task_impl(
         let current = conn.query_row(
             &format!("{TASK_COLUMNS} WHERE id = ?1"),
             rusqlite::params![task_id],
-            |row| row_to_task(row),
+            row_to_task,
         )?;
 
         let status = status.unwrap_or(current.status);
@@ -380,18 +381,18 @@ pub fn update_team_task_impl(
         let updated = conn.query_row(
             &format!("{TASK_COLUMNS} WHERE id = ?1"),
             rusqlite::params![task_id],
-            |row| row_to_task(row),
+            row_to_task,
         )?;
         Ok(updated)
     })
 }
 
-pub fn get_team_tasks_impl(db: &Database, run_id: String) -> Result<Vec<TeamTask>, DbError> {
+pub fn get_team_tasks_impl(db: &Database, run_id: &str) -> Result<Vec<TeamTask>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
             &format!("{TASK_COLUMNS} WHERE run_id = ?1 ORDER BY started_at ASC"),
         )?;
-        let rows = stmt.query_map(rusqlite::params![run_id], |row| row_to_task(row))?;
+        let rows = stmt.query_map(rusqlite::params![run_id], row_to_task)?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
@@ -452,7 +453,7 @@ mod tests {
         let db = setup_db();
         let leader_id = create_test_agent(&db, "leader", "Leader");
         let team = create_team_impl(&db, default_create_team(&leader_id)).unwrap();
-        let detail = get_team_detail_impl(&db, team.id).unwrap();
+        let detail = get_team_detail_impl(&db, &team.id).unwrap();
         assert_eq!(detail.members.len(), 1);
         assert_eq!(detail.members[0].agent_id, leader_id);
         assert_eq!(detail.members[0].role, "leader");
@@ -473,7 +474,7 @@ mod tests {
             },
         )
         .unwrap();
-        let detail = get_team_detail_impl(&db, team.id).unwrap();
+        let detail = get_team_detail_impl(&db, &team.id).unwrap();
         assert_eq!(detail.members.len(), 2);
     }
 
@@ -482,7 +483,7 @@ mod tests {
         let db = setup_db();
         let leader_id = create_test_agent(&db, "leader", "Leader");
         let team = create_team_impl(&db, default_create_team(&leader_id)).unwrap();
-        let detail = get_team_detail_impl(&db, team.id.clone()).unwrap();
+        let detail = get_team_detail_impl(&db, &team.id).unwrap();
         assert_eq!(detail.team.id, team.id);
         assert!(!detail.members.is_empty());
     }
@@ -503,7 +504,7 @@ mod tests {
         let team = create_team_impl(&db, default_create_team(&leader_id)).unwrap();
         let updated = update_team_impl(
             &db,
-            team.id,
+            &team.id,
             UpdateTeamRequest {
                 name: Some("Updated".into()),
                 description: None,
@@ -520,7 +521,7 @@ mod tests {
         let db = setup_db();
         let leader_id = create_test_agent(&db, "leader", "Leader");
         let team = create_team_impl(&db, default_create_team(&leader_id)).unwrap();
-        delete_team_impl(&db, team.id).unwrap();
+        delete_team_impl(&db, &team.id).unwrap();
         let teams = list_teams_impl(&db).unwrap();
         assert!(teams.is_empty());
     }
@@ -531,7 +532,7 @@ mod tests {
         let leader_id = create_test_agent(&db, "leader", "Leader");
         let team = create_team_impl(&db, default_create_team(&leader_id)).unwrap();
         let team_id = team.id.clone();
-        delete_team_impl(&db, team_id.clone()).unwrap();
+        delete_team_impl(&db, &team_id).unwrap();
 
         let conn = db.conn.lock().unwrap();
         let count: i64 = conn
@@ -557,11 +558,11 @@ mod tests {
             .unwrap();
         assert_eq!(member.agent_id, member_id);
 
-        let detail = get_team_detail_impl(&db, team.id.clone()).unwrap();
+        let detail = get_team_detail_impl(&db, &team.id).unwrap();
         assert_eq!(detail.members.len(), 2);
 
-        remove_team_member_impl(&db, team.id.clone(), member_id).unwrap();
-        let detail = get_team_detail_impl(&db, team.id).unwrap();
+        remove_team_member_impl(&db, &team.id, &member_id).unwrap();
+        let detail = get_team_detail_impl(&db, &team.id).unwrap();
         assert_eq!(detail.members.len(), 1);
     }
 
@@ -591,9 +592,9 @@ mod tests {
             leader_id.clone(),
         )
         .unwrap();
-        assert_eq!(run.status, "running");
+        assert_eq!(run.status, TeamRunStatus::Running);
 
-        let fetched = get_team_run_impl(&db, run.id.clone()).unwrap();
+        let fetched = get_team_run_impl(&db, &run.id).unwrap();
         assert_eq!(fetched.id, run.id);
     }
 
@@ -606,10 +607,10 @@ mod tests {
         let run = create_team_run_impl(&db, team.id, conv.id, leader_id).unwrap();
 
         let now = Utc::now().to_rfc3339();
-        update_team_run_status_impl(&db, run.id.clone(), "completed".into(), Some(now)).unwrap();
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::Completed, Some(now)).unwrap();
 
-        let updated = get_team_run_impl(&db, run.id).unwrap();
-        assert_eq!(updated.status, "completed");
+        let updated = get_team_run_impl(&db, &run.id).unwrap();
+        assert_eq!(updated.status, TeamRunStatus::Completed);
         assert!(updated.finished_at.is_some());
     }
 
@@ -627,8 +628,8 @@ mod tests {
         // Complete the run
         update_team_run_status_impl(
             &db,
-            running[0].id.clone(),
-            "completed".into(),
+            &running[0].id,
+            TeamRunStatus::Completed,
             Some(Utc::now().to_rfc3339()),
         )
         .unwrap();
@@ -654,9 +655,9 @@ mod tests {
             None,
         )
         .unwrap();
-        assert_eq!(task.status, "queued");
+        assert_eq!(task.status, TaskStatus::Queued);
 
-        let tasks = get_team_tasks_impl(&db, run.id).unwrap();
+        let tasks = get_team_tasks_impl(&db, &run.id).unwrap();
         assert_eq!(tasks.len(), 1);
         assert_eq!(tasks[0].task_description, "Do something");
     }
@@ -672,15 +673,15 @@ mod tests {
 
         let updated = update_team_task_impl(
             &db,
-            task.id,
-            Some("completed".into()),
+            &task.id,
+            Some(TaskStatus::Completed),
             Some("req-123".into()),
             Some("Done successfully".into()),
             Some(Utc::now().to_rfc3339()),
         )
         .unwrap();
 
-        assert_eq!(updated.status, "completed");
+        assert_eq!(updated.status, TaskStatus::Completed);
         assert_eq!(updated.request_id, Some("req-123".into()));
         assert_eq!(updated.result_summary, Some("Done successfully".into()));
         assert!(updated.finished_at.is_some());
@@ -697,15 +698,15 @@ mod tests {
 
         let updated = update_team_task_impl(
             &db,
-            task.id,
-            Some("running".into()),
+            &task.id,
+            Some(TaskStatus::Running),
             None,
             None,
             None,
         )
         .unwrap();
 
-        assert_eq!(updated.status, "running");
+        assert_eq!(updated.status, TaskStatus::Running);
         assert_eq!(updated.request_id, None); // preserved as None
     }
 }

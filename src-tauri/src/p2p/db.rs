@@ -188,7 +188,7 @@ pub fn update_contact(
             return Ok(());
         }
 
-        sets.push(format!("updated_at = datetime('now')"));
+        sets.push("updated_at = datetime('now')".to_string());
         let id_param_idx = params.len() + 1;
         params.push(Box::new(id.to_string()));
 
@@ -480,7 +480,7 @@ pub fn update_outbox_retry(
     })
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // TODO: call from outbox GC or manual message cancellation
 pub fn delete_outbox_entry(db: &Database, id: &str) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute("DELETE FROM outbox WHERE id = ?1", rusqlite::params![id])?;

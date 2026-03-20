@@ -12,6 +12,7 @@ import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
 import { useMessageStore } from "./messageStore";
 import { resetTransientChatState, resetChatContext } from "./resetHelper";
+import { logger } from "../services/logger";
 
 interface ConversationState {
   conversations: Conversation[];
@@ -64,7 +65,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     try {
       const content = await cmds.readConsolidatedMemory(agentId);
       set({ consolidatedMemory: content ?? null });
-    } catch {
+    } catch (e) {
+      logger.debug("Consolidated memory unavailable", e);
       set({ consolidatedMemory: null });
     }
   },
@@ -76,11 +78,11 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
         // Reload consolidated memory after consolidation completes
         get().loadConsolidatedMemory(agentId);
       })
-      .catch(() => {});
+      .catch((e) => logger.debug("Background consolidation failed", e));
   },
 
   initConsolidationRecovery: () => {
-    recoverPendingConsolidations().catch(() => {});
+    recoverPendingConsolidations().catch((e) => logger.debug("Consolidation recovery failed", e));
   },
 
   getCurrentLearningMode: () => {
@@ -106,7 +108,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
             set({ learningModeWarning: true });
             return;
           }
-        } catch { /* proceed if config unreadable */ }
+        } catch (e) { logger.debug("Tool config unreadable for learning mode check", e); }
       }
     }
 
@@ -117,8 +119,8 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       try {
         await cmds.setLearningMode(currentConversationId, newValue);
         set({ currentLearningMode: newValue });
-      } catch {
-        // Rollback on failure — state unchanged
+      } catch (e) {
+        logger.debug("Failed to persist learning mode, state unchanged", e);
       }
     } else {
       set({ draftLearningMode: !draftLearningMode });

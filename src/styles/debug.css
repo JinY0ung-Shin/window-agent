@@ -1,0 +1,279 @@
+/* ── Debug Panel ── */
+.debug-toggle-btn {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+  transition: color 0.15s, background 0.15s;
+}
+
+.debug-toggle-btn:hover {
+  color: var(--primary);
+  background: var(--bg-color);
+}
+
+.debug-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 360px;
+  height: 100vh;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s ease-in-out;
+}
+
+.debug-panel.open {
+  transform: translateX(0);
+}
+
+.debug-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.debug-panel-header h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.debug-tab-bar {
+  display: flex;
+  gap: 2px;
+}
+
+.debug-tab {
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.debug-tab.active {
+  color: var(--text-main);
+  border-bottom-color: var(--primary);
+}
+
+.debug-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 4px;
+  border-radius: 9px;
+  background: var(--primary);
+  color: white;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.debug-clear-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.debug-clear-btn:hover:not(:disabled) {
+  background: var(--bg-color);
+}
+
+.debug-clear-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.debug-panel-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.debug-panel-close:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.debug-panel-filters {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.debug-filter-select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-color);
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+.debug-filter-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.debug-status-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.debug-status-checkbox input {
+  width: 12px;
+  height: 12px;
+}
+
+.debug-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.debug-panel-logs {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.debug-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  padding: 32px 16px;
+}
+
+.debug-log-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.debug-log-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 0.78rem;
+  transition: background 0.1s;
+}
+
+.debug-log-summary:hover {
+  background: var(--hover, #f1f5f9);
+}
+
+.debug-log-expand {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.debug-log-time {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.debug-log-tool {
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.debug-status-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  text-transform: capitalize;
+}
+
+.debug-log-duration {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  flex-shrink: 0;
+}
+
+.debug-log-detail {
+  padding: 8px 16px 12px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.debug-log-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.debug-log-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.debug-code-block {
+  font-family: "SF Mono", "Fira Code", "Fira Mono", Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+  color: var(--text);
+  margin: 0;
+}
