@@ -11,7 +11,6 @@ import TeamPanel from "../team/TeamPanel";
 import TeamChatWindow from "../team/TeamChatWindow";
 
 import { useDebugStore } from "../../stores/debugStore";
-import { useMemoryStore } from "../../stores/memoryStore";
 import { useVaultStore } from "../../stores/vaultStore";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useNavigationStore } from "../../stores/navigationStore";
@@ -40,12 +39,11 @@ export default function MainLayout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Listen for vault file changes (external Obsidian edits) and refresh stores
+  // Listen for vault file changes (external Obsidian edits) and refresh vault store
   useEffect(() => {
     const refreshStores = () => {
-      const agentId = useMemoryStore.getState().currentAgentId;
+      const agentId = useVaultStore.getState().activeAgent;
       if (agentId) {
-        useMemoryStore.getState().loadNotes(agentId);
         useVaultStore.getState().loadNotes(agentId);
       }
     };

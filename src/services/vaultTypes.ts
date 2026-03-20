@@ -31,6 +31,7 @@ export interface VaultNoteSummary {
   tags: string[];
   confidence: number;
   scope: string | null;
+  sourceConversation: string | null;
   created: string;
   updated: string;
 }

@@ -4,6 +4,7 @@ import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
+import { useVaultStore } from "./vaultStore";
 import { useSkillStore } from "./skillStore";
 import { useBootstrapStore } from "./bootstrapStore";
 import { useToolRunStore } from "./toolRunStore";
@@ -253,14 +254,18 @@ async function streamOneTurn(
   const currentMessages = msg().messages;
   const consolidatedMem = conv().consolidatedMemory;
   const isLearning = conv().getCurrentLearningMode();
+  const vaultNotes = useVaultStore.getState().notes;
   const memNotes = useMemoryStore.getState().notes;
+  const notesTokens = vaultNotes.length > 0
+    ? Math.min(vaultNotes.reduce((s, n) => s + estimateTokens(n.title + (n.bodyPreview ?? "")) + 4, 0), isLearning ? 1500 : 500)
+    : Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), isLearning ? 1500 : 500);
   const systemOverhead =
     estimateTokens(baseSystemPrompt) +
     (skillsSection ? estimateTokens(skillsSection) : 0) +
     (bootContent ? estimateTokens(bootContent) : 0) +
     (consolidatedMem ? estimateTokens(consolidatedMem) : 0) +
-    (consolidatedMem && isLearning ? Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), 700) :
-     !consolidatedMem ? Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), isLearning ? 1500 : 500) : 0) +
+    (consolidatedMem && isLearning ? Math.min(notesTokens, 700) :
+     !consolidatedMem ? notesTokens : 0) +
     (workspacePath ? 200 : 0) +
     (isLearning ? 300 : 0) +
     500;
@@ -286,6 +291,7 @@ async function streamOneTurn(
     skillsSection,
     bootContent,
     memoryNotes: useMemoryStore.getState().notes,
+    vaultNotes: useVaultStore.getState().notes,
     workspacePath,
     learningMode,
     consolidatedMemory,
@@ -566,11 +572,24 @@ async function sendNormalMessage() {
         },
       });
 
-      // Refresh memory store after tool execution so the next turn's prompt
-      // includes any notes the agent just created/updated/deleted via memory_note tool.
-      const memAgentId = useAgentStore.getState().selectedAgentId;
-      if (memAgentId) {
-        await useMemoryStore.getState().loadNotes(memAgentId);
+      // Refresh stores based on tool call scopes after execution
+      const agentIdForRefresh = useAgentStore.getState().selectedAgentId;
+      if (agentIdForRefresh) {
+        const hasVaultChange = parsedToolCalls.some((tc) => {
+          if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
+          try { return JSON.parse(tc.arguments).scope === "vault"; } catch { return false; }
+        });
+        const hasPersonaChange = parsedToolCalls.some((tc) => {
+          if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
+          try { return JSON.parse(tc.arguments).scope === "persona"; } catch { return false; }
+        });
+        if (hasVaultChange) {
+          await useVaultStore.getState().loadNotes(agentIdForRefresh);
+        }
+        if (hasPersonaChange) {
+          const agent = useAgentStore.getState().agents.find((a) => a.id === agentIdForRefresh);
+          if (agent) invalidatePersonaCache(agent.folder_name);
+        }
       }
 
       currentRequestId = `req-${Date.now()}`;

@@ -94,7 +94,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     const { currentConversationId, currentLearningMode, draftLearningMode } = get();
     const wantEnable = currentConversationId ? !currentLearningMode : !draftLearningMode;
 
-    // Check if memory_note is available for the selected agent before enabling
+    // Check if write_file is available for the selected agent before enabling
     if (wantEnable) {
       const agent = useAgentStore.getState().agents.find(
         (a) => a.id === useAgentStore.getState().selectedAgentId,
@@ -102,9 +102,9 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       if (agent) {
         try {
           const config = await readToolConfig(agent.folder_name);
-          const entry = config?.native?.memory_note;
+          const entry = config?.native?.write_file;
           if (entry && (!entry.enabled || entry.tier === "deny")) {
-            // memory_note is disabled/deny — cannot use learning mode
+            // write_file is disabled/deny — cannot use learning mode
             set({ learningModeWarning: true });
             return;
           }

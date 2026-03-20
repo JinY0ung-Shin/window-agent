@@ -7,7 +7,7 @@ use super::schema::native_tool_definitions;
 
 // ── Native tool definitions & config commands ──
 
-/// Returns all 14 native tool definitions with full schemas.
+/// Returns all native tool definitions with full schemas.
 #[tauri::command]
 pub fn get_native_tools() -> Result<Vec<super::schema::NativeToolDef>, AppError> {
     Ok(native_tool_definitions())

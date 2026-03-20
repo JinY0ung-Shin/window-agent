@@ -15,7 +15,9 @@ import {
   readPersonaFiles,
   assembleManagerPrompt,
   getEffectiveSettings,
+  invalidatePersonaCache,
 } from "../services/personaService";
+import { useVaultStore } from "./vaultStore";
 import { buildConversationContext } from "../services/chatHelpers";
 import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
 import { readToolConfig } from "../services/nativeToolRegistry";
@@ -679,6 +681,27 @@ async function sendTeamMessageFlow() {
         });
 
         const savedToolMsgs = await executeToolPipeline(classification, convId);
+
+        // Refresh stores based on tool call scopes
+        const teamAgentId = useAgentStore.getState().selectedAgentId;
+        if (teamAgentId) {
+          const hasVaultChange = parsedToolCalls.some((tc) => {
+            if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
+            try { return JSON.parse(tc.arguments).scope === "vault"; } catch { return false; }
+          });
+          const hasPersonaChange = parsedToolCalls.some((tc) => {
+            if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
+            try { return JSON.parse(tc.arguments).scope === "persona"; } catch { return false; }
+          });
+          if (hasVaultChange) {
+            await useVaultStore.getState().loadNotes(teamAgentId);
+          }
+          if (hasPersonaChange) {
+            const agent = useAgentStore.getState().agents.find((a) => a.id === teamAgentId);
+            if (agent) invalidatePersonaCache(agent.folder_name);
+          }
+        }
+
         useToolRunStore.getState().resetToolState();
 
         // Create next pending message for continued loop

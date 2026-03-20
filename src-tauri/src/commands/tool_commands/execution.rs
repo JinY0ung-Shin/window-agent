@@ -1,20 +1,25 @@
 use crate::commands::vault_commands::VaultState;
+use crate::db::agent_operations;
 use crate::db::models::BrowserArtifact;
 use crate::db::{operations, Database};
 use crate::error::AppError;
 use crate::utils::path_security::{validate_no_traversal, validate_tool_roots};
-use crate::vault::strip_title_heading;
+use crate::vault::note::{compute_revision, parse_frontmatter, serialize_note, Frontmatter};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use tauri::{AppHandle, Manager, State};
 use tokio::time::{timeout, Duration};
 
+use super::config::get_agents_dir_for_tools;
 use super::http::tool_http_request;
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(30);
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const BROWSER_TOOL_TIMEOUT: Duration = Duration::from_secs(360); // 6 min: allows for Chromium install on first run
+
+/// Allowed persona files for the persona scope.
+const ALLOWED_PERSONA_FILES: &[&str] = &["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "BOOT.md"];
 
 /// Result returned by execute_tool to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,6 +36,87 @@ pub struct ToolExecutionResult {
 /// Delegates to utils::path_security::validate_tool_roots.
 fn validate_path(raw_path: &str, allowed_roots: &[PathBuf]) -> Result<PathBuf, String> {
     validate_tool_roots(raw_path, allowed_roots)
+}
+
+// ── Scope resolution ──
+
+/// Resolved scope information for file tools.
+struct ScopeResolution {
+    root: PathBuf,
+    allowed_roots: Vec<PathBuf>,
+    /// If set, only these filenames are accessible (persona scope).
+    allowed_filenames: Option<Vec<&'static str>>,
+    /// The agent_id from the conversation (needed for vault operations).
+    agent_id: String,
+}
+
+/// Resolve scope to root directory, allowed roots, and optional filename whitelist.
+fn resolve_scope(
+    app: &AppHandle,
+    db: &Database,
+    conversation_id: &str,
+    scope: &str,
+) -> Result<ScopeResolution, String> {
+    let conv = operations::get_conversation_detail_impl(db, conversation_id.to_string())
+        .map_err(|e| format!("Failed to get conversation: {}", e))?;
+
+    validate_no_traversal(&conv.agent_id, "agent_id")?;
+
+    match scope {
+        "workspace" => {
+            let workspace = resolve_workspace_path(app, db, conversation_id)?;
+            Ok(ScopeResolution {
+                root: workspace.clone(),
+                allowed_roots: vec![workspace],
+                allowed_filenames: None,
+                agent_id: conv.agent_id,
+            })
+        }
+        "persona" => {
+            let agent = agent_operations::get_agent_impl(db, conv.agent_id.clone())
+                .map_err(|e| format!("Failed to get agent: {}", e))?;
+            validate_no_traversal(&agent.folder_name, "folder_name")?;
+
+            let agents_dir = get_agents_dir_for_tools(app)?;
+            let persona_dir = agents_dir.join(&agent.folder_name);
+            std::fs::create_dir_all(&persona_dir)
+                .map_err(|e| format!("Failed to create persona directory: {}", e))?;
+
+            Ok(ScopeResolution {
+                root: persona_dir.clone(),
+                allowed_roots: vec![persona_dir],
+                allowed_filenames: Some(ALLOWED_PERSONA_FILES.to_vec()),
+                agent_id: conv.agent_id,
+            })
+        }
+        "vault" => {
+            let vault = app.state::<VaultState>();
+            let vault_path = {
+                let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+                vm.get_vault_path().to_path_buf()
+            };
+            let agent_vault = vault_path.join("agents").join(&conv.agent_id);
+
+            // Only allow access to memory-note category directories,
+            // not workspace/, archive/, or other internal vault dirs.
+            let allowed_categories = ["knowledge", "decision", "conversation", "reflection"];
+            let mut allowed_roots = Vec::new();
+            for cat in &allowed_categories {
+                let cat_dir = agent_vault.join(cat);
+                std::fs::create_dir_all(&cat_dir)
+                    .map_err(|e| format!("Failed to create vault category dir: {}", e))?;
+                allowed_roots.push(cat_dir);
+            }
+
+            Ok(ScopeResolution {
+                root: agent_vault,
+                allowed_roots,
+                allowed_filenames: None,
+                agent_id: conv.agent_id,
+            })
+        }
+        _ => Err(format!("Unknown scope: '{}'", scope)),
+    }
 }
 
 // ── Workspace path resolution ──
@@ -139,6 +225,151 @@ fn tool_list_directory(path: &str, allowed: &[PathBuf]) -> Result<serde_json::Va
     Ok(serde_json::json!({ "entries": entries }))
 }
 
+fn tool_list_directory_recursive(
+    path: &str,
+    allowed: &[PathBuf],
+) -> Result<serde_json::Value, String> {
+    let validated = validate_path(path, allowed)?;
+    let mut entries = Vec::new();
+    collect_entries_recursive(&validated, &validated, &mut entries)?;
+    Ok(serde_json::json!({ "entries": entries }))
+}
+
+fn collect_entries_recursive(
+    base: &Path,
+    current: &Path,
+    entries: &mut Vec<serde_json::Value>,
+) -> Result<(), String> {
+    let dir_entries = std::fs::read_dir(current)
+        .map_err(|e| format!("list_directory failed: {}", e))?;
+
+    for entry in dir_entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let full_path = entry.path();
+        let relative = full_path
+            .strip_prefix(base)
+            .unwrap_or(&full_path)
+            .to_string_lossy()
+            .to_string();
+        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
+        entries.push(serde_json::json!({ "name": relative, "is_dir": is_dir }));
+
+        if is_dir {
+            collect_entries_recursive(base, &full_path, entries)?;
+        }
+    }
+    Ok(())
+}
+
+// ── Vault helpers ──
+
+/// Infer note category from the vault-relative path.
+/// e.g. "decision/auth-flow.md" → "decision", "knowledge/topic.md" → "knowledge"
+fn infer_vault_category(path: &str) -> String {
+    let valid_categories = ["knowledge", "decision", "conversation", "reflection"];
+    let first_component = Path::new(path).components().next()
+        .and_then(|c| c.as_os_str().to_str())
+        .unwrap_or("knowledge");
+    if valid_categories.contains(&first_component) {
+        first_component.to_string()
+    } else {
+        "knowledge".to_string()
+    }
+}
+
+/// Strip YAML frontmatter from content if present (read-modify-write support).
+/// Allows agents to read a vault file, modify the body, and write it back
+/// without having to manually strip the frontmatter.
+fn strip_frontmatter_if_present(content: &str) -> String {
+    let trimmed = content.trim_start();
+    if trimmed.starts_with("---") {
+        // Find the closing --- delimiter
+        if let Some(end_idx) = trimmed[3..].find("\n---") {
+            let after_fm = &trimmed[3 + end_idx + 4..]; // skip past closing ---
+            return after_fm.trim_start_matches('\n').to_string();
+        }
+    }
+    content.to_string()
+}
+
+// ── Vault-specific write_file with frontmatter management ──
+
+fn tool_vault_write_file(
+    resolved_path: &str,
+    relative_path: &str,
+    body_content: &str,
+    allowed: &[PathBuf],
+    agent_id: &str,
+    conversation_id: &str,
+) -> Result<serde_json::Value, String> {
+    // Strip frontmatter if the model echoed it back from a read-modify-write loop.
+    // This allows the natural pattern: read → modify → write back.
+    let clean_content = strip_frontmatter_if_present(body_content);
+
+    let validated = validate_path(resolved_path, allowed)?;
+
+    // Ensure parent directory exists
+    if let Some(parent) = validated.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+
+    // Infer category from the relative path (knowledge/decision/conversation/reflection)
+    let note_type = infer_vault_category(relative_path);
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let revision = compute_revision(&clean_content);
+
+    let file_content = if validated.is_file() {
+        // Existing file: preserve id, agent, created from existing frontmatter
+        let existing = std::fs::read_to_string(&validated)
+            .map_err(|e| format!("Failed to read existing vault file: {}", e))?;
+        let (mut fm, _old_body) = parse_frontmatter(&existing)?;
+        fm.updated = now;
+        fm.revision = revision;
+        // Do NOT update source_conversation on edits — it would make long-lived notes
+        // eligible for archival at end of conversation. Modified notes are already
+        // tracked via tool call logs in the digest's "VAULT FILE ACTIVITY" section.
+        serialize_note(&fm, &clean_content)
+    } else {
+        // New file: generate frontmatter
+        let fm = Frontmatter {
+            id: uuid::Uuid::new_v4().to_string(),
+            agent: agent_id.to_string(),
+            note_type,
+            tags: Vec::new(),
+            confidence: 0.5,
+            created: now.clone(),
+            updated: now,
+            revision,
+            source: None,
+            aliases: Vec::new(),
+            legacy_id: None,
+            scope: None,
+            last_edited_by: None,
+            source_conversation: Some(conversation_id.to_string()),
+        };
+        serialize_note(&fm, &clean_content)
+    };
+
+    std::fs::write(&validated, &file_content)
+        .map_err(|e| format!("write_file failed: {}", e))?;
+
+    Ok(serde_json::json!({ "success": true, "path": validated.to_string_lossy() }))
+}
+
+// ── Vault index rebuild helper ──
+
+fn rebuild_vault_index(app: &AppHandle) -> Result<(), String> {
+    let vault = app.state::<VaultState>();
+    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    vm.rebuild_index().map_err(|e| format!("Failed to rebuild vault index: {}", e))?;
+    Ok(())
+}
+
 async fn tool_web_search(input: &str) -> Result<serde_json::Value, String> {
     // If input doesn't look like a URL, treat it as a search query
     let url = if input.starts_with("http://") || input.starts_with("https://") {
@@ -205,171 +436,6 @@ async fn tool_web_search(input: &str) -> Result<serde_json::Value, String> {
     };
 
     Ok(serde_json::json!({ "status": status, "body": result }))
-}
-
-fn tool_memory_note(
-    vault: &VaultState,
-    input: &serde_json::Value,
-    auto_agent_id: &str,
-    conversation_id: &str,
-) -> Result<serde_json::Value, String> {
-    let action = input["action"]
-        .as_str()
-        .ok_or("memory_note: missing 'action' field")?;
-
-    // Use agent_id from input if provided, otherwise use the auto-injected one
-    let agent_id = input["agent_id"]
-        .as_str()
-        .unwrap_or(auto_agent_id);
-
-    match action {
-        "create" => {
-            let title = input["title"]
-                .as_str()
-                .ok_or("memory_note create: missing 'title'")?;
-            let content = input["content"]
-                .as_str()
-                .ok_or("memory_note create: missing 'content'")?;
-            let scope = input.get("scope").and_then(|v| v.as_str());
-            let category = input.get("category")
-                .and_then(|v| v.as_str())
-                .unwrap_or("knowledge");
-            let tags: Vec<String> = input.get("tags")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                .unwrap_or_default();
-            let related_ids: Vec<String> = input.get("related_ids")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
-                .unwrap_or_default();
-
-            let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-            let note = vm.create_note_with_provenance(
-                agent_id,
-                scope,
-                category,
-                title,
-                content,
-                tags,
-                related_ids,
-                if conversation_id.is_empty() { None } else { Some(conversation_id) },
-            ).map_err(|e| format!("memory_note create failed: {}", e))?;
-
-            // Return legacy-compatible JSON: { id, agent_id, title, content, created_at, updated_at }
-            Ok(serde_json::json!({
-                "id": note.id,
-                "agent_id": note.agent,
-                "title": note.title,
-                "content": strip_title_heading(&note.content),
-                "created_at": note.created,
-                "updated_at": note.updated,
-            }))
-        }
-        "read" => {
-            let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-
-            if let Some(id) = input.get("id").and_then(|v| v.as_str()) {
-                // Single note read
-                let note = vm.read_note(id)
-                    .map_err(|e| format!("memory_note read failed: {}", e))?;
-                Ok(serde_json::json!({
-                    "id": note.id,
-                    "agent_id": note.agent,
-                    "title": note.title,
-                    "content": strip_title_heading(&note.content),
-                    "created_at": note.created,
-                    "updated_at": note.updated,
-                }))
-            } else {
-                // List all notes for agent
-                let summaries = vm.list_notes(Some(agent_id), None, None);
-                let items: Vec<serde_json::Value> = summaries
-                    .into_iter()
-                    .filter(|n| n.scope.as_deref() != Some("shared"))
-                    .filter_map(|n| {
-                        let full = vm.read_note(&n.id).ok()?;
-                        Some(serde_json::json!({
-                            "id": full.id,
-                            "agent_id": full.agent,
-                            "title": full.title,
-                            "content": strip_title_heading(&full.content),
-                            "created_at": full.created,
-                            "updated_at": full.updated,
-                        }))
-                    })
-                    .collect();
-                Ok(serde_json::Value::Array(items))
-            }
-        }
-        "update" => {
-            let id = input["id"]
-                .as_str()
-                .ok_or("memory_note update: missing 'id'")?;
-            let title = input.get("title").and_then(|v| v.as_str());
-            let content = input["content"].as_str();
-            let tags: Option<Vec<String>> = input.get("tags")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-            let confidence = input.get("confidence").and_then(|v| v.as_f64());
-            let add_links: Option<Vec<String>> = input.get("add_links")
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect());
-
-            let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-            let note = vm.update_note(
-                id,
-                agent_id,
-                title,
-                content,
-                tags,
-                confidence,
-                add_links,
-            ).map_err(|e| format!("memory_note update failed: {}", e))?;
-
-            Ok(serde_json::json!({
-                "id": note.id,
-                "agent_id": note.agent,
-                "title": note.title,
-                "content": strip_title_heading(&note.content),
-                "created_at": note.created,
-                "updated_at": note.updated,
-            }))
-        }
-        "delete" => {
-            let id = input["id"]
-                .as_str()
-                .ok_or("memory_note delete: missing 'id'")?;
-            // Agents cannot delete shared notes — pass agent_id as caller
-            let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-            vm.delete_note(id, agent_id)
-                .map_err(|e| format!("memory_note delete failed: {}", e))?;
-            Ok(serde_json::json!({ "success": true }))
-        }
-        "search" => {
-            let query = input["query"]
-                .as_str()
-                .ok_or("memory_note search: missing 'query'")?;
-            let scope = input.get("scope").and_then(|v| v.as_str());
-            let limit = input.get("limit").and_then(|v| v.as_u64()).map(|v| v as usize);
-
-            let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-            let mut results = vm.search(query, Some(agent_id), scope);
-            if let Some(max) = limit {
-                results.truncate(max);
-            }
-            Ok(serde_json::to_value(results).unwrap_or(serde_json::json!([])))
-        }
-        "recall" => {
-            let limit = input.get("limit")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(10) as usize;
-
-            let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-            let notes = vm.recall(agent_id, limit);
-            Ok(serde_json::to_value(notes).unwrap_or(serde_json::json!([])))
-        }
-        _ => Err(format!("memory_note: unknown action '{}'", action)),
-    }
 }
 
 // ── Dispatcher ──
@@ -466,16 +532,28 @@ async fn execute_tool_inner(
 ) -> Result<serde_json::Value, String> {
     match tool_name {
         "read_file" | "write_file" | "delete_file" | "list_directory" => {
-            // File tools are scoped to the agent's workspace directory
-            let workspace = resolve_workspace_path(app, db, conversation_id)?;
-            let ws_roots = vec![workspace.clone()];
+            let scope = input.get("scope").and_then(|v| v.as_str()).unwrap_or("workspace");
+            let resolution = resolve_scope(app, db, conversation_id, scope)?;
 
-            // Helper: resolve relative paths against the workspace root
-            let resolve_path = |raw: &str| -> String {
+            // Helper: resolve relative paths against the scope root, with optional filename whitelist
+            let resolve_and_check = |raw: &str| -> Result<String, String> {
+                if let Some(ref allowed_names) = resolution.allowed_filenames {
+                    // Persona scope: only specific filenames allowed (no subdirectories)
+                    let filename = Path::new(raw)
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or(raw);
+                    if raw.contains('/') || raw.contains('\\') || !allowed_names.contains(&filename) {
+                        return Err(format!(
+                            "File '{}' is not accessible in persona scope. Allowed: {:?}",
+                            raw, allowed_names
+                        ));
+                    }
+                }
                 if Path::new(raw).is_absolute() {
-                    raw.to_string()
+                    Ok(raw.to_string())
                 } else {
-                    workspace.join(raw).to_string_lossy().to_string()
+                    Ok(resolution.root.join(raw).to_string_lossy().to_string())
                 }
             };
 
@@ -484,7 +562,8 @@ async fn execute_tool_inner(
                     let raw = input["path"]
                         .as_str()
                         .ok_or("read_file: missing 'path' parameter")?;
-                    tool_read_file(&resolve_path(raw), &ws_roots)
+                    let resolved = resolve_and_check(raw)?;
+                    tool_read_file(&resolved, &resolution.allowed_roots)
                 }
                 "write_file" => {
                     let raw = input["path"]
@@ -493,19 +572,113 @@ async fn execute_tool_inner(
                     let content = input["content"]
                         .as_str()
                         .ok_or("write_file: missing 'content' parameter")?;
-                    tool_write_file(&resolve_path(raw), content, &ws_roots)
+                    let resolved = resolve_and_check(raw)?;
+
+                    if scope == "vault" {
+                        let result = tool_vault_write_file(
+                            &resolved,
+                            raw,
+                            content,
+                            &resolution.allowed_roots,
+                            &resolution.agent_id,
+                            conversation_id,
+                        )?;
+                        // Rebuild vault index after write
+                        rebuild_vault_index(app)?;
+                        Ok(result)
+                    } else {
+                        tool_write_file(&resolved, content, &resolution.allowed_roots)
+                    }
                 }
                 "delete_file" => {
                     let raw = input["path"]
                         .as_str()
                         .ok_or("delete_file: missing 'path' parameter")?;
-                    tool_delete_file(&resolve_path(raw), &ws_roots)
+                    let resolved = resolve_and_check(raw)?;
+                    let result = tool_delete_file(&resolved, &resolution.allowed_roots)?;
+
+                    if scope == "vault" {
+                        // Rebuild vault index after delete
+                        rebuild_vault_index(app)?;
+                    }
+                    Ok(result)
                 }
                 "list_directory" => {
                     let raw = input["path"]
                         .as_str()
                         .ok_or("list_directory: missing 'path' parameter")?;
-                    tool_list_directory(&resolve_path(raw), &ws_roots)
+                    let recursive = input.get("recursive").and_then(|v| v.as_bool()).unwrap_or(false);
+
+                    // For vault scope, listing root (".") is allowed — enumerate category dirs
+                    let is_vault_root = scope == "vault" && (raw == "." || raw.is_empty());
+
+                    let mut result = if is_vault_root {
+                        if recursive {
+                            // Recursively list all allowed category directories
+                            let mut all_entries = Vec::new();
+                            for root in &resolution.allowed_roots {
+                                if let Ok(r) = tool_list_directory_recursive(
+                                    root.to_str().unwrap_or_default(),
+                                    &[root.clone()],
+                                ) {
+                                    if let Some(entries) = r.get("entries").and_then(|v| v.as_array()) {
+                                        let cat_name = root.file_name()
+                                            .and_then(|n| n.to_str())
+                                            .unwrap_or("");
+                                        for entry in entries {
+                                            let name = entry["name"].as_str().unwrap_or("");
+                                            let is_dir = entry["is_dir"].as_bool().unwrap_or(false);
+                                            all_entries.push(serde_json::json!({
+                                                "name": format!("{}/{}", cat_name, name),
+                                                "is_dir": is_dir,
+                                            }));
+                                        }
+                                    }
+                                }
+                            }
+                            // Add category directory entries themselves
+                            let mut cat_entries: Vec<serde_json::Value> = resolution.allowed_roots.iter().map(|r| {
+                                let name = r.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                                serde_json::json!({ "name": name, "is_dir": true })
+                            }).collect();
+                            cat_entries.extend(all_entries);
+                            serde_json::json!({ "entries": cat_entries })
+                        } else {
+                            // Non-recursive: just list the category directory names
+                            let entries: Vec<serde_json::Value> = resolution.allowed_roots.iter().map(|r| {
+                                let name = r.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                                serde_json::json!({ "name": name, "is_dir": true })
+                            }).collect();
+                            serde_json::json!({ "entries": entries })
+                        }
+                    } else {
+                        // For persona scope list_directory, resolve path but skip filename check
+                        let resolved = if Path::new(raw).is_absolute() {
+                            raw.to_string()
+                        } else {
+                            resolution.root.join(raw).to_string_lossy().to_string()
+                        };
+
+                        if recursive {
+                            tool_list_directory_recursive(&resolved, &resolution.allowed_roots)?
+                        } else {
+                            tool_list_directory(&resolved, &resolution.allowed_roots)?
+                        }
+                    };
+
+                    // For persona scope, filter entries to only show allowed files
+                    if let Some(ref allowed_names) = resolution.allowed_filenames {
+                        if let Some(entries) = result.get_mut("entries").and_then(|v| v.as_array_mut()) {
+                            entries.retain(|entry| {
+                                entry["name"]
+                                    .as_str()
+                                    .map(|n| allowed_names.contains(&n))
+                                    .unwrap_or(false)
+                            });
+                        }
+                    }
+
+                    Ok(result)
                 }
                 _ => unreachable!(),
             }
@@ -516,14 +689,6 @@ async fn execute_tool_inner(
                 .or_else(|| input["query"].as_str())
                 .ok_or("web_search: missing 'url' or 'query' parameter")?;
             tool_web_search(url).await
-        }
-        "memory_note" => {
-            // Auto-inject agent_id from conversation so LLM doesn't need to know the DB ID
-            let agent_id = operations::get_conversation_detail_impl(db, conversation_id.to_string())
-                .map(|c| c.agent_id)
-                .unwrap_or_default();
-            let vault = app.state::<VaultState>();
-            tool_memory_note(&vault, input, &agent_id, conversation_id)
         }
 
         // ── Browser automation tools ──
@@ -801,119 +966,156 @@ mod tests {
         assert!(result.is_err());
     }
 
-    fn make_test_vault() -> (TempDir, VaultState) {
+    #[test]
+    fn test_list_directory_recursive() {
         let tmp = TempDir::new().unwrap();
-        let vm = crate::vault::VaultManager::new(tmp.path().to_path_buf()).unwrap();
-        (tmp, std::sync::Mutex::new(vm))
+        fs::write(tmp.path().join("root.txt"), "").unwrap();
+        let sub = tmp.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("nested.txt"), "").unwrap();
+
+        let allowed = make_allowed(tmp.path());
+        let result = tool_list_directory_recursive(tmp.path().to_str().unwrap(), &allowed).unwrap();
+        let entries = result["entries"].as_array().unwrap();
+
+        let names: Vec<&str> = entries.iter().filter_map(|e| e["name"].as_str()).collect();
+        assert!(names.contains(&"root.txt"));
+        assert!(names.contains(&"sub"));
+        assert!(names.iter().any(|n| n.contains("nested.txt")));
     }
 
     #[test]
-    fn test_memory_note_unknown_action() {
-        let (_tmp, vault) = make_test_vault();
-        let input = serde_json::json!({ "action": "fly" });
-        let result = tool_memory_note(&vault, &input, "test-agent-id", "");
-        assert!(result.is_err());
-        assert!(result.unwrap_err().contains("unknown action"));
+    fn test_vault_write_file_new() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("note.md");
+        let allowed = make_allowed(tmp.path());
+
+        let result = tool_vault_write_file(
+            file_path.to_str().unwrap(),
+            "knowledge/note.md",
+            "# My Note\n\nSome content.\n",
+            &allowed,
+            "test-agent",
+            "conv-123",
+        );
+        assert!(result.is_ok());
+
+        // Verify frontmatter was auto-generated
+        let content = fs::read_to_string(&file_path).unwrap();
+        assert!(content.starts_with("---\n"));
+        let (fm, body) = parse_frontmatter(&content).unwrap();
+        assert_eq!(fm.agent, "test-agent");
+        assert!(!fm.id.is_empty());
+        assert!((fm.confidence - 0.5).abs() < f64::EPSILON);
+        assert_eq!(fm.source_conversation, Some("conv-123".to_string()));
+        assert_eq!(fm.note_type, "knowledge");
+        assert!(body.contains("My Note"));
     }
 
     #[test]
-    fn test_memory_note_create_missing_fields() {
-        let (_tmp, vault) = make_test_vault();
-        let input = serde_json::json!({ "action": "create" });
-        let result = tool_memory_note(&vault, &input, "test-agent-id", "");
-        assert!(result.is_err());
+    fn test_vault_write_file_infers_category_from_path() {
+        let tmp = TempDir::new().unwrap();
+        let decision_dir = tmp.path().join("decision");
+        fs::create_dir_all(&decision_dir).unwrap();
+        let file_path = decision_dir.join("auth.md");
+        let allowed = make_allowed(tmp.path());
+
+        tool_vault_write_file(
+            file_path.to_str().unwrap(),
+            "decision/auth.md",
+            "# Auth Decision\n\nWe chose JWT.\n",
+            &allowed,
+            "test-agent",
+            "conv-123",
+        ).unwrap();
+
+        let content = fs::read_to_string(&file_path).unwrap();
+        let (fm, _) = parse_frontmatter(&content).unwrap();
+        assert_eq!(fm.note_type, "decision");
     }
 
     #[test]
-    fn test_memory_note_crud_lifecycle() {
-        let (_tmp, vault) = make_test_vault();
-        let agent_id = "test-agent";
+    fn test_vault_write_file_update_preserves_metadata_including_source_conversation() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("existing.md");
+        let allowed = make_allowed(tmp.path());
 
-        // Create — agent_id auto-injected via auto_agent_id param
-        let create_input = serde_json::json!({
-            "action": "create",
-            "title": "Test Note",
-            "content": "Note body"
-        });
-        let created = tool_memory_note(&vault, &create_input, agent_id, "").unwrap();
-        assert_eq!(created["title"], "Test Note");
-        assert_eq!(created["agent_id"], agent_id);
+        // Create initial file
+        tool_vault_write_file(
+            file_path.to_str().unwrap(),
+            "knowledge/existing.md",
+            "# Initial\n\nFirst content.\n",
+            &allowed,
+            "test-agent",
+            "conv-123",
+        )
+        .unwrap();
 
-        let note_id = created["id"].as_str().unwrap();
+        let initial_content = fs::read_to_string(&file_path).unwrap();
+        let (initial_fm, _) = parse_frontmatter(&initial_content).unwrap();
+        let original_id = initial_fm.id.clone();
+        let original_created = initial_fm.created.clone();
+        assert_eq!(initial_fm.source_conversation, Some("conv-123".to_string()));
 
-        // Read — agent_id auto-injected
-        let read_input = serde_json::json!({
-            "action": "read"
-        });
-        let notes = tool_memory_note(&vault, &read_input, agent_id, "").unwrap();
-        let arr = notes.as_array().unwrap();
-        assert_eq!(arr.len(), 1);
+        // Update the file from a different conversation
+        tool_vault_write_file(
+            file_path.to_str().unwrap(),
+            "knowledge/existing.md",
+            "# Updated\n\nNew content.\n",
+            &allowed,
+            "test-agent",
+            "conv-456",
+        )
+        .unwrap();
 
-        // Update
-        let update_input = serde_json::json!({
-            "action": "update",
-            "id": note_id,
-            "content": "Updated body"
-        });
-        let updated = tool_memory_note(&vault, &update_input, agent_id, "").unwrap();
-        assert!(updated["content"].as_str().unwrap().contains("Updated body"));
+        let updated_content = fs::read_to_string(&file_path).unwrap();
+        let (updated_fm, body) = parse_frontmatter(&updated_content).unwrap();
 
-        // Delete
-        let delete_input = serde_json::json!({
-            "action": "delete",
-            "id": note_id
-        });
-        let deleted = tool_memory_note(&vault, &delete_input, agent_id, "").unwrap();
-        assert_eq!(deleted["success"], true);
-
-        // Verify empty
-        let notes_after = tool_memory_note(&vault, &read_input, agent_id, "").unwrap();
-        assert_eq!(notes_after.as_array().unwrap().len(), 0);
+        // id, created, and source_conversation should all be preserved
+        assert_eq!(updated_fm.id, original_id);
+        assert_eq!(updated_fm.created, original_created);
+        assert_eq!(updated_fm.source_conversation, Some("conv-123".to_string()));
+        // updated should change
+        assert!(updated_fm.updated >= original_created);
+        assert!(body.contains("New content"));
     }
 
     #[test]
-    fn test_memory_note_search() {
-        let (_tmp, vault) = make_test_vault();
-        let agent_id = "test-agent";
+    fn test_vault_write_file_strips_frontmatter_from_content() {
+        let tmp = TempDir::new().unwrap();
+        let file_path = tmp.path().join("readback.md");
+        let allowed = make_allowed(tmp.path());
 
-        // Create a note
-        let create_input = serde_json::json!({
-            "action": "create",
-            "title": "Rust Programming",
-            "content": "Rust is a systems language"
-        });
-        tool_memory_note(&vault, &create_input, agent_id, "").unwrap();
+        // Simulate read-modify-write: content includes frontmatter from a previous read
+        let result = tool_vault_write_file(
+            file_path.to_str().unwrap(),
+            "knowledge/readback.md",
+            "---\nid: fake\n---\n# Real Content\n\nBody here.\n",
+            &allowed,
+            "test-agent",
+            "conv-123",
+        );
+        assert!(result.is_ok());
 
-        // Search
-        let search_input = serde_json::json!({
-            "action": "search",
-            "query": "Rust"
-        });
-        let results = tool_memory_note(&vault, &search_input, agent_id, "").unwrap();
-        assert!(!results.as_array().unwrap().is_empty());
+        // Verify frontmatter was auto-generated (not the fake one)
+        let content = fs::read_to_string(&file_path).unwrap();
+        let (fm, body) = parse_frontmatter(&content).unwrap();
+        assert_ne!(fm.id, "fake");
+        assert_eq!(fm.agent, "test-agent");
+        assert!(body.contains("Real Content"));
     }
 
     #[test]
-    fn test_memory_note_recall() {
-        let (_tmp, vault) = make_test_vault();
-        let agent_id = "test-agent";
+    fn test_strip_frontmatter_if_present() {
+        // With frontmatter
+        let input = "---\nid: abc\ntags: []\n---\n# Title\n\nBody content";
+        let result = strip_frontmatter_if_present(input);
+        assert!(result.starts_with("# Title"));
+        assert!(result.contains("Body content"));
 
-        // Create a few notes
-        for i in 0..3 {
-            let input = serde_json::json!({
-                "action": "create",
-                "title": format!("Note {i}"),
-                "content": format!("Content {i}")
-            });
-            tool_memory_note(&vault, &input, agent_id, "").unwrap();
-        }
-
-        // Recall
-        let recall_input = serde_json::json!({
-            "action": "recall",
-            "limit": 2
-        });
-        let results = tool_memory_note(&vault, &recall_input, agent_id, "").unwrap();
-        assert_eq!(results.as_array().unwrap().len(), 2);
+        // Without frontmatter
+        let input2 = "# Just Content\n\nNo frontmatter here.";
+        let result2 = strip_frontmatter_if_present(input2);
+        assert_eq!(result2, input2);
     }
 }

@@ -271,7 +271,6 @@ mod tests {
                 "read_file": { "enabled": true, "tier": "auto" },
                 "write_file": { "enabled": true, "tier": "confirm" },
                 "list_directory": { "enabled": true, "tier": "auto" },
-                "memory_note": { "enabled": true, "tier": "auto" },
                 "web_search": { "enabled": false, "tier": "confirm" },
                 "delegate": { "enabled": true, "tier": "auto" },
                 "report": { "enabled": true, "tier": "auto" }
@@ -355,7 +354,6 @@ mod tests {
         assert!(ctx.enabled_tool_names.contains(&"read_file".to_string()));
         assert!(ctx.enabled_tool_names.contains(&"write_file".to_string()));
         assert!(ctx.enabled_tool_names.contains(&"list_directory".to_string()));
-        assert!(ctx.enabled_tool_names.contains(&"memory_note".to_string()));
         // Disabled tools should not appear
         assert!(!ctx.enabled_tool_names.contains(&"web_search".to_string()));
         assert!(!ctx.enabled_tool_names.contains(&"report".to_string()));
@@ -380,7 +378,6 @@ mod tests {
         assert!(ctx.enabled_tool_names.contains(&"delegate".to_string()));
         assert!(ctx.enabled_tool_names.contains(&"read_file".to_string()));
         assert!(ctx.enabled_tool_names.contains(&"list_directory".to_string()));
-        assert!(ctx.enabled_tool_names.contains(&"memory_note".to_string()));
         // Confirm-tier tools should NOT appear
         assert!(!ctx.enabled_tool_names.contains(&"write_file".to_string()));
         assert!(!ctx.enabled_tool_names.contains(&"report".to_string()));

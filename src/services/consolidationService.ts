@@ -13,6 +13,7 @@
 import { i18n } from "../i18n";
 import { useSettingsStore } from "../stores/settingsStore";
 import * as cmds from "./tauriCommands";
+import * as vault from "./commands/vaultCommands";
 import type { ChatCompletionRequest } from "./commands/apiCommands";
 import { chatCompletion } from "./commands/apiCommands";
 import { logger } from "./logger";
@@ -91,34 +92,37 @@ export async function generateDigest(
     .map((m) => `${m.role}: ${m.content}`)
     .join("\n\n");
 
-  // Collect memory notes captured in this conversation (by source_conversation provenance)
+  // Collect only vault notes created/modified in this conversation (via source_conversation)
   let capturedNotesText = "";
   try {
-    const memoryNotes = await cmds.listMemoryNotes(agentId);
-    const convNotes = memoryNotes.filter(
-      (n) => n.source_conversation === conversationId,
+    const allNotes = await vault.vaultListNotes(agentId);
+    const conversationNotes = allNotes.filter(
+      (n) => n.sourceConversation === conversationId,
     );
-    if (convNotes.length > 0) {
-      const noteSummaries = convNotes.map(
-        (n) => `- ${n.title}: ${n.content}`,
+    if (conversationNotes.length > 0) {
+      const noteSummaries = conversationNotes.map(
+        (n) => `- ${n.title}: ${n.bodyPreview ?? ""}`,
       );
-      capturedNotesText = `\n\n--- CAPTURED MEMORY NOTES ---\n${noteSummaries.join("\n")}`;
+      capturedNotesText = `\n\n--- VAULT NOTES (this conversation) ---\n${noteSummaries.join("\n")}`;
     }
-  } catch (e) { logger.debug("[consolidation] Memory notes fetch failed", e); }
+  } catch (e) { logger.debug("[consolidation] Vault notes fetch failed", e); }
 
-  // Also collect memory_note tool call activity for additional context
+  // Collect vault-scope file tool activity for additional context
   let toolActivity = "";
   try {
     const logs = await cmds.listToolCallLogs(conversationId);
-    const memoryLogs = logs.filter((log) => log.tool_name === "memory_note");
-    if (memoryLogs.length > 0) {
-      const logSummaries = memoryLogs.map((log) => {
+    const vaultLogs = logs.filter((log) => {
+      if (log.tool_name !== "write_file" && log.tool_name !== "delete_file") return false;
+      try { return JSON.parse(log.tool_input || "{}").scope === "vault"; } catch { return false; }
+    });
+    if (vaultLogs.length > 0) {
+      const logSummaries = vaultLogs.map((log) => {
         try {
           const input = JSON.parse(log.tool_input || "{}");
-          return `- ${input.action || "unknown"}: ${input.title || ""}`;
+          return `- ${log.tool_name}: ${input.path || ""}`;
         } catch { return `- ${log.tool_name}`; }
       });
-      toolActivity = `\n\n--- MEMORY TOOL ACTIVITY ---\n${logSummaries.join("\n")}`;
+      toolActivity = `\n\n--- VAULT FILE ACTIVITY ---\n${logSummaries.join("\n")}`;
     }
   } catch (e) { logger.debug("[consolidation] Tool call logs fetch failed", e); }
 
