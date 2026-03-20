@@ -182,6 +182,7 @@ module.exports = { generateSnapshot, buildResponse, buildSelector, buildTreeFrom
 async function ensureBrowser() {
   if (!browser) {
     browser = await chromium.launch({
+      channel: 'chrome',
       headless: false,
       args: ['--no-first-run', '--no-default-browser-check'],
     });
@@ -417,38 +418,6 @@ const server = http.createServer(async (req, res) => {
 // Only start server when run directly (not when required for tests)
 if (require.main === module) {
   (async () => {
-    // Check if Chromium is installed
-    const fs = require('node:fs');
-    try {
-      const browserPath = chromium.executablePath();
-      if (!fs.existsSync(browserPath)) {
-        throw new Error('Browser binary not found');
-      }
-    } catch {
-      // Chromium not found, install it
-      process.stdout.write('CHROMIUM_INSTALL_START\n');
-      log('Chromium not found, installing...');
-
-      try {
-        const { execSync } = require('node:child_process');
-        const path = require('node:path');
-        const playwrightCli = path.join(path.dirname(require.resolve('playwright/package.json')), 'cli.js');
-        execSync(`"${process.execPath}" "${playwrightCli}" install chromium`, {
-          cwd: __dirname,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          env: { ...process.env },
-          timeout: 300000, // 5 min timeout
-        });
-        process.stdout.write('CHROMIUM_INSTALL_DONE\n');
-        log('Chromium installed successfully');
-      } catch (installErr) {
-        const reason = installErr.message || 'unknown error';
-        process.stdout.write(`CHROMIUM_INSTALL_FAILED=${reason}\n`);
-        log(`Chromium install failed: ${reason}`);
-        process.exit(1);
-      }
-    }
-
     server.listen(0, '127.0.0.1', () => {
       const port = server.address().port;
       process.stdout.write(`SIDECAR_PORT=${port}\n`);
