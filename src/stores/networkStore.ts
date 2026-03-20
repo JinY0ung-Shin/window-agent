@@ -163,6 +163,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         selectedContactId: null,
         selectedThreadId: null,
         pendingApprovals: 0,
+        approvalSummaries: {},
+        connectedPeers: new Set<string>(),
       });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
@@ -200,9 +202,10 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     set({ selectedContactId: contactId, selectedThreadId: null, threads: [], messages: [] });
     if (contactId) {
       get().loadThreads(contactId).then(() => {
+        // 비동기 완료 전에 다른 contact가 선택됐으면 스킵
+        if (get().selectedContactId !== contactId) return;
         const threads = get().threads;
         if (threads.length > 0) {
-          // Auto-select the most recent thread
           const latest = threads.reduce((a, b) =>
             a.updated_at > b.updated_at ? a : b
           );
@@ -222,6 +225,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   loadThreads: async (contactId) => {
     try {
       const threads = await p2pListThreads(contactId);
+      // Guard against stale results if contact changed during async call
+      if (get().selectedContactId !== contactId) return;
       set({ threads });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
@@ -248,20 +253,32 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
   approveMessage: async (messageId, responseContent = i18n.t("network:approval.defaultResponse")) => {
     await p2pApproveMessage(messageId, responseContent);
-    const { selectedThreadId, pendingApprovals } = get();
+    const { selectedThreadId } = get();
     if (selectedThreadId) {
       await get().loadMessages(selectedThreadId);
     }
-    set({ pendingApprovals: Math.max(0, pendingApprovals - 1) });
+    set((s) => {
+      const { [messageId]: _, ...rest } = s.approvalSummaries;
+      return {
+        approvalSummaries: rest,
+        pendingApprovals: Math.max(0, s.pendingApprovals - 1),
+      };
+    });
   },
 
   rejectMessage: async (messageId) => {
     await p2pRejectMessage(messageId);
-    const { selectedThreadId, pendingApprovals } = get();
+    const { selectedThreadId } = get();
     if (selectedThreadId) {
       await get().loadMessages(selectedThreadId);
     }
-    set({ pendingApprovals: Math.max(0, pendingApprovals - 1) });
+    set((s) => {
+      const { [messageId]: _, ...rest } = s.approvalSummaries;
+      return {
+        approvalSummaries: rest,
+        pendingApprovals: Math.max(0, s.pendingApprovals - 1),
+      };
+    });
   },
 
   setupEventListeners: async () => {

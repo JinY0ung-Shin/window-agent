@@ -67,11 +67,17 @@ impl ContactCard {
         let public_key = ed_keypair.public().to_bytes().to_vec();
         let created_at = Utc::now().to_rfc3339();
 
+        let relay_hints: Vec<String> = addresses
+            .iter()
+            .filter(|a| a.contains("/p2p-circuit"))
+            .cloned()
+            .collect();
+
         let mut card = Self {
             peer_id,
             public_key,
             addresses,
-            relay_hints: Vec::new(),
+            relay_hints,
             expiry,
             agent_name,
             agent_description,

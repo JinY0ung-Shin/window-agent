@@ -6,6 +6,8 @@ use crate::services::api_service;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
+const SUMMARY_MODEL: &str = "gpt-4o-mini";
+
 /// Event payload emitted to frontend when approval is needed.
 #[derive(Debug, Clone, Serialize)]
 pub struct ApprovalNeeded {
@@ -144,7 +146,7 @@ async fn generate_summary(api_state: &ApiState, content: &str) -> String {
     let url = api_service::completions_url(&base_url);
 
     let body = serde_json::json!({
-        "model": "gpt-4o-mini",
+        "model": SUMMARY_MODEL,
         "messages": [
             {
                 "role": "system",

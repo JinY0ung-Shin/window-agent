@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use super::protocol::AgentBehaviour;
 
-/// Build a libp2p Swarm with TCP + Noise + Yamux transport and AgentBehaviour.
+/// Build a libp2p Swarm with TCP + Relay + Noise + Yamux transport and AgentBehaviour.
 pub fn build_swarm(
     keypair: Keypair,
 ) -> Result<Swarm<AgentBehaviour>, Box<dyn std::error::Error + Send + Sync>> {
@@ -14,8 +14,14 @@ pub fn build_swarm(
             libp2p::noise::Config::new,
             libp2p::yamux::Config::default,
         )?
-        .with_behaviour(AgentBehaviour::new)?
-        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(60)))
+        .with_relay_client(
+            libp2p::noise::Config::new,
+            libp2p::yamux::Config::default,
+        )?
+        .with_behaviour(|keypair, relay_client| {
+            AgentBehaviour::new(keypair, relay_client)
+        })?
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(120)))
         .build();
 
     Ok(swarm)

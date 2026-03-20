@@ -43,7 +43,7 @@ notify = { version = "7", features = ["macos_fsevent"] }
 walkdir = "2"
 sha2 = "0.10"
 libp2p-identity = { version = "0.2", features = ["ed25519", "peerid", "rand"] }
-libp2p = { version = "0.54", features = ["noise", "yamux", "tcp", "tokio", "mdns", "request-response", "macros", "json", "ed25519"] }
+libp2p = { version = "0.54", features = ["noise", "yamux", "tcp", "tokio", "mdns", "request-response", "macros", "json", "ed25519", "relay", "dcutr", "autonat"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

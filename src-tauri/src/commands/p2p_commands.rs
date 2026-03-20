@@ -318,15 +318,17 @@ pub async fn p2p_send_message(
 
     match manager.send_message(peer_id, envelope).await {
         Ok(()) => {
-            // Keep delivery_state as "sending" — transitions to "delivered" on ACK
-            p2p_db::update_outbox_status(&db, &outbox_id, "sending", 1)
+            // Keep delivery_state as "sending" — transitions to "delivered" on ACK.
+            // Don't increment attempts here; only OutboundFailure increments.
+            p2p_db::update_outbox_status(&db, &outbox_id, "sending", 0)
                 .map_err(|e| AppError::P2p(e.to_string()))?;
         }
         Err(e) => {
             // Mark as queued for retry with exponential backoff
             p2p_db::update_message_state(&db, &msg_id, None, Some("queued"))
                 .map_err(|e| AppError::P2p(e.to_string()))?;
-            let backoff_secs = 30i64; // First retry: 30s
+            let attempts = 1i32;
+            let backoff_secs = 30i64 * (1i64 << (attempts - 1).min(4));
             let next_retry =
                 chrono::Utc::now() + chrono::Duration::seconds(backoff_secs);
             p2p_db::update_outbox_retry(&db, &outbox_id, 1, &next_retry.to_rfc3339())
@@ -371,7 +373,7 @@ pub async fn p2p_approve_message(
                 &db,
                 &result.outbox_id,
                 "sending",
-                1,
+                0,
             );
         }
         Err(e) => {
@@ -598,24 +600,25 @@ async fn process_pending_outbox(db: &Database, manager: &P2PManager) {
             None => continue,
         };
 
-        let attempts = entry.attempts + 1;
         match manager.send_message(peer_id, envelope).await {
             Ok(()) => {
+                // Don't increment attempts here; only OutboundFailure increments.
                 let _ =
                     p2p_db::update_message_state(db, &entry.peer_message_id, None, Some("sending"));
-                let _ = p2p_db::update_outbox_status(db, &entry.id, "sending", attempts);
+                let _ = p2p_db::update_outbox_status(db, &entry.id, "sending", entry.attempts);
             }
             Err(_) => {
+                let new_attempts = entry.attempts + 1;
                 let _ =
                     p2p_db::update_message_state(db, &entry.peer_message_id, None, Some("queued"));
                 // Exponential backoff: 30s, 60s, 120s, 240s, 480s (capped at 4 doublings)
-                let backoff_secs = 30i64 * (1i64 << (attempts - 1).min(4));
+                let backoff_secs = 30i64 * (1i64 << (new_attempts - 1).min(4));
                 let next_retry =
                     chrono::Utc::now() + chrono::Duration::seconds(backoff_secs);
                 let _ = p2p_db::update_outbox_retry(
                     db,
                     &entry.id,
-                    attempts,
+                    new_attempts,
                     &next_retry.to_rfc3339(),
                 );
             }

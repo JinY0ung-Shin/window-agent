@@ -3,6 +3,7 @@ mod helpers;
 
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use libp2p::{Multiaddr, PeerId};
 use serde::Serialize;
@@ -218,7 +219,7 @@ impl P2PManager {
 
         {
             let mut inner = self.inner.lock().map_err(|_| P2PError::Transport("P2P inner lock poisoned".into()))?;
-            inner.command_tx = Some(cmd_tx);
+            inner.command_tx = Some(cmd_tx.clone());
             inner.status = NetworkStatus::Active;
         }
 
@@ -238,6 +239,42 @@ impl P2PManager {
         shared_authenticated.lock().map_err(|_| P2PError::Transport("authenticated_peers lock poisoned".into()))?.clear();
         listen_addrs.lock().map_err(|_| P2PError::Transport("listen_addresses lock poisoned".into()))?.clear();
         let identity = app_handle.state::<NodeIdentity>().inner().clone();
+
+        // Periodic reconnect task: dial known but not-yet-authenticated peers every 300s
+        let reconnect_handle = app_handle.clone();
+        let reconnect_known = self.known_peers.clone();
+        let reconnect_auth = self.authenticated_peers.clone();
+        let reconnect_tx = cmd_tx.clone();
+        tokio::spawn(async move {
+            // Short initial delay to let the swarm bind, then periodic reconnect
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                let known: HashSet<String> = reconnect_known.lock().map(|g| g.clone()).unwrap_or_default();
+                let authenticated: HashSet<String> = reconnect_auth.lock().map(|g| g.clone()).unwrap_or_default();
+
+                let db = reconnect_handle.state::<crate::db::Database>();
+                for peer_id_str in known.difference(&authenticated) {
+                    let addrs: Vec<Multiaddr> = crate::p2p::db::get_contact_by_peer_id(&db, peer_id_str)
+                        .ok()
+                        .flatten()
+                        .and_then(|c| c.addresses_json)
+                        .and_then(|json| serde_json::from_str::<Vec<String>>(&json).ok())
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter_map(|s| s.parse().ok())
+                        .collect();
+
+                    if let Ok(peer_id) = peer_id_str.parse::<PeerId>() {
+                        if reconnect_tx.send(P2PCommand::Dial { peer_id, addrs }).await.is_err() {
+                            return; // channel closed, event loop exited
+                        }
+                    }
+                }
+            }
+        });
+
         tokio::spawn(async move {
             event_loop::run_event_loop(swarm, cmd_rx, &app_handle, &known_peers, &shared_authenticated, &listen_addrs, &identity).await;
 

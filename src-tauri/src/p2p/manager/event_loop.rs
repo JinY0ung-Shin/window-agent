@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::StreamExt;
 use libp2p::{mdns, request_response, swarm::SwarmEvent};
@@ -12,7 +12,7 @@ use super::super::identity::NodeIdentity;
 use super::super::protocol::AgentBehaviourEvent;
 use super::super::security::{HandshakeMessage, HandshakeState};
 use super::{
-    P2PCommand, P2PManager, ConnectionStateEvent, IncomingMessageEvent,
+    P2PCommand, P2PManager, ConnectionStateEvent,
     PeerDisconnectedEvent,
 };
 
@@ -26,7 +26,7 @@ pub(crate) async fn run_event_loop(
     identity: &NodeIdentity,
 ) {
     let mut authenticated_peers: HashSet<String> = HashSet::new();
-    let mut pending_handshakes: HashMap<String, HandshakeState> = HashMap::new();
+    let mut pending_handshakes: HashMap<String, (HandshakeState, Instant)> = HashMap::new();
     let mut retry_interval = tokio::time::interval(Duration::from_secs(60));
     // Consume the first immediate tick so the retry doesn't fire at t=0
     retry_interval.tick().await;
@@ -62,6 +62,30 @@ pub(crate) async fn run_event_loop(
             }
             _ = retry_interval.tick() => {
                 super::helpers::retry_pending_outbox(&mut swarm, app_handle, &authenticated_peers);
+                // Reap stale pending handshakes (>30s) and re-initiate if still connected
+                let stale_peers: Vec<String> = pending_handshakes
+                    .iter()
+                    .filter(|(_, (_, ts))| ts.elapsed() > Duration::from_secs(30))
+                    .map(|(k, _)| k.clone())
+                    .collect();
+                for peer_str in stale_peers {
+                    pending_handshakes.remove(&peer_str);
+                    let is_known = known_peers.lock().map(|g| g.contains(&peer_str)).unwrap_or(false);
+                    if is_known && !authenticated_peers.contains(&peer_str) {
+                        if let Ok(peer_id) = peer_str.parse::<libp2p::PeerId>() {
+                            if swarm.is_connected(&peer_id) {
+                                let (state, challenge_msg) = HandshakeState::new_initiator(identity);
+                                pending_handshakes.insert(peer_str, (state, Instant::now()));
+                                let data = serde_json::to_string(&challenge_msg).unwrap_or_default();
+                                let envelope = Envelope::new(
+                                    swarm.local_peer_id().to_string(),
+                                    Payload::Handshake { data },
+                                );
+                                swarm.behaviour_mut().request_response.send_request(&peer_id, envelope);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -74,7 +98,7 @@ fn handle_swarm_event(
     app_handle: &tauri::AppHandle,
     known_peers: &Arc<Mutex<HashSet<String>>>,
     authenticated_peers: &mut HashSet<String>,
-    pending_handshakes: &mut HashMap<String, HandshakeState>,
+    pending_handshakes: &mut HashMap<String, (HandshakeState, Instant)>,
     listen_addresses: &Arc<Mutex<Vec<String>>>,
     identity: &NodeIdentity,
 ) {
@@ -96,13 +120,15 @@ fn handle_swarm_event(
         }
         SwarmEvent::Behaviour(AgentBehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
             for (peer_id, _addr) in peers {
-                let _ = app_handle.emit(
-                    "p2p:peer-disconnected",
-                    PeerDisconnectedEvent {
-                        peer_id: peer_id.to_string(),
-                        reason: "mdns_expired".into(),
-                    },
-                );
+                if !swarm.is_connected(&peer_id) {
+                    let _ = app_handle.emit(
+                        "p2p:peer-disconnected",
+                        PeerDisconnectedEvent {
+                            peer_id: peer_id.to_string(),
+                            reason: "mdns_expired".into(),
+                        },
+                    );
+                }
             }
         }
 
@@ -156,9 +182,9 @@ fn handle_swarm_event(
                         };
 
                         // Get or create responder state for this peer
-                        let state = pending_handshakes
+                        let (state, _) = pending_handshakes
                             .entry(peer_str.clone())
-                            .or_insert_with(HandshakeState::new_responder);
+                            .or_insert_with(|| (HandshakeState::new_responder(), Instant::now()));
 
                         match state.process_message(hs_msg, identity) {
                             Ok(Some(reply_msg)) => {
@@ -242,6 +268,31 @@ fn handle_swarm_event(
                             return;
                         }
 
+                        // Capability check
+                        let db = app_handle.state::<crate::db::Database>();
+                        let allowed = crate::p2p::db::get_contact_by_peer_id(&db, &peer_str)
+                            .ok()
+                            .flatten()
+                            .and_then(|c| serde_json::from_str::<crate::p2p::capability::CapabilitySet>(&c.capabilities_json).ok())
+                            .map(|caps| caps.is_allowed(&crate::p2p::capability::CapabilityAction::SendMessage))
+                            .unwrap_or(false);
+
+                        if !allowed {
+                            tracing::warn!(peer = %peer_str, "P2P rejecting message: capability denied");
+                            let reject = Envelope::new(
+                                "local".into(),
+                                Payload::Error {
+                                    code: "CAPABILITY_DENIED".into(),
+                                    message: "SendMessage capability not granted".into(),
+                                },
+                            );
+                            let _ = swarm
+                                .behaviour_mut()
+                                .request_response
+                                .send_response(channel, reject);
+                            return;
+                        }
+
                         let msg_id = request.message_id.clone();
 
                         // Pass through secretary pipeline
@@ -286,6 +337,29 @@ fn handle_swarm_event(
                                 .request_response
                                 .send_response(channel, reject);
                             return;
+                        }
+
+                        // Capability check (same as MessageRequest)
+                        {
+                            let db = app_handle.state::<crate::db::Database>();
+                            let allowed = crate::p2p::db::get_contact_by_peer_id(&db, &peer_str)
+                                .ok()
+                                .flatten()
+                                .and_then(|c| serde_json::from_str::<crate::p2p::capability::CapabilitySet>(&c.capabilities_json).ok())
+                                .map(|caps| caps.is_allowed(&crate::p2p::capability::CapabilityAction::SendMessage))
+                                .unwrap_or(false);
+                            if !allowed {
+                                tracing::warn!(peer = %peer_str, "P2P rejecting response: capability denied");
+                                let reject = Envelope::new(
+                                    "local".into(),
+                                    Payload::Error {
+                                        code: "CAPABILITY_DENIED".into(),
+                                        message: "SendMessage capability not granted".into(),
+                                    },
+                                );
+                                let _ = swarm.behaviour_mut().request_response.send_response(channel, reject);
+                                return;
+                            }
                         }
 
                         // Persist the response as an incoming message
@@ -360,7 +434,7 @@ fn handle_swarm_event(
                         }
                     };
 
-                    let state = match pending_handshakes.get_mut(&peer_str) {
+                    let (state, _) = match pending_handshakes.get_mut(&peer_str) {
                         Some(s) => s,
                         None => {
                             tracing::warn!(peer = %peer_str, "P2P handshake response but no pending state");
@@ -428,13 +502,14 @@ fn handle_swarm_event(
                     }
                 }
 
-                let _ = app_handle.emit(
-                    "p2p:incoming-message",
-                    IncomingMessageEvent {
-                        peer_id: peer.to_string(),
-                        envelope: response,
-                    },
-                );
+                // Handle Error payloads — log for diagnostics
+                if let Payload::Error { ref code, ref message } = response.payload {
+                    tracing::warn!(peer = %peer_str, code = %code, message = %message, "P2P remote error response");
+                    // Don't auto-fail outbox entries here — we can't correlate which
+                    // specific request this error belongs to. Stale "sending" entries
+                    // are handled by the periodic retry loop's timeout logic.
+                }
+
             }
         },
         SwarmEvent::Behaviour(AgentBehaviourEvent::RequestResponse(
@@ -486,10 +561,18 @@ fn handle_swarm_event(
             let peer_id_str = peer_id.to_string();
             let is_known = known_peers.lock().map(|g| g.contains(&peer_id_str)).unwrap_or(false);
 
-            // Initiate nonce/challenge handshake for known but unauthenticated peers
-            if is_known && !authenticated_peers.contains(&peer_id_str) {
+            // Initiate nonce/challenge handshake for known but unauthenticated peers.
+            // Allow restart if existing handshake is stale (>30s — covers relay→direct handoff).
+            let handshake_stale = pending_handshakes
+                .get(&peer_id_str)
+                .map(|(_, ts)| ts.elapsed() > Duration::from_secs(30))
+                .unwrap_or(false);
+            let should_handshake = is_known
+                && !authenticated_peers.contains(&peer_id_str)
+                && (!pending_handshakes.contains_key(&peer_id_str) || handshake_stale);
+            if should_handshake {
                 let (state, challenge_msg) = HandshakeState::new_initiator(identity);
-                pending_handshakes.insert(peer_id_str.clone(), state);
+                pending_handshakes.insert(peer_id_str.clone(), (state, Instant::now()));
 
                 let data = serde_json::to_string(&challenge_msg).unwrap_or_default();
                 let envelope = Envelope::new(
@@ -513,16 +596,20 @@ fn handle_swarm_event(
         }
         SwarmEvent::ConnectionClosed { peer_id, .. } => {
             let peer_id_str = peer_id.to_string();
-            authenticated_peers.remove(&peer_id_str);
-            pending_handshakes.remove(&peer_id_str);
+            // Only deauthenticate/disconnect if no other connection to this peer remains
+            // (relay→direct handoff closes the relay connection while direct stays open)
+            if !swarm.is_connected(&peer_id) {
+                authenticated_peers.remove(&peer_id_str);
+                pending_handshakes.remove(&peer_id_str);
 
-            let _ = app_handle.emit(
-                "p2p:peer-disconnected",
-                PeerDisconnectedEvent {
-                    peer_id: peer_id_str,
-                    reason: "connection_closed".into(),
-                },
-            );
+                let _ = app_handle.emit(
+                    "p2p:peer-disconnected",
+                    PeerDisconnectedEvent {
+                        peer_id: peer_id_str.clone(),
+                        reason: "connection_closed".into(),
+                    },
+                );
+            }
             let peer_count = swarm.connected_peers().count();
             let _ = app_handle.emit(
                 "p2p:connection-state",

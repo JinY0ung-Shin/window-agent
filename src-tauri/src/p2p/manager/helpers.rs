@@ -113,8 +113,24 @@ pub(crate) fn retry_queued_for_peer(
         Err(_) => return,
     };
 
+    const MAX_RETRY_ATTEMPTS: i32 = 10;
+
     for entry in entries {
         if entry.target_peer_id != peer_id_str {
+            continue;
+        }
+
+        // Enforce max retry limit (same as periodic retry)
+        if entry.attempts >= MAX_RETRY_ATTEMPTS {
+            let _ = crate::p2p::db::update_outbox_status(&db, &entry.id, "failed", entry.attempts);
+            let _ = crate::p2p::db::update_message_state(&db, &entry.peer_message_id, None, Some("failed"));
+            let _ = app_handle.emit(
+                "p2p:delivery-update",
+                super::super::secretary::DeliveryUpdate {
+                    message_id: entry.peer_message_id.clone(),
+                    state: "failed".to_string(),
+                },
+            );
             continue;
         }
 
@@ -142,7 +158,8 @@ pub(crate) fn retry_queued_for_peer(
             .request_response
             .send_request(&peer_id, envelope);
 
-        let new_attempts = entry.attempts + 1;
+        // Only update status to "sending" — don't increment attempts here.
+        // Attempts are incremented in OutboundFailure handler (the actual failure point).
         let _ = crate::p2p::db::update_message_state(
             &db,
             &entry.peer_message_id,
@@ -150,7 +167,7 @@ pub(crate) fn retry_queued_for_peer(
             Some("sending"),
         );
         let _ =
-            crate::p2p::db::update_outbox_status(&db, &entry.id, "sending", new_attempts);
+            crate::p2p::db::update_outbox_status(&db, &entry.id, "sending", entry.attempts);
     }
 }
 
@@ -168,7 +185,41 @@ pub(crate) fn retry_pending_outbox(
 
     let now = chrono::Utc::now();
 
+    const MAX_RETRY_ATTEMPTS: i32 = 10;
+
+    const SENDING_STALE_SECS: i64 = 60;
+
     for entry in entries {
+        // Max retry limit — checked first for all statuses including stale "sending"
+        if entry.attempts >= MAX_RETRY_ATTEMPTS {
+            let _ = crate::p2p::db::update_outbox_status(&db, &entry.id, "failed", entry.attempts);
+            let _ = crate::p2p::db::update_message_state(&db, &entry.peer_message_id, None, Some("failed"));
+            let _ = app_handle.emit(
+                "p2p:delivery-update",
+                super::super::secretary::DeliveryUpdate {
+                    message_id: entry.peer_message_id.clone(),
+                    state: "failed".to_string(),
+                },
+            );
+            continue;
+        }
+
+        // Requeue stale "sending" entries (e.g. error response with no ACK/failure)
+        if entry.status == "sending" {
+            let sent_at = entry.next_retry_at.as_deref().unwrap_or(&entry.created_at);
+            if let Ok(sent_time) = chrono::DateTime::parse_from_rfc3339(sent_at) {
+                let age = (now - sent_time.with_timezone(&chrono::Utc)).num_seconds();
+                if age > SENDING_STALE_SECS {
+                    let new_attempts = entry.attempts + 1;
+                    let backoff_secs = 30i64 * (1i64 << (new_attempts - 1).min(4));
+                    let next_retry = now + chrono::Duration::seconds(backoff_secs);
+                    let _ = crate::p2p::db::update_outbox_retry(&db, &entry.id, new_attempts, &next_retry.to_rfc3339());
+                    let _ = crate::p2p::db::update_message_state(&db, &entry.peer_message_id, None, Some("queued"));
+                }
+            }
+            continue;
+        }
+
         // Only retry for authenticated peers
         if !authenticated_peers.contains(&entry.target_peer_id) {
             continue;
@@ -207,7 +258,8 @@ pub(crate) fn retry_pending_outbox(
             .request_response
             .send_request(&peer_id, envelope);
 
-        let new_attempts = entry.attempts + 1;
+        // Only update status to "sending" — don't increment attempts here.
+        // Attempts are incremented in OutboundFailure handler (the actual failure point).
         let _ = crate::p2p::db::update_message_state(
             &db,
             &entry.peer_message_id,
@@ -215,6 +267,6 @@ pub(crate) fn retry_pending_outbox(
             Some("sending"),
         );
         let _ =
-            crate::p2p::db::update_outbox_status(&db, &entry.id, "sending", new_attempts);
+            crate::p2p::db::update_outbox_status(&db, &entry.id, "sending", entry.attempts);
     }
 }

@@ -337,18 +337,20 @@ pub fn update_message_state(
     delivery_state: Option<&str>,
 ) -> Result<(), DbError> {
     db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
         if let Some(as_val) = approval_state {
-            conn.execute(
+            tx.execute(
                 "UPDATE peer_messages SET approval_state = ?1 WHERE id = ?2",
                 rusqlite::params![as_val, id],
             )?;
         }
         if let Some(ds_val) = delivery_state {
-            conn.execute(
+            tx.execute(
                 "UPDATE peer_messages SET delivery_state = ?1 WHERE id = ?2",
                 rusqlite::params![ds_val, id],
             )?;
         }
+        tx.commit()?;
         Ok(())
     })
 }
@@ -441,7 +443,7 @@ pub fn update_outbox_status(
 ) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute(
-            "UPDATE outbox SET status = ?1, attempts = ?2 WHERE id = ?3",
+            "UPDATE outbox SET status = ?1, attempts = ?2, next_retry_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?3",
             rusqlite::params![status, attempts, id],
         )?;
         Ok(())
