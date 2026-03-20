@@ -340,4 +340,222 @@ mod tests {
         delete_conversation_impl(&db, conv.id).unwrap();
         assert!(get_browser_artifact(&db, &artifact.id).is_err());
     }
+
+    // ── Tool Call Log tests ──────────────────────────────
+
+    #[test]
+    fn test_create_tool_call_log() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let log = create_tool_call_log_impl(
+            &db,
+            conv.id.clone(),
+            None,
+            "web_search".into(),
+            r#"{"query": "rust testing"}"#.into(),
+        )
+        .unwrap();
+
+        assert!(!log.id.is_empty());
+        assert_eq!(log.conversation_id, conv.id);
+        assert_eq!(log.tool_name, "web_search");
+        assert_eq!(log.tool_input, r#"{"query": "rust testing"}"#);
+        assert_eq!(log.status, "pending");
+        assert!(log.tool_output.is_none());
+        assert!(log.duration_ms.is_none());
+        assert!(log.message_id.is_none());
+    }
+
+    #[test]
+    fn test_create_tool_call_log_with_message_id() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let msg = save_message_impl(&db, SaveMessageRequest {
+            conversation_id: conv.id.clone(),
+            role: "user".into(),
+            content: "hello".into(),
+            tool_call_id: None, tool_name: None, tool_input: None,
+            sender_agent_id: None, team_run_id: None, team_task_id: None,
+        }).unwrap();
+
+        let log = create_tool_call_log_impl(
+            &db,
+            conv.id.clone(),
+            Some(msg.id.clone()),
+            "code_exec".into(),
+            "print('hello')".into(),
+        )
+        .unwrap();
+
+        assert_eq!(log.message_id.as_deref(), Some(msg.id.as_str()));
+    }
+
+    #[test]
+    fn test_list_tool_call_logs_empty() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let logs = list_tool_call_logs_impl(&db, conv.id).unwrap();
+        assert!(logs.is_empty());
+    }
+
+    #[test]
+    fn test_list_tool_call_logs_ordered_by_created_at() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        // Create multiple logs (they get sequential timestamps)
+        create_tool_call_log_impl(&db, conv.id.clone(), None, "tool_a".into(), "input_a".into()).unwrap();
+        create_tool_call_log_impl(&db, conv.id.clone(), None, "tool_b".into(), "input_b".into()).unwrap();
+        create_tool_call_log_impl(&db, conv.id.clone(), None, "tool_c".into(), "input_c".into()).unwrap();
+
+        let logs = list_tool_call_logs_impl(&db, conv.id).unwrap();
+        assert_eq!(logs.len(), 3);
+        assert_eq!(logs[0].tool_name, "tool_a");
+        assert_eq!(logs[1].tool_name, "tool_b");
+        assert_eq!(logs[2].tool_name, "tool_c");
+    }
+
+    #[test]
+    fn test_list_tool_call_logs_scoped_to_conversation() {
+        let db = setup_db();
+        let (agent, conv1) = create_test_conversation(&db);
+        let conv2 = create_conversation_impl(&db, Some("Conv 2".into()), agent.id).unwrap();
+
+        create_tool_call_log_impl(&db, conv1.id.clone(), None, "tool_1".into(), "a".into()).unwrap();
+        create_tool_call_log_impl(&db, conv2.id.clone(), None, "tool_2".into(), "b".into()).unwrap();
+
+        let logs1 = list_tool_call_logs_impl(&db, conv1.id).unwrap();
+        assert_eq!(logs1.len(), 1);
+        assert_eq!(logs1[0].tool_name, "tool_1");
+
+        let logs2 = list_tool_call_logs_impl(&db, conv2.id).unwrap();
+        assert_eq!(logs2.len(), 1);
+        assert_eq!(logs2[0].tool_name, "tool_2");
+    }
+
+    #[test]
+    fn test_update_tool_call_log_status_success() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let log = create_tool_call_log_impl(
+            &db, conv.id.clone(), None, "web_search".into(), "query".into(),
+        ).unwrap();
+
+        update_tool_call_log_status_impl(
+            &db,
+            log.id.clone(),
+            "success".into(),
+            Some("result data".into()),
+            Some(150),
+            None,
+        )
+        .unwrap();
+
+        let logs = list_tool_call_logs_impl(&db, conv.id).unwrap();
+        assert_eq!(logs[0].status, "success");
+        assert_eq!(logs[0].tool_output.as_deref(), Some("result data"));
+        assert_eq!(logs[0].duration_ms, Some(150));
+    }
+
+    #[test]
+    fn test_update_tool_call_log_status_error() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let log = create_tool_call_log_impl(
+            &db, conv.id.clone(), None, "web_search".into(), "query".into(),
+        ).unwrap();
+
+        update_tool_call_log_status_impl(
+            &db,
+            log.id.clone(),
+            "error".into(),
+            Some("timeout occurred".into()),
+            Some(30000),
+            None,
+        )
+        .unwrap();
+
+        let logs = list_tool_call_logs_impl(&db, conv.id).unwrap();
+        assert_eq!(logs[0].status, "error");
+        assert_eq!(logs[0].tool_output.as_deref(), Some("timeout occurred"));
+    }
+
+    #[test]
+    fn test_update_tool_call_log_status_with_artifact_id() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let log = create_tool_call_log_impl(
+            &db, conv.id.clone(), None, "screenshot".into(), "{}".into(),
+        ).unwrap();
+
+        update_tool_call_log_status_impl(
+            &db,
+            log.id.clone(),
+            "success".into(),
+            None,
+            Some(500),
+            Some("artifact-abc".into()),
+        )
+        .unwrap();
+
+        let logs = list_tool_call_logs_impl(&db, conv.id).unwrap();
+        assert_eq!(logs[0].artifact_id.as_deref(), Some("artifact-abc"));
+    }
+
+    #[test]
+    fn test_update_tool_call_log_preserves_original_fields() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        let msg = save_message_impl(&db, SaveMessageRequest {
+            conversation_id: conv.id.clone(),
+            role: "user".into(),
+            content: "test".into(),
+            tool_call_id: None, tool_name: None, tool_input: None,
+            sender_agent_id: None, team_run_id: None, team_task_id: None,
+        }).unwrap();
+
+        let log = create_tool_call_log_impl(
+            &db, conv.id.clone(), Some(msg.id.clone()), "web_search".into(), r#"{"q":"test"}"#.into(),
+        ).unwrap();
+
+        update_tool_call_log_status_impl(
+            &db, log.id.clone(), "success".into(), Some("done".into()), Some(100), None,
+        ).unwrap();
+
+        let logs = list_tool_call_logs_impl(&db, conv.id.clone()).unwrap();
+        // Original fields preserved
+        assert_eq!(logs[0].conversation_id, conv.id);
+        assert_eq!(logs[0].message_id.as_deref(), Some(msg.id.as_str()));
+        assert_eq!(logs[0].tool_name, "web_search");
+        assert_eq!(logs[0].tool_input, r#"{"q":"test"}"#);
+    }
+
+    #[test]
+    fn test_tool_call_logs_cascade_on_conversation_delete() {
+        let db = setup_db();
+        let (_agent, conv) = create_test_conversation(&db);
+
+        create_tool_call_log_impl(&db, conv.id.clone(), None, "tool_a".into(), "a".into()).unwrap();
+        create_tool_call_log_impl(&db, conv.id.clone(), None, "tool_b".into(), "b".into()).unwrap();
+
+        delete_conversation_impl(&db, conv.id.clone()).unwrap();
+
+        // Verify logs are cascade-deleted
+        let conn = db.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tool_call_logs WHERE conversation_id = ?1",
+                rusqlite::params![conv.id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+    }
 }
