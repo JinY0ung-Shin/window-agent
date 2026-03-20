@@ -55,7 +55,7 @@
 .debug-panel-header h3 {
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-main);
 }
 
 .debug-tab-bar {
@@ -124,8 +124,8 @@
 }
 
 .debug-panel-close:hover {
-  color: var(--text);
-  background: var(--hover);
+  color: var(--text-main);
+  background: var(--hover-bg);
 }
 
 .debug-panel-filters {
@@ -143,7 +143,7 @@
   border-radius: 6px;
   border: 1px solid var(--border);
   background: var(--bg-color);
-  color: var(--text);
+  color: var(--text-main);
   font-size: 0.78rem;
 }
 
@@ -158,7 +158,7 @@
   align-items: center;
   gap: 4px;
   font-size: 0.72rem;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   cursor: pointer;
 }
 
@@ -202,7 +202,7 @@
 }
 
 .debug-log-summary:hover {
-  background: var(--hover, #f1f5f9);
+  background: var(--hover-bg);
 }
 
 .debug-log-expand {
@@ -219,7 +219,7 @@
 
 .debug-log-tool {
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-main);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -274,6 +274,6 @@
   word-break: break-all;
   max-height: 200px;
   overflow-y: auto;
-  color: var(--text);
+  color: var(--text-main);
   margin: 0;
 }

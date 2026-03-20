@@ -26,7 +26,7 @@
 .vault-header-actions {
   margin-left: auto;
   display: flex;
-  gap: 6px;
+  gap: 2px;
 }
 
 .vault-body {

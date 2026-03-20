@@ -417,7 +417,7 @@
 
 .skill-row-actions button:hover {
   color: var(--text-main);
-  background: var(--hover);
+  background: var(--hover-bg);
 }
 
 .skill-edit-panel {
@@ -600,7 +600,7 @@
 
 .tool-card-actions button:hover {
   color: var(--text-main);
-  background: var(--hover);
+  background: var(--hover-bg);
 }
 
 .tool-tier-badge {
@@ -793,7 +793,7 @@
 
 .tool-param-remove:hover {
   color: #ef4444;
-  background: var(--hover);
+  background: var(--hover-bg);
 }
 
 .tool-param-add {
@@ -885,7 +885,7 @@
 }
 
 .native-tool-row:hover {
-  background: var(--hover);
+  background: var(--hover-bg);
 }
 
 .native-tool-row.disabled {

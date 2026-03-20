@@ -173,7 +173,7 @@
 .team-card-conversations {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border-secondary);
+  border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -187,13 +187,13 @@
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   transition: background-color 0.15s;
 }
 
 .team-conv-item:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
+  background: var(--hover-bg);
+  color: var(--text-main);
 }
 
 .team-conv-title {
