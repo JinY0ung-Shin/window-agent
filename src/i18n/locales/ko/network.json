@@ -113,7 +113,10 @@
     "secretaryMode": "비서 (Secretary)",
     "delegateHint": "대리인 모드는 Phase 2에서 지원 예정",
     "deleteContact": "연락처 삭제",
-    "confirmDeleteMessage": "정말 삭제하시겠습니까?"
+    "confirmDeleteMessage": "정말 삭제하시겠습니까?",
+    "sendMessageLabel": "메시지 보내기",
+    "messagePlaceholder": "메시지를 입력하세요...",
+    "sendButton": "전송"
   },
   "approval": {
     "defaultResponse": "감사합니다. 확인했습니다.",

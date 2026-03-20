@@ -32,26 +32,28 @@ export default function ContactList() {
         <span>{t("contact.listHeader")}</span>
         <span className="contact-count">{contacts.length}</span>
       </div>
-      {contacts.map((contact: ContactRow) => (
-        <button
-          key={contact.id}
-          className={`contact-item${selectedContactId === contact.id ? " active" : ""}`}
-          onClick={() =>
-            selectContact(selectedContactId === contact.id ? null : contact.id)
-          }
-        >
-          <span className={statusDot(connectedPeers.has(contact.peer_id) ? "connected" : contact.status)} title={t(`contact.${connectedPeers.has(contact.peer_id) ? "online" : contact.status === "connecting" ? "connecting" : "offline"}`)} />
-          <div className="contact-item-info">
-            <span className="contact-item-name">
-              {contact.display_name || contact.agent_name}
-            </span>
-            {contact.agent_description && (
-              <span className="contact-item-desc">{contact.agent_description}</span>
-            )}
-          </div>
-          <span className="contact-item-mode">{contact.mode === "secretary" ? t("contact.modeSecretary") : contact.mode}</span>
-        </button>
-      ))}
+      <div className="contact-list-items">
+        {contacts.map((contact: ContactRow) => (
+          <button
+            key={contact.id}
+            className={`contact-item${selectedContactId === contact.id ? " active" : ""}`}
+            onClick={() =>
+              selectContact(selectedContactId === contact.id ? null : contact.id)
+            }
+          >
+            <span className={statusDot(connectedPeers.has(contact.peer_id) ? "connected" : contact.status)} title={t(`contact.${connectedPeers.has(contact.peer_id) ? "online" : contact.status === "connecting" ? "connecting" : "offline"}`)} />
+            <div className="contact-item-info">
+              <span className="contact-item-name">
+                {contact.display_name || contact.agent_name}
+              </span>
+              {contact.agent_description && (
+                <span className="contact-item-desc">{contact.agent_description}</span>
+              )}
+            </div>
+            <span className="contact-item-mode">{contact.mode === "secretary" ? t("contact.modeSecretary") : contact.mode}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

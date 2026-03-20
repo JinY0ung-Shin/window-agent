@@ -154,9 +154,9 @@ fn handle_event(
 
             match &request.payload {
                 Payload::Handshake { data } => {
+                    // Allow handshake from unknown peers (they have our invite)
                     if !is_known {
-                        println!("[handshake] 알 수 없는 피어에서 핸드셰이크: {peer_str}");
-                        return;
+                        println!("[handshake] 새 피어에서 핸드셰이크 수신: {}...", &peer_str[..16]);
                     }
                     let hs_msg: HandshakeMessage = match serde_json::from_str(data) {
                         Ok(m) => m,
@@ -178,6 +178,11 @@ fn handle_event(
 
                             if state.is_complete() {
                                 pending_handshakes.remove(&peer_str);
+                                // Auto-register unknown peer
+                                if !known_peers.contains(&peer_str) {
+                                    known_peers.insert(peer_str.clone());
+                                    peer_names.entry(peer_str.clone()).or_insert_with(|| format!("Peer-{}", &peer_str[..8]));
+                                }
                                 if authenticated_peers.insert(peer_str.clone()) {
                                     let name = peer_names.get(&peer_str).cloned().unwrap_or_else(|| peer_str[..16].to_string());
                                     println!("[auth] ✓ 핸드셰이크 완료 (responder): {name}");
@@ -188,6 +193,10 @@ fn handle_event(
                             pending_handshakes.remove(&peer_str);
                             let ack = Envelope::new("cli-peer".into(), Payload::Ack { acked_message_id: request.message_id.clone() });
                             let _ = swarm.behaviour_mut().request_response.send_response(channel, ack);
+                            if !known_peers.contains(&peer_str) {
+                                known_peers.insert(peer_str.clone());
+                                peer_names.entry(peer_str.clone()).or_insert_with(|| format!("Peer-{}", &peer_str[..8]));
+                            }
                             if authenticated_peers.insert(peer_str.clone()) {
                                 let name = peer_names.get(&peer_str).cloned().unwrap_or_else(|| peer_str[..16].to_string());
                                 println!("[auth] ✓ 핸드셰이크 완료 (responder): {name}");

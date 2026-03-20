@@ -244,10 +244,17 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
   sendMessage: async (contactId, content) => {
     await p2pSendMessage(contactId, content);
-    // Refresh threads/messages for active thread
-    const { selectedThreadId, selectedContactId } = get();
-    if (selectedContactId === contactId && selectedThreadId) {
-      await get().loadMessages(selectedThreadId);
+    const { selectedContactId } = get();
+    if (selectedContactId === contactId) {
+      // Reload threads (a new thread may have been created)
+      await get().loadThreads(contactId);
+      const { threads, selectedThreadId } = get();
+      if (!selectedThreadId && threads.length > 0) {
+        // Auto-select the new thread
+        await get().selectThread(threads[0].id);
+      } else if (selectedThreadId) {
+        await get().loadMessages(selectedThreadId);
+      }
     }
   },
 

@@ -78,6 +78,10 @@ pub async fn handle_incoming_message(
     let msg_id = uuid::Uuid::new_v4().to_string();
     let raw_envelope = serde_json::to_string(envelope).ok();
 
+    // Accepted contacts → auto-approve (normal chat), others → pending approval
+    let is_accepted = contact.status == "accepted";
+    let approval_state = if is_accepted { "none" } else { "pending" };
+
     let msg = p2p_db::PeerMessageRow {
         id: msg_id.clone(),
         thread_id: thread_id.clone(),
@@ -86,7 +90,7 @@ pub async fn handle_incoming_message(
         direction: "incoming".to_string(),
         sender_agent: envelope.sender_agent.clone(),
         content: content.clone(),
-        approval_state: "pending".to_string(),
+        approval_state: approval_state.to_string(),
         delivery_state: "received".to_string(),
         retry_count: 0,
         raw_envelope,
@@ -95,27 +99,37 @@ pub async fn handle_incoming_message(
 
     let inserted = p2p_db::insert_peer_message(db, &msg).map_err(|e| e.to_string())?;
     if !inserted {
-        // Duplicate message — already processed, skip silently
         return Ok(());
     }
 
-    // 5. Generate summary (isolated LLM call or fallback)
-    let api_state = app_handle.state::<ApiState>();
-    let summary = generate_summary(&api_state, &content).await;
+    if is_accepted {
+        // Trusted contact — just notify frontend to refresh messages
+        let _ = app_handle.emit(
+            "p2p:incoming-message",
+            serde_json::json!({
+                "peer_id": contact_peer_id,
+                "thread_id": thread_id,
+                "message_id": msg_id,
+            }),
+        );
+    } else {
+        // Untrusted contact — require approval
+        let api_state = app_handle.state::<ApiState>();
+        let summary = generate_summary(&api_state, &content).await;
 
-    // 6. Emit p2p:approval-needed event
-    app_handle
-        .emit(
-            "p2p:approval-needed",
-            ApprovalNeeded {
-                thread_id,
-                message_id: msg_id,
-                sender_agent: envelope.sender_agent.clone(),
-                summary,
-                original_content: content,
-            },
-        )
-        .map_err(|e| e.to_string())?;
+        app_handle
+            .emit(
+                "p2p:approval-needed",
+                ApprovalNeeded {
+                    thread_id,
+                    message_id: msg_id,
+                    sender_agent: envelope.sender_agent.clone(),
+                    summary,
+                    original_content: content,
+                },
+            )
+            .map_err(|e| e.to_string())?;
+    }
 
     Ok(())
 }

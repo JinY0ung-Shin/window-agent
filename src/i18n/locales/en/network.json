@@ -113,7 +113,10 @@
     "secretaryMode": "Secretary",
     "delegateHint": "Delegate mode coming in Phase 2",
     "deleteContact": "Delete Contact",
-    "confirmDeleteMessage": "Are you sure you want to delete?"
+    "confirmDeleteMessage": "Are you sure you want to delete?",
+    "sendMessageLabel": "Send Message",
+    "messagePlaceholder": "Type a message...",
+    "sendButton": "Send"
   },
   "approval": {
     "defaultResponse": "Thank you. Acknowledged.",

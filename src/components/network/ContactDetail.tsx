@@ -55,6 +55,8 @@ interface InnerProps {
 type DialState = "idle" | "dialing" | "connected" | "timeout";
 
 function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: InnerProps) {
+  const connectedPeers = useNetworkStore((s) => s.connectedPeers);
+  const isOnline = connectedPeers.has(contact.peer_id);
   const [displayName, setDisplayName] = useState(contact.display_name);
   const [localAgentId, setLocalAgentId] = useState(contact.local_agent_id ?? "");
   const [saving, setSaving] = useState(false);
@@ -109,12 +111,11 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
     }
   }, [dialState]);
 
-  const statusText =
-    contact.status === "connected"
-      ? t("contact.online")
-      : contact.status === "connecting"
-        ? t("contact.connecting")
-        : t("contact.offline");
+  const statusText = isOnline
+    ? t("contact.online")
+    : contact.status === "connecting"
+      ? t("contact.connecting")
+      : t("contact.offline");
 
   const hasChanges =
     displayName !== contact.display_name ||
@@ -169,8 +170,8 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
       <div className="contact-detail-header">
         <h3>{t("contact.detailTitle")}</h3>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span className={`status-badge ${contact.status}`}>{statusText}</span>
-          {contact.status !== "connected" && (
+          <span className={`status-badge ${isOnline ? "connected" : contact.status}`}>{statusText}</span>
+          {!isOnline && (
             <button
               className="btn-secondary"
               onClick={handleDial}

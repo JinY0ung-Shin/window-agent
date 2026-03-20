@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Send, ArrowLeft } from "lucide-react";
+import { Send, Settings } from "lucide-react";
 import { i18n } from "../../i18n";
 import { useNetworkStore } from "../../stores/networkStore";
 import type { PeerMessageRow } from "../../services/commands/p2pCommands";
 import DeliveryBadge from "./DeliveryBadge";
 import ApprovalPanel from "./ApprovalPanel";
+import ContactDetail from "./ContactDetail";
 
 function PeerMessageBubble({ msg, t }: { msg: PeerMessageRow; t: (key: string) => string }) {
   const approveMessage = useNetworkStore((s) => s.approveMessage);
@@ -55,14 +56,18 @@ function PeerMessageBubble({ msg, t }: { msg: PeerMessageRow; t: (key: string) =
   );
 }
 
-export default function PeerThread() {
+interface PeerThreadProps {
+  settingsOpen: boolean;
+  onToggleSettings: () => void;
+}
+
+export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThreadProps) {
   const { t } = useTranslation("network");
   const messages = useNetworkStore((s) => s.messages);
   const selectedThreadId = useNetworkStore((s) => s.selectedThreadId);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const contacts = useNetworkStore((s) => s.contacts);
   const sendMessage = useNetworkStore((s) => s.sendMessage);
-  const selectThread = useNetworkStore((s) => s.selectThread);
 
   const [inputValue, setInputValue] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -129,24 +134,9 @@ export default function PeerThread() {
     }
   };
 
-  if (!selectedThreadId) {
-    return (
-      <div className="peer-thread-empty">
-        <p>{t("peer.selectConversation")}</p>
-      </div>
-    );
-  }
-
   return (
     <div className="peer-thread">
       <header className="peer-thread-header">
-        <button
-          className="peer-thread-back"
-          onClick={() => selectThread(null)}
-          title={t("peer.backTitle")}
-        >
-          <ArrowLeft size={18} />
-        </button>
         <div className="peer-thread-agent-info">
           <span className="peer-thread-agent-name">
             {contact?.display_name || contact?.agent_name || t("peer.unknown")}
@@ -155,7 +145,20 @@ export default function PeerThread() {
             {isOnline ? t("peer.online") : t("peer.offline")}
           </span>
         </div>
+        <button
+          className={`icon-btn${settingsOpen ? " active" : ""}`}
+          onClick={onToggleSettings}
+          title={t("contact.detailTitle")}
+        >
+          <Settings size={16} />
+        </button>
       </header>
+
+      {settingsOpen && (
+        <div className="peer-thread-settings">
+          <ContactDetail />
+        </div>
+      )}
 
       <div className="peer-thread-messages" ref={containerRef}>
         {messages.length === 0 ? (
