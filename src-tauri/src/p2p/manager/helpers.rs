@@ -1,10 +1,65 @@
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
 
 use libp2p::PeerId;
 use tauri::{Emitter, Manager};
 
 use super::super::envelope::Envelope;
 use super::{IncomingMessageEvent, PeerConnectedEvent};
+
+// -----------------------------------------------------------------------
+// Auto-registration of unknown peers after successful handshake
+// -----------------------------------------------------------------------
+
+/// Auto-register a peer that completed a valid handshake but wasn't in known_peers.
+/// This handles the case where someone accepted our invite and connected to us.
+pub(crate) fn auto_register_peer(
+    app_handle: &tauri::AppHandle,
+    peer_str: &str,
+    known_peers: &Arc<Mutex<HashSet<String>>>,
+) {
+    // Check if already known
+    let already_known = known_peers.lock().map(|g| g.contains(peer_str)).unwrap_or(true);
+    if already_known {
+        return;
+    }
+
+    // Add to known_peers
+    if let Ok(mut kp) = known_peers.lock() {
+        kp.insert(peer_str.to_string());
+    }
+
+    // Create contact in DB
+    let db = app_handle.state::<crate::db::Database>();
+    if crate::p2p::db::get_contact_by_peer_id(&db, peer_str).ok().flatten().is_some() {
+        return; // already in DB
+    }
+
+    let now = chrono::Utc::now().to_rfc3339();
+    let contact = crate::p2p::db::ContactRow {
+        id: uuid::Uuid::new_v4().to_string(),
+        peer_id: peer_str.to_string(),
+        public_key: String::new(), // filled from handshake data if available
+        display_name: format!("Peer {}", &peer_str[..8.min(peer_str.len())]),
+        agent_name: String::new(),
+        agent_description: String::new(),
+        local_agent_id: None,
+        mode: "secretary".to_string(),
+        capabilities_json: serde_json::to_string(&crate::p2p::capability::CapabilitySet::default_phase1())
+            .unwrap_or_default(),
+        status: "accepted".to_string(),
+        invite_card_raw: None,
+        addresses_json: None,
+        created_at: now.clone(),
+        updated_at: now,
+    };
+
+    if let Err(e) = crate::p2p::db::insert_contact(&db, &contact) {
+        tracing::warn!(error = %e, "Failed to auto-register peer contact");
+    } else {
+        tracing::info!(peer = %peer_str, "Auto-registered peer after handshake");
+    }
+}
 
 // -----------------------------------------------------------------------
 // Handshake / message helpers

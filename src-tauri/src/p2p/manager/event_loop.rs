@@ -142,8 +142,9 @@ fn handle_swarm_event(
                 let peer_str = peer.to_string();
                 let is_known = known_peers.lock().map(|g| g.contains(&peer_str)).unwrap_or(false);
 
-                // Handshake requests are allowed from known (but not yet authenticated) peers
-                if !is_known {
+                // Allow Handshake from unknown peers (they accepted our invite).
+                // Reject non-handshake messages from unknown peers.
+                if !is_known && !matches!(&request.payload, Payload::Handshake { .. }) {
                     tracing::warn!(peer = %peer_str, "P2P rejecting message from unknown peer");
                     let reject = Envelope::new(
                         "local".into(),
@@ -202,6 +203,7 @@ fn handle_swarm_event(
                                 // Check if handshake is now complete (responder side)
                                 if state.is_complete() {
                                     pending_handshakes.remove(&peer_str);
+                                    super::helpers::auto_register_peer(app_handle, &peer_str, known_peers);
                                     let was_new = authenticated_peers.insert(peer_str.clone());
                                     if was_new {
                                         super::helpers::emit_peer_connected(
@@ -216,6 +218,7 @@ fn handle_swarm_event(
                             Ok(None) => {
                                 // Handshake complete, no reply needed (shouldn't happen on responder side, but handle gracefully)
                                 pending_handshakes.remove(&peer_str);
+                                super::helpers::auto_register_peer(app_handle, &peer_str, known_peers);
                                 let was_new = authenticated_peers.insert(peer_str.clone());
                                 let ack = Envelope::new(
                                     "local".into(),
