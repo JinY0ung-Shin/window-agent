@@ -116,12 +116,12 @@
 
 .team-card-edit:hover {
   color: var(--primary);
-  background: #eef2ff;
+  background: var(--focus-ring);
 }
 
 .team-card-delete:hover {
-  color: #ef4444;
-  background: #fef2f2;
+  color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .team-card-delete-confirm {
@@ -386,13 +386,13 @@
 }
 
 .team-role-leader {
-  background: #eef2ff;
-  color: #6366f1;
+  background: var(--focus-ring);
+  color: var(--primary);
 }
 
 .team-role-member {
-  background: #f0fdf4;
-  color: #16a34a;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .team-streaming-badge {
@@ -422,7 +422,7 @@
 }
 
 .team-message.failed .team-msg-bubble-agent {
-  border-left: 3px solid #ef4444;
+  border-left: 3px solid var(--danger);
 }
 
 .team-message.aborted .team-msg-bubble-agent {
@@ -435,7 +435,7 @@
   gap: 4px;
   margin-top: 6px;
   font-size: 0.8125rem;
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .team-msg-aborted {
@@ -480,12 +480,12 @@
 }
 
 .team-status-agent.team-status-streaming {
-  border-color: #22c55e;
+  border-color: var(--success-hover);
   animation: statusPulse 1.5s ease-in-out infinite;
 }
 
 .team-status-agent.team-status-done {
-  border-color: #22c55e;
+  border-color: var(--success-hover);
 }
 
 .team-status-agent.team-status-idle {
@@ -503,7 +503,7 @@
   position: absolute;
   bottom: -2px;
   right: -2px;
-  color: #22c55e;
+  color: var(--success-hover);
   animation: spin 1s linear infinite;
 }
 
@@ -511,7 +511,7 @@
   position: absolute;
   bottom: -2px;
   right: -2px;
-  color: #22c55e;
+  color: var(--success-hover);
 }
 
 .team-status-progress {

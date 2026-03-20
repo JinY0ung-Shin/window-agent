@@ -250,7 +250,7 @@
 }
 
 .vault-note-item.selected {
-  background: #eef2ff;
+  background: var(--focus-ring);
   border-left-color: var(--primary);
 }
 
@@ -671,7 +671,7 @@
 }
 
 .vault-create-error {
-  color: #ef4444;
+  color: var(--danger);
   font-size: 0.8125rem;
   margin-bottom: 12px;
 }
@@ -791,7 +791,7 @@
 }
 
 .vault-wikilink.broken {
-  color: #ef4444;
+  color: var(--danger);
   text-decoration: underline;
   text-decoration-style: dashed;
 }
@@ -896,12 +896,12 @@
 }
 
 .vault-action-danger {
-  color: #ef4444;
-  border-color: #fca5a5;
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 .vault-action-danger:hover {
-  background: #fef2f2;
+  background: var(--danger-bg);
 }
 
 .vault-delete-confirm {

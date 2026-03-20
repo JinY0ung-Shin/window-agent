@@ -90,7 +90,7 @@
 
 .onboarding-theme-btn.selected {
   border-color: var(--primary);
-  background-color: #eef2ff;
+  background-color: var(--focus-ring);
   color: var(--primary);
 }
 
@@ -133,7 +133,7 @@
 }
 
 .onboarding-error {
-  color: #e53e3e;
+  color: var(--danger);
   font-size: 13px;
   margin: 0;
   text-align: center;

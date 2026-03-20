@@ -57,7 +57,7 @@
 }
 
 .agent-list-item.active {
-  background-color: #eef2ff;
+  background-color: var(--focus-ring);
   border-color: var(--primary);
   color: var(--primary);
   font-weight: 600;
@@ -172,11 +172,11 @@
 
 .persona-editor:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px #eef2ff;
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .persona-editor::placeholder {
-  color: #94a3b8;
+  color: var(--text-light);
 }
 
 /* ── Thinking Mode Selector ── */
@@ -218,10 +218,10 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--danger-border);
   border-radius: 12px;
-  background-color: #fef2f2;
-  color: #dc2626;
+  background-color: var(--danger-bg);
+  color: var(--danger-hover);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
@@ -230,8 +230,8 @@
 }
 
 .agent-delete-btn:hover {
-  background-color: #fee2e2;
-  border-color: #f87171;
+  background-color: var(--danger-bg-hover);
+  border-color: var(--danger);
 }
 
 /* ── Avatar Uploader ── */
@@ -391,7 +391,7 @@
 }
 
 .skill-row-warn {
-  color: #f59e0b;
+  color: var(--warning);
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -453,7 +453,7 @@
 }
 
 .skill-error {
-  color: #ef4444;
+  color: var(--danger);
   font-size: 0.78rem;
   padding: 4px 8px;
 }
@@ -473,11 +473,11 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: #fef3c7;
-  border: 1px solid #fde68a;
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
   border-radius: 8px;
   font-size: 0.78rem;
-  color: #92400e;
+  color: var(--warning-dark);
 }
 
 .tool-fallback-warning button {
@@ -612,18 +612,18 @@
 }
 
 .tier-auto {
-  background: #dcfce7;
-  color: #16a34a;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .tier-confirm {
-  background: #fef3c7;
-  color: #d97706;
+  background: var(--warning-bg);
+  color: var(--warning-text);
 }
 
 .tier-deny {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--danger-bg-hover);
+  color: var(--danger-hover);
 }
 
 .tool-form {
@@ -760,9 +760,9 @@
 }
 
 .tool-param-req.required {
-  background: #dbeafe;
-  color: #2563eb;
-  border-color: #93c5fd;
+  background: var(--info-bg);
+  color: var(--info);
+  border-color: var(--info-border);
 }
 
 .tool-param-req.optional {
@@ -792,7 +792,7 @@
 }
 
 .tool-param-remove:hover {
-  color: #ef4444;
+  color: var(--danger);
   background: var(--hover-bg);
 }
 

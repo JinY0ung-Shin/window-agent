@@ -78,7 +78,7 @@
 
 .locale-option.selected {
   border-color: var(--primary);
-  background-color: #eef2ff;
+  background-color: var(--focus-ring);
   color: var(--primary);
   font-weight: 600;
 }
@@ -111,7 +111,7 @@
 }
 
 .settings-inline-action.danger {
-  color: #dc2626;
+  color: var(--danger-hover);
 }
 
 /* ── Health Check ── */
@@ -216,7 +216,7 @@
 }
 
 .export-warning {
-  color: var(--warning, #e6a817);
+  color: var(--warning);
   font-size: 0.75rem;
 }
 
@@ -290,7 +290,7 @@
   gap: 4px;
   padding: 1px 8px;
   font-size: 0.7rem;
-  background: #e0e7ff;
+  background: var(--focus-ring);
   color: var(--primary);
   border-radius: 10px;
   white-space: nowrap;
@@ -331,11 +331,11 @@
 }
 
 .cred-action-btn.danger {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .cred-action-btn.danger:hover {
-  background: #fef2f2;
+  background: var(--danger-bg);
 }
 
 .cred-confirm-delete {
@@ -343,7 +343,7 @@
   align-items: center;
   gap: 6px;
   font-size: 0.75rem;
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .cred-add-btn {
@@ -430,7 +430,7 @@
 
 .cred-form-error {
   font-size: 0.8rem;
-  color: #ef4444;
+  color: var(--danger);
   padding: 4px 0;
 }
 
@@ -457,16 +457,16 @@
 }
 
 .network-status-dormant {
-  background-color: #94a3b8;
+  background-color: var(--text-light);
 }
 
 .network-status-starting,
 .network-status-stopping {
-  background-color: #f59e0b;
+  background-color: var(--warning);
 }
 
 .network-status-active {
-  background-color: #22c55e;
+  background-color: var(--success-hover);
 }
 
 .network-peer-count {
@@ -501,8 +501,8 @@
 }
 
 .network-consent {
-  background-color: #fef3c7;
-  border: 1px solid #f59e0b;
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning);
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 16px;

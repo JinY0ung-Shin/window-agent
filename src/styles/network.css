@@ -44,7 +44,7 @@
 }
 
 .peer-thread-status.online {
-  color: #22c55e;
+  color: var(--success-hover);
 }
 
 .peer-thread-messages {
@@ -125,11 +125,11 @@
 }
 
 .peer-msg-approval.approved {
-  color: #22c55e;
+  color: var(--success-hover);
 }
 
 .peer-msg-approval.rejected {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 /* ── Peer Thread Input ── */
@@ -152,7 +152,7 @@
 }
 
 .peer-thread-input-container:focus-within {
-  box-shadow: 0 0 0 2px #eef2ff, var(--shadow-md);
+  box-shadow: 0 0 0 2px var(--focus-ring), var(--shadow-md);
   border-color: var(--primary);
 }
 
@@ -172,7 +172,7 @@
 }
 
 .peer-thread-input::placeholder {
-  color: #94a3b8;
+  color: var(--text-light);
 }
 
 /* ── Delivery Badge ── */
@@ -187,26 +187,26 @@
 }
 
 .delivery-sending {
-  color: #3b82f6;
+  color: var(--info);
 }
 
 .delivery-delivered {
-  color: #22c55e;
+  color: var(--success-hover);
 }
 
 .delivery-failed {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 .delivery-queued {
-  color: #eab308;
+  color: var(--warning);
 }
 
 .delivery-spinner {
   display: inline-block;
   width: 10px;
   height: 10px;
-  border: 2px solid #3b82f6;
+  border: 2px solid var(--info);
   border-top-color: transparent;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -215,7 +215,7 @@
 .delivery-retry-btn {
   background: none;
   border: none;
-  color: #ef4444;
+  color: var(--danger);
   cursor: pointer;
   padding: 2px;
   display: inline-flex;
@@ -225,15 +225,15 @@
 }
 
 .delivery-retry-btn:hover {
-  background-color: #fef2f2;
+  background-color: var(--danger-bg);
 }
 
 /* ── Approval Panel ── */
 .approval-panel {
   margin-top: 8px;
   padding: 12px;
-  background-color: #fffbeb;
-  border: 1px solid #fde68a;
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
   border-radius: 12px;
   font-size: 0.85rem;
 }
@@ -295,24 +295,24 @@
 }
 
 .approval-btn.approve {
-  background-color: #22c55e;
+  background-color: var(--success-hover);
   color: white;
 }
 
 .approval-btn.approve:hover {
-  background-color: #16a34a;
+  background-color: var(--success-text);
 }
 
 .approval-btn.reject {
-  background-color: #f1f5f9;
-  color: #64748b;
+  background-color: var(--hover-bg);
+  color: var(--text-muted);
   border: 1px solid var(--border);
 }
 
 .approval-btn.reject:hover {
-  background-color: #fef2f2;
-  color: #ef4444;
-  border-color: #fecaca;
+  background-color: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
 }
 
 /* ── Network Panel ── */
@@ -405,10 +405,10 @@
 
 .network-error {
   padding: 8px 16px;
-  background: #fef2f2;
-  color: #dc2626;
+  background: var(--danger-bg);
+  color: var(--danger-hover);
   font-size: 0.8125rem;
-  border-bottom: 1px solid #fecaca;
+  border-bottom: 1px solid var(--danger-border);
 }
 
 .peer-thread-settings {
@@ -471,7 +471,7 @@
 }
 
 .contact-item.active {
-  background-color: #eef2ff;
+  background-color: var(--focus-ring);
 }
 
 .contact-item-info {
@@ -532,17 +532,17 @@
 }
 
 .status-dot.online {
-  background-color: #22c55e;
-  box-shadow: 0 0 4px #22c55e80;
+  background-color: var(--success-hover);
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.5);
 }
 
 .status-dot.connecting {
-  background-color: #eab308;
+  background-color: var(--warning);
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
 
 .status-dot.offline {
-  background-color: #94a3b8;
+  background-color: var(--text-light);
 }
 
 .status-badge {
@@ -553,19 +553,19 @@
 }
 
 .status-badge.connected {
-  background: #dcfce7;
-  color: #16a34a;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .status-badge.connecting {
-  background: #fef9c3;
-  color: #ca8a04;
+  background: var(--warning-bg);
+  color: var(--warning-dark);
 }
 
 .status-badge.offline,
 .status-badge.disconnected {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--hover-bg);
+  color: var(--text-muted);
 }
 
 /* ── Invite Dialog ── */
@@ -601,7 +601,7 @@
 }
 
 .invite-tab.active {
-  background: #eef2ff;
+  background: var(--focus-ring);
   color: var(--primary);
 }
 
@@ -672,7 +672,7 @@
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 4px;
-  background: #e0e7ff;
+  background: var(--focus-ring);
   color: var(--primary);
   flex-shrink: 0;
 }
@@ -732,7 +732,7 @@
 }
 
 .addr-manual-item .icon-btn:hover {
-  color: #ef4444;
+  color: var(--danger);
 }
 
 /* ── Invite Preview in AcceptTab ── */
@@ -752,8 +752,8 @@
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 4px;
-  background: #fef3c7;
-  color: #b45309;
+  background: var(--warning-bg);
+  color: var(--warning-dark);
   align-self: flex-start;
 }
 
