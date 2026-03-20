@@ -13,6 +13,8 @@ use super::{IncomingMessageEvent, PeerConnectedEvent};
 
 /// Auto-register a peer that completed a valid handshake but wasn't in known_peers.
 /// This handles the case where someone accepted our invite and connected to us.
+/// The contact is created with status "pending_approval" — the user must approve
+/// before the peer can send messages (capability check will deny until accepted).
 pub(crate) fn auto_register_peer(
     app_handle: &tauri::AppHandle,
     peer_str: &str,
@@ -24,30 +26,30 @@ pub(crate) fn auto_register_peer(
         return;
     }
 
-    // Add to known_peers
-    if let Ok(mut kp) = known_peers.lock() {
-        kp.insert(peer_str.to_string());
-    }
-
-    // Create contact in DB
+    // Check DB: if contact exists (including previously deleted/blocked), skip
     let db = app_handle.state::<crate::db::Database>();
     if crate::p2p::db::get_contact_by_peer_id(&db, peer_str).ok().flatten().is_some() {
-        return; // already in DB
+        // Already in DB — just add to known_peers for this session
+        if let Ok(mut kp) = known_peers.lock() {
+            kp.insert(peer_str.to_string());
+        }
+        return;
     }
 
+    // Create contact in DB first (with pending_approval status)
     let now = chrono::Utc::now().to_rfc3339();
     let contact = crate::p2p::db::ContactRow {
         id: uuid::Uuid::new_v4().to_string(),
         peer_id: peer_str.to_string(),
-        public_key: String::new(), // filled from handshake data if available
+        public_key: String::new(),
         display_name: format!("Peer {}", &peer_str[..8.min(peer_str.len())]),
         agent_name: String::new(),
         agent_description: String::new(),
         local_agent_id: None,
         mode: "secretary".to_string(),
-        capabilities_json: serde_json::to_string(&crate::p2p::capability::CapabilitySet::default_phase1())
+        capabilities_json: serde_json::to_string(&crate::p2p::capability::CapabilitySet::deny_all())
             .unwrap_or_default(),
-        status: "accepted".to_string(),
+        status: "pending_approval".to_string(),
         invite_card_raw: None,
         addresses_json: None,
         created_at: now.clone(),
@@ -56,9 +58,24 @@ pub(crate) fn auto_register_peer(
 
     if let Err(e) = crate::p2p::db::insert_contact(&db, &contact) {
         tracing::warn!(error = %e, "Failed to auto-register peer contact");
-    } else {
-        tracing::info!(peer = %peer_str, "Auto-registered peer after handshake");
+        return; // Don't add to known_peers if DB write failed
     }
+
+    tracing::info!(peer = %peer_str, "Auto-registered peer as pending_approval after handshake");
+
+    // Only add to known_peers after successful DB insert
+    if let Ok(mut kp) = known_peers.lock() {
+        kp.insert(peer_str.to_string());
+    }
+
+    // Notify frontend about the new pending contact
+    let _ = app_handle.emit(
+        "p2p:contact-pending",
+        serde_json::json!({
+            "peer_id": peer_str,
+            "display_name": format!("Peer {}", &peer_str[..8.min(peer_str.len())]),
+        }),
+    );
 }
 
 // -----------------------------------------------------------------------

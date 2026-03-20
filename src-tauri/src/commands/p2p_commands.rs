@@ -107,22 +107,31 @@ pub async fn p2p_accept_invite(
     let contact = if let Some(existing) =
         p2p_db::get_contact_by_peer_id(&db, &card.peer_id).map_err(|e| AppError::P2p(e.to_string()))?
     {
-        // Update existing contact — always set addresses_json (Some(None) clears it)
+        // Update existing contact — fill in invite data (covers auto-registered placeholders)
+        let public_key_b64 = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            &card.public_key,
+        );
         let mut update = p2p_db::ContactUpdate {
+            display_name: Some(card.agent_name.clone()),
             agent_name: Some(card.agent_name.clone()),
             agent_description: Some(card.agent_description.clone()),
             addresses_json: Some(addresses_json.clone()),
+            status: Some("accepted".to_string()),
+            capabilities_json: Some(
+                serde_json::to_string(&CapabilitySet::default_phase1()).unwrap_or_default(),
+            ),
             ..Default::default()
         };
         if let Some(ref aid) = local_agent_id {
             update.local_agent_id = Some(Some(aid.clone()));
         }
         p2p_db::update_contact(&db, &existing.id, update).map_err(|e| AppError::P2p(e.to_string()))?;
-        // Update invite_card_raw directly (not in ContactUpdate)
+        // Update invite_card_raw and public_key directly
         db.with_conn(|conn| {
             conn.execute(
-                "UPDATE contacts SET invite_card_raw = ?1 WHERE id = ?2",
-                rusqlite::params![code, existing.id],
+                "UPDATE contacts SET invite_card_raw = ?1, public_key = ?2 WHERE id = ?3",
+                rusqlite::params![code, public_key_b64, existing.id],
             )?;
             Ok(())
         })
