@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNetworkStore } from "../../stores/networkStore";
-import { p2pGetRelayUrl, p2pSetRelayUrl } from "../../services/commands/p2pCommands";
+import { relayGetRelayUrl, relaySetRelayUrl } from "../../services/commands/relayCommands";
 
 interface Props {
   isOpen: boolean;
@@ -23,7 +23,7 @@ export default function NetworkSettingsPanel({ isOpen }: Props) {
 
   useEffect(() => {
     if (isOpen) {
-      p2pGetRelayUrl().then((url) => {
+      relayGetRelayUrl().then((url) => {
         setTempRelayUrl(url);
         setRelaySaved(false);
         setRelayError("");
@@ -126,7 +126,7 @@ export default function NetworkSettingsPanel({ isOpen }: Props) {
               }
               setRelaySaving(true);
               try {
-                await p2pSetRelayUrl(val);
+                await relaySetRelayUrl(val);
                 setRelaySaved(true);
               } catch (e) {
                 setRelayError(e instanceof Error ? e.message : String(e));

@@ -1,13 +1,13 @@
 {
   "consent": {
-    "title": "P2P Network Notice",
+    "title": "Agent Network Notice",
     "description": "Enabling the network allows this agent to exchange messages directly with other agents. All communication is encrypted, and only peers who have exchanged invitation codes can connect. Received messages are processed only after user approval.",
     "cancel": "Cancel",
     "agreeAndEnable": "Agree & Enable"
   },
   "toggle": {
-    "label": "P2P Network",
-    "hint": "Enable P2P communication with other agents."
+    "label": "Agent Network",
+    "hint": "Enable relay-based communication with other agents."
   },
   "relay": {
     "label": "Relay Server URL",
@@ -75,7 +75,7 @@
     "title": "Agent Network",
     "inviteTitle": "Invite",
     "inactive": "Network is inactive.",
-    "inactiveHint": "Enable P2P network in settings.",
+    "inactiveHint": "Enable agent network in settings.",
     "refreshTitle": "Refresh"
   },
   "peer": {

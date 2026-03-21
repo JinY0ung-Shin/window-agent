@@ -30,7 +30,7 @@ export default function MainLayout() {
 
   const [chromiumError, setChromiumError] = useState<string | null>(null);
 
-  // Initialize P2P network store and event listeners
+  // Initialize relay network store and event listeners
   useEffect(() => {
     initializeNetwork();
     let cleanup: (() => void) | undefined;

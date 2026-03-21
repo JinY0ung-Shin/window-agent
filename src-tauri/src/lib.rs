@@ -5,7 +5,7 @@ mod db;
 mod error;
 pub mod memory;
 mod models;
-pub mod p2p;
+pub mod relay;
 mod services;
 mod utils;
 pub mod vault;
@@ -72,12 +72,38 @@ pub fn run() {
                 Err(e) => { tracing::warn!("Vault watcher failed to start: {e}"); }
             }
 
-            // Initialize P2P identity and manager (dormant until user opts in)
-            let p2p_identity = p2p::identity::NodeIdentity::load_or_create(app.handle())
-                .expect("failed to initialize P2P identity");
-            let p2p_manager = p2p::manager::P2PManager::new(&p2p_identity);
-            app.manage(p2p_identity);
-            app.manage(p2p_manager);
+            // Migrate legacy p2p store files → relay (one-time, idempotent)
+            {
+                use tauri_plugin_store::StoreExt;
+                for (old, new_name) in [
+                    ("p2p-identity.json", "relay-identity.json"),
+                    ("p2p-settings.json", "relay-settings.json"),
+                ] {
+                    if let Ok(old_store) = app.store(old) {
+                        if let Ok(new_store) = app.store(new_name) {
+                            // Only migrate if new store is empty and old has data
+                            let new_has_data = new_store.length() > 0;
+                            let old_has_data = old_store.length() > 0;
+                            if !new_has_data && old_has_data {
+                                for (key, value) in old_store.entries() {
+                                    new_store.set(key, value);
+                                }
+                                match new_store.save() {
+                                    Ok(()) => tracing::info!("Migrated {old} → {new_name}"),
+                                    Err(e) => tracing::warn!("Failed to save migrated store {new_name}: {e}"),
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Initialize relay identity and manager (dormant until user opts in)
+            let relay_identity = relay::identity::NodeIdentity::load_or_create(app.handle())
+                .expect("failed to initialize relay identity");
+            let relay_manager = relay::manager::RelayManager::new(&relay_identity);
+            app.manage(relay_identity);
+            app.manage(relay_manager);
 
             // Initialize SystemMemoryManager
             app.manage(SystemMemoryManager::new(&app_dir));
@@ -176,30 +202,30 @@ pub fn run() {
             commands::vault_rebuild_index,
             commands::vault_archive_note,
             commands::vault_list_notes_with_decay,
-            commands::p2p_start,
-            commands::p2p_stop,
-            commands::p2p_status,
-            commands::p2p_generate_invite,
-            commands::p2p_accept_invite,
-            commands::p2p_list_contacts,
-            commands::p2p_update_contact,
-            commands::p2p_remove_contact,
-            commands::p2p_approve_contact,
-            commands::p2p_reject_contact,
-            commands::p2p_bind_agent,
-            commands::p2p_send_message,
-            commands::p2p_approve_message,
-            commands::p2p_reject_message,
-            commands::p2p_request_draft,
-            commands::p2p_list_threads,
-            commands::p2p_get_thread,
-            commands::p2p_get_thread_messages,
-            commands::p2p_get_peer_id,
-            commands::p2p_get_network_enabled,
-            commands::p2p_set_network_enabled,
-            commands::p2p_get_connection_info,
-            commands::p2p_get_relay_url,
-            commands::p2p_set_relay_url,
+            commands::relay_start,
+            commands::relay_stop,
+            commands::relay_status,
+            commands::relay_generate_invite,
+            commands::relay_accept_invite,
+            commands::relay_list_contacts,
+            commands::relay_update_contact,
+            commands::relay_remove_contact,
+            commands::relay_approve_contact,
+            commands::relay_reject_contact,
+            commands::relay_bind_agent,
+            commands::relay_send_message,
+            commands::relay_approve_message,
+            commands::relay_reject_message,
+            commands::relay_request_draft,
+            commands::relay_list_threads,
+            commands::relay_get_thread,
+            commands::relay_get_thread_messages,
+            commands::relay_get_peer_id,
+            commands::relay_get_network_enabled,
+            commands::relay_set_network_enabled,
+            commands::relay_get_connection_info,
+            commands::relay_get_relay_url,
+            commands::relay_set_relay_url,
             commands::read_consolidated_memory,
             commands::list_pending_consolidations,
             commands::read_digest,

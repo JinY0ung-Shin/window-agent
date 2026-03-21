@@ -4,9 +4,9 @@ import { Trash2, Save } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
 import {
-  p2pUpdateContact,
-  p2pRemoveContact,
-} from "../../services/commands/p2pCommands";
+  relayUpdateContact,
+  relayRemoveContact,
+} from "../../services/commands/relayCommands";
 
 export default function ContactDetail() {
   const { t } = useTranslation("network");
@@ -72,7 +72,7 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
   const handleSave = async () => {
     setSaving(true);
     try {
-      await p2pUpdateContact(
+      await relayUpdateContact(
         contact.id,
         displayName !== contact.display_name ? displayName : undefined,
         localAgentId !== (contact.local_agent_id ?? "") ? localAgentId || undefined : undefined,
@@ -84,7 +84,7 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
   };
 
   const handleDelete = async () => {
-    await p2pRemoveContact(contact.id);
+    await relayRemoveContact(contact.id);
     onDeselect();
     await onRefresh();
   };

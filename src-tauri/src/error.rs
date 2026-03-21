@@ -14,7 +14,7 @@ pub enum AppError {
     Validation(String),
     Io(String),
     NotFound(String),
-    P2p(String),
+    Relay(String),
     Vault(String),
     Config(String),
     Lock(String),
@@ -29,7 +29,7 @@ impl fmt::Display for AppError {
             AppError::Validation(msg) => write!(f, "Validation error: {msg}"),
             AppError::Io(msg) => write!(f, "IO error: {msg}"),
             AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
-            AppError::P2p(msg) => write!(f, "P2P error: {msg}"),
+            AppError::Relay(msg) => write!(f, "Relay error: {msg}"),
             AppError::Vault(msg) => write!(f, "Vault error: {msg}"),
             AppError::Config(msg) => write!(f, "Config error: {msg}"),
             AppError::Lock(msg) => write!(f, "Lock error: {msg}"),
@@ -119,8 +119,8 @@ mod tests {
             "Not found: item"
         );
         assert_eq!(
-            AppError::P2p("disconnected".into()).to_string(),
-            "P2P error: disconnected"
+            AppError::Relay("disconnected".into()).to_string(),
+            "Relay error: disconnected"
         );
         assert_eq!(
             AppError::Vault("corrupt".into()).to_string(),

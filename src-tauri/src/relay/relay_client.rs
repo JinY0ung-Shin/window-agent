@@ -11,7 +11,7 @@ use tokio_tungstenite::tungstenite::Message as WsMessage;
 use tracing::{info, warn};
 use wa_shared::protocol::*;
 
-use crate::p2p::identity::NodeIdentity;
+use crate::relay::identity::NodeIdentity;
 
 /// Derive the relay-compatible peer_id from an Ed25519 public key.
 /// Matches the server's derivation: hex-encoded first 16 bytes.

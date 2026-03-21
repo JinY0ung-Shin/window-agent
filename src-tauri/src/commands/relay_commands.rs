@@ -1,32 +1,32 @@
 use crate::db::Database;
 use crate::error::AppError;
-use crate::p2p::capability::CapabilitySet;
-use crate::p2p::db as p2p_db;
-use crate::p2p::envelope::{Envelope, Payload};
-use crate::p2p::identity::NodeIdentity;
-use crate::p2p::invite;
-use crate::p2p::manager::P2PManager;
-use crate::p2p::secretary;
+use crate::relay::capability::CapabilitySet;
+use crate::relay::db as relay_db;
+use crate::relay::envelope::{Envelope, Payload};
+use crate::relay::identity::NodeIdentity;
+use crate::relay::invite;
+use crate::relay::manager::RelayManager;
+use crate::relay::secretary;
 use tauri::{Manager, State};
 
 // ── Lifecycle commands ──
 
 #[tauri::command]
-pub async fn p2p_start(
+pub async fn relay_start(
     app: tauri::AppHandle,
     db: State<'_, Database>,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
 ) -> Result<(), AppError> {
     // Load known peers from contacts DB before starting
-    let contacts = p2p_db::list_contacts(&db).map_err(|e| AppError::P2p(e.to_string()))?;
+    let contacts = relay_db::list_contacts(&db).map_err(|e| AppError::Relay(e.to_string()))?;
     let peer_ids: std::collections::HashSet<String> =
         contacts.into_iter().map(|c| c.peer_id).collect();
-    manager.set_known_peers(peer_ids).map_err(|e| AppError::P2p(e.to_string()))?;
+    manager.set_known_peers(peer_ids).map_err(|e| AppError::Relay(e.to_string()))?;
 
     manager
         .start(app.clone())
         .await
-        .map_err(|e| AppError::P2p(e.to_string()))?;
+        .map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Process pending outbox entries on startup
     process_pending_outbox(&db, &manager).await;
@@ -35,24 +35,24 @@ pub async fn p2p_start(
 }
 
 #[tauri::command]
-pub async fn p2p_stop(manager: State<'_, P2PManager>) -> Result<(), AppError> {
-    manager.stop().await.map_err(|e| AppError::P2p(e.to_string()))
+pub async fn relay_stop(manager: State<'_, RelayManager>) -> Result<(), AppError> {
+    manager.stop().await.map_err(|e| AppError::Relay(e.to_string()))
 }
 
 #[tauri::command]
-pub fn p2p_status(manager: State<'_, P2PManager>) -> Result<String, AppError> {
-    Ok(format!("{:?}", manager.status().map_err(|e| AppError::P2p(e.to_string()))?).to_lowercase())
+pub fn relay_status(manager: State<'_, RelayManager>) -> Result<String, AppError> {
+    Ok(format!("{:?}", manager.status().map_err(|e| AppError::Relay(e.to_string()))?).to_lowercase())
 }
 
 #[tauri::command]
-pub fn p2p_get_peer_id(manager: State<'_, P2PManager>) -> Result<String, AppError> {
-    Ok(manager.peer_id().map_err(|e| AppError::P2p(e.to_string()))?.to_string())
+pub fn relay_get_peer_id(manager: State<'_, RelayManager>) -> Result<String, AppError> {
+    Ok(manager.peer_id().map_err(|e| AppError::Relay(e.to_string()))?.to_string())
 }
 
 // ── Invite commands ──
 
 #[tauri::command]
-pub fn p2p_generate_invite(
+pub fn relay_generate_invite(
     app: tauri::AppHandle,
     identity: State<'_, NodeIdentity>,
     agent_name: String,
@@ -60,27 +60,27 @@ pub fn p2p_generate_invite(
     addresses: Vec<String>,
     expiry_hours: Option<u64>,
 ) -> Result<String, AppError> {
-    let relay_url = p2p_get_relay_url(app);
+    let relay_url = relay_get_relay_url(app);
     invite::generate_invite_with_relay(&identity, addresses, agent_name, agent_description, expiry_hours, Some(relay_url))
-        .map_err(|e| AppError::P2p(e.to_string()))
+        .map_err(|e| AppError::Relay(e.to_string()))
 }
 
 #[tauri::command]
-pub async fn p2p_accept_invite(
+pub async fn relay_accept_invite(
     app: tauri::AppHandle,
     db: State<'_, Database>,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
     code: String,
     local_agent_id: Option<String>,
-) -> Result<p2p_db::ContactRow, AppError> {
-    let card = invite::parse_invite(&code).map_err(|e| AppError::P2p(e.to_string()))?;
+) -> Result<relay_db::ContactRow, AppError> {
+    let card = invite::parse_invite(&code).map_err(|e| AppError::Relay(e.to_string()))?;
 
     // If the invite carries a relay_url, store it for next startup
     // (multi-relay reconnect is out of scope — single relay assumption)
     if let Some(ref invite_relay_url) = card.relay_url {
         if !invite_relay_url.is_empty() {
             use tauri_plugin_store::StoreExt;
-            if let Ok(store) = app.store("p2p-settings.json") {
+            if let Ok(store) = app.store("relay-settings.json") {
                 store.set("relay_url", serde_json::json!(invite_relay_url));
                 let _ = store.save();
             }
@@ -96,14 +96,14 @@ pub async fn p2p_accept_invite(
 
     // Check if a contact with this peer_id already exists
     let contact = if let Some(existing) =
-        p2p_db::get_contact_by_peer_id(&db, &card.peer_id).map_err(|e| AppError::P2p(e.to_string()))?
+        relay_db::get_contact_by_peer_id(&db, &card.peer_id).map_err(|e| AppError::Relay(e.to_string()))?
     {
         // Update existing contact — fill in invite data (covers auto-registered placeholders)
         let public_key_b64 = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
             &card.public_key,
         );
-        let mut update = p2p_db::ContactUpdate {
+        let mut update = relay_db::ContactUpdate {
             display_name: Some(card.agent_name.clone()),
             agent_name: Some(card.agent_name.clone()),
             agent_description: Some(card.agent_description.clone()),
@@ -117,7 +117,7 @@ pub async fn p2p_accept_invite(
         if let Some(ref aid) = local_agent_id {
             update.local_agent_id = Some(Some(aid.clone()));
         }
-        p2p_db::update_contact(&db, &existing.id, update).map_err(|e| AppError::P2p(e.to_string()))?;
+        relay_db::update_contact(&db, &existing.id, update).map_err(|e| AppError::Relay(e.to_string()))?;
         // Update invite_card_raw and public_key directly
         db.with_conn(|conn| {
             conn.execute(
@@ -126,15 +126,15 @@ pub async fn p2p_accept_invite(
             )?;
             Ok(())
         })
-        .map_err(|e| AppError::P2p(e.to_string()))?;
+        .map_err(|e| AppError::Relay(e.to_string()))?;
         // Re-fetch to return fresh data
-        p2p_db::get_contact(&db, &existing.id)
-            .map_err(|e| AppError::P2p(e.to_string()))?
+        relay_db::get_contact(&db, &existing.id)
+            .map_err(|e| AppError::Relay(e.to_string()))?
             .ok_or_else(|| AppError::NotFound("Contact disappeared after update".into()))?
     } else {
         // Insert new contact
         let now = chrono::Utc::now().to_rfc3339();
-        let contact = p2p_db::ContactRow {
+        let contact = relay_db::ContactRow {
             id: uuid::Uuid::new_v4().to_string(),
             peer_id: card.peer_id.clone(),
             public_key: base64::Engine::encode(
@@ -154,17 +154,17 @@ pub async fn p2p_accept_invite(
             created_at: now.clone(),
             updated_at: now,
         };
-        p2p_db::insert_contact(&db, &contact).map_err(|e| AppError::P2p(e.to_string()))?;
+        relay_db::insert_contact(&db, &contact).map_err(|e| AppError::Relay(e.to_string()))?;
         contact
     };
 
     // Register peer's public key for encryption/relay routing
     manager
         .register_peer_key(&contact.peer_id, &contact.public_key)
-        .map_err(|e| AppError::P2p(e.to_string()))?;
+        .map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Update known peers set so the new contact can communicate immediately
-    manager.add_known_peer(contact.peer_id.clone()).map_err(|e| AppError::P2p(e.to_string()))?;
+    manager.add_known_peer(contact.peer_id.clone()).map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Send Introduce envelope so the remote peer knows who we are (using LOCAL identity, not remote card)
     if manager.is_peer_authenticated(&contact.peer_id).unwrap_or(false) {
@@ -208,63 +208,63 @@ pub async fn p2p_accept_invite(
 // ── Contact commands ──
 
 #[tauri::command]
-pub fn p2p_list_contacts(db: State<'_, Database>) -> Result<Vec<p2p_db::ContactRow>, AppError> {
-    p2p_db::list_contacts(&db).map_err(|e| AppError::P2p(e.to_string()))
+pub fn relay_list_contacts(db: State<'_, Database>) -> Result<Vec<relay_db::ContactRow>, AppError> {
+    relay_db::list_contacts(&db).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 #[tauri::command]
-pub fn p2p_update_contact(
+pub fn relay_update_contact(
     db: State<'_, Database>,
     id: String,
     display_name: Option<String>,
     local_agent_id: Option<String>,
     mode: Option<String>,
 ) -> Result<(), AppError> {
-    let update = p2p_db::ContactUpdate {
+    let update = relay_db::ContactUpdate {
         display_name,
         local_agent_id: local_agent_id.map(Some),
         mode,
         ..Default::default()
     };
-    p2p_db::update_contact(&db, &id, update).map_err(|e| AppError::P2p(e.to_string()))
+    relay_db::update_contact(&db, &id, update).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 #[tauri::command]
-pub fn p2p_remove_contact(
+pub fn relay_remove_contact(
     db: State<'_, Database>,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
     id: String,
 ) -> Result<(), AppError> {
     // Look up contact to get peer_id before deleting
-    if let Ok(Some(contact)) = p2p_db::get_contact(&db, &id) {
-        manager.remove_known_peer(&contact.peer_id).map_err(|e| AppError::P2p(e.to_string()))?;
+    if let Ok(Some(contact)) = relay_db::get_contact(&db, &id) {
+        manager.remove_known_peer(&contact.peer_id).map_err(|e| AppError::Relay(e.to_string()))?;
     }
-    p2p_db::delete_contact(&db, &id).map_err(|e| AppError::P2p(e.to_string()))
+    relay_db::delete_contact(&db, &id).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 #[tauri::command]
-pub fn p2p_bind_agent(
+pub fn relay_bind_agent(
     db: State<'_, Database>,
     contact_id: String,
     agent_id: String,
 ) -> Result<(), AppError> {
-    let update = p2p_db::ContactUpdate {
+    let update = relay_db::ContactUpdate {
         local_agent_id: Some(Some(agent_id)),
         ..Default::default()
     };
-    p2p_db::update_contact(&db, &contact_id, update).map_err(|e| AppError::P2p(e.to_string()))
+    relay_db::update_contact(&db, &contact_id, update).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 // ── Contact approval commands ──
 
 #[tauri::command]
-pub fn p2p_approve_contact(
+pub fn relay_approve_contact(
     db: State<'_, Database>,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
     contact_id: String,
 ) -> Result<(), AppError> {
-    let contact = p2p_db::get_contact(&db, &contact_id)
-        .map_err(|e| AppError::P2p(e.to_string()))?
+    let contact = relay_db::get_contact(&db, &contact_id)
+        .map_err(|e| AppError::Relay(e.to_string()))?
         .ok_or_else(|| AppError::NotFound(format!("Contact not found: {}", contact_id)))?;
 
     if contact.status != "pending_approval" {
@@ -275,20 +275,20 @@ pub fn p2p_approve_contact(
     }
 
     // Update status to accepted with default Phase 1 capabilities
-    let update = p2p_db::ContactUpdate {
+    let update = relay_db::ContactUpdate {
         status: Some("accepted".to_string()),
         capabilities_json: Some(
             serde_json::to_string(&CapabilitySet::default_phase1()).unwrap_or_default(),
         ),
         ..Default::default()
     };
-    p2p_db::update_contact(&db, &contact_id, update).map_err(|e| AppError::P2p(e.to_string()))?;
+    relay_db::update_contact(&db, &contact_id, update).map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Ensure peer is in known_peers and key indexes
     if !contact.public_key.is_empty() {
         let _ = manager.register_peer_key(&contact.peer_id, &contact.public_key);
     }
-    manager.add_known_peer(contact.peer_id.clone()).map_err(|e| AppError::P2p(e.to_string()))?;
+    manager.add_known_peer(contact.peer_id.clone()).map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Subscribe to presence for the newly approved contact
     if let Ok(relay_pid) = manager.peer_id_to_relay_id(&contact.peer_id) {
@@ -301,44 +301,44 @@ pub fn p2p_approve_contact(
 }
 
 #[tauri::command]
-pub fn p2p_reject_contact(
+pub fn relay_reject_contact(
     db: State<'_, Database>,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
     contact_id: String,
 ) -> Result<(), AppError> {
-    let contact = p2p_db::get_contact(&db, &contact_id)
-        .map_err(|e| AppError::P2p(e.to_string()))?
+    let contact = relay_db::get_contact(&db, &contact_id)
+        .map_err(|e| AppError::Relay(e.to_string()))?
         .ok_or_else(|| AppError::NotFound(format!("Contact not found: {}", contact_id)))?;
 
     // Remove from peer indexes
-    manager.remove_known_peer(&contact.peer_id).map_err(|e| AppError::P2p(e.to_string()))?;
+    manager.remove_known_peer(&contact.peer_id).map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Delete the contact
-    p2p_db::delete_contact(&db, &contact_id).map_err(|e| AppError::P2p(e.to_string()))
+    relay_db::delete_contact(&db, &contact_id).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 // ── Messaging commands ──
 
 #[tauri::command]
-pub async fn p2p_send_message(
+pub async fn relay_send_message(
     db: State<'_, Database>,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
     contact_id: String,
     content: String,
 ) -> Result<(), AppError> {
     // 1. Look up contact
-    let contact = p2p_db::get_contact(&db, &contact_id)
-        .map_err(|e| AppError::P2p(e.to_string()))?
+    let contact = relay_db::get_contact(&db, &contact_id)
+        .map_err(|e| AppError::Relay(e.to_string()))?
         .ok_or_else(|| AppError::NotFound(format!("Contact not found: {}", contact_id)))?;
 
     // 2. Find or create thread
     let threads =
-        p2p_db::list_threads_for_contact(&db, &contact_id).map_err(|e| AppError::P2p(e.to_string()))?;
+        relay_db::list_threads_for_contact(&db, &contact_id).map_err(|e| AppError::Relay(e.to_string()))?;
     let thread_id = if let Some(thread) = threads.first() {
         thread.id.clone()
     } else {
         let now = chrono::Utc::now().to_rfc3339();
-        let thread = p2p_db::PeerThreadRow {
+        let thread = relay_db::PeerThreadRow {
             id: uuid::Uuid::new_v4().to_string(),
             contact_id: contact_id.clone(),
             local_agent_id: contact.local_agent_id.clone(),
@@ -348,7 +348,7 @@ pub async fn p2p_send_message(
             updated_at: now,
         };
         let tid = thread.id.clone();
-        p2p_db::create_thread(&db, &thread).map_err(|e| AppError::P2p(e.to_string()))?;
+        relay_db::create_thread(&db, &thread).map_err(|e| AppError::Relay(e.to_string()))?;
         tid
     };
 
@@ -363,7 +363,7 @@ pub async fn p2p_send_message(
     // 4. Persist message (outgoing, auto-approved)
     let now = chrono::Utc::now().to_rfc3339();
     let msg_id = uuid::Uuid::new_v4().to_string();
-    let msg = p2p_db::PeerMessageRow {
+    let msg = relay_db::PeerMessageRow {
         id: msg_id.clone(),
         thread_id,
         message_id_unique: envelope.message_id.clone(),
@@ -377,11 +377,11 @@ pub async fn p2p_send_message(
         raw_envelope: serde_json::to_string(&envelope).ok(),
         created_at: now.clone(),
     };
-    p2p_db::insert_peer_message(&db, &msg).map_err(|e| AppError::P2p(e.to_string()))?;
+    relay_db::insert_peer_message(&db, &msg).map_err(|e| AppError::Relay(e.to_string()))?;
 
     // 5. Persist to outbox
     let outbox_id = uuid::Uuid::new_v4().to_string();
-    let outbox = p2p_db::OutboxRow {
+    let outbox = relay_db::OutboxRow {
         id: outbox_id.clone(),
         peer_message_id: msg_id.clone(),
         target_peer_id: contact.peer_id.clone(),
@@ -390,18 +390,18 @@ pub async fn p2p_send_message(
         status: "pending".to_string(),
         created_at: now,
     };
-    p2p_db::insert_outbox(&db, &outbox).map_err(|e| AppError::P2p(e.to_string()))?;
+    relay_db::insert_outbox(&db, &outbox).map_err(|e| AppError::Relay(e.to_string()))?;
 
     // 6. Skip if relay is not active
-    if !manager.is_peer_authenticated(&contact.peer_id).map_err(|e| AppError::P2p(e.to_string()))? {
-        p2p_db::update_message_state(&db, &msg_id, None, Some("queued"))
-            .map_err(|e| AppError::P2p(e.to_string()))?;
+    if !manager.is_peer_authenticated(&contact.peer_id).map_err(|e| AppError::Relay(e.to_string()))? {
+        relay_db::update_message_state(&db, &msg_id, None, Some("queued"))
+            .map_err(|e| AppError::Relay(e.to_string()))?;
         return Ok(());
     }
 
     // 7. Encrypt first, then send
     let encrypted_json = manager.encrypt_for_peer(&contact.peer_id, &envelope)
-        .map_err(|e| AppError::P2p(e.to_string()))?;
+        .map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Store encrypted version in raw_envelope
     let _ = db.with_conn(|conn| {
@@ -414,19 +414,19 @@ pub async fn p2p_send_message(
 
     match manager.send_raw_envelope(&contact.peer_id, &encrypted_json).await {
         Ok(()) => {
-            p2p_db::update_outbox_status(&db, &outbox_id, "sending", 0)
-                .map_err(|e| AppError::P2p(e.to_string()))?;
+            relay_db::update_outbox_status(&db, &outbox_id, "sending", 0)
+                .map_err(|e| AppError::Relay(e.to_string()))?;
         }
         Err(e) => {
-            p2p_db::update_message_state(&db, &msg_id, None, Some("queued"))
-                .map_err(|e| AppError::P2p(e.to_string()))?;
+            relay_db::update_message_state(&db, &msg_id, None, Some("queued"))
+                .map_err(|e| AppError::Relay(e.to_string()))?;
             let attempts = 1i32;
             let backoff_secs = 30i64 * (1i64 << (attempts - 1).min(4));
             let next_retry =
                 chrono::Utc::now() + chrono::Duration::seconds(backoff_secs);
-            p2p_db::update_outbox_retry(&db, &outbox_id, 1, &next_retry.to_rfc3339())
-                .map_err(|e2| AppError::P2p(e2.to_string()))?;
-            return Err(AppError::P2p(format!("Failed to send (queued for retry): {}", e)));
+            relay_db::update_outbox_retry(&db, &outbox_id, 1, &next_retry.to_rfc3339())
+                .map_err(|e2| AppError::Relay(e2.to_string()))?;
+            return Err(AppError::Relay(format!("Failed to send (queued for retry): {}", e)));
         }
     }
 
@@ -434,17 +434,17 @@ pub async fn p2p_send_message(
 }
 
 #[tauri::command]
-pub async fn p2p_approve_message(
+pub async fn relay_approve_message(
     db: State<'_, Database>,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
     message_id: String,
     response_content: String,
 ) -> Result<String, AppError> {
     let result = secretary::approve_message(&db, &message_id, &response_content)
-        .map_err(AppError::P2p)?;
+        .map_err(AppError::Relay)?;
 
     // Skip sending if relay is not active
-    if !manager.is_peer_authenticated(&result.target_peer_id).map_err(|e| AppError::P2p(e.to_string()))? {
+    if !manager.is_peer_authenticated(&result.target_peer_id).map_err(|e| AppError::Relay(e.to_string()))? {
         return Ok(result.response_message_id);
     }
 
@@ -468,13 +468,13 @@ pub async fn p2p_approve_message(
 
     match manager.send_raw_envelope(&result.target_peer_id, &encrypted_json).await {
         Ok(()) => {
-            let _ = p2p_db::update_message_state(
+            let _ = relay_db::update_message_state(
                 &db,
                 &result.response_message_id,
                 None,
                 Some("sending"),
             );
-            let _ = p2p_db::update_outbox_status(
+            let _ = relay_db::update_outbox_status(
                 &db,
                 &result.outbox_id,
                 "sending",
@@ -490,12 +490,12 @@ pub async fn p2p_approve_message(
 }
 
 #[tauri::command]
-pub fn p2p_reject_message(db: State<'_, Database>, message_id: String) -> Result<(), AppError> {
-    secretary::reject_message(&db, &message_id).map_err(AppError::P2p)
+pub fn relay_reject_message(db: State<'_, Database>, message_id: String) -> Result<(), AppError> {
+    secretary::reject_message(&db, &message_id).map_err(AppError::Relay)
 }
 
 #[tauri::command]
-pub async fn p2p_request_draft(
+pub async fn relay_request_draft(
     app: tauri::AppHandle,
     db: State<'_, Database>,
     message_id: String,
@@ -503,41 +503,41 @@ pub async fn p2p_request_draft(
 ) -> Result<String, AppError> {
     secretary::generate_draft_response(&app, &db, &message_id, &agent_id)
         .await
-        .map_err(AppError::P2p)
+        .map_err(AppError::Relay)
 }
 
 // ── Thread commands ──
 
 #[tauri::command]
-pub fn p2p_list_threads(
+pub fn relay_list_threads(
     db: State<'_, Database>,
     contact_id: String,
-) -> Result<Vec<p2p_db::PeerThreadRow>, AppError> {
-    p2p_db::list_threads_for_contact(&db, &contact_id).map_err(|e| AppError::P2p(e.to_string()))
+) -> Result<Vec<relay_db::PeerThreadRow>, AppError> {
+    relay_db::list_threads_for_contact(&db, &contact_id).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 #[tauri::command]
-pub fn p2p_get_thread(
+pub fn relay_get_thread(
     db: State<'_, Database>,
     thread_id: String,
-) -> Result<Option<p2p_db::PeerThreadRow>, AppError> {
-    p2p_db::get_thread(&db, &thread_id).map_err(|e| AppError::P2p(e.to_string()))
+) -> Result<Option<relay_db::PeerThreadRow>, AppError> {
+    relay_db::get_thread(&db, &thread_id).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 #[tauri::command]
-pub fn p2p_get_thread_messages(
+pub fn relay_get_thread_messages(
     db: State<'_, Database>,
     thread_id: String,
-) -> Result<Vec<p2p_db::PeerMessageRow>, AppError> {
-    p2p_db::get_thread_messages(&db, &thread_id).map_err(|e| AppError::P2p(e.to_string()))
+) -> Result<Vec<relay_db::PeerMessageRow>, AppError> {
+    relay_db::get_thread_messages(&db, &thread_id).map_err(|e| AppError::Relay(e.to_string()))
 }
 
 // ── Network settings commands ──
 
 #[tauri::command]
-pub fn p2p_get_network_enabled(app: tauri::AppHandle) -> bool {
+pub fn relay_get_network_enabled(app: tauri::AppHandle) -> bool {
     use tauri_plugin_store::StoreExt;
-    app.store("p2p-settings.json")
+    app.store("relay-settings.json")
         .ok()
         .and_then(|s| s.get("network_enabled"))
         .and_then(|v| v.as_bool())
@@ -545,10 +545,10 @@ pub fn p2p_get_network_enabled(app: tauri::AppHandle) -> bool {
 }
 
 #[tauri::command]
-pub fn p2p_set_network_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), AppError> {
+pub fn relay_set_network_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), AppError> {
     use tauri_plugin_store::StoreExt;
     let store = app
-        .store("p2p-settings.json")
+        .store("relay-settings.json")
         .map_err(|e| AppError::Config(e.to_string()))?;
     store.set("network_enabled", serde_json::json!(enabled));
     store.save().map_err(|e| AppError::Config(e.to_string()))
@@ -564,23 +564,23 @@ pub struct ConnectionInfo {
 }
 
 #[tauri::command]
-pub fn p2p_get_connection_info(
+pub fn relay_get_connection_info(
     app: tauri::AppHandle,
-    manager: State<'_, P2PManager>,
+    manager: State<'_, RelayManager>,
 ) -> Result<ConnectionInfo, AppError> {
     Ok(ConnectionInfo {
-        peer_id: manager.peer_id().map_err(|e| AppError::P2p(e.to_string()))?.to_string(),
-        relay_url: p2p_get_relay_url(app),
-        status: format!("{:?}", manager.status().map_err(|e| AppError::P2p(e.to_string()))?).to_lowercase(),
+        peer_id: manager.peer_id().map_err(|e| AppError::Relay(e.to_string()))?.to_string(),
+        relay_url: relay_get_relay_url(app),
+        status: format!("{:?}", manager.status().map_err(|e| AppError::Relay(e.to_string()))?).to_lowercase(),
     })
 }
 
 // ── Relay URL commands ──
 
 #[tauri::command]
-pub fn p2p_get_relay_url(app: tauri::AppHandle) -> String {
+pub fn relay_get_relay_url(app: tauri::AppHandle) -> String {
     use tauri_plugin_store::StoreExt;
-    app.store("p2p-settings.json")
+    app.store("relay-settings.json")
         .ok()
         .and_then(|s| s.get("relay_url"))
         .and_then(|v| v.as_str().map(String::from))
@@ -588,13 +588,13 @@ pub fn p2p_get_relay_url(app: tauri::AppHandle) -> String {
 }
 
 #[tauri::command]
-pub fn p2p_set_relay_url(app: tauri::AppHandle, url: String) -> Result<(), AppError> {
+pub fn relay_set_relay_url(app: tauri::AppHandle, url: String) -> Result<(), AppError> {
     use tauri_plugin_store::StoreExt;
     if url.trim().is_empty() {
         return Err(AppError::Validation("Relay URL cannot be empty".into()));
     }
     let store = app
-        .store("p2p-settings.json")
+        .store("relay-settings.json")
         .map_err(|e| AppError::Config(e.to_string()))?;
     store.set("relay_url", serde_json::json!(url));
     store.save().map_err(|e| AppError::Config(e.to_string()))
@@ -603,8 +603,8 @@ pub fn p2p_set_relay_url(app: tauri::AppHandle, url: String) -> Result<(), AppEr
 // ── Outbox processor ──
 
 /// Process pending outbox entries — retries queued messages.
-async fn process_pending_outbox(db: &Database, manager: &P2PManager) {
-    let pending = match p2p_db::get_pending_outbox(db) {
+async fn process_pending_outbox(db: &Database, manager: &RelayManager) {
+    let pending = match relay_db::get_pending_outbox(db) {
         Ok(entries) => entries,
         Err(_) => return,
     };
@@ -625,7 +625,7 @@ async fn process_pending_outbox(db: &Database, manager: &P2PManager) {
         }
 
         // Get stored message
-        let msg = match p2p_db::get_peer_message(db, &entry.peer_message_id) {
+        let msg = match relay_db::get_peer_message(db, &entry.peer_message_id) {
             Ok(Some(m)) => m,
             _ => continue,
         };
@@ -668,17 +668,17 @@ async fn process_pending_outbox(db: &Database, manager: &P2PManager) {
         match manager.send_raw_envelope(&entry.target_peer_id, &encrypted_json).await {
             Ok(()) => {
                 let _ =
-                    p2p_db::update_message_state(db, &entry.peer_message_id, None, Some("sending"));
-                let _ = p2p_db::update_outbox_status(db, &entry.id, "sending", entry.attempts);
+                    relay_db::update_message_state(db, &entry.peer_message_id, None, Some("sending"));
+                let _ = relay_db::update_outbox_status(db, &entry.id, "sending", entry.attempts);
             }
             Err(_) => {
                 let new_attempts = entry.attempts + 1;
                 let _ =
-                    p2p_db::update_message_state(db, &entry.peer_message_id, None, Some("queued"));
+                    relay_db::update_message_state(db, &entry.peer_message_id, None, Some("queued"));
                 let backoff_secs = 30i64 * (1i64 << (new_attempts - 1).min(4));
                 let next_retry =
                     chrono::Utc::now() + chrono::Duration::seconds(backoff_secs);
-                let _ = p2p_db::update_outbox_retry(
+                let _ = relay_db::update_outbox_retry(
                     db,
                     &entry.id,
                     new_attempts,

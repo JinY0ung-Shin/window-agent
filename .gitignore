@@ -31,5 +31,8 @@ dist-ssr
 # Bundled Node.js binary
 browser-sidecar/node.exe
 
+# Rust/Cargo build output
+target/
+
 # AutoFlow plan artifacts
 .ccb/

@@ -450,7 +450,7 @@ mod tests {
     }
 
     #[test]
-    fn test_p2p_tables_cascade() {
+    fn test_relay_tables_cascade() {
         let conn = setup_conn();
         ensure_schema(&conn).unwrap();
 

@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Send, Settings } from "lucide-react";
 import { i18n } from "../../i18n";
 import { useNetworkStore } from "../../stores/networkStore";
-import type { PeerMessageRow } from "../../services/commands/p2pCommands";
+import type { PeerMessageRow } from "../../services/commands/relayCommands";
 import DeliveryBadge from "./DeliveryBadge";
 import ApprovalPanel from "./ApprovalPanel";
 import ContactDetail from "./ContactDetail";

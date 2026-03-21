@@ -1,26 +1,26 @@
 import { create } from "zustand";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
-  p2pStart,
-  p2pStop,
-  p2pStatus,
-  p2pGetPeerId,
-  p2pListContacts,
-  p2pGenerateInvite,
-  p2pAcceptInvite,
-  p2pListThreads,
-  p2pGetThreadMessages,
-  p2pApproveMessage,
-  p2pRejectMessage,
-  p2pSendMessage,
-  p2pGetNetworkEnabled,
-  p2pSetNetworkEnabled,
-  p2pApproveContact,
-  p2pRejectContact,
+  relayStart,
+  relayStop,
+  relayStatus,
+  relayGetPeerId,
+  relayListContacts,
+  relayGenerateInvite,
+  relayAcceptInvite,
+  relayListThreads,
+  relayGetThreadMessages,
+  relayApproveMessage,
+  relayRejectMessage,
+  relaySendMessage,
+  relayGetNetworkEnabled,
+  relaySetNetworkEnabled,
+  relayApproveContact,
+  relayRejectContact,
   type ContactRow,
   type PeerThreadRow,
   type PeerMessageRow,
-} from "../services/commands/p2pCommands";
+} from "../services/commands/relayCommands";
 import { i18n } from "../i18n";
 
 type NetworkStatus = "dormant" | "starting" | "active" | "stopping" | "reconnecting";
@@ -105,7 +105,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   initialize: async () => {
     let enabled: boolean;
     try {
-      enabled = await p2pGetNetworkEnabled();
+      enabled = await relayGetNetworkEnabled();
     } catch (e) {
       logger.debug("Network enabled check failed, using localStorage", e);
       enabled = localStorage.getItem(STORAGE_KEY) === "true";
@@ -123,14 +123,14 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   startNetwork: async () => {
     set({ status: "starting", error: null });
     try {
-      await p2pStart();
+      await relayStart();
       const [statusStr, peerId, contacts] = await Promise.all([
-        p2pStatus(),
-        p2pGetPeerId(),
-        p2pListContacts(),
+        relayStatus(),
+        relayGetPeerId(),
+        relayListContacts(),
       ]);
       try {
-        await p2pSetNetworkEnabled(true);
+        await relaySetNetworkEnabled(true);
       } catch (e) {
         logger.debug("Persist network enabled failed, using localStorage", e);
         localStorage.setItem(STORAGE_KEY, "true");
@@ -150,9 +150,9 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   stopNetwork: async () => {
     set({ status: "stopping", error: null });
     try {
-      await p2pStop();
+      await relayStop();
       try {
-        await p2pSetNetworkEnabled(false);
+        await relaySetNetworkEnabled(false);
       } catch (e) {
         logger.debug("Persist network disabled failed, using localStorage", e);
         localStorage.setItem(STORAGE_KEY, "false");
@@ -177,7 +177,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
   refreshStatus: async () => {
     try {
-      const statusStr = await p2pStatus();
+      const statusStr = await relayStatus();
       set({ status: statusStr as NetworkStatus });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
@@ -186,7 +186,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
   refreshContacts: async () => {
     try {
-      const contacts = await p2pListContacts();
+      const contacts = await relayListContacts();
       set({ contacts });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
@@ -194,11 +194,11 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   },
 
   generateInvite: async (agentName, agentDesc, expiryHours) => {
-    return p2pGenerateInvite(agentName, agentDesc, [], expiryHours);
+    return relayGenerateInvite(agentName, agentDesc, [], expiryHours);
   },
 
   acceptInvite: async (code, localAgentId) => {
-    await p2pAcceptInvite(code, localAgentId);
+    await relayAcceptInvite(code, localAgentId);
     await get().refreshContacts();
   },
 
@@ -228,7 +228,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
   loadThreads: async (contactId) => {
     try {
-      const threads = await p2pListThreads(contactId);
+      const threads = await relayListThreads(contactId);
       // Guard against stale results if contact changed during async call
       if (get().selectedContactId !== contactId) return;
       set({ threads });
@@ -239,7 +239,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
   loadMessages: async (threadId) => {
     try {
-      const messages = await p2pGetThreadMessages(threadId);
+      const messages = await relayGetThreadMessages(threadId);
       set({ messages });
     } catch (e) {
       set({ error: e instanceof Error ? e.message : String(e) });
@@ -247,7 +247,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   },
 
   sendMessage: async (contactId, content) => {
-    await p2pSendMessage(contactId, content);
+    await relaySendMessage(contactId, content);
     const { selectedContactId } = get();
     if (selectedContactId === contactId) {
       // Reload threads (a new thread may have been created)
@@ -263,7 +263,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   },
 
   approveMessage: async (messageId, responseContent = i18n.t("network:approval.defaultResponse")) => {
-    await p2pApproveMessage(messageId, responseContent);
+    await relayApproveMessage(messageId, responseContent);
     const { selectedThreadId } = get();
     if (selectedThreadId) {
       await get().loadMessages(selectedThreadId);
@@ -278,7 +278,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   },
 
   rejectMessage: async (messageId) => {
-    await p2pRejectMessage(messageId);
+    await relayRejectMessage(messageId);
     const { selectedThreadId } = get();
     if (selectedThreadId) {
       await get().loadMessages(selectedThreadId);
@@ -293,13 +293,13 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   },
 
   approveContact: async (contactId) => {
-    await p2pApproveContact(contactId);
+    await relayApproveContact(contactId);
     await get().refreshContacts();
     set((s) => ({ pendingApprovals: Math.max(0, s.pendingApprovals - 1) }));
   },
 
   rejectContact: async (contactId) => {
-    await p2pRejectContact(contactId);
+    await relayRejectContact(contactId);
     await get().refreshContacts();
     set((s) => ({ pendingApprovals: Math.max(0, s.pendingApprovals - 1) }));
   },
@@ -308,14 +308,14 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     const unlisteners: UnlistenFn[] = [];
 
     unlisteners.push(
-      await listen<ConnectionStatePayload>("p2p:connection-state", (event) => {
+      await listen<ConnectionStatePayload>("relay:connection-state", (event) => {
         const payload = event.payload;
         set({ status: payload.status as NetworkStatus });
       }),
     );
 
     unlisteners.push(
-      await listen<PresencePayload>("p2p:presence", (event) => {
+      await listen<PresencePayload>("relay:presence", (event) => {
         const { peer_id, status } = event.payload;
         set((s) => {
           const next = new Set(s.connectedPeers);
@@ -331,7 +331,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen("p2p:incoming-message", () => {
+      await listen("relay:incoming-message", () => {
         const { selectedThreadId } = get();
         if (selectedThreadId) {
           get().loadMessages(selectedThreadId);
@@ -340,7 +340,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen<ApprovalNeededPayload & { type?: string }>("p2p:approval-needed", (event) => {
+      await listen<ApprovalNeededPayload & { type?: string }>("relay:approval-needed", (event) => {
         const payload = event.payload;
         if (payload.type === "introduce") {
           // Contact introduction — refresh contacts list to show pending_approval contact
@@ -361,7 +361,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen("p2p:delivery-update", () => {
+      await listen("relay:delivery-update", () => {
         const { selectedThreadId } = get();
         if (selectedThreadId) {
           get().loadMessages(selectedThreadId);
@@ -370,7 +370,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen<ErrorPayload>("p2p:error", (event) => {
+      await listen<ErrorPayload>("relay:error", (event) => {
         const payload = event.payload;
         set({ error: payload.message });
       }),

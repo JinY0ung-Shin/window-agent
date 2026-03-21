@@ -2,7 +2,7 @@ use ed25519_dalek::SigningKey;
 use tauri_plugin_store::StoreExt;
 use thiserror::Error;
 
-const STORE_FILE: &str = "p2p-identity.json";
+const STORE_FILE: &str = "relay-identity.json";
 const STORE_KEY_PRIVATE: &str = "ed25519_private_key";
 
 #[derive(Debug, Error)]
@@ -123,7 +123,7 @@ impl NodeIdentity {
     /// Return the X25519 public key (32 bytes) derived from this node's Ed25519 public key.
     pub fn to_x25519_public(&self) -> [u8; 32] {
         let ed_pub_bytes = self.public_key_bytes();
-        crate::p2p::crypto::ed25519_public_to_x25519(&ed_pub_bytes)
+        crate::relay::crypto::ed25519_public_to_x25519(&ed_pub_bytes)
     }
 
     /// Export the secret key bytes (32 bytes).
@@ -142,7 +142,7 @@ mod tests {
         let pub_bytes = id.public_key_bytes();
         assert_eq!(pub_bytes.len(), 32);
         // Verify relay peer_id derivation works
-        let relay_id = crate::p2p::relay_client::derive_relay_peer_id(&pub_bytes);
+        let relay_id = crate::relay::relay_client::derive_relay_peer_id(&pub_bytes);
         assert_eq!(relay_id.len(), 32); // hex-encoded 16 bytes
     }
 
@@ -180,7 +180,7 @@ mod tests {
     fn test_signing_and_verification() {
         use ed25519_dalek::{Verifier, Signature};
         let id = NodeIdentity::generate();
-        let message = b"hello p2p world";
+        let message = b"hello relay world";
         let sig_bytes = id.sign(message);
         let sig = Signature::from_bytes(&sig_bytes.try_into().unwrap());
         let verifying_key = id.signing_key().verifying_key();

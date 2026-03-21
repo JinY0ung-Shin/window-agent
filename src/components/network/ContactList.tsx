@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Users } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
-import type { ContactRow } from "../../services/commands/p2pCommands";
+import type { ContactRow } from "../../services/commands/relayCommands";
 
 function statusDot(status: string) {
   if (status === "connected") return "status-dot online";

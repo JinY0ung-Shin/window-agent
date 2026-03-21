@@ -1,7 +1,7 @@
 use crate::api::ApiState;
 use crate::db::Database;
-use crate::p2p::db as p2p_db;
-use crate::p2p::envelope::{Envelope, Payload};
+use crate::relay::db as relay_db;
+use crate::relay::envelope::{Envelope, Payload};
 use crate::services::api_service;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
@@ -34,7 +34,7 @@ pub struct ApproveResult {
 }
 
 /// Process an incoming message envelope from a remote peer.
-/// Called by the P2PManager event loop when a MessageRequest is received.
+/// Called by the RelayManager event loop when a MessageRequest is received.
 pub async fn handle_incoming_message(
     app_handle: &tauri::AppHandle,
     db: &Database,
@@ -49,18 +49,18 @@ pub async fn handle_incoming_message(
     };
 
     // 2. Look up contact by peer_id
-    let contact = p2p_db::get_contact_by_peer_id(db, contact_peer_id)
+    let contact = relay_db::get_contact_by_peer_id(db, contact_peer_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Unknown contact peer_id: {}", contact_peer_id))?;
 
     // 3. Find existing thread or create a new one
-    let threads = p2p_db::list_threads_for_contact(db, &contact.id)
+    let threads = relay_db::list_threads_for_contact(db, &contact.id)
         .map_err(|e| e.to_string())?;
     let thread_id = if let Some(thread) = threads.first() {
         thread.id.clone()
     } else {
         let now = chrono::Utc::now().to_rfc3339();
-        let new_thread = p2p_db::PeerThreadRow {
+        let new_thread = relay_db::PeerThreadRow {
             id: uuid::Uuid::new_v4().to_string(),
             contact_id: contact.id.clone(),
             local_agent_id: contact.local_agent_id.clone(),
@@ -70,7 +70,7 @@ pub async fn handle_incoming_message(
             updated_at: now,
         };
         let tid = new_thread.id.clone();
-        p2p_db::create_thread(db, &new_thread).map_err(|e| e.to_string())?;
+        relay_db::create_thread(db, &new_thread).map_err(|e| e.to_string())?;
         tid
     };
 
@@ -83,7 +83,7 @@ pub async fn handle_incoming_message(
     let is_accepted = contact.status == "accepted";
     let approval_state = if is_accepted { "none" } else { "pending" };
 
-    let msg = p2p_db::PeerMessageRow {
+    let msg = relay_db::PeerMessageRow {
         id: msg_id.clone(),
         thread_id: thread_id.clone(),
         message_id_unique: envelope.message_id.clone(),
@@ -98,7 +98,7 @@ pub async fn handle_incoming_message(
         created_at: now,
     };
 
-    let inserted = p2p_db::insert_peer_message(db, &msg).map_err(|e| e.to_string())?;
+    let inserted = relay_db::insert_peer_message(db, &msg).map_err(|e| e.to_string())?;
     if !inserted {
         return Ok(());
     }
@@ -106,7 +106,7 @@ pub async fn handle_incoming_message(
     if is_accepted {
         // Trusted contact — just notify frontend to refresh messages
         let _ = app_handle.emit(
-            "p2p:incoming-message",
+            "relay:incoming-message",
             serde_json::json!({
                 "peer_id": contact_peer_id,
                 "thread_id": thread_id,
@@ -120,7 +120,7 @@ pub async fn handle_incoming_message(
 
         app_handle
             .emit(
-                "p2p:approval-needed",
+                "relay:approval-needed",
                 ApprovalNeeded {
                     thread_id,
                     message_id: msg_id,
@@ -217,19 +217,19 @@ pub fn approve_message(
     response_content: &str,
 ) -> Result<ApproveResult, String> {
     // 1. Mark the incoming message as approved
-    p2p_db::update_message_state(db, message_id, Some("approved"), None)
+    relay_db::update_message_state(db, message_id, Some("approved"), None)
         .map_err(|e| e.to_string())?;
 
     // 2. Get the original message to find thread_id and correlation info
-    let original = p2p_db::get_peer_message(db, message_id)
+    let original = relay_db::get_peer_message(db, message_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Message not found: {}", message_id))?;
 
     // 3. Get thread → contact → target peer_id
-    let thread = p2p_db::get_thread(db, &original.thread_id)
+    let thread = relay_db::get_thread(db, &original.thread_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Thread not found: {}", original.thread_id))?;
-    let contact = p2p_db::get_contact(db, &thread.contact_id)
+    let contact = relay_db::get_contact(db, &thread.contact_id)
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Contact not found: {}", thread.contact_id))?;
 
@@ -246,7 +246,7 @@ pub fn approve_message(
 
     // 5. Create outgoing response message with raw_envelope
     let now = chrono::Utc::now().to_rfc3339();
-    let response_msg = p2p_db::PeerMessageRow {
+    let response_msg = relay_db::PeerMessageRow {
         id: uuid::Uuid::new_v4().to_string(),
         thread_id: original.thread_id,
         message_id_unique: envelope.message_id.clone(),
@@ -262,11 +262,11 @@ pub fn approve_message(
     };
 
     let response_id = response_msg.id.clone();
-    p2p_db::insert_peer_message(db, &response_msg).map_err(|e| e.to_string())?;
+    relay_db::insert_peer_message(db, &response_msg).map_err(|e| e.to_string())?;
 
     // 6. Create outbox entry for retry/delivery tracking
     let outbox_id = uuid::Uuid::new_v4().to_string();
-    let outbox = p2p_db::OutboxRow {
+    let outbox = relay_db::OutboxRow {
         id: outbox_id.clone(),
         peer_message_id: response_id.clone(),
         target_peer_id: contact.peer_id.clone(),
@@ -275,7 +275,7 @@ pub fn approve_message(
         status: "pending".to_string(),
         created_at: now,
     };
-    p2p_db::insert_outbox(db, &outbox).map_err(|e| e.to_string())?;
+    relay_db::insert_outbox(db, &outbox).map_err(|e| e.to_string())?;
 
     Ok(ApproveResult {
         response_message_id: response_id,
@@ -287,7 +287,7 @@ pub fn approve_message(
 
 /// Reject a pending message.
 pub fn reject_message(db: &Database, message_id: &str) -> Result<(), String> {
-    p2p_db::update_message_state(db, message_id, Some("rejected"), None)
+    relay_db::update_message_state(db, message_id, Some("rejected"), None)
         .map_err(|e| e.to_string())
 }
 
@@ -369,7 +369,7 @@ mod tests {
         let result =
             approve_message(&db, "m1", "감사합니다. 확인했습니다.").unwrap();
 
-        let msgs = p2p_db::get_thread_messages(&db, "t1").unwrap();
+        let msgs = relay_db::get_thread_messages(&db, "t1").unwrap();
         // Original message should be approved
         assert_eq!(msgs[0].approval_state, "approved");
         assert_eq!(msgs[0].delivery_state, "received");
@@ -393,7 +393,7 @@ mod tests {
 
         reject_message(&db, "m1").unwrap();
 
-        let msgs = p2p_db::get_thread_messages(&db, "t1").unwrap();
+        let msgs = relay_db::get_thread_messages(&db, "t1").unwrap();
         assert_eq!(msgs[0].approval_state, "rejected");
     }
 
@@ -405,14 +405,14 @@ mod tests {
         approve_message(&db, "m1", "response text").unwrap();
         reject_message(&db, "m1").unwrap();
 
-        let msgs = p2p_db::get_thread_messages(&db, "t1").unwrap();
+        let msgs = relay_db::get_thread_messages(&db, "t1").unwrap();
         assert_eq!(msgs[0].approval_state, "rejected");
     }
 
     // ── Helper to set up contact → thread → message ──
 
     fn setup_test_data(db: &Database) {
-        let contact = p2p_db::ContactRow {
+        let contact = relay_db::ContactRow {
             id: "c1".to_string(),
             peer_id: "peer1".to_string(),
             public_key: "pk_peer1".to_string(),
@@ -428,9 +428,9 @@ mod tests {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         };
-        p2p_db::insert_contact(db, &contact).unwrap();
+        relay_db::insert_contact(db, &contact).unwrap();
 
-        let thread = p2p_db::PeerThreadRow {
+        let thread = relay_db::PeerThreadRow {
             id: "t1".to_string(),
             contact_id: "c1".to_string(),
             local_agent_id: None,
@@ -439,9 +439,9 @@ mod tests {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         };
-        p2p_db::create_thread(db, &thread).unwrap();
+        relay_db::create_thread(db, &thread).unwrap();
 
-        let msg = p2p_db::PeerMessageRow {
+        let msg = relay_db::PeerMessageRow {
             id: "m1".to_string(),
             thread_id: "t1".to_string(),
             message_id_unique: "unique-1".to_string(),
@@ -455,6 +455,6 @@ mod tests {
             raw_envelope: None,
             created_at: "2024-01-01T00:00:00Z".to_string(),
         };
-        p2p_db::insert_peer_message(db, &msg).unwrap();
+        relay_db::insert_peer_message(db, &msg).unwrap();
     }
 }

@@ -21,7 +21,7 @@ pub enum ContactCardError {
 }
 
 /// A signed contact card that can be shared as an invite code.
-/// Contains everything needed to establish a P2P connection.
+/// Contains everything needed to establish a relay connection.
 ///
 /// Version 0 = legacy libp2p format (implicit default for old cards).
 /// Version 2 = relay format (peer_id derived from public_key, relay_url included).
@@ -95,7 +95,7 @@ impl ContactCard {
     ) -> Result<Self, ContactCardError> {
         let public_key = identity.public_key_bytes().to_vec();
         // v2: derive peer_id from public_key using relay format
-        let peer_id = crate::p2p::relay_client::derive_relay_peer_id(
+        let peer_id = crate::relay::relay_client::derive_relay_peer_id(
             &<[u8; 32]>::try_from(public_key.as_slice())
                 .map_err(|_| ContactCardError::InvalidKey("key must be 32 bytes".into()))?,
         );
@@ -131,7 +131,7 @@ impl ContactCard {
 
         // For v2 cards, verify peer_id matches public_key derivation
         if self.version >= 2 {
-            let expected = crate::p2p::relay_client::derive_relay_peer_id(&pk_bytes);
+            let expected = crate::relay::relay_client::derive_relay_peer_id(&pk_bytes);
             if self.peer_id != expected {
                 return Ok(false);
             }
@@ -232,7 +232,7 @@ mod tests {
         let card = create_test_card(&id);
 
         // v2 card: peer_id is relay format (hex of first 16 bytes of public key)
-        let expected_pid = crate::p2p::relay_client::derive_relay_peer_id(
+        let expected_pid = crate::relay::relay_client::derive_relay_peer_id(
             &id.public_key_bytes(),
         );
         assert_eq!(card.peer_id, expected_pid);

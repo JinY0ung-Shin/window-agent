@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, X, ChevronDown, ChevronUp, FileEdit } from "lucide-react";
-import { p2pRequestDraft } from "../../services/commands/p2pCommands";
+import { relayRequestDraft } from "../../services/commands/relayCommands";
 import { logger } from "../../services/logger";
 
 interface ApprovalPanelProps {
@@ -30,7 +30,7 @@ export default function ApprovalPanel({
     if (!agentId) return;
     setIsDraftLoading(true);
     try {
-      const draft = await p2pRequestDraft(messageId, agentId);
+      const draft = await relayRequestDraft(messageId, agentId);
       setResponseText(draft);
     } catch (e) {
       logger.debug("Draft request failed, keeping current text", e);
