@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Users } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import type { ContactRow } from "../../services/commands/relayCommands";
+import EmptyState from "../common/EmptyState";
 
 function statusDot(status: string) {
   if (status === "connected") return "status-dot online";
@@ -18,11 +19,12 @@ export default function ContactList() {
 
   if (contacts.length === 0) {
     return (
-      <div className="contact-list-empty">
-        <Users size={32} strokeWidth={1.5} />
-        <p>{t("contact.noContacts")}</p>
-        <p className="text-muted">{t("contact.noContactsHint")}</p>
-      </div>
+      <EmptyState
+        icon={<Users size={32} strokeWidth={1.5} />}
+        message={t("contact.noContacts")}
+        hint={t("contact.noContactsHint")}
+        className="contact-list-empty"
+      />
     );
   }
 

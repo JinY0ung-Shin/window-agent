@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Network, UserPlus, RefreshCw } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import DraggableHeader from "../layout/DraggableHeader";
+import EmptyState from "../common/EmptyState";
 import ContactList from "./ContactList";
 import PeerThread from "./PeerThread";
 import InviteDialog from "./InviteDialog";
@@ -43,11 +44,12 @@ export default function NetworkPanel() {
             </button>
           </div>
         </DraggableHeader>
-        <div className="network-panel-empty">
-          <Network size={40} strokeWidth={1.5} />
-          <p>{t("panel.inactive")}</p>
-          <p className="text-muted">{t("panel.inactiveHint")}</p>
-        </div>
+        <EmptyState
+          icon={<Network size={40} strokeWidth={1.5} />}
+          message={t("panel.inactive")}
+          hint={t("panel.inactiveHint")}
+          className="network-panel-empty"
+        />
         {showInviteDialog && (
           <InviteDialog onClose={() => setShowInviteDialog(false)} />
         )}

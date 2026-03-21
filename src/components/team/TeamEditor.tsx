@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Bot } from "lucide-react";
+import { Bot } from "lucide-react";
+import Modal from "../common/Modal";
 import { useTeamStore } from "../../stores/teamStore";
 import { useAgentStore } from "../../stores/agentStore";
 import type { TeamDetail } from "../../services/types";
@@ -109,24 +110,31 @@ export default function TeamEditor() {
     }
   };
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) closeTeamEditor();
-  };
-
   // Available agents for member selection (excluding leader)
   const memberCandidates = agents.filter((a) => a.id !== leaderId);
 
   return (
-    <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="modal-content team-editor-modal">
-        <div className="modal-header">
-          <h2>{isEditing ? t("editTeam") : t("createTeam")}</h2>
-          <button className="close-button" onClick={closeTeamEditor}>
-            <X size={20} />
+    <Modal
+      onClose={closeTeamEditor}
+      title={isEditing ? t("editTeam") : t("createTeam")}
+      overlayClose="currentTarget"
+      contentClassName="team-editor-modal"
+      footer={
+        <>
+          <button className="btn-secondary" onClick={closeTeamEditor}>
+            {t("cancel")}
           </button>
-        </div>
-
-        <div className="modal-body">
+          <button
+            className="btn-primary"
+            onClick={handleSave}
+            disabled={!name.trim() || !leaderId || saving}
+          >
+            {t("save")}
+          </button>
+        </>
+      }
+    >
+      <div className="modal-body">
           <div className="form-group">
             <label htmlFor="teamName">{t("teamName")}</label>
             <input
@@ -199,20 +207,6 @@ export default function TeamEditor() {
             </div>
           </div>
         </div>
-
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={closeTeamEditor}>
-            {t("cancel")}
-          </button>
-          <button
-            className="btn-primary"
-            onClick={handleSave}
-            disabled={!name.trim() || !leaderId || saving}
-          >
-            {t("save")}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

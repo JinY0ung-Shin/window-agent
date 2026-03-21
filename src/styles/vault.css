@@ -8,8 +8,8 @@
 }
 
 .vault-header {
-  height: 48px;
-  padding: 0 120px 0 16px;
+  height: var(--header-height);
+  padding: 0 var(--window-controls-padding) 0 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -594,12 +594,6 @@
 /* ── Create Note Dialog ── */
 .vault-create-dialog {
   max-width: 480px;
-}
-
-.vault-create-dialog h3 {
-  margin: 0 0 20px;
-  font-size: 1.125rem;
-  font-weight: 600;
 }
 
 .vault-create-field {

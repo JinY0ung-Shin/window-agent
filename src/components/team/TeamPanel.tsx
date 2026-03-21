@@ -10,6 +10,7 @@ import TeamEditor from "./TeamEditor";
 import type { TeamDetail } from "../../services/types";
 import { logger } from "../../services/logger";
 import DraggableHeader from "../layout/DraggableHeader";
+import EmptyState from "../common/EmptyState";
 
 export default function TeamPanel() {
   const { t } = useTranslation("team");
@@ -89,10 +90,11 @@ export default function TeamPanel() {
 
       <div className="team-panel-body">
         {teams.length === 0 ? (
-          <div className="team-empty">
-            <Users size={48} strokeWidth={1} />
-            <p>{t("noTeams")}</p>
-          </div>
+          <EmptyState
+            icon={<Users size={48} strokeWidth={1} />}
+            message={t("noTeams")}
+            className="team-empty"
+          />
         ) : (
           <div className="team-grid">
             {teams.map((team) => {

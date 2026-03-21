@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Copy, Check, Loader2 } from "lucide-react";
+import { Copy, Check, Loader2 } from "lucide-react";
+import Modal from "../common/Modal";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
 
@@ -15,16 +16,13 @@ export default function InviteDialog({ onClose }: Props) {
   const [tab, setTab] = useState<Tab>("generate");
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content invite-dialog" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>{t("invite.title")}</h3>
-          <button className="icon-btn" onClick={onClose}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="invite-tabs">
+    <Modal
+      onClose={onClose}
+      title={t("invite.title")}
+      overlayClose="stopPropagation"
+      contentClassName="invite-dialog"
+    >
+      <div className="invite-tabs">
           <button
             className={`invite-tab${tab === "generate" ? " active" : ""}`}
             onClick={() => setTab("generate")}
@@ -39,13 +37,12 @@ export default function InviteDialog({ onClose }: Props) {
           </button>
         </div>
 
-        {tab === "generate" ? (
-          <GenerateTab onClose={onClose} t={t} />
-        ) : (
-          <AcceptTab onClose={onClose} t={t} />
-        )}
-      </div>
-    </div>
+      {tab === "generate" ? (
+        <GenerateTab onClose={onClose} t={t} />
+      ) : (
+        <AcceptTab onClose={onClose} t={t} />
+      )}
+    </Modal>
   );
 }
 

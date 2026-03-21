@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
+import Modal from "../common/Modal";
 import type { NoteType, NoteScope } from "../../services/vaultTypes";
 import { useVaultStore } from "../../stores/vaultStore";
 
@@ -64,13 +65,13 @@ export default function CreateNoteDialog({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-content vault-create-dialog"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3>{t("create.title")}</h3>
-        <form onSubmit={handleSubmit}>
+    <Modal
+      onClose={onClose}
+      title={t("create.title")}
+      overlayClose="stopPropagation"
+      contentClassName="vault-create-dialog"
+    >
+      <form onSubmit={handleSubmit}>
           {/* Title */}
           <div className="vault-create-field">
             <label>{t("create.titleLabel")}</label>
@@ -170,8 +171,7 @@ export default function CreateNoteDialog({
               {isSubmitting ? t("create.creating") : t("create.submit")}
             </button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </Modal>
   );
 }

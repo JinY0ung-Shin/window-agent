@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Plus, Bot } from "lucide-react";
+import { Plus, Bot } from "lucide-react";
+import Modal from "../common/Modal";
 import { listModels } from "../../services/tauriCommands";
 import { useAgentEditor } from "../../hooks/useAgentEditor";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -85,20 +86,24 @@ export default function AgentEditor() {
     }
   };
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) closeEditor();
-  };
-
   return (
-    <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="agent-editor-modal">
-        {/* Header */}
-        <div className="modal-header">
-          <h2>{editingAgentId ? t("editorTitle", { context: uiTheme }) : t("editorNewTitle", { context: uiTheme })}</h2>
-          <button className="close-button" onClick={closeEditor}>
-            <X size={20} />
+    <Modal
+      onClose={closeEditor}
+      title={editingAgentId ? t("editorTitle", { context: uiTheme }) : t("editorNewTitle", { context: uiTheme })}
+      overlayClose="currentTarget"
+      contentClassName="agent-editor-modal"
+      error={editorError}
+      footer={
+        <>
+          <button className="btn-secondary" onClick={closeEditor}>
+            {t("common:cancel")}
           </button>
-        </div>
+          <button className="btn-primary" onClick={handleSave}>
+            {t("common:save")}
+          </button>
+        </>
+      }
+    >
 
         {/* Agent list strip */}
         <div className="agent-list-strip">
@@ -216,19 +221,6 @@ export default function AgentEditor() {
           </div>
         </div>
 
-        {/* Footer */}
-        {editorError && (
-          <div className="modal-error">{editorError}</div>
-        )}
-        <div className="modal-footer">
-          <button className="btn-secondary" onClick={closeEditor}>
-            {t("common:cancel")}
-          </button>
-          <button className="btn-primary" onClick={handleSave}>
-            {t("common:save")}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
