@@ -27,7 +27,17 @@ else
   echo "PASS: No unexpected hardcoded hex colors"
 fi
 
-echo "=== 3. Undefined CSS variables (used - defined) ==="
+echo "=== 3. No residual libp2p imports ==="
+LIBP2P_HITS=$(grep -rnE 'use libp2p|libp2p_identity|libp2p::' src-tauri/src/ || true)
+if [ -z "$LIBP2P_HITS" ]; then
+  echo "PASS: No libp2p imports in source"
+else
+  echo "$LIBP2P_HITS"
+  echo "FAIL: Residual libp2p imports found"
+  FAIL=1
+fi
+
+echo "=== 4. Undefined CSS variables (used - defined) ==="
 DEFINED=$(grep -ohE '\-\-[a-zA-Z0-9_-]+[[:space:]]*:' src/styles/*.css | sed 's/[[:space:]]*://' | sort -u)
 USED=$(grep -ohE 'var\(\-\-[a-zA-Z0-9_-]+' src/styles/*.css | sed 's/var(//' | sort -u)
 UNDEF=$(comm -23 <(echo "$USED") <(echo "$DEFINED"))

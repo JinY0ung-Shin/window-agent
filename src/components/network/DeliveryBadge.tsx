@@ -15,10 +15,16 @@ export default function DeliveryBadge({ state, onRetry }: DeliveryBadgeProps) {
           <span className="delivery-spinner" /> {t("delivery.sending")}
         </span>
       );
+    case "sent":
+      return (
+        <span className="delivery-badge delivery-sent">
+          ✓ {t("delivery.sent")}
+        </span>
+      );
     case "delivered":
       return (
         <span className="delivery-badge delivery-delivered">
-          ✓ {t("delivery.delivered")}
+          ✓✓ {t("delivery.delivered")}
         </span>
       );
     case "failed":

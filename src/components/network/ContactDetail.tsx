@@ -1,15 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2, Save, RefreshCw } from "lucide-react";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { Trash2, Save } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
 import {
   p2pUpdateContact,
   p2pRemoveContact,
-  p2pDialPeer,
 } from "../../services/commands/p2pCommands";
-import { logger } from "../../services/logger";
 
 export default function ContactDetail() {
   const { t } = useTranslation("network");
@@ -44,7 +41,6 @@ interface InnerProps {
     local_agent_id: string | null;
     mode: string;
     status: string;
-    addresses_json: string | null;
   };
   agents: { id: string; name: string }[];
   t: (key: string) => string;
@@ -52,69 +48,21 @@ interface InnerProps {
   onRefresh: () => Promise<void>;
 }
 
-type DialState = "idle" | "dialing" | "connected" | "timeout";
-
 function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: InnerProps) {
   const connectedPeers = useNetworkStore((s) => s.connectedPeers);
+  const approveContact = useNetworkStore((s) => s.approveContact);
+  const rejectContact = useNetworkStore((s) => s.rejectContact);
   const isOnline = connectedPeers.has(contact.peer_id);
+  const isPendingApproval = contact.status === "pending_approval";
   const [displayName, setDisplayName] = useState(contact.display_name);
   const [localAgentId, setLocalAgentId] = useState(contact.local_agent_id ?? "");
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [dialState, setDialState] = useState<DialState>("idle");
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const hasAddresses = (() => {
-    if (!contact.addresses_json) return false;
-    try {
-      const parsed = JSON.parse(contact.addresses_json);
-      return Array.isArray(parsed) && parsed.length > 0;
-    } catch {
-      return false;
-    }
-  })();
-
-  // Listen for peer-connected event to detect successful connection
-  useEffect(() => {
-    if (dialState !== "dialing") return;
-
-    let unlisten: UnlistenFn | null = null;
-    let cancelled = false;
-
-    listen<{ peer_id: string }>("p2p:peer-connected", (event) => {
-      if (event.payload.peer_id === contact.peer_id && !cancelled) {
-        setDialState("connected");
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-      }
-    }).then((fn) => {
-      if (cancelled) {
-        fn();
-      } else {
-        unlisten = fn;
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [dialState, contact.peer_id]);
-
-  // Reset dial state when it transitions to connected/timeout
-  useEffect(() => {
-    if (dialState === "connected" || dialState === "timeout") {
-      const timer = setTimeout(() => setDialState("idle"), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [dialState]);
-
-  const statusText = isOnline
-    ? t("contact.online")
-    : contact.status === "connecting"
-      ? t("contact.connecting")
+  const statusText = isPendingApproval
+    ? t("contact.pendingApproval")
+    : isOnline
+      ? t("contact.online")
       : t("contact.offline");
 
   const hasChanges =
@@ -141,49 +89,11 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
     await onRefresh();
   };
 
-  const handleDial = async () => {
-    setDialState("dialing");
-    try {
-      await p2pDialPeer(contact.id);
-    } catch (e) {
-      logger.debug("Dial peer failed", e);
-      setDialState("idle");
-      return;
-    }
-    // Start 10-second timeout
-    timeoutRef.current = setTimeout(() => {
-      setDialState((prev) => (prev === "dialing" ? "timeout" : prev));
-    }, 10000);
-  };
-
-  const dialButtonLabel = (() => {
-    switch (dialState) {
-      case "dialing": return t("contact.dialing");
-      case "connected": return t("contact.connected");
-      case "timeout": return t("contact.timeout");
-      default: return t("contact.reconnect");
-    }
-  })();
-
   return (
     <div className="contact-detail">
       <div className="contact-detail-header">
         <h3>{t("contact.detailTitle")}</h3>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span className={`status-badge ${isOnline ? "connected" : contact.status}`}>{statusText}</span>
-          {!isOnline && (
-            <button
-              className="btn-secondary"
-              onClick={handleDial}
-              disabled={!hasAddresses || dialState === "dialing"}
-              title={!hasAddresses ? t("contact.noAddressHint") : t("contact.reconnectTitle")}
-              style={{ display: "inline-flex", alignItems: "center", gap: "4px", fontSize: "12px", padding: "2px 8px" }}
-            >
-              <RefreshCw size={12} className={dialState === "dialing" ? "spinning" : ""} />
-              {dialButtonLabel}
-            </button>
-          )}
-        </div>
+        <span className={`status-badge ${isOnline ? "connected" : contact.status}`}>{statusText}</span>
       </div>
 
       <div className="form-group">
@@ -228,26 +138,44 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
       </div>
 
       <div className="contact-detail-actions">
-        {hasChanges && (
+        {isPendingApproval && (
+          <>
+            <button
+              className="btn-primary"
+              onClick={async () => { await approveContact(contact.id); }}
+            >
+              {t("contact.approveContact")}
+            </button>
+            <button
+              className="btn-danger"
+              onClick={async () => { await rejectContact(contact.id); onDeselect(); }}
+            >
+              {t("contact.rejectContact")}
+            </button>
+          </>
+        )}
+        {!isPendingApproval && hasChanges && (
           <button className="btn-primary" onClick={handleSave} disabled={saving}>
             <Save size={14} />
             {saving ? t("common:saving") : t("common:save")}
           </button>
         )}
-        {!confirmDelete ? (
-          <button
-            className="btn-danger"
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 size={14} />
-            {t("contact.deleteContact")}
-          </button>
-        ) : (
-          <div className="confirm-delete-row">
-            <span>{t("contact.confirmDeleteMessage")}</span>
-            <button className="btn-danger" onClick={handleDelete}>{t("common:delete")}</button>
-            <button className="btn-secondary" onClick={() => setConfirmDelete(false)}>{t("common:cancel")}</button>
-          </div>
+        {!isPendingApproval && (
+          !confirmDelete ? (
+            <button
+              className="btn-danger"
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 size={14} />
+              {t("contact.deleteContact")}
+            </button>
+          ) : (
+            <div className="confirm-delete-row">
+              <span>{t("contact.confirmDeleteMessage")}</span>
+              <button className="btn-danger" onClick={handleDelete}>{t("common:delete")}</button>
+              <button className="btn-secondary" onClick={() => setConfirmDelete(false)}>{t("common:cancel")}</button>
+            </div>
+          )
         )}
       </div>
     </div>

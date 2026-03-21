@@ -15,10 +15,6 @@ default-run = "tauri-app"
 name = "tauri_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
-[[bin]]
-name = "p2p-peer"
-path = "src/bin/p2p_peer.rs"
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -47,8 +43,14 @@ regex = "1"
 notify = { version = "7", features = ["macos_fsevent"] }
 walkdir = "2"
 sha2 = "0.10"
-libp2p-identity = { version = "0.2", features = ["ed25519", "peerid", "rand"] }
-libp2p = { version = "0.54", features = ["noise", "yamux", "tcp", "tokio", "mdns", "request-response", "macros", "json", "ed25519", "relay", "dcutr", "autonat"] }
+wa-shared = { path = "../shared" }
+tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
+futures-util = "0.3"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+chacha20poly1305 = "0.10"
+hkdf = "0.12"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

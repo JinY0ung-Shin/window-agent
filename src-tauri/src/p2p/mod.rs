@@ -1,11 +1,10 @@
 pub mod capability;
 pub mod contact_card;
+pub mod crypto;
 pub mod db;
 pub mod envelope;
 pub mod identity;
 pub mod invite;
 pub mod manager;
-pub mod protocol;
+pub mod relay_client;
 pub mod secretary;
-pub mod security;
-pub mod transport;

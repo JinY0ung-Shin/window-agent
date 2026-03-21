@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useNetworkStore } from "../../stores/networkStore";
-import { p2pGetListenPort, p2pSetListenPort, p2pGetConnectionInfo } from "../../services/commands/p2pCommands";
+import { p2pGetRelayUrl, p2pSetRelayUrl } from "../../services/commands/p2pCommands";
 
 interface Props {
   isOpen: boolean;
@@ -16,24 +16,18 @@ export default function NetworkSettingsPanel({ isOpen }: Props) {
   const [peerIdCopied, setPeerIdCopied] = useState(false);
   const hasEnabledBefore = useRef(localStorage.getItem("network_enabled") !== null);
   const [showConsent, setShowConsent] = useState(false);
-  const [configuredPort, setConfiguredPort] = useState<number | null>(null);
-  const [activePort, setActivePort] = useState<number | null>(null);
-  const [tempPort, setTempPort] = useState("");
-  const [portSaving, setPortSaving] = useState(false);
-  const [portSaved, setPortSaved] = useState(false);
-  const [portError, setPortError] = useState("");
+  const [tempRelayUrl, setTempRelayUrl] = useState("");
+  const [relaySaving, setRelaySaving] = useState(false);
+  const [relaySaved, setRelaySaved] = useState(false);
+  const [relayError, setRelayError] = useState("");
 
   useEffect(() => {
     if (isOpen) {
-      p2pGetListenPort().then((p) => {
-        setConfiguredPort(p);
-        setTempPort(p != null ? String(p) : "");
-        setPortSaved(false);
-        setPortError("");
+      p2pGetRelayUrl().then((url) => {
+        setTempRelayUrl(url);
+        setRelaySaved(false);
+        setRelayError("");
       }).catch(() => {});
-      p2pGetConnectionInfo().then((info) => {
-        setActivePort(info.active_listen_port ?? null);
-      }).catch(() => setActivePort(null));
     }
   }, [isOpen]);
 
@@ -106,64 +100,54 @@ export default function NetworkSettingsPanel({ isOpen }: Props) {
       </div>
 
       <div className="form-group">
-        <label htmlFor="listenPort">{tn("port.label")}</label>
+        <label htmlFor="relayUrl">{tn("relay.label")}</label>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
-            id="listenPort"
-            type="number"
-            min={1}
-            max={65535}
-            placeholder={tn("port.placeholder")}
-            value={tempPort}
+            id="relayUrl"
+            type="text"
+            placeholder={tn("relay.placeholder")}
+            value={tempRelayUrl}
             onChange={(e) => {
-              setTempPort(e.target.value);
-              setPortSaved(false);
-              setPortError("");
+              setTempRelayUrl(e.target.value);
+              setRelaySaved(false);
+              setRelayError("");
             }}
             style={{ flex: 1 }}
           />
           <button
             className="btn-secondary"
-            disabled={portSaving}
+            disabled={relaySaving}
             onClick={async () => {
-              setPortError("");
-              const val = tempPort.trim();
-              const portNum = val === "" ? null : Number(val);
-              if (portNum != null && (isNaN(portNum) || portNum < 1 || portNum > 65535 || !Number.isInteger(portNum))) {
-                setPortError(tn("port.validationError"));
+              setRelayError("");
+              const val = tempRelayUrl.trim();
+              if (val && !val.startsWith("ws://") && !val.startsWith("wss://")) {
+                setRelayError(tn("relay.validationError"));
                 return;
               }
-              setPortSaving(true);
+              setRelaySaving(true);
               try {
-                await p2pSetListenPort(portNum);
-                setConfiguredPort(portNum);
-                setPortSaved(true);
+                await p2pSetRelayUrl(val);
+                setRelaySaved(true);
               } catch (e) {
-                setPortError(e instanceof Error ? e.message : String(e));
+                setRelayError(e instanceof Error ? e.message : String(e));
               } finally {
-                setPortSaving(false);
+                setRelaySaving(false);
               }
             }}
           >
-            {portSaving ? t("common:saving") : t("common:save")}
+            {relaySaving ? t("common:saving") : t("common:save")}
           </button>
         </div>
-        {portSaved && (
+        {relaySaved && (
           <p className="form-text text-success">
-            {tn("port.saved")}
+            {tn("relay.saved")}
           </p>
         )}
-        {portError && (
-          <p className="form-text text-error">{portError}</p>
-        )}
-        {network.status === "active" && activePort != null && (
-          <p className="form-text">
-            {tn("port.activePort", { port: activePort })}
-            {configuredPort != null && activePort !== configuredPort && ` ${tn("port.portMismatch")}`}
-          </p>
+        {relayError && (
+          <p className="form-text text-error">{relayError}</p>
         )}
         <p className="form-text">
-          {tn("port.hint")}
+          {tn("relay.hint")}
         </p>
       </div>
 
@@ -176,10 +160,11 @@ export default function NetworkSettingsPanel({ isOpen }: Props) {
             {network.status === "starting" && tn("status.starting")}
             {network.status === "active" && tn("status.active")}
             {network.status === "stopping" && tn("status.stopping")}
+            {network.status === "reconnecting" && tn("status.reconnecting")}
           </span>
           {network.networkEnabled && (
             <span className="network-peer-count">
-              {tn("status.connectedPeers", { count: network.contacts.filter((c) => c.status === "connected").length })}
+              {tn("status.connectedPeers", { count: network.connectedPeers.size })}
             </span>
           )}
         </div>

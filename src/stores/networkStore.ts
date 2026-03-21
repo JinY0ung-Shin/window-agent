@@ -15,13 +15,15 @@ import {
   p2pSendMessage,
   p2pGetNetworkEnabled,
   p2pSetNetworkEnabled,
+  p2pApproveContact,
+  p2pRejectContact,
   type ContactRow,
   type PeerThreadRow,
   type PeerMessageRow,
 } from "../services/commands/p2pCommands";
 import { i18n } from "../i18n";
 
-type NetworkStatus = "dormant" | "starting" | "active" | "stopping";
+type NetworkStatus = "dormant" | "starting" | "active" | "stopping" | "reconnecting";
 
 import { logger } from "../services/logger";
 
@@ -31,9 +33,9 @@ interface ConnectionStatePayload {
   peer_count: number;
 }
 
-interface PeerEventPayload {
+interface PresencePayload {
   peer_id: string;
-  contact_name: string;
+  status: "online" | "offline";
 }
 
 interface ErrorPayload {
@@ -72,7 +74,7 @@ interface NetworkState {
   stopNetwork: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   refreshContacts: () => Promise<void>;
-  generateInvite: (agentName: string, agentDesc: string, addresses?: string[], expiryHours?: number) => Promise<string>;
+  generateInvite: (agentName: string, agentDesc: string, expiryHours?: number) => Promise<string>;
   acceptInvite: (code: string, localAgentId?: string) => Promise<void>;
   selectContact: (contactId: string | null) => void;
   selectThread: (threadId: string | null) => Promise<void>;
@@ -81,6 +83,8 @@ interface NetworkState {
   sendMessage: (contactId: string, content: string) => Promise<void>;
   approveMessage: (messageId: string, responseContent?: string) => Promise<void>;
   rejectMessage: (messageId: string) => Promise<void>;
+  approveContact: (contactId: string) => Promise<void>;
+  rejectContact: (contactId: string) => Promise<void>;
   setupEventListeners: () => Promise<() => void>;
 }
 
@@ -189,8 +193,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     }
   },
 
-  generateInvite: async (agentName, agentDesc, addresses = [], expiryHours) => {
-    return p2pGenerateInvite(agentName, agentDesc, addresses, expiryHours);
+  generateInvite: async (agentName, agentDesc, expiryHours) => {
+    return p2pGenerateInvite(agentName, agentDesc, [], expiryHours);
   },
 
   acceptInvite: async (code, localAgentId) => {
@@ -288,6 +292,18 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     });
   },
 
+  approveContact: async (contactId) => {
+    await p2pApproveContact(contactId);
+    await get().refreshContacts();
+    set((s) => ({ pendingApprovals: Math.max(0, s.pendingApprovals - 1) }));
+  },
+
+  rejectContact: async (contactId) => {
+    await p2pRejectContact(contactId);
+    await get().refreshContacts();
+    set((s) => ({ pendingApprovals: Math.max(0, s.pendingApprovals - 1) }));
+  },
+
   setupEventListeners: async () => {
     const unlisteners: UnlistenFn[] = [];
 
@@ -299,19 +315,15 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen<PeerEventPayload>("p2p:peer-connected", (event) => {
-        const { peer_id } = event.payload;
-        set((s) => ({ connectedPeers: new Set([...s.connectedPeers, peer_id]) }));
-        get().refreshContacts();
-      }),
-    );
-
-    unlisteners.push(
-      await listen<PeerEventPayload>("p2p:peer-disconnected", (event) => {
-        const { peer_id } = event.payload;
+      await listen<PresencePayload>("p2p:presence", (event) => {
+        const { peer_id, status } = event.payload;
         set((s) => {
           const next = new Set(s.connectedPeers);
-          next.delete(peer_id);
+          if (status === "online") {
+            next.add(peer_id);
+          } else {
+            next.delete(peer_id);
+          }
           return { connectedPeers: next };
         });
         get().refreshContacts();
@@ -328,8 +340,14 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen<ApprovalNeededPayload>("p2p:approval-needed", (event) => {
+      await listen<ApprovalNeededPayload & { type?: string }>("p2p:approval-needed", (event) => {
         const payload = event.payload;
+        if (payload.type === "introduce") {
+          // Contact introduction — refresh contacts list to show pending_approval contact
+          set((s) => ({ pendingApprovals: s.pendingApprovals + 1 }));
+          get().refreshContacts();
+          return;
+        }
         set((s) => ({
           pendingApprovals: s.pendingApprovals + 1,
           approvalSummaries: { ...s.approvalSummaries, [payload.message_id]: payload.summary },
