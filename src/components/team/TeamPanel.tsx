@@ -9,6 +9,7 @@ import { useNavigationStore } from "../../stores/navigationStore";
 import TeamEditor from "./TeamEditor";
 import type { TeamDetail } from "../../services/types";
 import { logger } from "../../services/logger";
+import DraggableHeader from "../layout/DraggableHeader";
 
 export default function TeamPanel() {
   const { t } = useTranslation("team");
@@ -75,7 +76,7 @@ export default function TeamPanel() {
 
   return (
     <div className="team-panel">
-      <div className="team-panel-header">
+      <DraggableHeader className="team-panel-header">
         <div className="team-panel-title">
           <Users size={22} />
           <h2>{t("title")}</h2>
@@ -84,7 +85,7 @@ export default function TeamPanel() {
           <Plus size={16} />
           {t("newTeam")}
         </button>
-      </div>
+      </DraggableHeader>
 
       <div className="team-panel-body">
         {teams.length === 0 ? (

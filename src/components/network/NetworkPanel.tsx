@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Network, UserPlus, RefreshCw } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
+import DraggableHeader from "../layout/DraggableHeader";
 import ContactList from "./ContactList";
 import PeerThread from "./PeerThread";
 import InviteDialog from "./InviteDialog";
@@ -29,7 +30,7 @@ export default function NetworkPanel() {
   if (status !== "active") {
     return (
       <div className="network-panel">
-        <div className="network-panel-header">
+        <DraggableHeader className="network-panel-header">
           <Network size={20} />
           <h2>{t("panel.title")}</h2>
           <div className="network-panel-actions">
@@ -41,7 +42,7 @@ export default function NetworkPanel() {
               <UserPlus size={16} />
             </button>
           </div>
-        </div>
+        </DraggableHeader>
         <div className="network-panel-empty">
           <Network size={40} strokeWidth={1.5} />
           <p>{t("panel.inactive")}</p>
@@ -58,7 +59,7 @@ export default function NetworkPanel() {
     <div className="network-panel network-panel--messenger">
       {/* Left sidebar: contacts */}
       <div className="network-panel-sidebar">
-        <div className="network-panel-header">
+        <DraggableHeader className="network-panel-header">
           <Network size={20} />
           <h2>{t("panel.title")}</h2>
           <div className="network-panel-actions">
@@ -77,7 +78,7 @@ export default function NetworkPanel() {
               <UserPlus size={16} />
             </button>
           </div>
-        </div>
+        </DraggableHeader>
         {error && <div className="network-error">{error}</div>}
         <ContactList />
       </div>

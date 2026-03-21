@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { BookOpen, List, Share2, Plus, ExternalLink } from "lucide-react";
 import type { Agent } from "../../services/types";
+import DraggableHeader from "../layout/DraggableHeader";
 
 interface VaultHeaderProps {
   viewMode: "list" | "graph";
@@ -23,7 +24,7 @@ export default function VaultHeader({
 }: VaultHeaderProps) {
   const { t } = useTranslation("vault");
   return (
-    <div className="vault-header">
+    <DraggableHeader className="vault-header">
       <BookOpen size={20} />
       <h2>{t("header.title")}</h2>
 
@@ -73,6 +74,6 @@ export default function VaultHeader({
           <ExternalLink size={18} />
         </button>
       </div>
-    </div>
+    </DraggableHeader>
   );
 }

@@ -7,6 +7,7 @@ import type { PeerMessageRow } from "../../services/commands/relayCommands";
 import DeliveryBadge from "./DeliveryBadge";
 import ApprovalPanel from "./ApprovalPanel";
 import ContactDetail from "./ContactDetail";
+import DraggableHeader from "../layout/DraggableHeader";
 
 function PeerMessageBubble({ msg, t }: { msg: PeerMessageRow; t: (key: string) => string }) {
   const approveMessage = useNetworkStore((s) => s.approveMessage);
@@ -135,7 +136,7 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
 
   return (
     <div className="peer-thread">
-      <header className="peer-thread-header">
+      <DraggableHeader className="peer-thread-header">
         <div className="peer-thread-agent-info">
           <span className="peer-thread-agent-name">
             {contact?.display_name || contact?.agent_name || t("peer.unknown")}
@@ -151,7 +152,7 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
         >
           <Settings size={16} />
         </button>
-      </header>
+      </DraggableHeader>
 
       {settingsOpen && (
         <div className="peer-thread-settings">
