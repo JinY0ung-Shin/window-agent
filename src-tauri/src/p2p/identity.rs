@@ -1,4 +1,4 @@
-use libp2p_identity::{Keypair, PeerId};
+use ed25519_dalek::SigningKey;
 use tauri_plugin_store::StoreExt;
 use thiserror::Error;
 
@@ -20,15 +20,13 @@ pub enum IdentityError {
 /// Node identity backed by an Ed25519 keypair.
 /// The keypair is persisted via tauri-plugin-store and auto-generated on first access.
 pub struct NodeIdentity {
-    keypair: Keypair,
-    peer_id: PeerId,
+    signing_key: SigningKey,
 }
 
 impl Clone for NodeIdentity {
     fn clone(&self) -> Self {
         Self {
-            keypair: self.keypair.clone(),
-            peer_id: self.peer_id,
+            signing_key: SigningKey::from_bytes(&self.signing_key.to_bytes()),
         }
     }
 }
@@ -46,18 +44,17 @@ impl NodeIdentity {
 
     /// Generate a fresh Ed25519 identity (not persisted).
     pub fn generate() -> Self {
-        let keypair = Keypair::generate_ed25519();
-        let peer_id = keypair.public().to_peer_id();
-        Self { keypair, peer_id }
+        let signing_key = SigningKey::generate(&mut rand::rngs::OsRng);
+        Self { signing_key }
     }
 
     /// Create from raw Ed25519 secret key bytes (32 bytes).
     pub fn from_secret_bytes(bytes: &[u8]) -> Result<Self, IdentityError> {
-        let mut buf = bytes.to_vec();
-        let keypair = Keypair::ed25519_from_bytes(&mut buf)
-            .map_err(|e| IdentityError::InvalidKey(e.to_string()))?;
-        let peer_id = keypair.public().to_peer_id();
-        Ok(Self { keypair, peer_id })
+        let key_bytes: [u8; 32] = bytes
+            .try_into()
+            .map_err(|_| IdentityError::InvalidKey("secret key must be 32 bytes".into()))?;
+        let signing_key = SigningKey::from_bytes(&key_bytes);
+        Ok(Self { signing_key })
     }
 
     /// Attempt to load from tauri-plugin-store. Returns Ok(None) if no stored key.
@@ -91,7 +88,7 @@ impl NodeIdentity {
 
     /// Persist the secret key to tauri-plugin-store (base64-encoded).
     fn save_to_store(&self, app: &tauri::AppHandle) -> Result<(), IdentityError> {
-        let secret = self.secret_bytes()?;
+        let secret = self.secret_bytes();
         let b64 = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
             &secret,
@@ -107,25 +104,31 @@ impl NodeIdentity {
         Ok(())
     }
 
-    /// The libp2p Keypair (for signing, etc.).
-    pub fn keypair(&self) -> &Keypair {
-        &self.keypair
+    /// The Ed25519 signing key.
+    pub fn signing_key(&self) -> &SigningKey {
+        &self.signing_key
     }
 
-    /// The PeerId derived from the public key.
-    pub fn peer_id(&self) -> &PeerId {
-        &self.peer_id
+    /// The Ed25519 public key bytes (32 bytes).
+    pub fn public_key_bytes(&self) -> [u8; 32] {
+        self.signing_key.verifying_key().to_bytes()
     }
 
-    /// Export the secret key bytes (32 bytes) for backup/transfer.
-    pub fn secret_bytes(&self) -> Result<Vec<u8>, IdentityError> {
-        let ed_keypair = self
-            .keypair
-            .clone()
-            .try_into_ed25519()
-            .map_err(|e| IdentityError::InvalidKey(e.to_string()))?;
-        let secret = ed_keypair.secret();
-        Ok(secret.as_ref().to_vec())
+    /// Sign a message, returning the 64-byte signature.
+    pub fn sign(&self, message: &[u8]) -> Vec<u8> {
+        use ed25519_dalek::Signer;
+        self.signing_key.sign(message).to_bytes().to_vec()
+    }
+
+    /// Return the X25519 public key (32 bytes) derived from this node's Ed25519 public key.
+    pub fn to_x25519_public(&self) -> [u8; 32] {
+        let ed_pub_bytes = self.public_key_bytes();
+        crate::p2p::crypto::ed25519_public_to_x25519(&ed_pub_bytes)
+    }
+
+    /// Export the secret key bytes (32 bytes).
+    pub fn secret_bytes(&self) -> Vec<u8> {
+        self.signing_key.to_bytes().to_vec()
     }
 }
 
@@ -136,33 +139,35 @@ mod tests {
     #[test]
     fn test_generate_creates_valid_identity() {
         let id = NodeIdentity::generate();
-        let peer_str = id.peer_id().to_string();
-        assert!(!peer_str.is_empty());
-        assert!(peer_str.starts_with("12D3KooW"), "PeerId: {peer_str}");
+        let pub_bytes = id.public_key_bytes();
+        assert_eq!(pub_bytes.len(), 32);
+        // Verify relay peer_id derivation works
+        let relay_id = crate::p2p::relay_client::derive_relay_peer_id(&pub_bytes);
+        assert_eq!(relay_id.len(), 32); // hex-encoded 16 bytes
     }
 
     #[test]
-    fn test_deterministic_peer_id_from_same_secret() {
+    fn test_deterministic_key_from_same_secret() {
         let id1 = NodeIdentity::generate();
-        let secret = id1.secret_bytes().unwrap();
+        let secret = id1.secret_bytes();
         let id2 = NodeIdentity::from_secret_bytes(&secret).unwrap();
-        assert_eq!(id1.peer_id(), id2.peer_id());
+        assert_eq!(id1.public_key_bytes(), id2.public_key_bytes());
     }
 
     #[test]
-    fn test_different_keys_produce_different_peer_ids() {
+    fn test_different_keys_produce_different_public_keys() {
         let id1 = NodeIdentity::generate();
         let id2 = NodeIdentity::generate();
-        assert_ne!(id1.peer_id(), id2.peer_id());
+        assert_ne!(id1.public_key_bytes(), id2.public_key_bytes());
     }
 
     #[test]
     fn test_secret_bytes_roundtrip() {
         let id = NodeIdentity::generate();
-        let secret = id.secret_bytes().unwrap();
+        let secret = id.secret_bytes();
         assert_eq!(secret.len(), 32);
         let restored = NodeIdentity::from_secret_bytes(&secret).unwrap();
-        assert_eq!(id.peer_id(), restored.peer_id());
+        assert_eq!(id.public_key_bytes(), restored.public_key_bytes());
     }
 
     #[test]
@@ -172,19 +177,14 @@ mod tests {
     }
 
     #[test]
-    fn test_keypair_is_ed25519() {
-        let id = NodeIdentity::generate();
-        let ed = id.keypair().clone().try_into_ed25519();
-        assert!(ed.is_ok());
-    }
-
-    #[test]
     fn test_signing_and_verification() {
+        use ed25519_dalek::{Verifier, Signature};
         let id = NodeIdentity::generate();
         let message = b"hello p2p world";
-        let ed_keypair = id.keypair().clone().try_into_ed25519().unwrap();
-        let signature = ed_keypair.sign(message);
-        assert!(ed_keypair.public().verify(message, &signature));
-        assert!(!ed_keypair.public().verify(b"tampered", &signature));
+        let sig_bytes = id.sign(message);
+        let sig = Signature::from_bytes(&sig_bytes.try_into().unwrap());
+        let verifying_key = id.signing_key().verifying_key();
+        assert!(verifying_key.verify(message, &sig).is_ok());
+        assert!(verifying_key.verify(b"tampered", &sig).is_err());
     }
 }

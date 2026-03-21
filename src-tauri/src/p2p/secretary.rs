@@ -41,10 +41,11 @@ pub async fn handle_incoming_message(
     contact_peer_id: &str,
     envelope: &Envelope,
 ) -> Result<(), String> {
-    // 1. Extract content (must be MessageRequest)
+    // 1. Extract content (MessageRequest or MessageResponse)
     let content = match &envelope.payload {
         Payload::MessageRequest { content } => content.clone(),
-        _ => return Err("Expected MessageRequest payload".into()),
+        Payload::MessageResponse { content } => content.clone(),
+        _ => return Err("Expected MessageRequest or MessageResponse payload".into()),
     };
 
     // 2. Look up contact by peer_id

@@ -1,9 +1,8 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { X, Copy, Check, Loader2, Plus, Trash2 } from "lucide-react";
+import { X, Copy, Check, Loader2 } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
-import { p2pGetConnectionInfo, type ConnectionInfo } from "../../services/commands/p2pCommands";
 
 type Tab = "generate" | "accept";
 
@@ -62,77 +61,15 @@ function GenerateTab({ onClose, t }: { onClose: () => void; t: (key: string, opt
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Connection info for address selection
-  const [connInfo, setConnInfo] = useState<ConnectionInfo | null>(null);
-  const [connInfoLoading, setConnInfoLoading] = useState(true);
-  const [selectedLanAddrs, setSelectedLanAddrs] = useState<Set<string>>(new Set());
-  const [manualAddrs, setManualAddrs] = useState<string[]>([]);
-  const [manualInput, setManualInput] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    setConnInfoLoading(true);
-    p2pGetConnectionInfo()
-      .then((info) => {
-        if (cancelled) return;
-        setConnInfo(info);
-        // Pre-select all LAN addresses
-        setSelectedLanAddrs(new Set(info.listen_addresses));
-      })
-      .catch(() => {
-        if (!cancelled) setConnInfo(null);
-      })
-      .finally(() => {
-        if (!cancelled) setConnInfoLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  const toggleLanAddr = (addr: string) => {
-    setSelectedLanAddrs((prev) => {
-      const next = new Set(prev);
-      if (next.has(addr)) next.delete(addr);
-      else next.add(addr);
-      return next;
-    });
-  };
-
-  const addManualAddr = () => {
-    const raw = manualInput.trim();
-    if (!raw) return;
-
-    let addr = raw;
-    // Auto-convert plain IP to multiaddr
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(raw)) {
-      const port = connInfo?.active_listen_port ?? connInfo?.configured_listen_port;
-      if (!port) {
-        setManualInput(raw);
-        return;
-      }
-      addr = `/ip4/${raw}/tcp/${port}`;
-    }
-
-    if (!manualAddrs.includes(addr)) {
-      setManualAddrs((prev) => [...prev, addr]);
-    }
-    setManualInput("");
-  };
-
-  const removeManualAddr = (addr: string) => {
-    setManualAddrs((prev) => prev.filter((a) => a !== addr));
-  };
-
   const handleGenerate = async () => {
     const agent = agents[selectedAgentIdx];
     if (!agent) return;
     setLoading(true);
     setError("");
     try {
-      const addresses = [...selectedLanAddrs, ...manualAddrs];
       const code = await generateInvite(
         agent.name,
         description || agent.description,
-        addresses,
         expiryHours === 0 ? undefined : expiryHours,
       );
       setInviteCode(code);
@@ -186,64 +123,6 @@ function GenerateTab({ onClose, t }: { onClose: () => void; t: (key: string, opt
             </select>
           </div>
 
-          {/* Address selection */}
-          <div className="form-group">
-            <label>{t("invite.addressLabel")}</label>
-            {connInfoLoading ? (
-              <span className="form-text"><Loader2 size={14} className="spinning" style={{ display: "inline-block", verticalAlign: "middle", marginRight: 4 }} />{t("invite.detectingAddresses")}</span>
-            ) : connInfo && connInfo.listen_addresses.length > 0 ? (
-              <div className="addr-checkbox-list">
-                {connInfo.listen_addresses.map((addr) => (
-                  <label key={addr} className="addr-checkbox-item">
-                    <input
-                      type="checkbox"
-                      checked={selectedLanAddrs.has(addr)}
-                      onChange={() => toggleLanAddr(addr)}
-                    />
-                    <code className="addr-text">{addr}</code>
-                    <span className="addr-badge">LAN</span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <span className="form-text">{t("invite.noLanAddresses")}</span>
-            )}
-          </div>
-
-          <div className="form-group">
-            <label>{t("invite.publicAddressLabel")}</label>
-            <div className="addr-manual-input">
-              <input
-                type="text"
-                value={manualInput}
-                onChange={(e) => setManualInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addManualAddr(); } }}
-                placeholder={t("invite.publicAddrPlaceholder", { port: String(connInfo?.active_listen_port ?? "port") })}
-              />
-              <button
-                className="btn-secondary addr-add-btn"
-                onClick={addManualAddr}
-                disabled={!manualInput.trim()}
-              >
-                <Plus size={14} />
-                {t("common:add")}
-              </button>
-            </div>
-            <span className="form-text">{t("invite.autoConvertHint")}</span>
-            {manualAddrs.length > 0 && (
-              <div className="addr-manual-list">
-                {manualAddrs.map((addr) => (
-                  <div key={addr} className="addr-manual-item">
-                    <code className="addr-text">{addr}</code>
-                    <button className="icon-btn" onClick={() => removeManualAddr(addr)} title={t("invite.removeTitle")}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {error && <div className="form-text text-error">{error}</div>}
           <button
             className="btn-primary"
@@ -274,7 +153,6 @@ function GenerateTab({ onClose, t }: { onClose: () => void; t: (key: string, opt
 
 interface InvitePreview {
   agent_name?: string;
-  addresses?: string[];
 }
 
 function tryDecodeInvite(code: string): InvitePreview | null {
@@ -292,7 +170,6 @@ function tryDecodeInvite(code: string): InvitePreview | null {
     if (typeof obj === "object" && obj !== null) {
       return {
         agent_name: obj.agent_name,
-        addresses: Array.isArray(obj.addresses) ? obj.addresses : undefined,
       };
     }
   } catch {
@@ -343,11 +220,6 @@ function AcceptTab({ onClose, t }: { onClose: () => void; t: (key: string, opts?
           {preview.agent_name && (
             <div className="invite-preview-row">{t("invite.agentPrefix", { name: preview.agent_name })}</div>
           )}
-          <div className="invite-preview-row">
-            {preview.addresses && preview.addresses.length > 0
-              ? t("invite.addressCount", { count: preview.addresses.length })
-              : t("invite.noAddressHint")}
-          </div>
         </div>
       )}
       <div className="form-group">

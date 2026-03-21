@@ -11,9 +11,21 @@ pub fn generate_invite(
     agent_description: String,
     expiry_hours: Option<u64>,
 ) -> Result<String, ContactCardError> {
+    generate_invite_with_relay(identity, addresses, agent_name, agent_description, expiry_hours, None)
+}
+
+/// Generate an invite code with an optional relay URL embedded.
+pub fn generate_invite_with_relay(
+    identity: &NodeIdentity,
+    addresses: Vec<String>,
+    agent_name: String,
+    agent_description: String,
+    expiry_hours: Option<u64>,
+    relay_url: Option<String>,
+) -> Result<String, ContactCardError> {
     let expiry = expiry_hours.map(|hours| (Utc::now() + Duration::hours(hours as i64)).to_rfc3339());
 
-    let card = ContactCard::create(identity, addresses, agent_name, agent_description, expiry)?;
+    let card = ContactCard::create_v2(identity, addresses, agent_name, agent_description, expiry, relay_url)?;
     card.to_invite_code()
 }
 
@@ -50,7 +62,9 @@ mod tests {
         .unwrap();
 
         let card = parse_invite(&code).unwrap();
-        assert_eq!(card.peer_id, id.peer_id().to_string());
+        // v2 card: peer_id is relay-format hex, not libp2p PeerId
+        assert!(!card.peer_id.is_empty());
+        assert_eq!(card.peer_id.len(), 32); // hex-encoded 16 bytes
         assert_eq!(card.agent_name, "Agent");
         assert!(card.expiry.is_some());
     }

@@ -18,15 +18,13 @@ pub enum Payload {
     Introduce {
         agent_name: String,
         agent_description: String,
+        public_key: String,
     },
     MessageRequest {
         content: String,
     },
     MessageResponse {
         content: String,
-    },
-    Handshake {
-        data: String,
     },
     Ack {
         acked_message_id: String,
@@ -79,6 +77,7 @@ mod tests {
         let payload = Payload::Introduce {
             agent_name: "agent1".into(),
             agent_description: "A test agent".into(),
+            public_key: "AAAA".into(),
         };
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains("\"type\":\"Introduce\""));
@@ -91,15 +90,13 @@ mod tests {
             Payload::Introduce {
                 agent_name: "a".into(),
                 agent_description: "b".into(),
+                public_key: "pk".into(),
             },
             Payload::MessageRequest {
                 content: "c".into(),
             },
             Payload::MessageResponse {
                 content: "d".into(),
-            },
-            Payload::Handshake {
-                data: "d2".into(),
             },
             Payload::Ack {
                 acked_message_id: "e".into(),

@@ -79,7 +79,6 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
   const connectedPeers = useNetworkStore((s) => s.connectedPeers);
   const contact = contacts.find((c) => c.id === selectedContactId);
   const isOnline = contact ? connectedPeers.has(contact.peer_id) : false;
-
   const isNearBottom = useCallback(() => {
     const el = containerRef.current;
     if (!el) return true;

@@ -112,6 +112,14 @@ export async function p2pRemoveContact(id: string): Promise<void> {
   return invoke("p2p_remove_contact", { id });
 }
 
+export async function p2pApproveContact(contactId: string): Promise<void> {
+  return invoke("p2p_approve_contact", { contactId });
+}
+
+export async function p2pRejectContact(contactId: string): Promise<void> {
+  return invoke("p2p_reject_contact", { contactId });
+}
+
 export async function p2pBindAgent(
   contactId: string,
   agentId: string,
@@ -150,9 +158,7 @@ export async function p2pRequestDraft(
 
 export interface ConnectionInfo {
   peer_id: string;
-  configured_listen_port: number | null;
-  active_listen_port: number | null;
-  listen_addresses: string[];
+  relay_url: string;
   status: string;
 }
 
@@ -170,20 +176,14 @@ export async function p2pSetNetworkEnabled(enabled: boolean): Promise<void> {
   return invoke("p2p_set_network_enabled", { enabled });
 }
 
-// ── Listen Port ──
+// ── Relay URL ──
 
-export async function p2pGetListenPort(): Promise<number | null> {
-  return invoke("p2p_get_listen_port");
+export async function p2pGetRelayUrl(): Promise<string> {
+  return invoke("p2p_get_relay_url");
 }
 
-export async function p2pSetListenPort(port: number | null): Promise<void> {
-  return invoke("p2p_set_listen_port", { port });
-}
-
-// ── Dial ──
-
-export async function p2pDialPeer(contactId: string): Promise<void> {
-  return invoke("p2p_dial_peer", { contactId });
+export async function p2pSetRelayUrl(url: string): Promise<void> {
+  return invoke("p2p_set_relay_url", { url });
 }
 
 // ── Threads ──
@@ -205,4 +205,3 @@ export async function p2pGetThreadMessages(
 ): Promise<PeerMessageRow[]> {
   return invoke("p2p_get_thread_messages", { threadId });
 }
-

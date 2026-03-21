@@ -9,14 +9,12 @@
     "label": "P2P 네트워크",
     "hint": "다른 에이전트와 P2P 통신을 활성화합니다."
   },
-  "port": {
-    "label": "리슨 포트",
-    "placeholder": "자동 (랜덤)",
-    "validationError": "1~65535 사이의 정수를 입력하세요",
+  "relay": {
+    "label": "릴레이 서버 URL",
+    "placeholder": "wss://relay.example.com",
+    "validationError": "유효한 WebSocket URL을 입력하세요 (ws:// 또는 wss://)",
     "saved": "저장됨 — 네트워크를 재시작해야 적용됩니다",
-    "activePort": "현재 활성 포트: {{port}}",
-    "portMismatch": "(설정과 다름 — 재시작 필요)",
-    "hint": "고정 포트를 지정하면 외부에서 직접 연결할 수 있습니다. 비워두면 랜덤 포트를 사용합니다."
+    "hint": "피어 연결에 사용할 WebSocket 릴레이 서버의 URL입니다."
   },
   "status": {
     "label": "연결 상태",
@@ -24,6 +22,7 @@
     "starting": "시작 중...",
     "active": "활성",
     "stopping": "중지 중...",
+    "reconnecting": "재연결 중...",
     "connectedPeers": "연결된 피어: {{count}}"
   },
   "peerId": {
@@ -66,6 +65,7 @@
   },
   "delivery": {
     "sending": "전송 중...",
+    "sent": "전송됨",
     "delivered": "전달됨",
     "failed": "실패",
     "retryTitle": "재시도",
@@ -87,7 +87,8 @@
     "online": "● 연결됨",
     "offline": "○ 오프라인",
     "noMessages": "아직 메시지가 없습니다. 대화를 시작하세요.",
-    "inputPlaceholder": "메시지를 입력하세요..."
+    "inputPlaceholder": "메시지를 입력하세요...",
+    "pendingApprovalHint": "메시지를 보내려면 먼저 연락처를 승인하세요"
   },
   "contact": {
     "online": "온라인",
@@ -112,6 +113,9 @@
     "modeLabel": "모드",
     "secretaryMode": "비서 (Secretary)",
     "delegateHint": "대리인 모드는 Phase 2에서 지원 예정",
+    "pendingApproval": "승인 대기 중",
+    "approveContact": "승인",
+    "rejectContact": "거절",
     "deleteContact": "연락처 삭제",
     "confirmDeleteMessage": "정말 삭제하시겠습니까?",
     "sendMessageLabel": "메시지 보내기",

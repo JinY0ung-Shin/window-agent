@@ -1,6 +1,6 @@
 use base64::Engine;
 use chrono::Utc;
-use libp2p_identity::ed25519;
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -22,12 +22,21 @@ pub enum ContactCardError {
 
 /// A signed contact card that can be shared as an invite code.
 /// Contains everything needed to establish a P2P connection.
+///
+/// Version 0 = legacy libp2p format (implicit default for old cards).
+/// Version 2 = relay format (peer_id derived from public_key, relay_url included).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContactCard {
+    #[serde(default)]
+    pub version: u32,
     pub peer_id: String,
     pub public_key: Vec<u8>,
+    #[serde(default)]
     pub addresses: Vec<String>,
+    #[serde(default)]
     pub relay_hints: Vec<String>,
+    #[serde(default)]
+    pub relay_url: Option<String>,
     pub expiry: Option<String>,
     pub agent_name: String,
     pub agent_description: String,
@@ -35,9 +44,9 @@ pub struct ContactCard {
     pub signature: Vec<u8>,
 }
 
-/// All fields except `signature`, serialized in declaration order for canonical signing.
+/// V1 (legacy) signable content — no version or relay_url fields.
 #[derive(Serialize)]
-struct SignableContent<'a> {
+struct SignableContentV1<'a> {
     peer_id: &'a str,
     public_key: &'a [u8],
     addresses: &'a [String],
@@ -48,8 +57,23 @@ struct SignableContent<'a> {
     created_at: &'a str,
 }
 
+/// V2 signable content — includes version and relay_url to prevent tampering.
+#[derive(Serialize)]
+struct SignableContentV2<'a> {
+    version: u32,
+    peer_id: &'a str,
+    public_key: &'a [u8],
+    addresses: &'a [String],
+    relay_hints: &'a [String],
+    relay_url: &'a Option<String>,
+    expiry: &'a Option<String>,
+    agent_name: &'a str,
+    agent_description: &'a str,
+    created_at: &'a str,
+}
+
 impl ContactCard {
-    /// Create and sign a new contact card.
+    /// Create and sign a new v2 (relay) contact card.
     pub fn create(
         identity: &NodeIdentity,
         addresses: Vec<String>,
@@ -57,27 +81,33 @@ impl ContactCard {
         agent_description: String,
         expiry: Option<String>,
     ) -> Result<Self, ContactCardError> {
-        let ed_keypair = identity
-            .keypair()
-            .clone()
-            .try_into_ed25519()
-            .map_err(|e| ContactCardError::InvalidKey(e.to_string()))?;
+        Self::create_v2(identity, addresses, agent_name, agent_description, expiry, None)
+    }
 
-        let peer_id = identity.peer_id().to_string();
-        let public_key = ed_keypair.public().to_bytes().to_vec();
+    /// Create a v2 contact card with optional relay_url.
+    pub fn create_v2(
+        identity: &NodeIdentity,
+        addresses: Vec<String>,
+        agent_name: String,
+        agent_description: String,
+        expiry: Option<String>,
+        relay_url: Option<String>,
+    ) -> Result<Self, ContactCardError> {
+        let public_key = identity.public_key_bytes().to_vec();
+        // v2: derive peer_id from public_key using relay format
+        let peer_id = crate::p2p::relay_client::derive_relay_peer_id(
+            &<[u8; 32]>::try_from(public_key.as_slice())
+                .map_err(|_| ContactCardError::InvalidKey("key must be 32 bytes".into()))?,
+        );
         let created_at = Utc::now().to_rfc3339();
 
-        let relay_hints: Vec<String> = addresses
-            .iter()
-            .filter(|a| a.contains("/p2p-circuit"))
-            .cloned()
-            .collect();
-
         let mut card = Self {
+            version: 2,
             peer_id,
             public_key,
             addresses,
-            relay_hints,
+            relay_hints: Vec::new(),
+            relay_url,
             expiry,
             agent_name,
             agent_description,
@@ -86,17 +116,34 @@ impl ContactCard {
         };
 
         let signable = card.signable_bytes()?;
-        card.signature = ed_keypair.sign(&signable);
+        card.signature = identity.sign(&signable);
 
         Ok(card)
     }
 
-    /// Verify the card's signature using the embedded public key.
+    /// Verify the card's signature and peer_id↔public_key consistency.
     pub fn verify(&self) -> Result<bool, ContactCardError> {
-        let pubkey = ed25519::PublicKey::try_from_bytes(&self.public_key)
+        let pk_bytes: [u8; 32] = self.public_key.as_slice()
+            .try_into()
+            .map_err(|_| ContactCardError::InvalidKey("key must be 32 bytes".into()))?;
+        let verifying_key = VerifyingKey::from_bytes(&pk_bytes)
             .map_err(|e| ContactCardError::InvalidKey(e.to_string()))?;
+
+        // For v2 cards, verify peer_id matches public_key derivation
+        if self.version >= 2 {
+            let expected = crate::p2p::relay_client::derive_relay_peer_id(&pk_bytes);
+            if self.peer_id != expected {
+                return Ok(false);
+            }
+        }
+
+        let sig_bytes: [u8; 64] = self.signature.as_slice()
+            .try_into()
+            .map_err(|_| ContactCardError::Decode("signature must be 64 bytes".into()))?;
+        let signature = Signature::from_bytes(&sig_bytes);
+
         let signable = self.signable_bytes()?;
-        Ok(pubkey.verify(&signable, &self.signature))
+        Ok(verifying_key.verify(&signable, &signature).is_ok())
     }
 
     /// Check if the card has expired.
@@ -125,18 +172,38 @@ impl ContactCard {
     }
 
     /// Canonical JSON bytes for signing/verification.
+    /// Version-aware: v1 uses legacy format, v2 includes version and relay_url.
     fn signable_bytes(&self) -> Result<Vec<u8>, ContactCardError> {
-        let content = SignableContent {
-            peer_id: &self.peer_id,
-            public_key: &self.public_key,
-            addresses: &self.addresses,
-            relay_hints: &self.relay_hints,
-            expiry: &self.expiry,
-            agent_name: &self.agent_name,
-            agent_description: &self.agent_description,
-            created_at: &self.created_at,
-        };
-        serde_json::to_vec(&content).map_err(|e| ContactCardError::Serialization(e.to_string()))
+        if self.version >= 2 {
+            let content = SignableContentV2 {
+                version: self.version,
+                peer_id: &self.peer_id,
+                public_key: &self.public_key,
+                addresses: &self.addresses,
+                relay_hints: &self.relay_hints,
+                relay_url: &self.relay_url,
+                expiry: &self.expiry,
+                agent_name: &self.agent_name,
+                agent_description: &self.agent_description,
+                created_at: &self.created_at,
+            };
+            serde_json::to_vec(&content)
+                .map_err(|e| ContactCardError::Serialization(e.to_string()))
+        } else {
+            // Legacy v1 format — no version or relay_url
+            let content = SignableContentV1 {
+                peer_id: &self.peer_id,
+                public_key: &self.public_key,
+                addresses: &self.addresses,
+                relay_hints: &self.relay_hints,
+                expiry: &self.expiry,
+                agent_name: &self.agent_name,
+                agent_description: &self.agent_description,
+                created_at: &self.created_at,
+            };
+            serde_json::to_vec(&content)
+                .map_err(|e| ContactCardError::Serialization(e.to_string()))
+        }
     }
 }
 
@@ -164,7 +231,12 @@ mod tests {
         let id = test_identity();
         let card = create_test_card(&id);
 
-        assert_eq!(card.peer_id, id.peer_id().to_string());
+        // v2 card: peer_id is relay format (hex of first 16 bytes of public key)
+        let expected_pid = crate::p2p::relay_client::derive_relay_peer_id(
+            &id.public_key_bytes(),
+        );
+        assert_eq!(card.peer_id, expected_pid);
+        assert_eq!(card.version, 2);
         assert_eq!(card.public_key.len(), 32);
         assert!(!card.signature.is_empty());
         assert_eq!(card.agent_name, "TestAgent");
@@ -201,8 +273,7 @@ mod tests {
         let id1 = test_identity();
         let id2 = test_identity();
         let mut card = create_test_card(&id1);
-        let ed2 = id2.keypair().clone().try_into_ed25519().unwrap();
-        card.public_key = ed2.public().to_bytes().to_vec();
+        card.public_key = id2.public_key_bytes().to_vec();
         assert!(!card.verify().unwrap());
     }
 
