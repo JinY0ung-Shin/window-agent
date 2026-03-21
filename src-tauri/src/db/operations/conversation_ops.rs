@@ -280,26 +280,6 @@ pub fn update_conversation_consolidated_at_impl(
     })
 }
 
-/// List conversations that need consolidation (digest or consolidation incomplete, have messages >= min_messages).
-#[allow(dead_code)] // TODO: call from heartbeat/scheduled consolidation worker
-pub fn list_pending_consolidations_impl(
-    db: &Database,
-    min_messages: i64,
-) -> Result<Vec<(String, String)>, DbError> {
-    db.with_conn(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT c.id, c.agent_id FROM conversations c
-             WHERE (c.digest_id IS NULL OR c.consolidated_at IS NULL)
-             AND (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) >= ?1
-             ORDER BY c.updated_at DESC",
-        )?;
-        let rows = stmt.query_map(rusqlite::params![min_messages], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })?;
-        Ok(rows.collect::<Result<Vec<_>, _>>()?)
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

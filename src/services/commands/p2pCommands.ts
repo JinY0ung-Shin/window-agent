@@ -120,13 +120,6 @@ export async function p2pRejectContact(contactId: string): Promise<void> {
   return invoke("p2p_reject_contact", { contactId });
 }
 
-export async function p2pBindAgent(
-  contactId: string,
-  agentId: string,
-): Promise<void> {
-  return invoke("p2p_bind_agent", { contactId, agentId });
-}
-
 // ── Messaging ──
 
 export async function p2pSendMessage(
@@ -152,18 +145,6 @@ export async function p2pRequestDraft(
   agentId: string,
 ): Promise<string> {
   return invoke("p2p_request_draft", { messageId, agentId });
-}
-
-// ── Connection Info ──
-
-export interface ConnectionInfo {
-  peer_id: string;
-  relay_url: string;
-  status: string;
-}
-
-export async function p2pGetConnectionInfo(): Promise<ConnectionInfo> {
-  return invoke("p2p_get_connection_info");
 }
 
 // ── Network Enabled ──
@@ -192,12 +173,6 @@ export async function p2pListThreads(
   contactId: string,
 ): Promise<PeerThreadRow[]> {
   return invoke("p2p_list_threads", { contactId });
-}
-
-export async function p2pGetThread(
-  threadId: string,
-): Promise<PeerThreadRow | null> {
-  return invoke("p2p_get_thread", { threadId });
 }
 
 export async function p2pGetThreadMessages(

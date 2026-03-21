@@ -29,12 +29,6 @@ interface ToolRunStoreState {
   waitForToolApproval: (runId?: string) => Promise<boolean>;
 }
 
-export const TOOL_RESET = {
-  toolRunState: "idle" as ToolRunState,
-  pendingToolCalls: [] as ToolCall[],
-  toolIterationCount: 0,
-};
-
 const DEFAULT_RUN_ID = "__default__";
 
 /** Per-run approval resolvers */

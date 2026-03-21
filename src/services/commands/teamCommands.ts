@@ -4,7 +4,6 @@ import type {
   TeamDetail,
   TeamMember,
   TeamRun,
-  TeamTask,
 } from "../types";
 
 // ── Team CRUD ──
@@ -70,47 +69,6 @@ export async function updateTeamRunStatus(
   finishedAt?: string,
 ): Promise<void> {
   return invoke("update_team_run_status", { runId, status, finishedAt });
-}
-
-export async function getTeamRun(runId: string): Promise<TeamRun> {
-  return invoke("get_team_run", { runId });
-}
-
-export async function getRunningRuns(): Promise<TeamRun[]> {
-  return invoke("get_running_runs");
-}
-
-// ── Team Tasks ──
-
-export async function createTeamTask(
-  runId: string,
-  agentId: string,
-  taskDescription: string,
-  parentMessageId?: string,
-): Promise<TeamTask> {
-  return invoke("create_team_task", { runId, agentId, taskDescription, parentMessageId });
-}
-
-export async function updateTeamTask(
-  taskId: string,
-  updates: {
-    status?: string;
-    requestId?: string;
-    resultSummary?: string;
-    finishedAt?: string;
-  },
-): Promise<TeamTask> {
-  return invoke("update_team_task", {
-    taskId,
-    status: updates.status,
-    requestId: updates.requestId,
-    resultSummary: updates.resultSummary,
-    finishedAt: updates.finishedAt,
-  });
-}
-
-export async function getTeamTasks(runId: string): Promise<TeamTask[]> {
-  return invoke("get_team_tasks", { runId });
 }
 
 // ── Orchestration ──

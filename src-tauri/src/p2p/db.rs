@@ -482,14 +482,6 @@ pub fn update_outbox_retry(
     })
 }
 
-#[allow(dead_code)] // TODO: call from outbox GC or manual message cancellation
-pub fn delete_outbox_entry(db: &Database, id: &str) -> Result<(), DbError> {
-    db.with_conn(|conn| {
-        conn.execute("DELETE FROM outbox WHERE id = ?1", rusqlite::params![id])?;
-        Ok(())
-    })
-}
-
 fn map_outbox_row(row: &rusqlite::Row) -> Result<OutboxRow, rusqlite::Error> {
     Ok(OutboxRow {
         id: row.get(0)?,
@@ -756,16 +748,6 @@ mod tests {
         update_outbox_status(&db, "o1", "sent", 1).unwrap();
         let pending = get_pending_outbox(&db).unwrap();
         assert!(pending.is_empty());
-
-        // Delete
-        delete_outbox_entry(&db, "o1").unwrap();
-        // Verify deleted
-        let all: i64 = db
-            .with_conn(|conn| {
-                Ok(conn.query_row("SELECT COUNT(*) FROM outbox", [], |row| row.get(0))?)
-            })
-            .unwrap();
-        assert_eq!(all, 0);
     }
 
     #[test]

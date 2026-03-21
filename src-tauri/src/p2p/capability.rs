@@ -34,27 +34,6 @@ impl CapabilitySet {
         }
     }
 
-    /// Check if a specific action is allowed.
-    #[allow(dead_code)] // TODO: call from P2P message handler to gate actions
-    pub fn is_allowed(&self, action: &CapabilityAction) -> bool {
-        match action {
-            CapabilityAction::SendMessage => self.can_send_messages,
-            CapabilityAction::ReadAgentInfo => self.can_read_agent_info,
-            CapabilityAction::RequestTask => self.can_request_tasks,
-            CapabilityAction::AccessTool(_) => self.can_access_tools,
-            CapabilityAction::WriteVault => self.can_write_vault,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)] // TODO: used by CapabilitySet::is_allowed — wire into P2P handler
-pub enum CapabilityAction {
-    SendMessage,
-    ReadAgentInfo,
-    RequestTask,
-    AccessTool(String),
-    WriteVault,
 }
 
 #[cfg(test)]
@@ -62,55 +41,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_default_phase1_allows_messages_and_agent_info() {
-        let caps = CapabilitySet::default_phase1();
-        assert!(caps.is_allowed(&CapabilityAction::SendMessage));
-        assert!(caps.is_allowed(&CapabilityAction::ReadAgentInfo));
-    }
-
-    #[test]
-    fn test_default_phase1_blocks_sensitive_actions() {
-        let caps = CapabilitySet::default_phase1();
-        assert!(!caps.is_allowed(&CapabilityAction::RequestTask));
-        assert!(!caps.is_allowed(&CapabilityAction::AccessTool("shell".into())));
-        assert!(!caps.is_allowed(&CapabilityAction::WriteVault));
-    }
-
-    #[test]
-    fn test_deny_all_blocks_everything() {
-        let caps = CapabilitySet::deny_all();
-        assert!(!caps.is_allowed(&CapabilityAction::SendMessage));
-        assert!(!caps.is_allowed(&CapabilityAction::ReadAgentInfo));
-        assert!(!caps.is_allowed(&CapabilityAction::RequestTask));
-        assert!(!caps.is_allowed(&CapabilityAction::AccessTool("any_tool".into())));
-        assert!(!caps.is_allowed(&CapabilityAction::WriteVault));
-    }
-
-    #[test]
-    fn test_access_tool_checks_can_access_tools_flag() {
-        let mut caps = CapabilitySet::deny_all();
-        caps.can_access_tools = true;
-        assert!(caps.is_allowed(&CapabilityAction::AccessTool("browser".into())));
-        assert!(caps.is_allowed(&CapabilityAction::AccessTool("editor".into())));
-    }
-
-    #[test]
     fn test_serialization_roundtrip() {
         let caps = CapabilitySet::default_phase1();
         let json = serde_json::to_string(&caps).unwrap();
         let restored: CapabilitySet = serde_json::from_str(&json).unwrap();
         assert_eq!(caps, restored);
-    }
-
-    #[test]
-    fn test_individual_capability_toggle() {
-        let mut caps = CapabilitySet::deny_all();
-
-        caps.can_request_tasks = true;
-        assert!(caps.is_allowed(&CapabilityAction::RequestTask));
-        assert!(!caps.is_allowed(&CapabilityAction::SendMessage));
-
-        caps.can_write_vault = true;
-        assert!(caps.is_allowed(&CapabilityAction::WriteVault));
     }
 }

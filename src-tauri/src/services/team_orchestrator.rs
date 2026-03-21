@@ -11,16 +11,6 @@ use tauri::{AppHandle, Emitter, Manager};
 // ── Team-specific event payloads ──────────────────────────
 
 #[derive(Serialize, Clone)]
-#[allow(dead_code)] // TODO: emit via Tauri event for real-time team task streaming
-pub struct TeamStreamChunkPayload {
-    pub run_id: String,
-    pub task_id: String,
-    pub agent_id: String,
-    pub delta: String,
-    pub reasoning_delta: Option<String>,
-}
-
-#[derive(Serialize, Clone)]
 pub struct TeamStreamDonePayload {
     pub run_id: String,
     pub task_id: String,

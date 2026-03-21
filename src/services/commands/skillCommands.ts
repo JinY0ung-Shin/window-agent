@@ -9,10 +9,6 @@ export async function readSkill(folderName: string, skillName: string): Promise<
   return invoke("read_skill", { folder_name: folderName, skill_name: skillName });
 }
 
-export async function readSkillResource(folderName: string, skillName: string, resourcePath: string): Promise<string> {
-  return invoke("read_skill_resource", { folder_name: folderName, skill_name: skillName, resource_path: resourcePath });
-}
-
 export async function createSkill(folderName: string, skillName: string): Promise<SkillMetadata> {
   return invoke("create_skill", { folder_name: folderName, skill_name: skillName });
 }

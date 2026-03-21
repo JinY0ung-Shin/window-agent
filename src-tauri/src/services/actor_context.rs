@@ -1,5 +1,4 @@
 use crate::db::agent_operations;
-use crate::db::models::Agent;
 use crate::db::Database;
 use crate::error::AppError;
 use serde_json;
@@ -47,10 +46,8 @@ pub struct ExecutionScope {
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // TODO: pass to LLM call site to replace individual parameter threading
 pub struct ResolvedContext {
-    pub agent: Agent,
     pub system_prompt: String,
     pub enabled_tool_names: Vec<String>,
-    pub workspace_path: Option<String>,
     pub model: String,
     pub temperature: Option<f64>,
     pub thinking_enabled: bool,
@@ -85,16 +82,7 @@ pub fn resolve(
     // 3. Determine enabled tools based on role + trigger + TOOL_CONFIG.json
     let enabled_tool_names = resolve_tool_names(&scope.role, &scope.trigger, &agent_dir);
 
-    // 4. Derive workspace path (agent-scoped working directory)
-    let workspace_path = if agent_dir.exists() {
-        let ws_dir = agent_dir.join("workspace");
-        let _ = std::fs::create_dir_all(&ws_dir);
-        Some(ws_dir.to_string_lossy().to_string())
-    } else {
-        None
-    };
-
-    // 5. LLM settings — agent-level with global fallback
+    // 4. LLM settings — agent-level with global fallback
     let model = agent
         .model
         .clone()
@@ -104,10 +92,8 @@ pub fn resolve(
     let thinking_budget = agent.thinking_budget;
 
     Ok(ResolvedContext {
-        agent,
         system_prompt,
         enabled_tool_names,
-        workspace_path,
         model,
         temperature,
         thinking_enabled,
@@ -301,7 +287,6 @@ mod tests {
 
         let ctx = resolve(&scope, &db, tmp.path()).unwrap();
 
-        assert_eq!(ctx.agent.name, "Test Agent");
         assert_eq!(ctx.model, "gpt-4o");
         assert_eq!(ctx.temperature, Some(0.7));
         assert!(ctx.thinking_enabled);
@@ -310,9 +295,6 @@ mod tests {
         assert!(ctx.system_prompt.contains("Be helpful."));
         // DM mode returns empty tool list (frontend provides)
         assert!(ctx.enabled_tool_names.is_empty());
-        // Workspace path should point to the workspace subdirectory
-        let ws = ctx.workspace_path.unwrap();
-        assert!(ws.ends_with("workspace"));
     }
 
     #[test]
@@ -419,8 +401,6 @@ mod tests {
 
         // No persona files → empty prompt, but no error
         assert!(ctx.system_prompt.is_empty());
-        // No agent dir → no workspace path
-        assert!(ctx.workspace_path.is_none());
         // Fallback model
         assert_eq!(ctx.model, DEFAULT_MODEL);
         assert!(!ctx.thinking_enabled);

@@ -4,9 +4,6 @@ import type { OpenAIMessage, OpenAITool } from "./commands/apiCommands";
 /** The 4 core persona file names that must be written for bootstrap to complete. */
 const REQUIRED_BOOTSTRAP_FILES = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md"] as const;
 
-/** Optional lifecycle files the agent can create during bootstrap. */
-export const OPTIONAL_BOOTSTRAP_FILES = ["BOOT.md", "HEARTBEAT.md"] as const;
-
 /** OpenAI function-calling tool definitions for bootstrap. */
 const BOOTSTRAP_TOOLS: OpenAITool[] = [
   {

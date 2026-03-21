@@ -35,13 +35,9 @@ struct SidecarProcess {
 
 pub struct BrowserSession {
     pub session_id: String,
-    #[allow(dead_code)] // TODO: use for session logging/debugging; key is duplicated in HashMap
-    pub conversation_id: String,
     pub last_url: String,
     pub last_title: String,
     pub last_ref_map: HashMap<u32, ElementRef>,
-    #[allow(dead_code)] // TODO: expose via session analytics endpoint
-    pub created_at: chrono::DateTime<chrono::Utc>,
     pub last_active: chrono::DateTime<chrono::Utc>,
     pub security_policy: SessionSecurityPolicy,
 }
@@ -59,8 +55,6 @@ pub struct ElementRef {
 pub struct SessionSecurityPolicy {
     pub blocked_origins: Vec<String>,
     pub approved_domains: HashSet<String>,
-    #[allow(dead_code)] // TODO: enforce in build_tool_result to limit snapshot payload size
-    pub max_snapshot_size: usize,
 }
 
 #[derive(Deserialize)]
@@ -258,11 +252,9 @@ impl BrowserManager {
 
         let session = BrowserSession {
             session_id: session_id.clone(),
-            conversation_id: conversation_id.to_string(),
             last_url: String::new(),
             last_title: String::new(),
             last_ref_map: HashMap::new(),
-            created_at: chrono::Utc::now(),
             last_active: chrono::Utc::now(),
             security_policy: policy,
         };
@@ -461,7 +453,6 @@ impl Default for SessionSecurityPolicy {
         Self {
             blocked_origins: vec![],
             approved_domains: HashSet::new(),
-            max_snapshot_size: 4096,
         }
     }
 }
@@ -660,7 +651,6 @@ mod tests {
         let policy = SessionSecurityPolicy::default();
         assert!(policy.blocked_origins.is_empty());
         assert!(policy.approved_domains.is_empty());
-        assert_eq!(policy.max_snapshot_size, 4096);
     }
 
     #[test]

@@ -76,16 +76,3 @@ export function formatRelativeDate(date: Date, locale: Locale): string {
   return formatShortDate(date, locale);
 }
 
-/**
- * Full date+time string (e.g. "2026년 3월 19일 오후 2:30" / "Mar 19, 2026, 2:30 PM").
- */
-export function formatFullDateTime(date: Date, locale: Locale): string {
-  const fmt = new Intl.DateTimeFormat(INTL_LOCALE[locale], {
-    year: "numeric",
-    month: locale === "ko" ? "numeric" : "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return fmt.format(date);
-}

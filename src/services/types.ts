@@ -232,8 +232,6 @@ export interface TeamTask {
   finished_at: string | null;
 }
 
-export type ExecutionRole = 'dm' | 'team_leader' | 'team_member';
-
 // ── Skill types ──────────────────────────────────────
 export interface SkillMetadata {
   name: string;

@@ -70,26 +70,8 @@ export async function deleteMessagesAndMaybeResetSummary(
 
 // ── Tool Call Logs ──
 
-export async function createToolCallLog(
-  conversationId: string,
-  toolName: string,
-  toolInput: string,
-  messageId?: string | null,
-): Promise<ToolCallLog> {
-  return invoke("create_tool_call_log", { conversationId, messageId: messageId ?? null, toolName, toolInput });
-}
-
 export async function listToolCallLogs(conversationId: string): Promise<ToolCallLog[]> {
   return invoke("list_tool_call_logs", { conversationId });
-}
-
-export async function updateToolCallLogStatus(
-  id: string,
-  status: string,
-  toolOutput?: string | null,
-  durationMs?: number | null,
-): Promise<void> {
-  return invoke("update_tool_call_log_status", { id, status, toolOutput: toolOutput ?? null, durationMs: durationMs ?? null });
 }
 
 // ── Tool Execution ──

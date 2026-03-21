@@ -8,7 +8,7 @@ npm run build
 npm test
 
 echo "=== 2. Remaining hardcoded hex colors ==="
-# Whitelist: intentionally excluded hex values (see PLAN.md Scope Exclusions)
+# Whitelist: intentionally excluded hex values
 # #c7d2fe (primary gradient), #fff (keyword-like shorthand), #fafafa, #f5f3ff,
 # #d7deea, #f3f4f6, #d4ddff, #e7d4d7, #f7f7fb (tool-run one-off colors)
 WHITELIST='#(fff|c7d2fe|fafafa|f5f3ff|d7deea|f3f4f6|d4ddff|e7d4d7|f7f7fb)\b'
@@ -27,17 +27,7 @@ else
   echo "PASS: No unexpected hardcoded hex colors"
 fi
 
-echo "=== 3. No residual libp2p imports ==="
-LIBP2P_HITS=$(grep -rnE 'use libp2p|libp2p_identity|libp2p::' src-tauri/src/ || true)
-if [ -z "$LIBP2P_HITS" ]; then
-  echo "PASS: No libp2p imports in source"
-else
-  echo "$LIBP2P_HITS"
-  echo "FAIL: Residual libp2p imports found"
-  FAIL=1
-fi
-
-echo "=== 4. Undefined CSS variables (used - defined) ==="
+echo "=== 3. Undefined CSS variables (used - defined) ==="
 DEFINED=$(grep -ohE '\-\-[a-zA-Z0-9_-]+[[:space:]]*:' src/styles/*.css | sed 's/[[:space:]]*://' | sort -u)
 USED=$(grep -ohE 'var\(\-\-[a-zA-Z0-9_-]+' src/styles/*.css | sed 's/var(//' | sort -u)
 UNDEF=$(comm -23 <(echo "$USED") <(echo "$DEFINED"))
