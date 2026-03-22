@@ -114,14 +114,16 @@ pub fn normalize_tool_config(config_str: &str) -> Result<(String, bool), String>
         }
     }
 
-    // Add missing native tools as disabled with their default_tier
+    // Add missing native tools — self-awareness tools ("self" category) are enabled
+    // by default so agents can introspect immediately; others are added as disabled.
     let defs = native_tool_definitions();
     if let Some(native) = config["native"].as_object_mut() {
         for def in &defs {
             if !native.contains_key(&def.name) {
+                let default_enabled = def.category == "self";
                 native.insert(
                     def.name.clone(),
-                    serde_json::json!({ "enabled": false, "tier": def.default_tier }),
+                    serde_json::json!({ "enabled": default_enabled, "tier": def.default_tier }),
                 );
                 changed = true;
             }
