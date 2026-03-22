@@ -36,7 +36,7 @@ export default function AgentMessageBubble({ message, isLeader }: Props) {
     <div className={`team-message team-message-agent${isFailed ? " failed" : ""}${isAborted ? " aborted" : ""}`}>
       <div className="team-msg-avatar team-msg-avatar-agent">
         {agentAvatar ? (
-          <img src={agentAvatar} alt="" className="team-msg-avatar-img" />
+          <img src={agentAvatar} alt={agentName} className="team-msg-avatar-img" />
         ) : (
           <Bot size={18} color="#6366f1" />
         )}

@@ -159,6 +159,8 @@ export default function ConversationSwitcher() {
       <button
         className={`conversation-switcher-trigger ${canShowDropdown ? "clickable" : ""}`}
         onClick={handleToggle}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
       >
         <span className="conversation-switcher-title">{displayTitle}</span>
         {canShowDropdown && (

@@ -60,7 +60,7 @@ export default function TeamStatusBar() {
             title={a.name}
           >
             {a.avatar ? (
-              <img src={a.avatar} alt="" className="team-status-avatar" />
+              <img src={a.avatar} alt={a.name} className="team-status-avatar" />
             ) : (
               <Bot size={14} />
             )}

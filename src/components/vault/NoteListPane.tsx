@@ -103,8 +103,8 @@ export default function NoteListPane() {
       <div className="vault-note-list">
         {notesStatus === "idle" || notesStatus === "loading" ? (
           <div className="vault-note-list-skeleton">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="vault-note-skeleton-item">
+            {[1, 2, 3, 4].map((n) => (
+              <div key={`skeleton-${n}`} className="vault-note-skeleton-item">
                 <div className="skeleton-line skeleton-title" />
                 <div className="skeleton-line skeleton-preview" />
                 <div className="skeleton-line skeleton-meta" />

@@ -196,7 +196,7 @@ export default function TeamEditor() {
                       onChange={() => toggleMember(agent.id)}
                     />
                     {agent.avatar ? (
-                      <img src={agent.avatar} alt="" className="team-member-avatar" />
+                      <img src={agent.avatar} alt={agent.name} className="team-member-avatar" />
                     ) : (
                       <Bot size={16} />
                     )}

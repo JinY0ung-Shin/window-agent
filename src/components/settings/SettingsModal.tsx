@@ -67,10 +67,14 @@ export default function SettingsPage() {
         <h2>{t("title")}</h2>
       </div>
 
-      <div className="settings-tabs">
+      <div className="settings-tabs" role="tablist">
         {(["general", "thinking", "branding", "credentials", "backup", "network"] as const).map((key) => (
           <button
             key={key}
+            role="tab"
+            id={`settings-tab-${key}`}
+            aria-selected={tab === key}
+            aria-controls={`settings-tabpanel-${key}`}
             className={`settings-tab ${tab === key ? "active" : ""}`}
             onClick={() => setTab(key)}
           >
@@ -80,7 +84,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-page-body">
-        <div className="settings-page-content">
+        <div className="settings-page-content" role="tabpanel" id={`settings-tabpanel-${tab}`} aria-labelledby={`settings-tab-${tab}`}>
           <div style={{ display: tab === "general" ? undefined : "none" }}>
             <GeneralSettingsPanel />
           </div>

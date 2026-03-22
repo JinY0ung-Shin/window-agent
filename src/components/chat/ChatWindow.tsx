@@ -74,7 +74,7 @@ export default function ChatWindow() {
             title={t("editAgent", { context: uiTheme })}
           >
             {currentAgent.avatar ? (
-              <img src={currentAgent.avatar} alt="" className="header-agent-avatar" />
+              <img src={currentAgent.avatar} alt={currentAgent.name} className="header-agent-avatar" />
             ) : null}
             <span>{currentAgent.name}</span>
           </button>

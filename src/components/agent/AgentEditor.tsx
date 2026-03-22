@@ -114,7 +114,7 @@ export default function AgentEditor() {
               onClick={() => openEditor(agent.id)}
             >
               {agent.avatar ? (
-                <img src={agent.avatar} alt="" className="agent-list-avatar" />
+                <img src={agent.avatar} alt={agent.name} className="agent-list-avatar" />
               ) : (
                 <span className="agent-list-icon"><Bot size={14} /></span>
               )}

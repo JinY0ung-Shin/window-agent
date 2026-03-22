@@ -136,8 +136,8 @@ export default function ExportSection() {
               context: uiTheme,
             })}
           </p>
-          {result.warnings.map((w, i) => (
-            <p key={i} className="export-warning">{w}</p>
+          {result.warnings.map((w) => (
+            <p key={w} className="export-warning">{w}</p>
           ))}
         </div>
       )}
