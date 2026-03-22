@@ -1,6 +1,62 @@
 use serde::{Deserialize, Serialize};
 
-// ── Non-streaming chat completion response ──
+// ── Request types for Tauri commands ──
+
+#[derive(Deserialize)]
+pub struct ChatCompletionRequest {
+    pub messages: Vec<serde_json::Value>,
+    pub system_prompt: String,
+    pub model: String,
+    pub temperature: Option<f64>,
+    pub thinking_enabled: bool,
+    pub thinking_budget: Option<u32>,
+    pub tools: Option<Vec<serde_json::Value>>,
+}
+
+#[derive(Deserialize)]
+pub struct SetApiConfigRequest {
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ApiHealthCheckRequest {
+    pub api_key: Option<String>,
+    pub base_url: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct BootstrapCompletionRequest {
+    pub messages: Vec<serde_json::Value>,
+    pub model: String,
+    pub tools: Vec<serde_json::Value>,
+}
+
+// ── Response types for Tauri commands ──
+
+#[derive(Serialize)]
+pub struct ChatCompletionResponse {
+    pub content: String,
+    pub reasoning_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ResponseToolCall>>,
+}
+
+#[derive(Serialize)]
+pub struct ApiHealthCheckResponse {
+    pub ok: bool,
+    pub base_url: String,
+    pub authorization_header_sent: bool,
+    pub api_key_preview: String,
+    pub detail: String,
+}
+
+#[derive(Serialize)]
+pub struct BootstrapCompletionResponse {
+    pub message: serde_json::Value,
+}
+
+// ── Non-streaming chat completion response (from API) ──
 
 /// Top-level response from /chat/completions (non-streaming).
 #[derive(Debug, Deserialize)]
@@ -37,7 +93,7 @@ pub struct ResponseToolCallFunction {
     pub arguments: String,
 }
 
-// ── Streaming chunk ──
+// ── Streaming chunk (from API) ──
 
 /// A single SSE chunk from a streaming /chat/completions call.
 #[derive(Debug, Deserialize)]
@@ -59,7 +115,55 @@ pub struct ChunkDelta {
     #[serde(default)]
     pub reasoning_content: Option<String>,
     #[serde(default)]
-    pub tool_calls: Option<Vec<crate::api::ToolCallDelta>>,
+    pub tool_calls: Option<Vec<ToolCallDelta>>,
+}
+
+// ── Tool calling types ──
+
+#[derive(Serialize, Clone, Debug)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub r#type: String,
+    pub function: ToolCallFunction,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct ToolCallFunction {
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ToolCallDelta {
+    pub index: usize,
+    pub id: Option<String>,
+    pub function: Option<ToolCallFunctionDelta>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ToolCallFunctionDelta {
+    pub name: Option<String>,
+    pub arguments: Option<String>,
+}
+
+// ── Streaming event payloads ──
+
+#[derive(Serialize, Clone)]
+pub struct StreamChunkPayload {
+    pub request_id: String,
+    pub delta: String,
+    pub reasoning_delta: Option<String>,
+    pub tool_calls_delta: Option<Vec<ToolCallDelta>>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct StreamDonePayload {
+    pub request_id: String,
+    pub full_content: String,
+    pub reasoning_content: Option<String>,
+    pub tool_calls: Option<Vec<ToolCall>>,
+    pub error: Option<String>,
 }
 
 // ── Models list ──

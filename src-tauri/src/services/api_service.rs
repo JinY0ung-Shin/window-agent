@@ -1,6 +1,8 @@
-use crate::api::*;
 use crate::error::AppError;
-use crate::models::api_types::{CompletionChunk, CompletionResponse};
+use crate::models::api_types::{
+    ChatCompletionResponse, CompletionChunk, CompletionResponse, StreamChunkPayload,
+    StreamDonePayload, ToolCall, ToolCallDelta, ToolCallFunction,
+};
 use futures::StreamExt;
 use serde::Serialize;
 use tauri::Emitter;
