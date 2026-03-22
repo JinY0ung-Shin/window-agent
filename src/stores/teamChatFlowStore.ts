@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { ChatMessage, ToolCall } from "../services/types";
+import type { ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import * as teamCmds from "../services/commands/teamCommands";
 import { useMessageStore } from "./messageStore";
@@ -12,19 +12,11 @@ import { useAgentStore } from "./agentStore";
 import { useSettingsStore } from "./settingsStore";
 import { useNavigationStore } from "./navigationStore";
 import { useToolRunStore } from "./toolRunStore";
-import {
-  readPersonaFiles,
-  assembleManagerPrompt,
-  getEffectiveSettings,
-  invalidatePersonaCache,
-} from "../services/personaService";
 import { useVaultStore } from "./vaultStore";
 import { buildConversationContext } from "../services/chatHelpers";
-import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
-import { readToolConfig } from "../services/nativeToolRegistry";
+import { toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
-  DEFAULT_SYSTEM_PROMPT,
   parseErrorMessage,
 } from "../constants";
 import { i18n } from "../i18n";
@@ -35,10 +27,17 @@ import {
   createPendingMessage,
   updateMessageInList,
   executeStreamCall,
-  classifyToolCalls,
-  executeToolPipeline,
 } from "../services/streamHelpers";
 import { logger } from "../services/logger";
+import {
+  resolveEffectiveSettings,
+  resolveToolConfig,
+  resolveManagerPrompt,
+  processToolCalls,
+  saveAssistantToolCallMessage,
+  saveFinalResponse,
+  parseRawToolCalls,
+} from "./chatFlowBase";
 
 // ── Team-specific event types ─────────────────────────
 type TeamAllReportsPayload = {
@@ -442,43 +441,12 @@ async function sendTeamMessageFlow() {
   });
 
   try {
-    const effective = leaderAgent
-      ? getEffectiveSettings(leaderAgent)
-      : {
-          model: settings.modelName,
-          temperature: null as number | null,
-          thinkingEnabled: settings.thinkingEnabled,
-          thinkingBudget: settings.thinkingBudget,
-        };
-
-    let toolDefinitions: ToolDefinition[] = [];
-    let autoApproveEnabled = false;
-    if (leaderAgent) {
-      try {
-        toolDefinitions = await getEffectiveTools(leaderAgent.folder_name);
-      } catch (e) { logger.debug("No tools for leader agent", e); }
-      try {
-        const tc = await readToolConfig(leaderAgent.folder_name);
-        autoApproveEnabled = tc?.auto_approve ?? false;
-      } catch (e) { logger.debug("No leader tool config, using defaults", e); }
-    }
-
+    const effective = resolveEffectiveSettings(leaderAgent);
+    const { toolDefinitions, autoApproveEnabled } = await resolveToolConfig(leaderAgent);
     const enabledToolNames = [...toolDefinitions.map((t) => t.name), "delegate"];
+    const baseSystemPrompt = await resolveManagerPrompt(leaderAgent, enabledToolNames, settings.companyName);
 
-    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
-    if (leaderAgent) {
-      try {
-        const files = await readPersonaFiles(leaderAgent.folder_name);
-        baseSystemPrompt = assembleManagerPrompt(
-          files,
-          agentStore.agents,
-          settings.companyName,
-          enabledToolNames,
-        );
-      } catch (e) {
-        logger.debug("Leader persona read failed, using default prompt", e);
-      }
-    }
+    const saveExtras = { sender_agent_id: leaderAgentId, team_run_id: teamRun.id };
 
     const MAX_LEADER_TOOL_ITERATIONS = 10;
     let iterationCount = 0;
@@ -652,56 +620,21 @@ async function sendTeamMessageFlow() {
           break;
         }
 
-        const parsedToolCalls: ToolCall[] = toolCalls.map((tc) => ({
-          id: tc.id,
-          name: tc.function.name,
-          arguments: tc.function.arguments,
-        }));
+        const parsedToolCalls = parseRawToolCalls(toolCalls);
 
-        const savedAssistant = await cmds.saveMessage({
-          conversation_id: convId,
-          role: "assistant",
-          content: replyContent,
-          sender_agent_id: leaderAgentId,
-          team_run_id: teamRun.id,
-          tool_name: "tool_calls",
-          tool_input: JSON.stringify(parsedToolCalls),
+        await saveAssistantToolCallMessage({
+          convId,
+          msgId: currentMsgId,
+          replyContent,
+          parsedToolCalls,
+          saveExtras,
         });
 
-        useMessageStore.setState({
-          messages: updateMessageInList(msg().messages, currentMsgId, {
-            dbMessageId: savedAssistant.id,
-            content: replyContent,
-            tool_calls: parsedToolCalls,
-            status: "complete",
-          }),
-        });
-
-        const classification = classifyToolCalls(parsedToolCalls, toolDefinitions, {
+        const savedToolMsgs = await processToolCalls(parsedToolCalls, {
+          convId,
+          toolDefinitions,
           autoApproveEnabled,
         });
-
-        const savedToolMsgs = await executeToolPipeline(classification, convId);
-
-        // Refresh stores based on tool call scopes
-        const teamAgentId = useAgentStore.getState().selectedAgentId;
-        if (teamAgentId) {
-          const hasVaultChange = parsedToolCalls.some((tc) => {
-            if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
-            try { return JSON.parse(tc.arguments).scope === "vault"; } catch { return false; }
-          });
-          const hasPersonaChange = parsedToolCalls.some((tc) => {
-            if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
-            try { return JSON.parse(tc.arguments).scope === "persona"; } catch { return false; }
-          });
-          if (hasVaultChange) {
-            await useVaultStore.getState().loadNotes(teamAgentId);
-          }
-          if (hasPersonaChange) {
-            const agent = useAgentStore.getState().agents.find((a) => a.id === teamAgentId);
-            if (agent) invalidatePersonaCache(agent.folder_name);
-          }
-        }
 
         useToolRunStore.getState().resetToolState();
 
@@ -731,21 +664,11 @@ async function sendTeamMessageFlow() {
         continue;
       } else {
         // Leader responded with normal text (no delegation, no tools)
-        const finalContent = replyContent || i18n.t("common:noResponse");
-        const savedLeader = await cmds.saveMessage({
-          conversation_id: convId,
-          role: "assistant",
-          content: finalContent,
-          sender_agent_id: leaderAgentId,
-          team_run_id: teamRun.id,
-        });
-
-        useMessageStore.setState({
-          messages: updateMessageInList(msg().messages, currentMsgId, {
-            dbMessageId: savedLeader.id,
-            content: finalContent,
-            status: "complete",
-          }),
+        await saveFinalResponse({
+          convId,
+          msgId: currentMsgId,
+          replyContent,
+          saveExtras,
         });
 
         try {

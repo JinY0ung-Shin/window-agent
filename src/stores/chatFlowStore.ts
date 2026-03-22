@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, ChatMessage, Conversation, SkillMetadata, ToolCall } from "../services/types";
+import type { Agent, ChatMessage, Conversation, SkillMetadata } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
@@ -16,11 +16,7 @@ import { useSummaryStore } from "./summaryStore";
 import { resetChatContext } from "./resetHelper";
 import { buildConversationContext } from "../services/chatHelpers";
 import {
-  readPersonaFiles,
   readBootFile,
-  assembleSystemPrompt,
-  assembleManagerPrompt,
-  getEffectiveSettings,
   invalidatePersonaCache,
 } from "../services/personaService";
 import {
@@ -28,11 +24,8 @@ import {
   parseAgentName,
   isBootstrapComplete,
 } from "../services/bootstrapService";
-import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
-import { readToolConfig } from "../services/nativeToolRegistry";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
-  DEFAULT_SYSTEM_PROMPT,
   parseErrorMessage,
 } from "../constants";
 import { i18n } from "../i18n";
@@ -46,14 +39,21 @@ import {
   createPendingMessage,
   updateMessageInList,
   executeStreamCall,
-  classifyToolCalls,
-  executeToolPipeline,
 } from "../services/streamHelpers";
-import {
-  extractBrowserDomain,
-  approveBrowserDomain,
-} from "../services/browserApprovalService";
 import { logger } from "../services/logger";
+import {
+  resolveEffectiveSettings,
+  resolveToolConfig,
+  resolveSystemPrompt,
+  resolveWorkspacePath,
+  processToolCalls,
+  saveAssistantToolCallMessage,
+  saveFinalResponse,
+  handleStreamError,
+  handleStreamAbort,
+  handleMaxIterations,
+  parseRawToolCalls,
+} from "./chatFlowBase";
 
 // ── Per-conversation BOOT.md cache (for regenerate) ──
 const bootContentCache = new Map<string, string>();
@@ -341,13 +341,12 @@ async function sendNormalMessage() {
 
   const isNewConversation = !currentConversationId;
   let convId = currentConversationId;
-  let initialTitle: string | null = null;
   if (!convId) {
     if (!agentId) {
       logger.error("No agent selected for new conversation");
       return;
     }
-    initialTitle =
+    const initialTitle =
       inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) ||
       i18n.t("common:defaultConversationTitle");
     const newConv = await cmds.createConversation(agentId, initialTitle);
@@ -414,55 +413,14 @@ async function sendNormalMessage() {
   });
 
   try {
-    const effective = agent
-      ? getEffectiveSettings(agent)
-      : {
-          model: settings.modelName,
-          temperature: null as number | null,
-          thinkingEnabled: settings.thinkingEnabled,
-          thinkingBudget: settings.thinkingBudget,
-        };
+    const effective = resolveEffectiveSettings(agent);
+    const { toolDefinitions, autoApproveEnabled, openAITools } = await resolveToolConfig(agent);
 
-    let toolDefinitions: ToolDefinition[] = [];
-    let autoApproveEnabled = false;
-    if (agent) {
-      try {
-        toolDefinitions = await getEffectiveTools(agent.folder_name);
-      } catch (e) { logger.debug("No tools for agent", e); }
-      try {
-        const tc = await readToolConfig(agent.folder_name);
-        autoApproveEnabled = tc?.auto_approve ?? false;
-      } catch (e) { logger.debug("No tool config, using defaults", e); }
-    }
-    const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
-
-    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
-    if (agent) {
-      try {
-        const files = await readPersonaFiles(agent.folder_name);
-        if (agent.is_default) {
-          const enabledToolNames = toolDefinitions.map((t) => t.name);
-          baseSystemPrompt = assembleManagerPrompt(
-            files,
-            agentStore.agents,
-            settings.companyName,
-            enabledToolNames,
-          );
-        } else {
-          baseSystemPrompt = assembleSystemPrompt(files);
-        }
-      } catch (e) {
-        logger.debug("Persona read failed, using default prompt", e);
-      }
-    }
+    const enabledToolNames = toolDefinitions.map((t) => t.name);
+    const baseSystemPrompt = await resolveSystemPrompt(agent, enabledToolNames, settings.companyName);
 
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
-
-    // Resolve workspace path for file tool scoping + prompt injection
-    let workspacePath: string | undefined;
-    try {
-      workspacePath = await cmds.getWorkspacePath(convId);
-    } catch (e) { logger.debug("Workspace path unavailable", e); }
+    const workspacePath = await resolveWorkspacePath(convId);
 
     let iterationCount = 0;
 
@@ -480,11 +438,7 @@ async function sendNormalMessage() {
 
       if (done.error) {
         if (done.error === "aborted") {
-          useMessageStore.setState({
-            messages: updateMessageInList(msg().messages, currentMsgId, { status: "aborted" }),
-          });
-          useStreamStore.setState({ activeRun: null });
-          useToolRunStore.getState().resetToolState();
+          handleStreamAbort(currentMsgId);
           break;
         }
         throw new Error(done.error);
@@ -495,23 +449,12 @@ async function sendNormalMessage() {
       const toolCalls = done.tool_calls;
 
       if (!toolCalls || toolCalls.length === 0) {
-        const finalContent = replyContent || i18n.t("common:noResponse");
-        const savedAssistant = await cmds.saveMessage({
-          conversation_id: convId,
-          role: "assistant",
-          content: finalContent,
+        await saveFinalResponse({
+          convId,
+          msgId: currentMsgId,
+          replyContent,
+          reasoningContent,
         });
-
-        useMessageStore.setState({
-          messages: updateMessageInList(msg().messages, currentMsgId, {
-            dbMessageId: savedAssistant.id,
-            content: finalContent,
-            reasoningContent,
-            status: "complete",
-          }),
-        });
-        useStreamStore.setState({ activeRun: null });
-        useToolRunStore.getState().resetToolState();
 
         summary().maybeGenerateSummary(
           convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
@@ -521,77 +464,27 @@ async function sendNormalMessage() {
 
       iterationCount++;
       if (iterationCount > MAX_TOOL_ITERATIONS) {
-        useMessageStore.setState({
-          messages: updateMessageInList(msg().messages, currentMsgId, {
-            content: replyContent || i18n.t("agent:tools.maxIterations"),
-            status: "failed",
-          }),
-        });
-        useStreamStore.setState({ activeRun: null });
-        useToolRunStore.getState().resetToolState();
+        handleMaxIterations(currentMsgId, replyContent);
         break;
       }
 
-      const parsedToolCalls: ToolCall[] = toolCalls.map((tc) => ({
-        id: tc.id,
-        name: tc.function.name,
-        arguments: tc.function.arguments,
-      }));
+      const parsedToolCalls = parseRawToolCalls(toolCalls);
 
-      const savedAssistant = await cmds.saveMessage({
-        conversation_id: convId,
-        role: "assistant",
-        content: replyContent,
-        tool_name: "tool_calls",
-        tool_input: JSON.stringify(parsedToolCalls),
-      });
-
-      useMessageStore.setState({
-        messages: updateMessageInList(msg().messages, currentMsgId, {
-          dbMessageId: savedAssistant.id,
-          content: replyContent,
-          reasoningContent,
-          tool_calls: parsedToolCalls,
-          status: "complete",
-        }),
-      });
-
-      const classification = classifyToolCalls(parsedToolCalls, toolDefinitions, {
-        workspacePath,
+      await saveAssistantToolCallMessage({
         convId,
+        msgId: currentMsgId,
+        replyContent,
+        reasoningContent,
+        parsedToolCalls,
+      });
+
+      const savedToolMsgs = await processToolCalls(parsedToolCalls, {
+        convId,
+        toolDefinitions,
         autoApproveEnabled,
-      });
-
-      const savedToolMsgs = await executeToolPipeline(classification, convId, {
+        workspacePath,
         iterationCount,
-        onConfirmApproved: (tools) => {
-          // Record approved browser domains for this conversation
-          for (const tc of tools) {
-            const domain = extractBrowserDomain(tc.name, tc.arguments);
-            if (domain) approveBrowserDomain(convId, domain);
-          }
-        },
       });
-
-      // Refresh stores based on tool call scopes after execution
-      const agentIdForRefresh = useAgentStore.getState().selectedAgentId;
-      if (agentIdForRefresh) {
-        const hasVaultChange = parsedToolCalls.some((tc) => {
-          if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
-          try { return JSON.parse(tc.arguments).scope === "vault"; } catch { return false; }
-        });
-        const hasPersonaChange = parsedToolCalls.some((tc) => {
-          if (tc.name !== "write_file" && tc.name !== "delete_file") return false;
-          try { return JSON.parse(tc.arguments).scope === "persona"; } catch { return false; }
-        });
-        if (hasVaultChange) {
-          await useVaultStore.getState().loadNotes(agentIdForRefresh);
-        }
-        if (hasPersonaChange) {
-          const agent = useAgentStore.getState().agents.find((a) => a.id === agentIdForRefresh);
-          if (agent) invalidatePersonaCache(agent.folder_name);
-        }
-      }
 
       currentRequestId = `req-${Date.now()}`;
       const { msgId: nextMsgId, msg: nextPending } = createPendingMessage(currentRequestId);
@@ -611,16 +504,7 @@ async function sendNormalMessage() {
       });
     }
   } catch (error) {
-    logger.error("API Error:", error);
-    useMessageStore.setState({
-      messages: updateMessageInList(msg().messages, currentMsgId, {
-        content: parseErrorMessage(error),
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    });
-    useStreamStore.setState({ activeRun: null });
-    useToolRunStore.getState().resetToolState();
+    handleStreamError(error, currentMsgId);
   }
 
   await conv().loadConversations();
@@ -657,46 +541,20 @@ async function regenerateStream(
   });
 
   try {
-    const effective = agent
-      ? getEffectiveSettings(agent)
-      : {
-          model: settings.modelName,
-          temperature: null as number | null,
-          thinkingEnabled: settings.thinkingEnabled,
-          thinkingBudget: settings.thinkingBudget,
-        };
+    const effective = resolveEffectiveSettings(agent);
 
-    let baseSystemPrompt = DEFAULT_SYSTEM_PROMPT;
-    if (agent) {
+    // 재생성 시 시스템 프롬프트 조립 — 매니저인 경우 도구 이름 필요
+    let enabledToolNames: string[] = [];
+    if (agent?.is_default) {
       try {
-        const files = await readPersonaFiles(agent.folder_name);
-        if (agent.is_default) {
-          let enabledToolNames: string[] = [];
-          try {
-            const toolDefs = await getEffectiveTools(agent.folder_name);
-            enabledToolNames = toolDefs.map((t) => t.name);
-          } catch (e) { logger.debug("No tools for regenerate agent", e); }
-          baseSystemPrompt = assembleManagerPrompt(
-            files,
-            agentStore.agents,
-            settings.companyName,
-            enabledToolNames,
-          );
-        } else {
-          baseSystemPrompt = assembleSystemPrompt(files);
-        }
-      } catch (e) {
-        logger.debug("Persona read failed during regenerate, using default", e);
-      }
+        const toolDefs = await resolveToolConfig(agent);
+        enabledToolNames = toolDefs.toolDefinitions.map((t) => t.name);
+      } catch (e) { logger.debug("No tools for regenerate agent", e); }
     }
+    const baseSystemPrompt = await resolveSystemPrompt(agent, enabledToolNames, settings.companyName);
 
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
-
-    // Resolve workspace path for prompt injection
-    let workspacePath: string | undefined;
-    try {
-      workspacePath = await cmds.getWorkspacePath(convId);
-    } catch (e) { logger.debug("Workspace path unavailable for regenerate", e); }
+    const workspacePath = await resolveWorkspacePath(convId);
 
     // Retrieve BOOT.md only if regenerating the first assistant reply.
     let cachedBoot: string | undefined;
@@ -739,36 +597,19 @@ async function regenerateStream(
       const replyContent = done.full_content || i18n.t("common:noResponse");
       const reasoningContent = done.reasoning_content ?? undefined;
 
-      const savedAssistant = await cmds.saveMessage({
-        conversation_id: convId,
-        role: "assistant",
-        content: replyContent,
+      await saveFinalResponse({
+        convId,
+        msgId,
+        replyContent,
+        reasoningContent,
       });
-
-      useMessageStore.setState({
-        messages: updateMessageInList(msg().messages, msgId, {
-          dbMessageId: savedAssistant.id,
-          content: replyContent,
-          reasoningContent,
-          status: "complete",
-        }),
-      });
-      useStreamStore.setState({ activeRun: null });
 
       summary().maybeGenerateSummary(
         convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
       );
     }
   } catch (error) {
-    logger.error("Regenerate Error:", error);
-    useMessageStore.setState({
-      messages: updateMessageInList(msg().messages, msgId, {
-        content: parseErrorMessage(error),
-        status: "failed",
-        error: error instanceof Error ? error.message : String(error),
-      }),
-    });
-    useStreamStore.setState({ activeRun: null });
+    handleStreamError(error, msgId);
   }
 
   await conv().loadConversations();
