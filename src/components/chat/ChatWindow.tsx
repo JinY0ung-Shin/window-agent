@@ -9,11 +9,11 @@ import { useStreamStore } from "../../stores/streamStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
-import AgentEditor from "../agent/AgentEditor";
 import SkillBar from "../skill/SkillBar";
 import ToolRunBlock from "./ToolRunBlock";
 import ConversationSwitcher from "./ConversationSwitcher";
 
+import { useNavigationStore } from "../../stores/navigationStore";
 import { useDragRegion } from "../../hooks/useDragRegion";
 import { useMessageScroll } from "../../hooks/useMessageScroll";
 import { buildChatRenderBlocks } from "./chatRenderBlocks";
@@ -27,6 +27,7 @@ export default function ChatWindow() {
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
   const openEditor = useAgentStore((s) => s.openEditor);
+  const setMainView = useNavigationStore((s) => s.setMainView);
   const { t } = useTranslation("glossary");
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const companyName = useSettingsStore((s) => s.companyName);
@@ -70,7 +71,7 @@ export default function ChatWindow() {
         {currentAgent && (
           <button
             className="header-agent-btn"
-            onClick={() => openEditor(currentAgent.id)}
+            onClick={() => { setMainView("agent"); openEditor(currentAgent.id); }}
             title={t("editAgent", { context: uiTheme })}
           >
             {currentAgent.avatar ? (
@@ -153,9 +154,6 @@ export default function ChatWindow() {
       </div>
 
       {!showSelector && <ChatInput />}
-
-      {/* Agent editor modal (rendered here so it overlays everything) */}
-      <AgentEditor />
     </main>
   );
 }

@@ -11,6 +11,7 @@ import VaultPanel from "../vault/VaultPanel";
 import TeamPanel from "../team/TeamPanel";
 import TeamChatWindow from "../team/TeamChatWindow";
 import CronPanel from "../cron/CronPanel";
+import AgentPanel from "../agent/AgentPanel";
 
 import { useDebugStore } from "../../stores/debugStore";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -94,6 +95,8 @@ export default function MainLayout() {
         <VaultPanel />
       ) : mainView === "network" ? (
         <NetworkPanel />
+      ) : mainView === "agent" ? (
+        <AgentPanel />
       ) : (
         <ChatWindow />
       )}

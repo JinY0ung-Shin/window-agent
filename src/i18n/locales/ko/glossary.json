@@ -131,5 +131,8 @@
   "noAgentForSkill_org": "현재 직원을 찾을 수 없습니다",
   "learningMode": "배움모드",
   "learningMode_classic": "학습 모드",
-  "learningMode_org": "배움모드"
+  "learningMode_org": "배움모드",
+  "noAgents": "아직 직원이 없습니다",
+  "noAgents_classic": "에이전트가 없습니다",
+  "noAgents_org": "아직 직원이 없습니다"
 }

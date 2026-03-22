@@ -18,7 +18,6 @@ export default function Sidebar() {
   const clearAgentChat = useConversationStore((s) => s.clearAgentChat);
   const agents = useAgentStore((s) => s.agents);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
-  const openEditor = useAgentStore((s) => s.openEditor);
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
   const teams = useTeamStore((s) => s.teams);
@@ -72,18 +71,6 @@ export default function Sidebar() {
       return conv?.agent_id === agentId;
     }
     return selectedAgentId === agentId;
-  };
-
-  const handleOpenAgentEditor = () => {
-    const activeAgentId = (() => {
-      if (currentConversationId) {
-        const conv = conversations.find((c) => c.id === currentConversationId);
-        return conv?.agent_id ?? null;
-      }
-      return selectedAgentId;
-    })();
-    const agentId = activeAgentId ?? agents.find((a) => a.is_default)?.id ?? null;
-    openEditor(agentId);
   };
 
   const handleNewAgent = async () => {
@@ -172,11 +159,14 @@ export default function Sidebar() {
         </div>
 
         <div
-          className="menu-item"
-          onClick={() => { setMainView("chat"); handleOpenAgentEditor(); }}
+          className={`menu-item ${mainView === "agent" ? "active" : ""}`}
+          onClick={() => toggleView("agent")}
         >
           <Users size={20} />
           <span>{t("editAgent", { context: uiTheme })}</span>
+          {agents.length > 0 && (
+            <span className="sidebar-badge">{agents.length}</span>
+          )}
         </div>
         <div
           className={`menu-item ${mainView === "network" ? "active" : ""}`}

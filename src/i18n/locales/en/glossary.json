@@ -131,5 +131,8 @@
   "noAgentForSkill_org": "Cannot find current employee",
   "learningMode": "Learning Mode",
   "learningMode_classic": "Learning Mode",
-  "learningMode_org": "Learning Mode"
+  "learningMode_org": "Learning Mode",
+  "noAgents": "No employees yet",
+  "noAgents_classic": "No agents yet",
+  "noAgents_org": "No employees yet"
 }
