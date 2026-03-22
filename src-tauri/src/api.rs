@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::utils::config_helpers::read_env_non_empty;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -74,15 +75,11 @@ impl ApiState {
         }
 
         // Env vars override store (dev convenience)
-        if let Ok(k) = std::env::var("OPENAI_API_KEY") {
-            if !k.is_empty() {
-                api_key = k;
-            }
+        if let Some(k) = read_env_non_empty("OPENAI_API_KEY") {
+            api_key = k;
         }
-        if let Ok(u) = std::env::var("OPENAI_API_URL") {
-            if !u.is_empty() {
-                base_url = u;
-            }
+        if let Some(u) = read_env_non_empty("OPENAI_API_URL") {
+            base_url = u;
         }
 
         let client = Self::build_client(no_proxy);

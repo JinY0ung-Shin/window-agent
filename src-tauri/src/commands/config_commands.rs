@@ -1,3 +1,4 @@
+use crate::utils::config_helpers::read_env_non_empty;
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -9,7 +10,7 @@ pub struct EnvConfig {
 #[tauri::command]
 pub fn get_env_config() -> EnvConfig {
     EnvConfig {
-        base_url: std::env::var("OPENAI_API_URL").ok().filter(|s| !s.is_empty()),
-        model: std::env::var("OPENAI_MODEL").ok().filter(|s| !s.is_empty()),
+        base_url: read_env_non_empty("OPENAI_API_URL"),
+        model: read_env_non_empty("OPENAI_MODEL"),
     }
 }

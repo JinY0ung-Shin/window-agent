@@ -10,7 +10,7 @@ use std::time::Instant;
 use tauri::{AppHandle, Manager, State};
 use tokio::time::{timeout, Duration};
 
-use super::config::get_agents_dir_for_tools;
+use crate::utils::config_helpers::agents_dir;
 use super::file_tools::{
     rebuild_vault_index, tool_delete_file, tool_list_directory, tool_list_directory_recursive,
     tool_read_file, tool_vault_write_file, tool_web_search, tool_write_file,
@@ -202,7 +202,7 @@ async fn execute_tool_inner_for_agent(
             let agent = agent_operations::get_agent_impl(db, agent_id.to_string())
                 .map_err(|e| format!("Failed to get agent: {e}"))?;
             validate_no_traversal(&agent.folder_name, "folder_name")?;
-            let agents_dir = get_agents_dir_for_tools(app)?;
+            let agents_dir = agents_dir(app)?;
 
             if scope == "persona" {
                 let persona_dir = agents_dir.join(&agent.folder_name);

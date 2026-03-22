@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use tauri::AppHandle;
 use tokio::time::Duration;
 
-use super::config::get_agents_dir_for_tools;
+use crate::utils::config_helpers::agents_dir;
 
 const MAX_RESPONSE_BYTES: usize = 512 * 1024; // 512KB
 
@@ -20,7 +20,7 @@ fn get_agent_allowed_credentials(
     let agent = agent_operations::get_agent_impl(db, conv.agent_id)
         .map_err(|e| format!("Failed to get agent: {}", e))?;
 
-    let agents_dir = get_agents_dir_for_tools(app)?;
+    let agents_dir = agents_dir(app)?;
     let config_path = agents_dir
         .join(&agent.folder_name)
         .join("TOOL_CONFIG.json");

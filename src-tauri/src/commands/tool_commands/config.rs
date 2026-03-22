@@ -1,7 +1,7 @@
 use crate::error::AppError;
+use crate::utils::config_helpers::agents_dir;
 use crate::utils::path_security::validate_no_traversal;
-use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 use super::schema::native_tool_definitions;
 
@@ -34,7 +34,7 @@ pub fn get_default_tool_config() -> Result<String, AppError> {
 #[tauri::command]
 pub fn read_tool_config(app: AppHandle, folder_name: String) -> Result<String, AppError> {
     validate_no_traversal(&folder_name, "folder name").map_err(AppError::Validation)?;
-    let agents_dir = get_agents_dir_for_tools(&app).map_err(AppError::Config)?;
+    let agents_dir = agents_dir(&app).map_err(AppError::Config)?;
     let config_path = agents_dir.join(&folder_name).join("TOOL_CONFIG.json");
     let raw = std::fs::read_to_string(&config_path)
         .map_err(|e| AppError::Io(format!("Failed to read TOOL_CONFIG.json: {}", e)))?;
@@ -60,7 +60,7 @@ pub fn write_tool_config(
     serde_json::from_str::<serde_json::Value>(&config)
         .map_err(|e| AppError::Json(format!("Invalid JSON: {}", e)))?;
 
-    let agents_dir = get_agents_dir_for_tools(&app).map_err(AppError::Config)?;
+    let agents_dir = agents_dir(&app).map_err(AppError::Config)?;
     let agent_dir = agents_dir.join(&folder_name);
     std::fs::create_dir_all(&agent_dir)
         .map_err(|e| AppError::Io(format!("Failed to create agent directory: {}", e)))?;
@@ -70,13 +70,6 @@ pub fn write_tool_config(
         .map_err(|e| AppError::Io(format!("Failed to write TOOL_CONFIG.json: {}", e)))
 }
 
-pub(crate) fn get_agents_dir_for_tools(app: &AppHandle) -> Result<PathBuf, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    Ok(app_dir.join("agents"))
-}
 
 /// Normalize a TOOL_CONFIG.json: add missing native tools (disabled), ensure credentials
 /// section exists, bump version to 2. Returns (normalized_json, changed).

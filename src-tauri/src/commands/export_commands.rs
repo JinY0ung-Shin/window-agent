@@ -4,6 +4,7 @@ use crate::db::models::*;
 use crate::db::operations::*;
 use crate::db::Database;
 use crate::error::AppError;
+use crate::utils::config_helpers::agents_dir as get_agents_base_dir;
 use crate::utils::path_security::validate_zip_entry;
 use crate::vault::note::parse_frontmatter;
 use serde::{Deserialize, Serialize};
@@ -74,11 +75,8 @@ pub fn export_agent(
             .map_err(|e| AppError::Io(format!("ZIP write error: {e}")))?;
 
         // persona files
-        let agents_dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| AppError::Io(format!("Failed to resolve app dir: {e}")))?
-            .join("agents")
+        let agents_dir = get_agents_base_dir(&app)
+            .map_err(AppError::Io)?
             .join(&agent.folder_name);
 
         let persona_files = ["IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "TOOL_CONFIG.json"];
@@ -477,11 +475,8 @@ pub fn import_agent(
     }
 
     // 7. Write persona files to disk BEFORE DB commit (atomic import)
-    let agents_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Io(format!("Failed to resolve app dir: {e}")))?
-        .join("agents")
+    let agents_dir = get_agents_base_dir(&app)
+        .map_err(AppError::Io)?
         .join(&new_folder);
 
     if let Err(e) = std::fs::create_dir_all(&agents_dir) {

@@ -1,6 +1,6 @@
+use crate::utils::config_helpers::app_data_dir;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
 const CREDENTIALS_META_FILE: &str = "credentials_meta.json";
@@ -20,11 +20,7 @@ pub struct CredentialMeta {
 // ── Metadata persistence (JSON file in app_data_dir) ──
 
 fn meta_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    Ok(app_dir.join(CREDENTIALS_META_FILE))
+    Ok(app_data_dir(app)?.join(CREDENTIALS_META_FILE))
 }
 
 fn load_all_meta(app: &tauri::AppHandle) -> Result<Vec<CredentialMeta>, String> {

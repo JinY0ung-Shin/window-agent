@@ -6,7 +6,7 @@ use crate::services::cron_scheduler::CronScheduler;
 use crate::utils::path_security::validate_no_traversal;
 use tauri::{AppHandle, Manager};
 
-use super::config::get_agents_dir_for_tools;
+use crate::utils::config_helpers::agents_dir;
 
 // ── Self-awareness tools ──
 
@@ -38,7 +38,7 @@ pub(super) fn tool_self_inspect(
 
     // Read enabled tools from TOOL_CONFIG.json
     validate_no_traversal(&agent.folder_name, "folder_name")?;
-    let agents_dir = get_agents_dir_for_tools(app)?;
+    let agents_dir = agents_dir(app)?;
     let config_path = agents_dir.join(&agent.folder_name).join("TOOL_CONFIG.json");
     let enabled_tools: Vec<String> = if let Ok(raw) = std::fs::read_to_string(&config_path) {
         if let Ok(config) = serde_json::from_str::<serde_json::Value>(&raw) {

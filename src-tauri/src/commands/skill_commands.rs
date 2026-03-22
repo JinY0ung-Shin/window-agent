@@ -1,10 +1,11 @@
 use crate::error::AppError;
 use crate::services::skill_service;
+use crate::utils::config_helpers::{agents_dir, app_data_dir};
 use crate::utils::path_security::{validate_no_traversal, validate_skill_path};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 // ── Data structures ──
 
@@ -30,24 +31,12 @@ pub struct SkillContent {
 
 // ── Path helpers ──
 
-fn get_agents_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    Ok(app_dir.join("agents"))
-}
-
 fn get_agent_skills_dir(app: &AppHandle, folder_name: &str) -> Result<PathBuf, String> {
-    Ok(get_agents_dir(app)?.join(folder_name).join("skills"))
+    Ok(agents_dir(app)?.join(folder_name).join("skills"))
 }
 
 fn get_global_skills_dir(app: &AppHandle) -> Result<PathBuf, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    Ok(app_dir.join("skills"))
+    Ok(app_data_dir(app)?.join("skills"))
 }
 
 /// Validate a folder/skill name to prevent path traversal.
@@ -311,10 +300,7 @@ pub fn update_skill(
     let skill_md = skill_dir.join("SKILL.md");
 
     // Validate path
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Io(format!("Failed to resolve app data dir: {}", e)))?;
+    let app_dir = app_data_dir(&app).map_err(AppError::Io)?;
     validate_path_within(&skill_md, &app_dir).map_err(AppError::Validation)?;
 
     std::fs::write(&skill_md, &content)
@@ -359,10 +345,7 @@ pub fn delete_skill(
     }
 
     // Validate path is within app data dir
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| AppError::Io(format!("Failed to resolve app data dir: {}", e)))?;
+    let app_dir = app_data_dir(&app).map_err(AppError::Io)?;
     validate_path_within(&skill_dir, &app_dir).map_err(AppError::Validation)?;
 
     std::fs::remove_dir_all(&skill_dir)

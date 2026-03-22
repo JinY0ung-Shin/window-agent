@@ -2,8 +2,9 @@ use crate::db::agent_operations;
 use crate::db::models::{Agent, CreateAgentRequest, UpdateAgentRequest};
 use crate::db::Database;
 use crate::error::AppError;
+use crate::utils::config_helpers::agents_dir;
 use crate::utils::path_security::{validate_agent_filename, validate_no_traversal};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, State};
 
 /// Validate a folder name to prevent path traversal and invalid directory names.
 fn validate_folder_name(name: &str) -> Result<(), String> {
@@ -47,7 +48,7 @@ pub fn delete_agent(app: AppHandle, db: State<'_, Database>, id: String) -> Resu
     validate_folder_name(folder_name).map_err(AppError::Validation)?;
 
     // Delete folder FIRST so that if it fails, DB (and conversations) remain intact
-    let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
+    let agents_dir = agents_dir(&app).map_err(AppError::Io)?;
     let folder_path = agents_dir.join(folder_name);
     if folder_path.exists() {
         // Verify the canonical path is still within agents_dir
@@ -82,7 +83,7 @@ fn resolve_agent_file_path(
 ) -> Result<std::path::PathBuf, String> {
     validate_agent_file_inputs(folder_name, file_name)?;
 
-    let agents_dir = get_agents_dir(app)?;
+    let agents_dir = agents_dir(app)?;
     let resolved = agents_dir.join(folder_name).join(file_name);
 
     // Double-check the resolved path is inside agents_dir
@@ -149,7 +150,7 @@ pub fn sync_agents_from_fs(
     app: AppHandle,
     db: State<'_, Database>,
 ) -> Result<Vec<Agent>, AppError> {
-    let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
+    let agents_dir = agents_dir(&app).map_err(AppError::Io)?;
 
     std::fs::create_dir_all(&agents_dir)
         .map_err(|e| AppError::Io(format!("Failed to create agents dir: {}", e)))?;
@@ -271,7 +272,7 @@ pub fn seed_manager_agent(
     )?;
 
     // Create .md files from locale-specific bundled resources
-    let agents_dir = get_agents_dir(&app).map_err(AppError::Io)?;
+    let agents_dir = agents_dir(&app).map_err(AppError::Io)?;
     let manager_dir = agents_dir.join("manager");
     std::fs::create_dir_all(&manager_dir)
         .map_err(|e| AppError::Io(format!("Failed to create manager directory: {}", e)))?;
@@ -511,7 +512,7 @@ fn refresh_default_persona_impl(
     folder_name: &str,
     locale: &str,
 ) -> Result<(), String> {
-    let agents_dir = get_agents_dir(app)?;
+    let agents_dir = agents_dir(app)?;
     let manager_dir = agents_dir.join(folder_name);
 
     if !manager_dir.exists() {
@@ -622,13 +623,6 @@ pub fn get_bootstrap_prompt(locale: String) -> String {
     }
 }
 
-fn get_agents_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
-    let app_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    Ok(app_dir.join("agents"))
-}
 
 fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
     // Simple base64 decode using a lookup table

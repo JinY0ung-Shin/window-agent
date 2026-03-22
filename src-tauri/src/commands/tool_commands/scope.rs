@@ -6,7 +6,7 @@ use crate::utils::path_security::{validate_no_traversal, validate_tool_roots};
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 
-use super::config::get_agents_dir_for_tools;
+use crate::utils::config_helpers::agents_dir;
 
 /// Allowed persona files for the persona scope.
 pub(super) const ALLOWED_PERSONA_FILES: &[&str] =
@@ -59,7 +59,7 @@ pub(super) fn resolve_scope(
                 .map_err(|e| format!("Failed to get agent: {}", e))?;
             validate_no_traversal(&agent.folder_name, "folder_name")?;
 
-            let agents_dir = get_agents_dir_for_tools(app)?;
+            let agents_dir = agents_dir(app)?;
             let persona_dir = agents_dir.join(&agent.folder_name);
             std::fs::create_dir_all(&persona_dir)
                 .map_err(|e| format!("Failed to create persona directory: {}", e))?;
