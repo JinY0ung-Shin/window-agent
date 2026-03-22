@@ -458,9 +458,15 @@ fn resolve_agent_for_conversation(
 fn tool_self_inspect(
     app: &AppHandle,
     db: &Database,
-    conversation_id: &str,
+    agent_id_or_conv: &str,
 ) -> Result<serde_json::Value, String> {
-    let (agent_id, agent) = resolve_agent_for_conversation(db, conversation_id)?;
+    // Try as conversation_id first, fall back to direct agent_id
+    let (agent_id, agent) = resolve_agent_for_conversation(db, agent_id_or_conv)
+        .or_else(|_| {
+            let agent = agent_operations::get_agent_impl(db, agent_id_or_conv.to_string())
+                .map_err(|e| format!("Failed to get agent: {e}"))?;
+            Ok::<_, String>((agent_id_or_conv.to_string(), agent))
+        })?;
 
     // Read enabled tools from TOOL_CONFIG.json
     validate_no_traversal(&agent.folder_name, "folder_name")?;
@@ -524,9 +530,15 @@ fn tool_manage_schedule(
     app: &AppHandle,
     db: &Database,
     input: &serde_json::Value,
-    conversation_id: &str,
+    agent_id_or_conv: &str,
 ) -> Result<serde_json::Value, String> {
-    let (agent_id, _agent) = resolve_agent_for_conversation(db, conversation_id)?;
+    // Try as conversation_id first, fall back to direct agent_id
+    let (agent_id, _agent) = resolve_agent_for_conversation(db, agent_id_or_conv)
+        .or_else(|_| {
+            let agent = agent_operations::get_agent_impl(db, agent_id_or_conv.to_string())
+                .map_err(|e| format!("Failed to get agent: {e}"))?;
+            Ok::<_, String>((agent_id_or_conv.to_string(), agent))
+        })?;
 
     let action = input
         .get("action")
@@ -792,6 +804,245 @@ pub async fn execute_tool(
         output,
         duration_ms,
     })
+}
+
+/// Public entry point for backend-triggered tool execution (e.g., cron jobs).
+/// Accepts `agent_id` directly instead of `conversation_id` since background
+/// tasks don't have a conversation context. Creates a synthetic conversation_id
+/// so that scope resolution (file tools) can resolve the agent's persona dir.
+///
+/// All tools are auto-approved — no user confirmation is possible in backend context.
+pub async fn execute_tool_inner_public(
+    app: &AppHandle,
+    db: &Database,
+    tool_name: &str,
+    input: &serde_json::Value,
+    agent_id: &str,
+) -> Result<serde_json::Value, String> {
+    // For backend execution, we use agent_id as a synthetic conversation_id.
+    // The resolve_scope function will look up the conversation, which won't exist,
+    // so we need to handle scope differently for cron.
+    // For now, pass agent_id and handle the "no conversation" case gracefully.
+    let timeout_secs = match tool_name {
+        "http_request" => 120,
+        t if t.starts_with("browser_") => 360,
+        _ => 30,
+    };
+    let duration = std::time::Duration::from_secs(timeout_secs);
+
+    match tokio::time::timeout(
+        duration,
+        execute_tool_inner_for_agent(app, db, tool_name, input, agent_id),
+    ).await {
+        Ok(result) => result,
+        Err(_) => Err(format!("Tool '{}' timed out after {}s", tool_name, timeout_secs)),
+    }
+}
+
+/// Inner dispatch for agent-context execution (no conversation required).
+/// Used by cron jobs and other backend-triggered tool calls.
+/// Passes `agent_id` as the identifier — tools that support both conversation_id
+/// and agent_id resolution (self_inspect, manage_schedule) handle this gracefully.
+/// Tools that require a conversation (browser, workspace files) return clear errors.
+async fn execute_tool_inner_for_agent(
+    app: &AppHandle,
+    db: &Database,
+    tool_name: &str,
+    input: &serde_json::Value,
+    agent_id: &str,
+) -> Result<serde_json::Value, String> {
+    match tool_name {
+        "self_inspect" => tool_self_inspect(app, db, agent_id),
+        "manage_schedule" => tool_manage_schedule(app, db, input, agent_id),
+        "web_search" => {
+            let url = input.get("url").and_then(|v| v.as_str())
+                .ok_or("web_search: missing 'url' parameter")?;
+            tool_web_search(url).await
+        }
+        "http_request" => {
+            // Check if request uses credential placeholders — those require conversation context
+            let input_str = serde_json::to_string(input).unwrap_or_default();
+            if input_str.contains("{{credential:") {
+                return Err("Credential-based HTTP requests are not supported in scheduled task execution. Use plain headers instead.".to_string());
+            }
+            tool_http_request(app, input, agent_id, db).await
+        }
+        "read_file" | "write_file" | "delete_file" | "list_directory" => {
+            let scope = input.get("scope").and_then(|v| v.as_str()).unwrap_or("workspace");
+            if scope == "workspace" {
+                return Err("Workspace scope is not available in scheduled task execution. Use 'persona' or 'vault' scope.".to_string());
+            }
+            // Resolve agent to build scope directly (no conversation needed)
+            let agent = agent_operations::get_agent_impl(db, agent_id.to_string())
+                .map_err(|e| format!("Failed to get agent: {e}"))?;
+            validate_no_traversal(&agent.folder_name, "folder_name")?;
+            let agents_dir = get_agents_dir_for_tools(app)?;
+
+            if scope == "persona" {
+                let persona_dir = agents_dir.join(&agent.folder_name);
+                let resolution = ScopeResolution {
+                    root: persona_dir.clone(),
+                    allowed_roots: vec![persona_dir],
+                    allowed_filenames: Some(vec![
+                        "IDENTITY.md", "SOUL.md", "USER.md", "AGENTS.md", "BOOT.md",
+                    ]),
+                    agent_id: agent_id.to_string(),
+                };
+                execute_file_tool_with_scope(app, tool_name, input, &resolution)
+            } else {
+                // vault scope — restrict to agent's own category dirs (matches interactive path)
+                let vault = app.state::<VaultState>();
+                let vault_path = {
+                    let vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+                    vm.get_vault_path().to_path_buf()
+                };
+                let agent_vault = vault_path.join("agents").join(agent_id);
+                let allowed_categories = ["knowledge", "decision", "conversation", "reflection"];
+                let mut allowed_roots = Vec::new();
+                for cat in &allowed_categories {
+                    let cat_dir = agent_vault.join(cat);
+                    let _ = std::fs::create_dir_all(&cat_dir);
+                    allowed_roots.push(cat_dir);
+                }
+                let resolution = ScopeResolution {
+                    root: agent_vault,
+                    allowed_roots,
+                    allowed_filenames: None,
+                    agent_id: agent_id.to_string(),
+                };
+                execute_file_tool_with_scope(app, tool_name, input, &resolution)
+            }
+        }
+        t if t.starts_with("browser_") => {
+            Err("Browser tools are not available in scheduled task execution.".to_string())
+        }
+        "delegate" | "report" => {
+            Err(format!("Tool '{}' is not available in scheduled task execution.", tool_name))
+        }
+        _ => Err(format!("Unknown tool: '{}'", tool_name)),
+    }
+}
+
+/// Execute a file tool (read/write/delete/list) with a pre-resolved scope.
+/// Used by cron execution where conversation-based scope resolution is not available.
+/// For vault scope, write/delete trigger vault index rebuild to maintain integrity.
+fn execute_file_tool_with_scope(
+    app: &AppHandle,
+    tool_name: &str,
+    input: &serde_json::Value,
+    resolution: &ScopeResolution,
+) -> Result<serde_json::Value, String> {
+    let resolve_path = |raw: &str| -> Result<String, String> {
+        if let Some(ref allowed_names) = resolution.allowed_filenames {
+            let name = std::path::Path::new(raw)
+                .file_name()
+                .and_then(|f| f.to_str())
+                .ok_or_else(|| format!("Invalid filename: {raw}"))?;
+            if !allowed_names.iter().any(|&a| a == name) {
+                return Err(format!("File not allowed in this scope: {name}"));
+            }
+            Ok(resolution.root.join(name).to_string_lossy().to_string())
+        } else {
+            let resolved = resolution.root.join(raw);
+            let resolved_str = resolved.to_string_lossy().to_string();
+            validate_tool_roots(&resolved_str, &resolution.allowed_roots)?;
+            Ok(resolved_str)
+        }
+    };
+
+    match tool_name {
+        "read_file" => {
+            let raw_path = input["path"].as_str().ok_or("read_file: missing 'path'")?;
+            let resolved = resolve_path(raw_path)?;
+            let content = std::fs::read_to_string(&resolved)
+                .map_err(|e| format!("Failed to read file: {e}"))?;
+            Ok(serde_json::json!({ "content": content, "path": resolved }))
+        }
+        "write_file" => {
+            let raw_path = input["path"].as_str().ok_or("write_file: missing 'path'")?;
+            let content = input["content"].as_str().ok_or("write_file: missing 'content'")?;
+            let resolved = resolve_path(raw_path)?;
+            if let Some(parent) = std::path::Path::new(&resolved).parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            std::fs::write(&resolved, content)
+                .map_err(|e| format!("Failed to write file: {e}"))?;
+            // Rebuild vault index if this is a vault write
+            if resolution.allowed_filenames.is_none() {
+                let _ = rebuild_vault_index(app);
+            }
+            Ok(serde_json::json!({ "success": true, "path": resolved }))
+        }
+        "delete_file" => {
+            let raw_path = input["path"].as_str().ok_or("delete_file: missing 'path'")?;
+            let resolved = resolve_path(raw_path)?;
+            std::fs::remove_file(&resolved)
+                .map_err(|e| format!("Failed to delete file: {e}"))?;
+            // Rebuild vault index if this is a vault delete
+            if resolution.allowed_filenames.is_none() {
+                let _ = rebuild_vault_index(app);
+            }
+            Ok(serde_json::json!({ "success": true, "path": resolved }))
+        }
+        "list_directory" => {
+            let raw_path = input["path"].as_str().ok_or("list_directory: missing 'path'")?;
+            let recursive = input["recursive"].as_bool().unwrap_or(false);
+
+            // Special case: vault root listing (path is "." or empty)
+            // Returns the allowed category directories, matching interactive behavior
+            if (raw_path == "." || raw_path.is_empty()) && resolution.allowed_filenames.is_none() {
+                let items: Vec<serde_json::Value> = resolution.allowed_roots.iter()
+                    .filter_map(|r| r.file_name().map(|n| n.to_string_lossy().to_string()))
+                    .map(|name| serde_json::json!({ "name": name, "is_dir": true }))
+                    .collect();
+                return Ok(serde_json::json!({ "entries": items, "path": resolution.root.to_string_lossy() }));
+            }
+
+            let resolved = resolve_path(raw_path)?;
+
+            fn collect_entries(
+                dir: &str,
+                recursive: bool,
+                allowed_names: &Option<Vec<&'static str>>,
+                allowed_roots: &[std::path::PathBuf],
+            ) -> Result<Vec<serde_json::Value>, String> {
+                let entries = std::fs::read_dir(dir)
+                    .map_err(|e| format!("Failed to read directory: {e}"))?;
+                let mut items: Vec<serde_json::Value> = Vec::new();
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if let Some(ref names) = allowed_names {
+                        if !names.iter().any(|&a| a == name) {
+                            continue;
+                        }
+                    }
+                    let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                    items.push(serde_json::json!({ "name": name, "is_dir": is_dir }));
+                    if recursive && is_dir {
+                        let sub_path = entry.path().to_string_lossy().to_string();
+                        // Validate sub-path is still within allowed roots
+                        if validate_tool_roots(&sub_path, allowed_roots).is_ok() {
+                            if let Ok(sub_items) = collect_entries(&sub_path, true, allowed_names, allowed_roots) {
+                                for mut sub in sub_items {
+                                    if let Some(n) = sub.get("name").and_then(|v| v.as_str()) {
+                                        sub["name"] = serde_json::json!(format!("{name}/{n}"));
+                                    }
+                                    items.push(sub);
+                                }
+                            }
+                        }
+                    }
+                }
+                Ok(items)
+            }
+
+            let items = collect_entries(&resolved, recursive, &resolution.allowed_filenames, &resolution.allowed_roots)?;
+
+            // Filter persona files if applicable
+            Ok(serde_json::json!({ "entries": items, "path": resolved }))
+        }
+        _ => Err(format!("Not a file tool: {tool_name}")),
+    }
 }
 
 /// Inner dispatch — routes to the correct tool implementation.

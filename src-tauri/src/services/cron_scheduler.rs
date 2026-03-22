@@ -1,4 +1,5 @@
 use crate::api::ApiState;
+use crate::commands::tool_commands::native_tool_definitions;
 use crate::db::cron_operations::{
     claim_due_jobs_impl, complete_cron_run_impl, reset_stale_claims_impl,
 };
@@ -230,16 +231,39 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
         }
     }
 
+    // 3. Build tools array from agent's enabled tools
+    let all_defs = native_tool_definitions();
+    let tools: Vec<serde_json::Value> = resolved
+        .enabled_tool_names
+        .iter()
+        .filter_map(|name| {
+            all_defs.iter().find(|d| d.name == *name).map(|def| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": def.name,
+                        "description": def.description,
+                        "parameters": def.parameters,
+                    }
+                })
+            })
+        })
+        .collect();
+
     let mut body = serde_json::json!({
         "model": resolved.model,
         "messages": api_messages,
     });
 
+    if !tools.is_empty() {
+        body["tools"] = serde_json::json!(tools);
+    }
+
     if let Some(temp) = resolved.temperature {
         body["temperature"] = serde_json::json!(temp);
     }
 
-    // 3. Call API (non-streaming) with thinking fallback
+    // 4. Call API with tool execution loop
     let api_state = app.state::<ApiState>();
     let (api_key, base_url) = match api_state.effective() {
         Ok(pair) => pair,
@@ -258,7 +282,6 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
         }
     };
 
-    // Try with thinking first if enabled, fall back without on thinking-specific errors
     if resolved.thinking_enabled {
         if let Some(budget) = resolved.thinking_budget {
             body["thinking"] = serde_json::json!({
@@ -266,53 +289,103 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
                 "budget_tokens": budget,
             });
         }
+    }
 
-        match api_service::do_completion(&client, &api_key, &base_url, &body, Some(&app)).await {
-            Ok(resp) => {
-                let summary = if resp.content.is_empty() {
-                    resp.reasoning_content.as_deref().unwrap_or("(no content)").to_string()
-                } else {
-                    resp.content
-                };
-                finish_run(&app, &db, &job, &run, true, Some(&summary), None);
-                return;
-            }
-            Err(e) => {
-                if api_service::is_thinking_specific_error(&e) {
+    const MAX_TOOL_ITERATIONS: usize = 10;
+
+    for iteration in 0..=MAX_TOOL_ITERATIONS {
+        let result = api_service::do_completion(&client, &api_key, &base_url, &body, Some(&app)).await;
+
+        // On first attempt with thinking, handle thinking-specific errors
+        if iteration == 0 && resolved.thinking_enabled {
+            if let Err(ref e) = result {
+                if api_service::is_thinking_specific_error(e) {
                     if let Some(obj) = body.as_object_mut() {
                         obj.remove("thinking");
                     }
-                    // Fall through to retry without thinking
-                } else {
-                    let error_msg = e.to_string();
-                    finish_run(&app, &db, &job, &run, false, None, Some(&error_msg));
-                    return;
+                    // Retry without thinking
+                    continue;
                 }
             }
         }
-    }
 
-    let result = api_service::do_completion(&client, &api_key, &base_url, &body, Some(&app)).await;
+        let response = match result {
+            Ok(r) => r,
+            Err(e) => {
+                let error_msg = e.to_string();
+                finish_run(&app, &db, &job, &run, false, None, Some(&error_msg));
+                return;
+            }
+        };
 
-    // 4. Store result
-    match result {
-        Ok(response) => {
+        // If no tool calls, we're done — return the text response
+        if response.tool_calls.is_none() {
             let summary = if response.content.is_empty() {
-                response
-                    .reasoning_content
-                    .as_deref()
-                    .unwrap_or("(no content)")
-                    .to_string()
+                response.reasoning_content.as_deref().unwrap_or("(no content)").to_string()
             } else {
                 response.content
             };
             finish_run(&app, &db, &job, &run, true, Some(&summary), None);
+            return;
         }
-        Err(e) => {
-            let error_msg = e.to_string();
-            finish_run(&app, &db, &job, &run, false, None, Some(&error_msg));
+
+        // Execute tool calls and feed results back
+        let tool_calls = response.tool_calls.unwrap();
+
+        // Append assistant message with tool calls to conversation
+        if let Some(msgs) = body["messages"].as_array_mut() {
+            let tc_json: Vec<serde_json::Value> = tool_calls.iter().map(|tc| {
+                serde_json::json!({
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    }
+                })
+            }).collect();
+            msgs.push(serde_json::json!({
+                "role": "assistant",
+                "content": if response.content.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(response.content.clone()) },
+                "tool_calls": tc_json,
+            }));
+        }
+
+        // Execute each tool call (all auto-approved for cron)
+        for tc in &tool_calls {
+            let input: serde_json::Value = serde_json::from_str(&tc.function.arguments)
+                .unwrap_or(serde_json::json!({}));
+
+            let tool_result = crate::commands::tool_commands::execute_tool_inner_public(
+                &app, &db, &tc.function.name, &input, &job.agent_id,
+            ).await;
+
+            let output = match tool_result {
+                Ok(val) => serde_json::to_string(&val).unwrap_or_else(|_| "{}".to_string()),
+                Err(e) => format!("Tool error: {e}"),
+            };
+
+            // Append tool result message
+            if let Some(msgs) = body["messages"].as_array_mut() {
+                msgs.push(serde_json::json!({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": output,
+                }));
+            }
+        }
+
+        // Remove thinking after first successful call to avoid issues on subsequent turns
+        if let Some(obj) = body.as_object_mut() {
+            obj.remove("thinking");
         }
     }
+
+    // Max iterations reached
+    finish_run(
+        &app, &db, &job, &run, false, None,
+        Some("Max tool iterations reached"),
+    );
 }
 
 /// Update DB and emit completion/failure event.

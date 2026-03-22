@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // ── Non-streaming chat completion response ──
 
@@ -21,6 +21,20 @@ pub struct ResponseMessage {
     pub content: Option<String>,
     #[serde(default)]
     pub reasoning_content: Option<String>,
+    #[serde(default)]
+    pub tool_calls: Option<Vec<ResponseToolCall>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ResponseToolCall {
+    pub id: String,
+    pub function: ResponseToolCallFunction,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ResponseToolCallFunction {
+    pub name: String,
+    pub arguments: String,
 }
 
 // ── Streaming chunk ──

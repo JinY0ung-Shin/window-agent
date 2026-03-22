@@ -215,14 +215,19 @@ pub async fn do_completion(
     let reasoning_content = msg
         .and_then(|m| m.reasoning_content.clone());
 
+    let tool_calls = msg
+        .and_then(|m| m.tool_calls.clone());
+
     // Reject empty responses – the API returned no useful content
-    if content.is_empty() && reasoning_content.is_none() {
+    // (tool_calls count as useful content)
+    if content.is_empty() && reasoning_content.is_none() && tool_calls.is_none() {
         return Err(AppError::Api("EMPTY_RESPONSE: No content in API response".to_string()));
     }
 
     Ok(ChatCompletionResponse {
         content,
         reasoning_content,
+        tool_calls,
     })
 }
 

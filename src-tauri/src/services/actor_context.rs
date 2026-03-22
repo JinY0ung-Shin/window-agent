@@ -265,8 +265,18 @@ fn resolve_tool_names(
         // DM — full tool access; empty vec signals "use default frontend config"
         ExecutionRole::Dm => Vec::new(),
 
-        // Cron execution — same as DM (empty vec, no frontend tools in backend)
-        ExecutionRole::CronExecution => Vec::new(),
+        // Cron execution — all enabled tools except browser/orchestration
+        // (browser requires UI, orchestration requires team context)
+        ExecutionRole::CronExecution => {
+            let config_tools = read_tool_config(agent_dir);
+            config_tools
+                .into_iter()
+                .filter(|(name, _)| {
+                    !name.starts_with("browser_") && name != "delegate" && name != "report"
+                })
+                .map(|(name, _)| name)
+                .collect()
+        }
 
         // Team member — report only for v1.
         ExecutionRole::TeamMember => {

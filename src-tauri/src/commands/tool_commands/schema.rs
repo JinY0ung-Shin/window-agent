@@ -159,7 +159,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
 
     defs.push(NativeToolDef {
         name: "manage_schedule".into(),
-        description: "자신의 예약 작업(크론 잡)을 관리합니다: 조회, 생성, 수정, 삭제, 활성화/비활성화. 주의: 예약된 작업은 프롬프트 전용으로 실행되며 도구(tool) 호출은 지원되지 않습니다.".into(),
+        description: "자신의 예약 작업(크론 잡)을 관리합니다: 조회, 생성, 수정, 삭제, 활성화/비활성화. 예약된 작업은 에이전트의 도구를 사용할 수 있습니다 (브라우저 제외).".into(),
         category: "self".into(),
         default_tier: "confirm".into(),
         default_enabled: true,
