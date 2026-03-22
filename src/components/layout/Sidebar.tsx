@@ -15,7 +15,6 @@ export default function Sidebar() {
   const currentConversationId = useConversationStore((s) => s.currentConversationId);
   const openAgentChat = useConversationStore((s) => s.openAgentChat);
   const clearAgentChat = useConversationStore((s) => s.clearAgentChat);
-  const setIsSettingsOpen = useSettingsStore((s) => s.setIsSettingsOpen);
   const agents = useAgentStore((s) => s.agents);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const openEditor = useAgentStore((s) => s.openEditor);
@@ -201,8 +200,8 @@ export default function Sidebar() {
           )}
         </div>
         <div
-          className="menu-item settings-btn"
-          onClick={() => setIsSettingsOpen(true)}
+          className={`menu-item settings-btn ${mainView === "settings" ? "active" : ""}`}
+          onClick={() => toggleView("settings")}
         >
           <Settings size={20} />
           <span>{t("settings:title")}</span>

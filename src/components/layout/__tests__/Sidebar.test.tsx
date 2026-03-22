@@ -4,6 +4,7 @@ import Sidebar from "../Sidebar";
 import { useConversationStore } from "../../../stores/conversationStore";
 import { useAgentStore } from "../../../stores/agentStore";
 import { useSettingsStore } from "../../../stores/settingsStore";
+import { useNavigationStore } from "../../../stores/navigationStore";
 import { useBootstrapStore } from "../../../stores/bootstrapStore";
 
 vi.mock("../../../services/tauriCommands");
@@ -168,9 +169,9 @@ describe("Sidebar (DM-style)", () => {
     expect(spy).toHaveBeenCalledWith("a1");
   });
 
-  it("clicking settings opens settings modal", () => {
+  it("clicking settings navigates to settings view", () => {
     render(<Sidebar />);
     fireEvent.click(screen.getByText("환경 설정"));
-    expect(useSettingsStore.getState().isSettingsOpen).toBe(true);
+    expect(useNavigationStore.getState().mainView).toBe("settings");
   });
 });

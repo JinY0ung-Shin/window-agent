@@ -8,6 +8,10 @@
     "backup": "백업/복원",
     "network": "네트워크"
   },
+  "sections": {
+    "apiServer": "API 서버",
+    "agentNetwork": "에이전트 네트워크"
+  },
   "general": {
     "apiKeyLabel": "API Key (OpenAI 또는 Custom)",
     "apiKeyPlaceholderClearing": "저장 시 기존 API 키가 삭제됩니다",

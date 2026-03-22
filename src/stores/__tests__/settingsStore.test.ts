@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { useSettingsStore } from "../settingsStore";
+import { useNavigationStore } from "../navigationStore";
 import {
   DEFAULT_BASE_URL,
   DEFAULT_MODEL,
@@ -9,9 +10,11 @@ import {
 
 const mockedInvoke = vi.mocked(invoke);
 const initialState = useSettingsStore.getState();
+const initialNav = useNavigationStore.getState();
 
 beforeEach(() => {
   useSettingsStore.setState(initialState, true);
+  useNavigationStore.setState(initialNav, true);
   localStorage.clear();
   mockedInvoke.mockReset();
 });
@@ -23,7 +26,6 @@ describe("settingsStore", () => {
     expect(s.modelName).toBe(DEFAULT_MODEL);
     expect(s.thinkingEnabled).toBe(true);
     expect(s.thinkingBudget).toBe(DEFAULT_THINKING_BUDGET);
-    expect(s.isSettingsOpen).toBe(false);
     expect(s.hasApiKey).toBe(false);
   });
 
@@ -74,8 +76,8 @@ describe("settingsStore", () => {
     const s = useSettingsStore.getState();
     expect(s.baseUrl).toBe("http://new-url");
     expect(s.thinkingBudget).toBe(8192);
-    expect(s.isSettingsOpen).toBe(false);
     expect(s.hasApiKey).toBe(true);
+    expect(useNavigationStore.getState().mainView).toBe("chat");
   });
 
   it("saveSettings uses default model when modelName is empty", async () => {
@@ -131,14 +133,6 @@ describe("settingsStore", () => {
     });
   });
 
-  it("setIsSettingsOpen toggles modal state", () => {
-    useSettingsStore.getState().setIsSettingsOpen(true);
-    expect(useSettingsStore.getState().isSettingsOpen).toBe(true);
-
-    useSettingsStore.getState().setIsSettingsOpen(false);
-    expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
-  });
-
   it("loadSettings handles corrupt localStorage value (uses defaults)", () => {
     localStorage.setItem("thinking_budget", "not-a-number");
     localStorage.setItem("thinking_enabled", "garbage");
@@ -173,7 +167,7 @@ describe("settingsStore", () => {
     expect(s.modelName).toBe("claude-3");
     expect(s.thinkingEnabled).toBe(true);
     expect(s.thinkingBudget).toBe(16384);
-    expect(s.isSettingsOpen).toBe(false);
+    expect(useNavigationStore.getState().mainView).toBe("chat");
   });
 
   describe("loadEnvDefaults", () => {

@@ -10,6 +10,7 @@ import { useTeamStore } from "./teamStore";
 import { useTeamRunStore } from "./teamRunStore";
 import { useAgentStore } from "./agentStore";
 import { useSettingsStore } from "./settingsStore";
+import { useNavigationStore } from "./navigationStore";
 import { useToolRunStore } from "./toolRunStore";
 import {
   readPersonaFiles,
@@ -82,7 +83,7 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
     await useSettingsStore.getState().waitForEnv();
     const settings = useSettingsStore.getState();
     if (!settings.hasApiKey) {
-      settings.setIsSettingsOpen(true);
+      useNavigationStore.getState().setMainView("settings");
       return;
     }
 

@@ -6,6 +6,7 @@ import {
 } from "../constants";
 import { getEnvConfig, hasApiKey as checkApiKey, hasStoredKey as checkStoredKey, setApiConfig } from "../services/tauriCommands";
 import { refreshDefaultManagerPersona } from "../services/commands/agentCommands";
+import { useNavigationStore } from "./navigationStore";
 import { i18n, type Locale } from "../i18n";
 import { logger } from "../services/logger";
 
@@ -28,7 +29,6 @@ interface SettingsState {
   modelName: string;
   thinkingEnabled: boolean;
   thinkingBudget: number;
-  isSettingsOpen: boolean;
   envLoaded: boolean;
   settingsError: string | null;
   // ── Branding ──
@@ -37,7 +37,6 @@ interface SettingsState {
   brandingInitialized: boolean;
   locale: Locale;
   appReady: boolean;
-  setIsSettingsOpen: (open: boolean) => void;
   loadSettings: () => void;
   loadEnvDefaults: () => Promise<void>;
   waitForEnv: () => Promise<void>;
@@ -87,12 +86,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...initial,
   hasApiKey: false,
   hasStoredKey: false,
-  isSettingsOpen: false,
   envLoaded: false,
   settingsError: null,
   appReady: false,
-
-  setIsSettingsOpen: (open) => set({ isSettingsOpen: open, ...(open ? { settingsError: null } : {}) }),
 
   loadSettings: () => set(readNonSecretSettings()),
 
@@ -163,9 +159,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       modelName: model,
       thinkingEnabled: s.thinkingEnabled,
       thinkingBudget: s.thinkingBudget,
-      isSettingsOpen: false,
       settingsError: null,
     });
+    useNavigationStore.getState().goBack();
   },
 
   // ── Branding actions ──

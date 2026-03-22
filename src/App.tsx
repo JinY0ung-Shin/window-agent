@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import { initializeApp } from "./services/initService";
 import { useSettingsStore } from "./stores/settingsStore";
 import MainLayout from "./components/layout/MainLayout";
-import SettingsModal from "./components/settings/SettingsModal";
 import OnboardingScreen from "./components/onboarding/OnboardingScreen";
 import "./App.css";
 
@@ -24,12 +23,7 @@ function App() {
     return <OnboardingScreen />;
   }
 
-  return (
-    <>
-      <MainLayout />
-      <SettingsModal />
-    </>
-  );
+  return <MainLayout />;
 }
 
 export default App;

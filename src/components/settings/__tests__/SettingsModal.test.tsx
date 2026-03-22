@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import SettingsModal from "../SettingsModal";
+import SettingsPage from "../SettingsModal";
 import { useSettingsStore } from "../../../stores/settingsStore";
+import { useNavigationStore } from "../../../stores/navigationStore";
 
 vi.mock("../../../services/tauriCommands", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../../services/tauriCommands")>();
@@ -18,59 +19,79 @@ vi.mock("../../../services/tauriCommands", async (importOriginal) => {
   };
 });
 
-const initialState = useSettingsStore.getState();
+vi.mock("../../../services/commands/relayCommands", () => ({
+  relayGetRelayUrl: vi.fn().mockResolvedValue(""),
+  relaySetRelayUrl: vi.fn().mockResolvedValue(undefined),
+}));
+
+const initialSettings = useSettingsStore.getState();
+const initialNav = useNavigationStore.getState();
 
 beforeEach(() => {
-  useSettingsStore.setState(initialState, true);
+  useSettingsStore.setState(initialSettings, true);
+  useNavigationStore.setState(initialNav, true);
 });
 
-describe("SettingsModal", () => {
-  it("does not render when isSettingsOpen is false", () => {
-    useSettingsStore.setState({ isSettingsOpen: false });
-    const { container } = render(<SettingsModal />);
-    expect(container.innerHTML).toBe("");
-  });
-
-  it("renders when isSettingsOpen is true", async () => {
-    useSettingsStore.setState({ isSettingsOpen: true });
-    await act(async () => { render(<SettingsModal />); });
+describe("SettingsPage", () => {
+  it("renders title when mainView is settings", async () => {
+    useNavigationStore.setState({ mainView: "settings" });
+    await act(async () => { render(<SettingsPage />); });
     expect(screen.getByText("환경 설정")).toBeInTheDocument();
   });
 
-  it("general tab is active by default", async () => {
-    useSettingsStore.setState({ isSettingsOpen: true });
-    await act(async () => { render(<SettingsModal />); });
+  it("general tab is active by default when API key exists", async () => {
+    useSettingsStore.setState({ hasApiKey: true });
+    useNavigationStore.setState({ mainView: "settings" });
+    await act(async () => { render(<SettingsPage />); });
     const generalTab = screen.getByText("일반");
     expect(generalTab.className).toContain("active");
   });
 
+  it("network tab is active by default when API key is missing", async () => {
+    useSettingsStore.setState({ hasApiKey: false });
+    useNavigationStore.setState({ mainView: "settings" });
+    await act(async () => { render(<SettingsPage />); });
+    const networkTab = screen.getByText("네트워크");
+    expect(networkTab.className).toContain("active");
+  });
+
   it("switching to thinking tab shows thinking controls", async () => {
-    useSettingsStore.setState({ isSettingsOpen: true });
-    await act(async () => { render(<SettingsModal />); });
+    useNavigationStore.setState({ mainView: "settings" });
+    await act(async () => { render(<SettingsPage />); });
     fireEvent.click(screen.getByText("추론 (Thinking)"));
     expect(screen.getByText("Thinking 모드 사용")).toBeInTheDocument();
     expect(screen.getByText("Budget Tokens")).toBeInTheDocument();
   });
 
-  it("clicking cancel closes modal", async () => {
-    useSettingsStore.setState({ isSettingsOpen: true });
-    await act(async () => { render(<SettingsModal />); });
+  it("clicking cancel goes back to previous view", async () => {
+    useNavigationStore.setState({ mainView: "settings", previousView: "vault" });
+    await act(async () => { render(<SettingsPage />); });
     fireEvent.click(screen.getByText("취소"));
-    expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
+    expect(useNavigationStore.getState().mainView).toBe("vault");
   });
 
-  it("clicking save calls saveSettings and closes modal", async () => {
-    useSettingsStore.setState({ isSettingsOpen: true, hasApiKey: true });
-    await act(async () => { render(<SettingsModal />); });
-    await act(async () => { fireEvent.click(screen.getByText("저장")); });
+  it("clicking save calls saveSettings and goes back", async () => {
+    useNavigationStore.setState({ mainView: "settings", previousView: "team" });
+    useSettingsStore.setState({ hasApiKey: true });
+    await act(async () => { render(<SettingsPage />); });
+    const saveButtons = screen.getAllByText("저장");
+    const footerSave = saveButtons.find((btn) => btn.classList.contains("btn-primary"))!;
+    await act(async () => { fireEvent.click(footerSave); });
     await vi.waitFor(() => {
-      expect(useSettingsStore.getState().isSettingsOpen).toBe(false);
+      expect(useNavigationStore.getState().mainView).toBe("team");
     });
   });
 
+  it("clears stale settingsError on open", async () => {
+    useSettingsStore.setState({ settingsError: "old error" });
+    useNavigationStore.setState({ mainView: "settings" });
+    await act(async () => { render(<SettingsPage />); });
+    expect(useSettingsStore.getState().settingsError).toBeNull();
+  });
+
   it("runs API health check and shows result", async () => {
+    useNavigationStore.setState({ mainView: "settings" });
     useSettingsStore.setState({
-      isSettingsOpen: true,
       hasApiKey: true,
       baseUrl: "http://localhost:4000/v1",
       modelName: "model-a",
@@ -78,7 +99,8 @@ describe("SettingsModal", () => {
       thinkingBudget: 4096,
     });
 
-    await act(async () => { render(<SettingsModal />); });
+    await act(async () => { render(<SettingsPage />); });
+    await act(async () => { fireEvent.click(screen.getByText("네트워크")); });
     await act(async () => { fireEvent.click(screen.getByText("연결 확인")); });
 
     expect(await screen.findByText("연결 성공")).toBeInTheDocument();

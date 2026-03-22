@@ -1,38 +1,45 @@
 import { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Settings, Wifi } from "lucide-react";
-import Modal from "../common/Modal";
+import { Settings } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { useNavigationStore } from "../../stores/navigationStore";
 import GeneralSettingsPanel from "./GeneralSettingsPanel";
 import ThinkingSettingsPanel from "./ThinkingSettingsPanel";
 import BrandingSettingsPanel from "./BrandingSettingsPanel";
 import NetworkSettingsPanel from "./NetworkSettingsPanel";
 import ExportSection from "./ExportSection";
 import CredentialManager from "./CredentialManager";
-import type { GeneralSettingsPanelRef } from "./GeneralSettingsPanel";
+import type { NetworkSettingsPanelRef } from "./NetworkSettingsPanel";
 import type { ThinkingSettingsPanelRef } from "./ThinkingSettingsPanel";
 import type { BrandingSettingsPanelRef } from "./BrandingSettingsPanel";
 
 type Tab = "general" | "thinking" | "branding" | "credentials" | "backup" | "network";
 
-export default function SettingsModal() {
+export default function SettingsPage() {
   const { t } = useTranslation("settings");
   const store = useSettingsStore();
-  const { isSettingsOpen, setIsSettingsOpen, saveSettings, settingsError } = store;
+  const { saveSettings, settingsError } = store;
+  const mainView = useNavigationStore((s) => s.mainView);
+  const goBack = useNavigationStore((s) => s.goBack);
+  const isOpen = mainView === "settings";
 
   const [tab, setTab] = useState<Tab>("general");
 
-  const generalRef = useRef<GeneralSettingsPanelRef>(null);
+  const networkRef = useRef<NetworkSettingsPanelRef>(null);
   const thinkingRef = useRef<ThinkingSettingsPanelRef>(null);
   const brandingRef = useRef<BrandingSettingsPanelRef>(null);
 
   useEffect(() => {
-    if (isSettingsOpen) {
-      setTab("general");
+    if (isOpen) {
+      // If no API key, start on network tab where API settings live
+      const defaultTab = store.hasApiKey ? "general" : "network";
+      setTab(defaultTab);
+      // Clear stale errors from previous visits
+      if (settingsError) {
+        useSettingsStore.setState({ settingsError: null });
+      }
     }
-  }, [isSettingsOpen]);
-
-  if (!isSettingsOpen) return null;
+  }, [isOpen]);
 
   const handleSave = () => {
     const branding = brandingRef.current?.getValues();
@@ -41,36 +48,27 @@ export default function SettingsModal() {
       store.setUITheme(branding.uiTheme);
     }
 
-    const general = generalRef.current?.getValues();
+    const networkValues = networkRef.current?.getValues();
     const thinking = thinkingRef.current?.getValues();
     saveSettings({
-      apiKey: general?.apiKey ?? "",
-      clearApiKey: general?.clearApiKey ?? false,
-      baseUrl: general?.baseUrl ?? "",
-      modelName: general?.modelName ?? "",
+      apiKey: networkValues?.apiKey ?? "",
+      clearApiKey: networkValues?.clearApiKey ?? false,
+      baseUrl: networkValues?.baseUrl ?? "",
+      modelName: networkValues?.modelName ?? "",
       thinkingEnabled: thinking?.thinkingEnabled ?? true,
       thinkingBudget: thinking?.thinkingBudget ?? 4096,
     });
   };
 
   return (
-    <Modal
-      onClose={() => setIsSettingsOpen(false)}
-      title={<><Settings size={24} color="#6366f1" />{t("title")}</>}
-      error={settingsError}
-      footer={
-        <>
-          <button className="btn-secondary" onClick={() => setIsSettingsOpen(false)}>
-            {t("common:cancel")}
-          </button>
-          <button className="btn-primary" onClick={handleSave}>
-            {t("common:save")}
-          </button>
-        </>
-      }
-    >
+    <div className="settings-page">
+      <div className="settings-page-header">
+        <Settings size={20} color="#6366f1" />
+        <h2>{t("title")}</h2>
+      </div>
+
       <div className="settings-tabs">
-        {(["general", "thinking", "branding", "credentials", "backup"] as const).map((key) => (
+        {(["general", "thinking", "branding", "credentials", "backup", "network"] as const).map((key) => (
           <button
             key={key}
             className={`settings-tab ${tab === key ? "active" : ""}`}
@@ -79,29 +77,39 @@ export default function SettingsModal() {
             {t(`tabs.${key}`)}
           </button>
         ))}
-        <button
-          className={`settings-tab ${tab === "network" ? "active" : ""}`}
-          onClick={() => setTab("network")}
-        >
-          <Wifi size={14} />
-          {t("tabs.network")}
-        </button>
       </div>
 
-      <div className="modal-body">
-        <div style={{ display: tab === "general" ? undefined : "none" }}>
-          <GeneralSettingsPanel ref={generalRef} isOpen={isSettingsOpen} />
+      <div className="settings-page-body">
+        <div className="settings-page-content">
+          <div style={{ display: tab === "general" ? undefined : "none" }}>
+            <GeneralSettingsPanel />
+          </div>
+          <div style={{ display: tab === "thinking" ? undefined : "none" }}>
+            <ThinkingSettingsPanel ref={thinkingRef} isOpen={isOpen} />
+          </div>
+          <div style={{ display: tab === "branding" ? undefined : "none" }}>
+            <BrandingSettingsPanel ref={brandingRef} isOpen={isOpen} />
+          </div>
+          {tab === "credentials" && <CredentialManager />}
+          {tab === "backup" && <ExportSection />}
+          <div style={{ display: tab === "network" ? undefined : "none" }}>
+            <NetworkSettingsPanel ref={networkRef} isOpen={isOpen} />
+          </div>
         </div>
-        <div style={{ display: tab === "thinking" ? undefined : "none" }}>
-          <ThinkingSettingsPanel ref={thinkingRef} isOpen={isSettingsOpen} />
-        </div>
-        <div style={{ display: tab === "branding" ? undefined : "none" }}>
-          <BrandingSettingsPanel ref={brandingRef} isOpen={isSettingsOpen} />
-        </div>
-        {tab === "credentials" && <CredentialManager />}
-        {tab === "backup" && <ExportSection />}
-        {tab === "network" && <NetworkSettingsPanel isOpen={isSettingsOpen} />}
       </div>
-    </Modal>
+
+      {settingsError && (
+        <div className="settings-page-error">{settingsError}</div>
+      )}
+
+      <div className="settings-page-footer">
+        <button className="btn-secondary" onClick={goBack}>
+          {t("common:cancel")}
+        </button>
+        <button className="btn-primary" onClick={handleSave}>
+          {t("common:save")}
+        </button>
+      </div>
+    </div>
   );
 }

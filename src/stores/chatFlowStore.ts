@@ -9,6 +9,7 @@ import { useSkillStore } from "./skillStore";
 import { useBootstrapStore } from "./bootstrapStore";
 import { useToolRunStore } from "./toolRunStore";
 import { useConversationStore } from "./conversationStore";
+import { useNavigationStore } from "./navigationStore";
 import { useMessageStore } from "./messageStore";
 import { useStreamStore } from "./streamStore";
 import { useSummaryStore } from "./summaryStore";
@@ -90,7 +91,7 @@ export const useChatFlowStore = create<ChatFlowState>((_set, _get) => ({
     await useSettingsStore.getState().waitForEnv();
     const settings = useSettingsStore.getState();
     if (!settings.hasApiKey) {
-      settings.setIsSettingsOpen(true);
+      useNavigationStore.getState().setMainView("settings");
       return;
     }
 

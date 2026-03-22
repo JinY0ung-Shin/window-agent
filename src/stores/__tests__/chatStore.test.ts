@@ -8,6 +8,7 @@ import { useToolRunStore } from "../toolRunStore";
 import { useSummaryStore } from "../summaryStore";
 import { useChatFlowStore } from "../chatFlowStore";
 import { useSettingsStore } from "../settingsStore";
+import { useNavigationStore } from "../navigationStore";
 import { useAgentStore } from "../agentStore";
 import { useMemoryStore } from "../memoryStore";
 import { useDebugStore } from "../debugStore";
@@ -154,7 +155,7 @@ describe("chat stores (integrated)", () => {
     useSettingsStore.setState({ hasApiKey: false });
     useMessageStore.setState({ inputValue: "test" });
     await useChatFlowStore.getState().sendMessage();
-    expect(useSettingsStore.getState().isSettingsOpen).toBe(true);
+    expect(useNavigationStore.getState().mainView).toBe("settings");
   });
 
   it("sendMessage auto-creates conversation and saves messages", async () => {

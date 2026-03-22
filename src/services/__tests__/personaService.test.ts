@@ -19,7 +19,6 @@ vi.mock("../../stores/settingsStore", () => {
     modelName: "global-model",
     thinkingEnabled: true,
     thinkingBudget: 8192,
-    isSettingsOpen: false,
   }));
   return { useSettingsStore: store };
 });

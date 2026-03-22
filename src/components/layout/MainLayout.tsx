@@ -5,6 +5,7 @@ import { Bug } from "lucide-react";
 import Sidebar from "./Sidebar";
 import ChatWindow from "../chat/ChatWindow";
 import DebugPanel from "../debug/DebugPanel";
+import SettingsPage from "../settings/SettingsModal";
 import NetworkPanel from "../network/NetworkPanel";
 import VaultPanel from "../vault/VaultPanel";
 import TeamPanel from "../team/TeamPanel";
@@ -78,7 +79,9 @@ export default function MainLayout() {
     <div className="app-container">
       <Sidebar />
       <WindowControls />
-      {mainView === "team" ? (
+      {mainView === "settings" ? (
+        <SettingsPage />
+      ) : mainView === "team" ? (
         selectedTeamId ? (
           <TeamChatWindow />
         ) : (

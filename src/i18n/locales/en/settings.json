@@ -8,6 +8,10 @@
     "backup": "Backup/Restore",
     "network": "Network"
   },
+  "sections": {
+    "apiServer": "API Server",
+    "agentNetwork": "Agent Network"
+  },
   "general": {
     "apiKeyLabel": "API Key (OpenAI or Custom)",
     "apiKeyPlaceholderClearing": "Stored API key will be deleted on save",
