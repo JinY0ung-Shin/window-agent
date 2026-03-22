@@ -58,8 +58,6 @@ pub struct ResolvedContext {
     pub thinking_budget: Option<i64>,
     /// Consolidated long-term memory for this agent (if available).
     pub consolidated_memory: Option<String>,
-    /// Whether this agent is the default (manager) agent.
-    pub is_manager: bool,
     /// Preformatted [REGISTERED AGENTS] section (manager agents only).
     pub registered_agents_section: Option<String>,
     /// Preformatted [SYSTEM CONTEXT] section with available tool names.
@@ -118,8 +116,7 @@ pub fn resolve(
         memory_mgr.and_then(|mgr| mgr.read_consolidated(&scope.actor_agent_id));
 
     // 6. Manager agent context
-    let is_manager = agent.is_default;
-    let registered_agents_section = if is_manager {
+    let registered_agents_section = if agent.is_default {
         build_registered_agents_section(db)
     } else {
         None
@@ -143,7 +140,6 @@ pub fn resolve(
         thinking_enabled,
         thinking_budget,
         consolidated_memory,
-        is_manager,
         registered_agents_section,
         tools_section,
     })
@@ -391,7 +387,6 @@ mod tests {
         assert!(ctx.system_prompt.contains("Be helpful."));
         // DM mode returns empty tool list (frontend provides)
         assert!(ctx.enabled_tool_names.is_empty());
-        assert!(!ctx.is_manager);
         assert!(ctx.consolidated_memory.is_none());
     }
 
