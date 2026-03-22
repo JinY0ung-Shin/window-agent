@@ -1,12 +1,16 @@
 // 공유 로직: chatFlowStore와 teamChatFlowStore에서 중복되는 패턴을 추출한 모듈
-import type { Agent, ChatMessage, ToolCall } from "../services/types";
+import type { Agent, ChatMessage, Conversation, MemoryNote, ToolCall } from "../services/types";
+import type { VaultNoteSummary } from "../services/vaultTypes";
+import type { LifecycleEvent } from "../services/lifecycleEvents";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
+import { useMemoryStore } from "./memoryStore";
 import { useMessageStore } from "./messageStore";
 import { useStreamStore } from "./streamStore";
 import { useToolRunStore } from "./toolRunStore";
 import { useVaultStore } from "./vaultStore";
+import { useConversationStore } from "./conversationStore";
 import {
   readPersonaFiles,
   assembleSystemPrompt,
@@ -16,20 +20,374 @@ import {
 } from "../services/personaService";
 import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
 import { readToolConfig } from "../services/nativeToolRegistry";
-import { DEFAULT_SYSTEM_PROMPT, parseErrorMessage } from "../constants";
+import { CONVERSATION_TITLE_MAX_LENGTH, DEFAULT_SYSTEM_PROMPT, parseErrorMessage } from "../constants";
 import { toErrorMessage } from "../utils/errorUtils";
 import { i18n } from "../i18n";
 import {
+  type StreamDoneEvent,
+  MAX_TOOL_ITERATIONS,
   msg,
+  conv,
+  summary,
+  createPendingMessage,
   updateMessageInList,
   classifyToolCalls,
   executeToolPipeline,
+  executeStreamCall,
 } from "../services/streamHelpers";
+import { buildConversationContext } from "../services/chatHelpers";
 import {
   extractBrowserDomain,
   approveBrowserDomain,
 } from "../services/browserApprovalService";
+import { estimateTokens } from "../services/tokenEstimator";
+import { shouldFlush, preCompactFlush } from "../services/preCompactService";
 import { logger } from "../services/logger";
+
+// ── 에이전트 해석 ────────────────────────────────────
+
+export interface ResolvedAgent {
+  agentId: string | null;
+  agent: Agent | null;
+}
+
+/** 대화 또는 전역 선택에서 에이전트 해석 */
+export function resolveAgentForConversation(
+  currentConversationId: string | null,
+  conversations: Conversation[],
+): ResolvedAgent {
+  const agentStore = useAgentStore.getState();
+  let agentId: string | null = null;
+
+  if (currentConversationId) {
+    const convObj = conversations.find((c: Conversation) => c.id === currentConversationId);
+    agentId = convObj?.agent_id ?? null;
+  } else {
+    agentId = agentStore.selectedAgentId;
+  }
+
+  const agent = agentId
+    ? agentStore.agents.find((a: Agent) => a.id === agentId) ?? null
+    : null;
+
+  return { agentId, agent };
+}
+
+// ── 토큰 추정 ────────────────────────────────────────
+
+export interface TokenEstimationParams {
+  messages: ChatMessage[];
+  baseSystemPrompt: string;
+  skillsSection?: string;
+  bootContent?: string | null;
+  consolidatedMemory: string | null;
+  isLearning: boolean;
+  vaultNotes: VaultNoteSummary[];
+  memNotes: MemoryNote[];
+  workspacePath?: string;
+}
+
+/**
+ * 시스템 프롬프트 + 메시지 + 메모리 노트로 전체 토큰 사용량 추정
+ * Pre-compaction 판단에 사용
+ */
+export function estimateContextTokens(params: TokenEstimationParams): number {
+  const {
+    messages, baseSystemPrompt, skillsSection, bootContent,
+    consolidatedMemory, isLearning, vaultNotes, memNotes, workspacePath,
+  } = params;
+
+  const notesTokens = vaultNotes.length > 0
+    ? Math.min(
+        vaultNotes.reduce((s, n) => s + estimateTokens(n.title + (n.bodyPreview ?? "")) + 4, 0),
+        isLearning ? 1500 : 500,
+      )
+    : Math.min(
+        memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0),
+        isLearning ? 1500 : 500,
+      );
+
+  const systemOverhead =
+    estimateTokens(baseSystemPrompt) +
+    (skillsSection ? estimateTokens(skillsSection) : 0) +
+    (bootContent ? estimateTokens(bootContent) : 0) +
+    (consolidatedMemory ? estimateTokens(consolidatedMemory) : 0) +
+    (consolidatedMemory && isLearning ? Math.min(notesTokens, 700) :
+     !consolidatedMemory ? notesTokens : 0) +
+    (workspacePath ? 200 : 0) +
+    (isLearning ? 300 : 0) +
+    500;
+
+  return systemOverhead + messages.reduce(
+    (sum: number, m: ChatMessage) => sum + estimateTokens(m.content) + 4,
+    0,
+  );
+}
+
+// ── Pre-compaction 체크 ──────────────────────────────
+
+/**
+ * 토큰 추정치가 모델 한계에 가까우면 pre-compaction flush 실행
+ * streamOneTurn 호출 전에 사용
+ */
+export async function checkAndFlushPreCompaction(
+  totalTokenEstimate: number,
+  model: string,
+): Promise<void> {
+  const currentConvId = conv().currentConversationId;
+  if (!shouldFlush(totalTokenEstimate, model) || !currentConvId) return;
+
+  const convObj = conv().conversations.find((c: Conversation) => c.id === currentConvId);
+  const flushAgentId = convObj?.agent_id;
+  if (flushAgentId) {
+    await preCompactFlush(currentConvId, flushAgentId, model, totalTokenEstimate);
+  }
+}
+
+// ── 새 대화 생성 ─────────────────────────────────────
+
+export interface EnsureConversationParams {
+  currentConversationId: string | null;
+  agentId: string | null;
+  agent: Agent | null;
+  inputValue: string;
+  emitLifecycleEvent: (event: LifecycleEvent) => void;
+}
+
+export interface EnsureConversationResult {
+  convId: string;
+  isNew: boolean;
+}
+
+/**
+ * 기존 대화를 반환하거나, 없으면 새 대화를 생성.
+ * 새 대화 시 lifecycle 이벤트 발행, draft learning mode 전파, 스킬 저장
+ */
+export async function ensureConversation(
+  params: EnsureConversationParams,
+  hooks: {
+    loadSkills: (folderName: string) => Promise<void>;
+    getActiveSkillNames: () => string[];
+    getDraftLearningMode: () => boolean;
+  },
+): Promise<EnsureConversationResult | null> {
+  const { currentConversationId, agentId, agent, inputValue, emitLifecycleEvent } = params;
+
+  if (currentConversationId) {
+    return { convId: currentConversationId, isNew: false };
+  }
+
+  if (!agentId) {
+    logger.error("No agent selected for new conversation");
+    return null;
+  }
+
+  const initialTitle =
+    inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) ||
+    i18n.t("common:defaultConversationTitle");
+  const newConv = await cmds.createConversation(agentId, initialTitle);
+  const convId = newConv.id;
+  useConversationStore.setState({ currentConversationId: convId });
+
+  emitLifecycleEvent({ type: "session:start", conversationId: convId, agentId });
+  if (agent) {
+    emitLifecycleEvent({ type: "agent:boot", agentId, folderName: agent.folder_name });
+  }
+
+  const draftLearningMode = hooks.getDraftLearningMode();
+  if (draftLearningMode) {
+    await cmds.setLearningMode(convId, true);
+    useConversationStore.setState({ currentLearningMode: true, draftLearningMode: false });
+  }
+
+  const skillNames = hooks.getActiveSkillNames();
+  if (skillNames.length > 0) {
+    await cmds.updateConversationSkills(convId, skillNames);
+  }
+
+  return { convId, isNew: true };
+}
+
+// ── Stream one turn ─────────────────────────────────
+
+export interface StreamOneTurnParams {
+  baseSystemPrompt: string;
+  effective: EffectiveSettings;
+  requestId: string;
+  msgId: string;
+  tools?: object[];
+  skillsSection?: string;
+  workspacePath?: string;
+  bootContent?: string | null;
+}
+
+/**
+ * 단일 스트림 턴 실행: pre-compaction 체크 → 컨텍스트 빌드 → LLM 스트림 호출
+ * chatFlowStore와 teamChatFlowStore에서 공유
+ */
+export async function streamOneTurn(params: StreamOneTurnParams): Promise<StreamDoneEvent> {
+  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection, workspacePath, bootContent } = params;
+
+  // Pre-compaction check: flush if approaching context limit
+  const totalTokenEstimate = estimateContextTokens({
+    messages: msg().messages,
+    baseSystemPrompt,
+    skillsSection,
+    bootContent,
+    consolidatedMemory: conv().consolidatedMemory,
+    isLearning: conv().getCurrentLearningMode(),
+    vaultNotes: useVaultStore.getState().notes,
+    memNotes: useMemoryStore.getState().notes,
+    workspacePath,
+  });
+  await checkAndFlushPreCompaction(totalTokenEstimate, effective.model);
+
+  const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
+    messages: msg().messages,
+    summary: summary().currentSummary,
+    baseSystemPrompt,
+    skillsSection,
+    bootContent,
+    memoryNotes: useMemoryStore.getState().notes,
+    vaultNotes: useVaultStore.getState().notes,
+    workspacePath,
+    learningMode: conv().getCurrentLearningMode(),
+    consolidatedMemory: conv().consolidatedMemory,
+  });
+
+  return executeStreamCall({
+    requestId,
+    msgId,
+    messages: chatMessages as Record<string, unknown>[],
+    systemPrompt,
+    model: effective.model,
+    temperature: effective.temperature,
+    thinkingEnabled: effective.thinkingEnabled,
+    thinkingBudget: effective.thinkingBudget,
+    tools: tools ?? null,
+  });
+}
+
+// ── 도구 반복 루프 ──────────────────────────────────
+
+export interface ToolLoopParams {
+  convId: string;
+  baseSystemPrompt: string;
+  effective: EffectiveSettings;
+  toolDefinitions: ToolDefinition[];
+  autoApproveEnabled: boolean;
+  openAITools?: object[];
+  skillsSection?: string;
+  workspacePath?: string;
+  bootContent?: string | null;
+  /** 추가 저장 필드 (team: sender_agent_id 등) */
+  saveExtras?: Record<string, unknown>;
+}
+
+export interface ToolLoopState {
+  currentRequestId: string;
+  currentMsgId: string;
+}
+
+/**
+ * streamOneTurn을 반복 호출하며 도구 호출을 처리하는 루프
+ * 도구 없는 최종 응답이 오거나 최대 반복 초과 시 종료
+ */
+export async function runToolLoop(
+  params: ToolLoopParams,
+  state: ToolLoopState,
+): Promise<void> {
+  const {
+    convId, baseSystemPrompt, effective, toolDefinitions,
+    autoApproveEnabled, openAITools, skillsSection, workspacePath, bootContent,
+    saveExtras,
+  } = params;
+  let { currentRequestId, currentMsgId } = state;
+
+  let iterationCount = 0;
+
+  while (iterationCount <= MAX_TOOL_ITERATIONS) {
+    const done = await streamOneTurn({
+      baseSystemPrompt,
+      effective,
+      requestId: currentRequestId,
+      msgId: currentMsgId,
+      tools: openAITools,
+      skillsSection,
+      workspacePath,
+      bootContent,
+    });
+
+    if (done.error) {
+      if (done.error === "aborted") {
+        handleStreamAbort(currentMsgId);
+        return;
+      }
+      throw new Error(done.error);
+    }
+
+    const replyContent = done.full_content || "";
+    const reasoningContent = done.reasoning_content ?? undefined;
+    const toolCalls = done.tool_calls;
+
+    if (!toolCalls || toolCalls.length === 0) {
+      await saveFinalResponse({
+        convId,
+        msgId: currentMsgId,
+        replyContent,
+        reasoningContent,
+        saveExtras,
+      });
+
+      summary().maybeGenerateSummary(
+        convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
+      );
+      return;
+    }
+
+    iterationCount++;
+    if (iterationCount > MAX_TOOL_ITERATIONS) {
+      handleMaxIterations(currentMsgId, replyContent);
+      return;
+    }
+
+    const parsedToolCalls = parseRawToolCalls(toolCalls);
+
+    await saveAssistantToolCallMessage({
+      convId,
+      msgId: currentMsgId,
+      replyContent,
+      reasoningContent,
+      parsedToolCalls,
+      saveExtras,
+    });
+
+    const savedToolMsgs = await processToolCalls(parsedToolCalls, {
+      convId,
+      toolDefinitions,
+      autoApproveEnabled,
+      workspacePath,
+      iterationCount,
+    });
+
+    currentRequestId = `req-${Date.now()}`;
+    const { msgId: nextMsgId, msg: nextPending } = createPendingMessage(currentRequestId);
+    currentMsgId = nextMsgId;
+
+    useMessageStore.setState({
+      messages: [...msg().messages, ...savedToolMsgs, nextPending],
+    });
+    useToolRunStore.setState({ toolRunState: "continuing" });
+    useStreamStore.setState({
+      activeRun: {
+        requestId: currentRequestId,
+        conversationId: convId,
+        targetMessageId: currentMsgId,
+        status: "pending",
+      },
+    });
+  }
+}
 
 // ── 에이전트 설정 해석 ──────────────────────────────
 

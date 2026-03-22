@@ -3,18 +3,13 @@ import type { Agent, ChatMessage, Conversation, SkillMetadata } from "../service
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
-import { useMemoryStore } from "./memoryStore";
-import { useVaultStore } from "./vaultStore";
 import { useSkillStore } from "./skillStore";
 import { useBootstrapStore } from "./bootstrapStore";
-import { useToolRunStore } from "./toolRunStore";
-import { useConversationStore } from "./conversationStore";
 import { useNavigationStore } from "./navigationStore";
 import { useMessageStore } from "./messageStore";
 import { useStreamStore } from "./streamStore";
 import { useSummaryStore } from "./summaryStore";
 import { resetChatContext } from "./resetHelper";
-import { buildConversationContext } from "../services/chatHelpers";
 import {
   readBootFile,
   invalidatePersonaCache,
@@ -24,36 +19,28 @@ import {
   parseAgentName,
   isBootstrapComplete,
 } from "../services/bootstrapService";
-import {
-  CONVERSATION_TITLE_MAX_LENGTH,
-  parseErrorMessage,
-} from "../constants";
+import { parseErrorMessage } from "../constants";
 import { toErrorMessage } from "../utils/errorUtils";
 import { i18n } from "../i18n";
 import { emitLifecycleEvent, onLifecycleEvent } from "../services/lifecycleEvents";
-import { shouldFlush, preCompactFlush } from "../services/preCompactService";
-import { estimateTokens } from "../services/tokenEstimator";
 import {
-  type StreamDoneEvent,
-  MAX_TOOL_ITERATIONS,
   msg, conv, stream, boot, summary,
   createPendingMessage,
   updateMessageInList,
-  executeStreamCall,
 } from "../services/streamHelpers";
 import { logger } from "../services/logger";
 import {
+  resolveAgentForConversation,
+  ensureConversation,
+  streamOneTurn,
+  runToolLoop,
   resolveEffectiveSettings,
   resolveToolConfig,
   resolveSystemPrompt,
   resolveWorkspacePath,
-  processToolCalls,
-  saveAssistantToolCallMessage,
   saveFinalResponse,
   handleStreamError,
   handleStreamAbort,
-  handleMaxIterations,
-  parseRawToolCalls,
 } from "./chatFlowBase";
 
 // ── Per-conversation BOOT.md cache (for regenerate) ──
@@ -236,82 +223,6 @@ async function handleSkillCommand(command: string) {
   useMessageStore.setState({ messages: [...msg().messages, sysMsg], inputValue: "" });
 }
 
-// ── Stream one turn ─────────────────────────────────────
-
-async function streamOneTurn(
-  params: {
-    baseSystemPrompt: string;
-    effective: { model: string; temperature: number | null; thinkingEnabled: boolean; thinkingBudget: number | null };
-    requestId: string;
-    msgId: string;
-    tools?: object[];
-    skillsSection?: string;
-    workspacePath?: string;
-    bootContent?: string | null;
-  },
-): Promise<StreamDoneEvent> {
-  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection, workspacePath, bootContent } = params;
-
-  // Pre-compaction check: flush if approaching context limit
-  const currentMessages = msg().messages;
-  const consolidatedMem = conv().consolidatedMemory;
-  const isLearning = conv().getCurrentLearningMode();
-  const vaultNotes = useVaultStore.getState().notes;
-  const memNotes = useMemoryStore.getState().notes;
-  const notesTokens = vaultNotes.length > 0
-    ? Math.min(vaultNotes.reduce((s, n) => s + estimateTokens(n.title + (n.bodyPreview ?? "")) + 4, 0), isLearning ? 1500 : 500)
-    : Math.min(memNotes.reduce((s, n) => s + estimateTokens(n.title + n.content) + 4, 0), isLearning ? 1500 : 500);
-  const systemOverhead =
-    estimateTokens(baseSystemPrompt) +
-    (skillsSection ? estimateTokens(skillsSection) : 0) +
-    (bootContent ? estimateTokens(bootContent) : 0) +
-    (consolidatedMem ? estimateTokens(consolidatedMem) : 0) +
-    (consolidatedMem && isLearning ? Math.min(notesTokens, 700) :
-     !consolidatedMem ? notesTokens : 0) +
-    (workspacePath ? 200 : 0) +
-    (isLearning ? 300 : 0) +
-    500;
-  const totalTokenEstimate = systemOverhead + currentMessages.reduce(
-    (sum: number, m: ChatMessage) => sum + estimateTokens(m.content) + 4,
-    0,
-  );
-  const currentConvId = conv().currentConversationId;
-  if (shouldFlush(totalTokenEstimate, effective.model) && currentConvId) {
-    const convObj = conv().conversations.find((c: Conversation) => c.id === currentConvId);
-    const flushAgentId = convObj?.agent_id;
-    if (flushAgentId) {
-      await preCompactFlush(currentConvId, flushAgentId, effective.model, totalTokenEstimate);
-    }
-  }
-
-  const learningMode = conv().getCurrentLearningMode();
-  const consolidatedMemory = conv().consolidatedMemory;
-  const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
-    messages: msg().messages,
-    summary: summary().currentSummary,
-    baseSystemPrompt,
-    skillsSection,
-    bootContent,
-    memoryNotes: useMemoryStore.getState().notes,
-    vaultNotes: useVaultStore.getState().notes,
-    workspacePath,
-    learningMode,
-    consolidatedMemory,
-  });
-
-  return executeStreamCall({
-    requestId,
-    msgId,
-    messages: chatMessages as Record<string, unknown>[],
-    systemPrompt,
-    model: effective.model,
-    temperature: effective.temperature,
-    thinkingEnabled: effective.thinkingEnabled,
-    thinkingBudget: effective.thinkingBudget,
-    tools: tools ?? null,
-  });
-}
-
 // ── Normal message flow ────────────────────────────────
 
 async function sendNormalMessage() {
@@ -321,63 +232,28 @@ async function sendNormalMessage() {
   const conversations = conv().conversations;
   const settings = useSettingsStore.getState();
 
-  const agentStore = useAgentStore.getState();
-  let agentId: string | null = null;
-  let agent = null;
-
-  if (currentConversationId) {
-    const convObj = conversations.find((c: Conversation) => c.id === currentConversationId);
-    agentId = convObj?.agent_id ?? null;
-  } else {
-    agentId = agentStore.selectedAgentId;
-  }
-
-  if (agentId) {
-    agent = agentStore.agents.find((a: Agent) => a.id === agentId) ?? null;
-  }
+  const { agentId, agent } = resolveAgentForConversation(currentConversationId, conversations);
 
   if (agent && useSkillStore.getState().availableSkills.length === 0) {
     await useSkillStore.getState().loadSkills(agent.folder_name);
   }
 
-  const isNewConversation = !currentConversationId;
-  let convId = currentConversationId;
-  if (!convId) {
-    if (!agentId) {
-      logger.error("No agent selected for new conversation");
-      return;
-    }
-    const initialTitle =
-      inputValue.slice(0, CONVERSATION_TITLE_MAX_LENGTH) ||
-      i18n.t("common:defaultConversationTitle");
-    const newConv = await cmds.createConversation(agentId, initialTitle);
-    convId = newConv.id;
-    useConversationStore.setState({ currentConversationId: convId });
-
-    // Emit lifecycle events for the new session
-    emitLifecycleEvent({ type: "session:start", conversationId: convId, agentId });
-    if (agent) {
-      emitLifecycleEvent({ type: "agent:boot", agentId, folderName: agent.folder_name });
-    }
-
-    // Propagate draft learning mode to the new conversation
-    const { draftLearningMode } = conv();
-    if (draftLearningMode) {
-      await cmds.setLearningMode(convId, true);
-      useConversationStore.setState({ currentLearningMode: true, draftLearningMode: false });
-    }
-
-    const skillNames = useSkillStore.getState().activeSkillNames;
-    if (skillNames.length > 0) {
-      await cmds.updateConversationSkills(convId, skillNames);
-    }
-  }
+  const convResult = await ensureConversation(
+    { currentConversationId, agentId, agent, inputValue, emitLifecycleEvent },
+    {
+      loadSkills: (fn) => useSkillStore.getState().loadSkills(fn),
+      getActiveSkillNames: () => useSkillStore.getState().activeSkillNames,
+      getDraftLearningMode: () => conv().draftLearningMode,
+    },
+  );
+  if (!convResult) return;
+  const { convId, isNew } = convResult;
 
   // Load BOOT.md for new conversations (cached for regenerate)
   let bootContent: string | null | undefined;
-  if (isNewConversation && agent) {
+  if (isNew && agent) {
     bootContent = await readBootFile(agent.folder_name);
-    if (bootContent && convId) {
+    if (bootContent) {
       bootContentCache.set(convId, bootContent);
     }
   }
@@ -396,9 +272,8 @@ async function sendNormalMessage() {
     status: "complete",
   };
 
-  let currentRequestId = `req-${Date.now()}`;
+  const currentRequestId = `req-${Date.now()}`;
   const { msgId: firstMsgId, msg: pendingMsg } = createPendingMessage(currentRequestId);
-  let currentMsgId = firstMsgId;
 
   useMessageStore.setState({
     messages: [...messages, userMsg, pendingMsg],
@@ -408,7 +283,7 @@ async function sendNormalMessage() {
     activeRun: {
       requestId: currentRequestId,
       conversationId: convId,
-      targetMessageId: currentMsgId,
+      targetMessageId: firstMsgId,
       status: "pending",
     },
   });
@@ -423,89 +298,15 @@ async function sendNormalMessage() {
     const skillsSection = useSkillStore.getState().getSkillsPromptSection();
     const workspacePath = await resolveWorkspacePath(convId);
 
-    let iterationCount = 0;
-
-    while (iterationCount <= MAX_TOOL_ITERATIONS) {
-      const done = await streamOneTurn({
-        baseSystemPrompt,
-        effective,
-        requestId: currentRequestId,
-        msgId: currentMsgId,
-        tools: openAITools,
-        skillsSection,
-        workspacePath,
-        bootContent,
-      });
-
-      if (done.error) {
-        if (done.error === "aborted") {
-          handleStreamAbort(currentMsgId);
-          break;
-        }
-        throw new Error(done.error);
-      }
-
-      const replyContent = done.full_content || "";
-      const reasoningContent = done.reasoning_content ?? undefined;
-      const toolCalls = done.tool_calls;
-
-      if (!toolCalls || toolCalls.length === 0) {
-        await saveFinalResponse({
-          convId,
-          msgId: currentMsgId,
-          replyContent,
-          reasoningContent,
-        });
-
-        summary().maybeGenerateSummary(
-          convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
-        );
-        break;
-      }
-
-      iterationCount++;
-      if (iterationCount > MAX_TOOL_ITERATIONS) {
-        handleMaxIterations(currentMsgId, replyContent);
-        break;
-      }
-
-      const parsedToolCalls = parseRawToolCalls(toolCalls);
-
-      await saveAssistantToolCallMessage({
-        convId,
-        msgId: currentMsgId,
-        replyContent,
-        reasoningContent,
-        parsedToolCalls,
-      });
-
-      const savedToolMsgs = await processToolCalls(parsedToolCalls, {
-        convId,
-        toolDefinitions,
-        autoApproveEnabled,
-        workspacePath,
-        iterationCount,
-      });
-
-      currentRequestId = `req-${Date.now()}`;
-      const { msgId: nextMsgId, msg: nextPending } = createPendingMessage(currentRequestId);
-      currentMsgId = nextMsgId;
-
-      useMessageStore.setState({
-        messages: [...msg().messages, ...savedToolMsgs, nextPending],
-      });
-      useToolRunStore.setState({ toolRunState: "continuing" });
-      useStreamStore.setState({
-        activeRun: {
-          requestId: currentRequestId,
-          conversationId: convId,
-          targetMessageId: currentMsgId,
-          status: "pending",
-        },
-      });
-    }
+    await runToolLoop(
+      {
+        convId, baseSystemPrompt, effective, toolDefinitions,
+        autoApproveEnabled, openAITools, skillsSection, workspacePath, bootContent,
+      },
+      { currentRequestId, currentMsgId: firstMsgId },
+    );
   } catch (error) {
-    handleStreamError(error, currentMsgId);
+    handleStreamError(error, firstMsgId);
   }
 
   await conv().loadConversations();
@@ -519,14 +320,9 @@ async function regenerateStream(
   _lastUserContent: string,
 ) {
   const settings = useSettingsStore.getState();
-  const agentStore = useAgentStore.getState();
   const conversations = conv().conversations;
 
-  const convObj = conversations.find((c: Conversation) => c.id === convId);
-  const agentId = convObj?.agent_id ?? null;
-  const agent = agentId
-    ? agentStore.agents.find((a: Agent) => a.id === agentId) ?? null
-    : null;
+  const { agent } = resolveAgentForConversation(convId, conversations);
 
   const requestId = `req-${Date.now()}`;
   const { msgId, msg: pendingMsg } = createPendingMessage(requestId);
@@ -587,10 +383,7 @@ async function regenerateStream(
 
     if (done.error) {
       if (done.error === "aborted") {
-        useMessageStore.setState({
-          messages: updateMessageInList(msg().messages, msgId, { status: "aborted" }),
-        });
-        useStreamStore.setState({ activeRun: null });
+        handleStreamAbort(msgId);
       } else {
         throw new Error(done.error);
       }
