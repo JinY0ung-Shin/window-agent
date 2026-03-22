@@ -13,8 +13,9 @@ pub fn get_native_tools() -> Result<Vec<super::schema::NativeToolDef>, AppError>
     Ok(native_tool_definitions())
 }
 
-/// Generates default TOOL_CONFIG.json from native tool definitions (all enabled, default tiers).
-/// Orchestration tools (delegate, report) are excluded — they are managed by the team orchestrator.
+/// Generates default TOOL_CONFIG.json from native tool definitions.
+/// Each tool's `default_enabled` field (from schema.rs) is the single source of truth.
+/// Orchestration tools are excluded — they are managed by the team orchestrator.
 #[tauri::command]
 pub fn get_default_tool_config() -> Result<String, AppError> {
     let defs = native_tool_definitions();
@@ -22,7 +23,7 @@ pub fn get_default_tool_config() -> Result<String, AppError> {
     for def in defs.iter().filter(|d| d.category != "orchestration") {
         native.insert(
             def.name.clone(),
-            serde_json::json!({ "enabled": true, "tier": def.default_tier }),
+            serde_json::json!({ "enabled": def.default_enabled, "tier": def.default_tier }),
         );
     }
     let config = serde_json::json!({ "version": 2, "auto_approve": false, "native": native, "credentials": {} });
@@ -114,25 +115,25 @@ pub fn normalize_tool_config(config_str: &str) -> Result<(String, bool), String>
         }
     }
 
-    // Add missing native tools — self-awareness tools ("self" category) are enabled
-    // by default so agents can introspect immediately; others are added as disabled.
+    // Add missing native tools using each definition's `default_enabled` field
+    // as the single source of truth for initial enablement.
     let defs = native_tool_definitions();
     if let Some(native) = config["native"].as_object_mut() {
         for def in &defs {
             if !native.contains_key(&def.name) {
-                let default_enabled = def.category == "self";
                 native.insert(
                     def.name.clone(),
-                    serde_json::json!({ "enabled": default_enabled, "tier": def.default_tier }),
+                    serde_json::json!({ "enabled": def.default_enabled, "tier": def.default_tier }),
                 );
                 changed = true;
             }
         }
 
-        // Migration: ensure self-awareness tools are enabled even if previously
-        // added as disabled (before the self-category auto-enable was introduced).
+        // Migration: if a tool's schema says default_enabled=true but the config
+        // has it disabled, force-enable it. This handles tools that were added
+        // before their default_enabled was set to true (e.g., self-awareness tools).
         for def in &defs {
-            if def.category == "self" {
+            if def.default_enabled {
                 if let Some(entry) = native.get_mut(&def.name) {
                     if entry.get("enabled").and_then(|v| v.as_bool()) == Some(false) {
                         entry["enabled"] = serde_json::json!(true);
@@ -176,13 +177,13 @@ mod tests {
     }
 
     #[test]
-    fn test_normalize_config_skips_delete_file_when_write_disabled() {
+    fn test_normalize_config_enables_delete_file_via_default_enabled() {
         let config = r#"{"version":2,"auto_approve":false,"native":{"read_file":{"enabled":true,"tier":"auto"},"write_file":{"enabled":false,"tier":"confirm"}},"credentials":{}}"#;
         let (normalized, changed) = normalize_tool_config(config).unwrap();
-        // delete_file is still added via the "add missing native tools" logic, but as disabled
+        // delete_file has default_enabled=true in schema, so it's added enabled
         let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
         let delete = &parsed["native"]["delete_file"];
-        assert_eq!(delete["enabled"], false);
+        assert_eq!(delete["enabled"], true);
         assert!(changed);
     }
 }

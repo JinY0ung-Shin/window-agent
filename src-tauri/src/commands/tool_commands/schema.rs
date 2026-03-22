@@ -6,6 +6,10 @@ pub struct NativeToolDef {
     pub description: String,
     pub category: String,
     pub default_tier: String,
+    /// Whether this tool should be enabled by default in new or migrated configs.
+    /// Single source of truth — both `get_default_tool_config` and
+    /// `normalize_tool_config` read this field.
+    pub default_enabled: bool,
     pub parameters: serde_json::Value,
 }
 
@@ -16,6 +20,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "지정 경로의 파일 내용을 읽습니다".into(),
             category: "file".into(),
             default_tier: "auto".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"파일 경로"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"}},"required":["path"]}),
         },
         NativeToolDef {
@@ -23,6 +28,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "지정 경로에 파일을 씁니다".into(),
             category: "file".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"파일 경로"},"content":{"type":"string","description":"파일 내용"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"}},"required":["path","content"]}),
         },
         NativeToolDef {
@@ -30,6 +36,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "디렉토리 내 파일 목록을 조회합니다".into(),
             category: "file".into(),
             default_tier: "auto".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"디렉토리 경로"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"},"recursive":{"type":"boolean","description":"하위 디렉토리 포함 여부 (기본값: false)"}},"required":["path"]}),
         },
         NativeToolDef {
@@ -37,6 +44,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "지정 경로의 파일을 삭제합니다".into(),
             category: "file".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"삭제할 파일 경로"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"}},"required":["path"]}),
         },
         NativeToolDef {
@@ -44,6 +52,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "URL의 웹 페이지 내용을 가져옵니다".into(),
             category: "web".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"url":{"type":"string","description":"가져올 URL"}},"required":["url"]}),
         },
         NativeToolDef {
@@ -51,6 +60,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Navigate to a URL and return a snapshot of the page".into(),
             category: "browser".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"url":{"type":"string","description":"The URL to navigate to"}},"required":["url"]}),
         },
         NativeToolDef {
@@ -58,6 +68,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Take a snapshot of the current page showing all interactive elements".into(),
             category: "browser".into(),
             default_tier: "auto".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{}}),
         },
         NativeToolDef {
@@ -65,6 +76,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Click an interactive element on the page by its reference number".into(),
             category: "browser".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"ref":{"type":"number","description":"The reference number of the element to click"}},"required":["ref"]}),
         },
         NativeToolDef {
@@ -72,6 +84,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Type text into an input field by its reference number".into(),
             category: "browser".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"ref":{"type":"number","description":"The reference number of the input field"},"text":{"type":"string","description":"The text to type"}},"required":["ref","text"]}),
         },
         NativeToolDef {
@@ -79,6 +92,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Wait for a specified number of seconds then take a new snapshot".into(),
             category: "browser".into(),
             default_tier: "auto".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{"seconds":{"type":"number","description":"Number of seconds to wait (default 2, max 10)"}}}),
         },
         NativeToolDef {
@@ -86,6 +100,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Go back to the previous page in browser history".into(),
             category: "browser".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{}}),
         },
         NativeToolDef {
@@ -93,6 +108,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Close the browser session for this conversation".into(),
             category: "browser".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{}}),
         },
         NativeToolDef {
@@ -100,6 +116,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             description: "Make HTTP requests. Use {{credential:ID}} in headers/body for authentication.".into(),
             category: "web".into(),
             default_tier: "confirm".into(),
+            default_enabled: true,
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -136,6 +153,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         description: "자신의 설정, 활성화된 도구(대화 모드 기준), 예약된 작업 등 에이전트 상태를 조회합니다".into(),
         category: "self".into(),
         default_tier: "auto".into(),
+        default_enabled: true,
         parameters: serde_json::json!({"type":"object","properties":{}}),
     });
 
@@ -144,6 +162,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         description: "자신의 예약 작업(크론 잡)을 관리합니다: 조회, 생성, 수정, 삭제, 활성화/비활성화. 주의: 예약된 작업은 프롬프트 전용으로 실행되며 도구(tool) 호출은 지원되지 않습니다.".into(),
         category: "self".into(),
         default_tier: "confirm".into(),
+        default_enabled: true,
         parameters: serde_json::json!({
             "type": "object",
             "properties": {
@@ -193,6 +212,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         description: "팀 멤버들에게 작업을 위임합니다 (팀 리더 전용)".into(),
         category: "orchestration".into(),
         default_tier: "auto".into(),
+        default_enabled: false,
         parameters: serde_json::json!({
             "type": "object",
             "properties": {
@@ -219,6 +239,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         description: "팀 리더에게 작업 결과를 보고합니다 (팀 멤버 전용)".into(),
         category: "orchestration".into(),
         default_tier: "auto".into(),
+        default_enabled: false,
         parameters: serde_json::json!({
             "type": "object",
             "properties": {
