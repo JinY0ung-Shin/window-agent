@@ -31,6 +31,9 @@ dist-ssr
 # Bundled Node.js binary
 browser-sidecar/node.exe
 
+# Playwright bundled browsers (downloaded at build time, ~200MB+)
+browser-sidecar/playwright-browsers/
+
 # Rust/Cargo build output
 target/
 

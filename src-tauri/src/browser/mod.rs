@@ -113,9 +113,16 @@ impl BrowserManager {
 
         let node_path = resolve_node_executable(self.app_handle.as_ref())?;
 
+        // Resolve browser paths:
+        // - Primary: bundled Chromium in Tauri resources (release builds)
+        // - Fallback: writable app_data_dir (for runtime download)
+        let browsers_path = self.resolve_browsers_path();
+        let fallback_path = self.app_data_dir.join("playwright-browsers");
+
         let mut cmd = Command::new(&node_path);
         cmd.arg(&script_path)
-            .env("PLAYWRIGHT_BROWSERS_PATH", self.app_data_dir.join("playwright-browsers"))
+            .env("PLAYWRIGHT_BROWSERS_PATH", &browsers_path)
+            .env("PLAYWRIGHT_BROWSERS_PATH_FALLBACK", &fallback_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
 
@@ -175,6 +182,30 @@ impl BrowserManager {
         Err("sidecar health check failed after startup".to_string())
     }
 
+    /// Resolve the Playwright browsers directory.
+    /// Release: bundled within Tauri resources (read-only).
+    /// Dev/fallback: app_data_dir/playwright-browsers (writable, for runtime download).
+    fn resolve_browsers_path(&self) -> PathBuf {
+        if let Some(ref handle) = self.app_handle {
+            if let Ok(path) = handle
+                .path()
+                .resolve("../browser-sidecar/playwright-browsers", tauri::path::BaseDirectory::Resource)
+            {
+                if path.is_dir() {
+                    // Check for actual Chromium payload (chromium-* subdirectory)
+                    let has_chromium = std::fs::read_dir(&path)
+                        .map(|entries| entries.filter_map(|e| e.ok())
+                            .any(|e| e.file_name().to_string_lossy().starts_with("chromium-")))
+                        .unwrap_or(false);
+                    if has_chromium {
+                        return path;
+                    }
+                }
+            }
+        }
+        self.app_data_dir.join("playwright-browsers")
+    }
+
     /// Send command to sidecar
     pub(crate) async fn send_command(
         &self,
@@ -195,7 +226,7 @@ impl BrowserManager {
             .client
             .post(&url)
             .json(&body)
-            .timeout(std::time::Duration::from_secs(60))
+            .timeout(std::time::Duration::from_secs(360)) // Allow time for first-run Chromium download
             .send()
             .await
             .map_err(|e| format!("sidecar request failed: {}", e))?;

@@ -1,5 +1,7 @@
 const http = require('node:http');
+const fs = require('node:fs');
 const { chromium } = require('playwright');
+const { execFileSync } = require('node:child_process');
 
 // --- State ---
 let browser = null;
@@ -179,16 +181,55 @@ module.exports = { generateSnapshot, buildResponse, buildSelector, buildTreeFrom
 
 // --- Browser Management ---
 
+const LAUNCH_ARGS = ['--no-first-run', '--no-default-browser-check'];
+
 async function ensureBrowser() {
   if (!browser) {
-    browser = await chromium.launch({
-      channel: 'chrome',
-      headless: false,
-      args: ['--no-first-run', '--no-default-browser-check'],
-    });
-    log('Browser launched');
+    try {
+      // 1st: Playwright bundled/downloaded Chromium
+      browser = await chromium.launch({ headless: false, args: LAUNCH_ARGS });
+      log('Browser launched (Playwright Chromium)');
+    } catch (err1) {
+      log(`Playwright Chromium unavailable: ${err1.message}`);
+      try {
+        // 2nd: System Chrome fallback
+        browser = await chromium.launch({ channel: 'chrome', headless: false, args: LAUNCH_ARGS });
+        log('Browser launched (system Chrome)');
+      } catch (err2) {
+        log(`System Chrome also unavailable: ${err2.message}`);
+        // 3rd: Runtime download as last resort
+        await installChromiumRuntime();
+        browser = await chromium.launch({ headless: false, args: LAUNCH_ARGS });
+        log('Browser launched (freshly installed Chromium)');
+      }
+    }
   }
   return browser;
+}
+
+/**
+ * Download Chromium at runtime via Playwright CLI.
+ * Emits CHROMIUM_INSTALL_START/DONE/FAILED to stdout for the Rust host to parse.
+ */
+async function installChromiumRuntime() {
+  const playwrightCli = require('path').join(__dirname, 'node_modules', 'playwright', 'cli.js');
+  const fallbackPath = process.env.PLAYWRIGHT_BROWSERS_PATH_FALLBACK
+    || process.env.PLAYWRIGHT_BROWSERS_PATH;
+
+  process.stdout.write('CHROMIUM_INSTALL_START\n');
+  try {
+    execFileSync(process.execPath, [playwrightCli, 'install', 'chromium'], {
+      stdio: ['pipe', 'pipe', 'inherit'],
+      env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: fallbackPath },
+      timeout: 300000, // 5 min
+    });
+    // Point Playwright to the freshly downloaded browsers
+    process.env.PLAYWRIGHT_BROWSERS_PATH = fallbackPath;
+    process.stdout.write('CHROMIUM_INSTALL_DONE\n');
+  } catch (err) {
+    process.stdout.write(`CHROMIUM_INSTALL_FAILED=${err.message}\n`);
+    throw err;
+  }
 }
 
 function getSession(sessionId) {
@@ -417,13 +458,15 @@ const server = http.createServer(async (req, res) => {
 
 // Only start server when run directly (not when required for tests)
 if (require.main === module) {
-  (async () => {
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port;
-      process.stdout.write(`SIDECAR_PORT=${port}\n`);
-      log(`Listening on 127.0.0.1:${port}`);
-    });
-  })();
+  // Chromium availability is checked lazily in ensureBrowser() with a
+  // 3-stage fallback (bundled → system Chrome → runtime download).
+  // No pre-flight download here to avoid penalizing machines that already
+  // have Chrome installed.
+  server.listen(0, '127.0.0.1', () => {
+    const port = server.address().port;
+    process.stdout.write(`SIDECAR_PORT=${port}\n`);
+    log(`Listening on 127.0.0.1:${port}`);
+  });
 
   // Graceful shutdown (outside async IIFE)
   process.on('SIGTERM', async () => {

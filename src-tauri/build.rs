@@ -16,5 +16,16 @@ fn main() {
             .expect("Failed to create node.exe placeholder for Tauri resource validation");
     }
 
+    // Ensure browser-sidecar/playwright-browsers/ exists with at least one file
+    // so the Tauri resource glob (**/*) does not fail on dev/fresh builds.
+    // On release builds, prepare-chromium.sh populates this with real Chromium.
+    let pw_browsers = Path::new(&manifest_dir).join("../browser-sidecar/playwright-browsers");
+    if !pw_browsers.exists() || std::fs::read_dir(&pw_browsers).map(|mut d| d.next().is_none()).unwrap_or(true) {
+        std::fs::create_dir_all(&pw_browsers)
+            .expect("Failed to create playwright-browsers placeholder dir");
+        std::fs::write(pw_browsers.join(".gitkeep"), "")
+            .expect("Failed to create playwright-browsers placeholder file");
+    }
+
     tauri_build::build()
 }

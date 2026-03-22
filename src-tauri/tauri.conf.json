@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run prepare:chromium && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -29,7 +29,8 @@
       "../browser-sidecar/server.js",
       "../browser-sidecar/package.json",
       "../browser-sidecar/node_modules/**/*",
-      "../browser-sidecar/node.exe"
+      "../browser-sidecar/node.exe",
+      "../browser-sidecar/playwright-browsers/**/*"
     ],
     "icon": [
       "icons/32x32.png",
