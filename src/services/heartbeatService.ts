@@ -12,9 +12,8 @@
  */
 
 import { emitLifecycleEvent, onLifecycleEvent } from "./lifecycleEvents";
-import { vaultListNotesWithDecay } from "./commands/vaultCommands";
+import { vaultListNotesWithDecay, vaultArchiveNote } from "./commands/vaultCommands";
 import { readAgentFile } from "./tauriCommands";
-import { invoke } from "@tauri-apps/api/core";
 import { logger } from "./logger";
 
 // ── Types ────────────────────────────────────────────
@@ -85,7 +84,7 @@ async function runHeartbeat(agentId: string, folderName: string): Promise<void> 
     );
     for (const note of archiveCandidates) {
       try {
-        await invoke("vault_archive_note", { noteId: note.id, agentId });
+        await vaultArchiveNote(note.id, agentId);
       } catch (e) {
         logger.debug(`[heartbeat] Archive note ${note.id} failed`, e);
       }

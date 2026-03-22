@@ -1,23 +1,8 @@
-import type { ToolCall } from "../../services/types";
+import type { ToolCall, ToolCallStatus, BrowserResult } from "../../services/types";
 import { i18n } from "../../i18n";
 
-export type ToolCallStatus =
-  | "pending"
-  | "approved"
-  | "running"
-  | "executed"
-  | "denied"
-  | "error"
-  | "incomplete";
-
-export interface BrowserResult {
-  url?: string;
-  title?: string;
-  snapshot?: string;
-  elementCount?: number;
-  artifact_id?: string;
-  screenshot_path?: string;
-}
+// Re-export for backward compatibility
+export type { ToolCallStatus, BrowserResult };
 
 const SUMMARY_TRUNCATE = 80;
 const PREVIEW_TRUNCATE = 120;

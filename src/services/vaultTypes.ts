@@ -113,3 +113,11 @@ export interface IndexStats {
   totalLinks: number;
   brokenLinks: number;
 }
+
+// ── Decay types ─────────────────────────────────────
+
+export interface VaultNoteSummaryWithDecay extends VaultNoteSummary {
+  effectiveConfidence: number;
+  ageDays: number;
+  isStale: boolean;
+}

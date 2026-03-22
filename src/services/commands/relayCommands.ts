@@ -1,48 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { ContactRow, PeerThreadRow, PeerMessageRow } from "../types";
 
-// ── Types ──
-
-export interface ContactRow {
-  id: string;
-  peer_id: string;
-  public_key: string;
-  display_name: string;
-  agent_name: string;
-  agent_description: string;
-  local_agent_id: string | null;
-  mode: string;
-  capabilities_json: string;
-  status: string;
-  invite_card_raw: string | null;
-  addresses_json: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PeerThreadRow {
-  id: string;
-  contact_id: string;
-  local_agent_id: string | null;
-  title: string;
-  summary: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PeerMessageRow {
-  id: string;
-  thread_id: string;
-  message_id_unique: string;
-  correlation_id: string | null;
-  direction: string;
-  sender_agent: string;
-  content: string;
-  approval_state: string;
-  delivery_state: string;
-  retry_count: number;
-  raw_envelope: string | null;
-  created_at: string;
-}
+// Re-export for backward compatibility
+export type { ContactRow, PeerThreadRow, PeerMessageRow };
 
 // ── Lifecycle ──
 

@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   VaultNote,
   VaultNoteSummary,
+  VaultNoteSummaryWithDecay,
   GraphData,
   SearchResult,
   LinkRef,
@@ -9,6 +10,9 @@ import type {
   NoteUpdates,
   IndexStats,
 } from "../vaultTypes";
+
+// Re-export for backward compatibility
+export type { VaultNoteSummaryWithDecay };
 
 // ── CRUD ─────────────────────────────────────────────
 
@@ -92,13 +96,13 @@ export async function vaultRebuildIndex(): Promise<IndexStats> {
   return invoke("vault_rebuild_index");
 }
 
-// ── Decay (compute-on-read) ─────────────────────────
+// ── Archive ─────────────────────────────────────────
 
-export interface VaultNoteSummaryWithDecay extends VaultNoteSummary {
-  effectiveConfidence: number;
-  ageDays: number;
-  isStale: boolean;
+export async function vaultArchiveNote(noteId: string, agentId: string): Promise<void> {
+  return invoke("vault_archive_note", { noteId, agentId });
 }
+
+// ── Decay (compute-on-read) ─────────────────────────
 
 export async function vaultListNotesWithDecay(
   agentId: string | null,
