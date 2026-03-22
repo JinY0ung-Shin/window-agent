@@ -14,6 +14,7 @@ use api::{ApiState, RunRegistry};
 use commands::vault_commands::VaultState;
 use db::Database;
 use memory::SystemMemoryManager;
+use services::cron_scheduler::CronScheduler;
 use services::team_orchestrator::TeamOrchestrator;
 use tauri::Manager;
 use vault::VaultManager;
@@ -115,6 +116,13 @@ pub fn run() {
                     tracing::info!(recovered, "Recovered stale team run(s) on startup");
                 }
             }
+
+            // Initialize CronScheduler
+            app.manage(CronScheduler::new());
+            let scheduler_app = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                CronScheduler::run(scheduler_app).await;
+            });
 
             let browser_manager = browser::BrowserManager::new(app_dir.clone(), Some(app.handle().clone()));
             let bm_clone = browser_manager.clone();
@@ -252,6 +260,15 @@ pub fn run() {
             commands::abort_team_run,
             commands::execute_delegation,
             commands::handle_team_report,
+            // Cron commands
+            commands::create_cron_job,
+            commands::list_cron_jobs,
+            commands::list_cron_jobs_for_agent,
+            commands::get_cron_job,
+            commands::update_cron_job,
+            commands::delete_cron_job,
+            commands::toggle_cron_job,
+            commands::list_cron_runs,
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {

@@ -2,6 +2,7 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { useConversationStore } from "../stores/conversationStore";
 import { useAgentStore } from "../stores/agentStore";
 import { useTeamStore } from "../stores/teamStore";
+import { useCronStore } from "../stores/cronStore";
 import * as cmds from "./tauriCommands";
 import { refreshDefaultManagerPersona } from "./commands/agentCommands";
 import { emitLifecycleEvent } from "./lifecycleEvents";
@@ -80,6 +81,14 @@ export async function initializeApp(): Promise<void> {
     await useTeamStore.getState().loadTeams();
   } catch (e) {
     logger.warn("loadTeams:", e);
+  }
+
+  // Step 6c: Load cron jobs + setup event listeners
+  try {
+    await useCronStore.getState().loadJobs();
+    await useCronStore.getState().setupListeners();
+  } catch (e) {
+    logger.warn("loadCronJobs:", e);
   }
 
   // Step 7: Auto-initialize branding for upgraded users.

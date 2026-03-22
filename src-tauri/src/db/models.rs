@@ -366,3 +366,168 @@ pub struct TeamTask {
     pub started_at: Option<String>,
     pub finished_at: Option<String>,
 }
+
+// ── Cron models ──────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CronScheduleType {
+    At,
+    Every,
+    Cron,
+}
+
+impl fmt::Display for CronScheduleType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::At => write!(f, "at"),
+            Self::Every => write!(f, "every"),
+            Self::Cron => write!(f, "cron"),
+        }
+    }
+}
+
+impl FromStr for CronScheduleType {
+    type Err = ParseStatusError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "at" => Ok(Self::At),
+            "every" => Ok(Self::Every),
+            "cron" => Ok(Self::Cron),
+            other => Err(ParseStatusError(other.to_string())),
+        }
+    }
+}
+
+impl Serialize for CronScheduleType {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for CronScheduleType {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl rusqlite::types::FromSql for CronScheduleType {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        let s = value.as_str()?;
+        s.parse()
+            .map_err(|e| rusqlite::types::FromSqlError::Other(Box::new(e)))
+    }
+}
+
+impl rusqlite::types::ToSql for CronScheduleType {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(rusqlite::types::ToSqlOutput::from(self.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CronRunResult {
+    Success,
+    Failed,
+}
+
+impl fmt::Display for CronRunResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Success => write!(f, "success"),
+            Self::Failed => write!(f, "failed"),
+        }
+    }
+}
+
+impl FromStr for CronRunResult {
+    type Err = ParseStatusError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "success" => Ok(Self::Success),
+            "failed" => Ok(Self::Failed),
+            other => Err(ParseStatusError(other.to_string())),
+        }
+    }
+}
+
+impl Serialize for CronRunResult {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for CronRunResult {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl rusqlite::types::FromSql for CronRunResult {
+    fn column_result(value: rusqlite::types::ValueRef<'_>) -> rusqlite::types::FromSqlResult<Self> {
+        let s = value.as_str()?;
+        s.parse()
+            .map_err(|e| rusqlite::types::FromSqlError::Other(Box::new(e)))
+    }
+}
+
+impl rusqlite::types::ToSql for CronRunResult {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        Ok(rusqlite::types::ToSqlOutput::from(self.to_string()))
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CronJob {
+    pub id: String,
+    pub agent_id: String,
+    pub name: String,
+    pub description: String,
+    pub schedule_type: CronScheduleType,
+    pub schedule_value: String,
+    pub prompt: String,
+    pub enabled: bool,
+    pub last_run_at: Option<String>,
+    pub next_run_at: Option<String>,
+    pub last_result: Option<CronRunResult>,
+    pub last_error: Option<String>,
+    pub run_count: i64,
+    pub claimed_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CronRun {
+    pub id: String,
+    pub job_id: String,
+    pub agent_id: String,
+    pub status: String,
+    pub prompt: String,
+    pub result_summary: Option<String>,
+    pub error: Option<String>,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateCronJobRequest {
+    pub agent_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub schedule_type: CronScheduleType,
+    pub schedule_value: String,
+    pub prompt: String,
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCronJobRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub schedule_type: Option<CronScheduleType>,
+    pub schedule_value: Option<String>,
+    pub prompt: Option<String>,
+    pub enabled: Option<bool>,
+}

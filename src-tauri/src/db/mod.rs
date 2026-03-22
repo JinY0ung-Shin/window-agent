@@ -1,4 +1,5 @@
 pub mod agent_operations;
+pub mod cron_operations;
 pub mod error;
 pub mod migrations;
 pub mod models;

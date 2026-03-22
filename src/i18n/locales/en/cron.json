@@ -1,0 +1,59 @@
+{
+  "title": "Schedules",
+  "newJob": "New Job",
+  "editJob": "Edit Job",
+  "createJob": "Create Job",
+  "noJobs": "No scheduled jobs yet. Create one to get started.",
+  "deleteConfirm": "Delete this job?",
+  "save": "Save",
+  "cancel": "Cancel",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "jobName": "Name",
+  "jobNamePlaceholder": "Enter job name",
+  "description": "Description",
+  "descriptionPlaceholder": "What does this job do?",
+  "agent": "Agent",
+  "selectAgent": "Select an agent",
+  "scheduleType": "Schedule Type",
+  "scheduleValue": "Schedule",
+  "prompt": "Prompt",
+  "promptPlaceholder": "Enter the prompt for this job...",
+  "types": {
+    "at": "One-time",
+    "every": "Interval",
+    "cron": "Cron Expression"
+  },
+  "units": {
+    "seconds": "seconds",
+    "minutes": "minutes",
+    "hours": "hours",
+    "days": "days"
+  },
+  "everyPrefix": "Every",
+  "cronPlaceholder": "0 9 * * 1-5",
+  "validation": {
+    "nameRequired": "Name is required",
+    "agentRequired": "Agent is required",
+    "promptRequired": "Prompt is required",
+    "scheduleRequired": "Schedule value is required",
+    "invalidCron": "Invalid cron expression",
+    "pastTimestamp": "Timestamp must be in the future",
+    "minInterval": "Minimum interval is 60 seconds"
+  },
+  "status": {
+    "running": "Running",
+    "success": "Success",
+    "failed": "Failed",
+    "idle": "Idle"
+  },
+  "nextRun": "Next run",
+  "lastRun": "Last run",
+  "runCount": "{{count}} runs",
+  "runHistory": "Run History",
+  "noRuns": "No runs yet",
+  "runResult": "Result",
+  "runError": "Error",
+  "runStarted": "Started",
+  "runFinished": "Finished"
+}

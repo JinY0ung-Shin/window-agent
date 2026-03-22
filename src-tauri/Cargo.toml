@@ -53,6 +53,7 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+cron = "0.12"
 
 [dev-dependencies]
 tempfile = "3"

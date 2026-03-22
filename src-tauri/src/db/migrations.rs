@@ -330,6 +330,90 @@ fn run_incremental_migrations(conn: &Connection) -> Result<(), rusqlite::Error> 
         )?;
     }
 
+    // ── Cron tables ─────────────────────────────────────────
+    let has_cron_jobs: bool = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='cron_jobs'")?
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            Ok(name)
+        })?
+        .filter_map(|r| r.ok())
+        .any(|_| true);
+
+    if !has_cron_jobs {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS cron_jobs (
+                id              TEXT PRIMARY KEY,
+                agent_id        TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+                name            TEXT NOT NULL,
+                description     TEXT NOT NULL DEFAULT '',
+                schedule_type   TEXT NOT NULL CHECK(schedule_type IN ('at','every','cron')),
+                schedule_value  TEXT NOT NULL,
+                prompt          TEXT NOT NULL,
+                enabled         INTEGER NOT NULL DEFAULT 1,
+                last_run_at     TEXT,
+                next_run_at     TEXT,
+                last_result     TEXT CHECK(last_result IN ('success','failed') OR last_result IS NULL),
+                last_error      TEXT,
+                run_count       INTEGER NOT NULL DEFAULT 0,
+                claimed_at      TEXT,
+                created_at      TEXT NOT NULL,
+                updated_at      TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_cron_jobs_agent ON cron_jobs(agent_id);
+            CREATE INDEX IF NOT EXISTS idx_cron_jobs_enabled ON cron_jobs(enabled);
+            CREATE INDEX IF NOT EXISTS idx_cron_jobs_next_run ON cron_jobs(next_run_at);
+            ",
+        )?;
+    }
+
+    let has_cron_runs: bool = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='cron_runs'")?
+        .query_map([], |row| {
+            let name: String = row.get(0)?;
+            Ok(name)
+        })?
+        .filter_map(|r| r.ok())
+        .any(|_| true);
+
+    if !has_cron_runs {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS cron_runs (
+                id              TEXT PRIMARY KEY,
+                job_id          TEXT NOT NULL REFERENCES cron_jobs(id) ON DELETE CASCADE,
+                agent_id        TEXT NOT NULL,
+                status          TEXT NOT NULL CHECK(status IN ('running','success','failed')) DEFAULT 'running',
+                prompt          TEXT NOT NULL,
+                result_summary  TEXT,
+                error           TEXT,
+                started_at      TEXT NOT NULL,
+                finished_at     TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_cron_runs_job ON cron_runs(job_id);
+            ",
+        )?;
+    }
+
+    // ── Ensure claimed_at column exists on cron_jobs (upgrade path) ──
+    if has_cron_jobs {
+        let cj_columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(cron_jobs)")?
+            .query_map([], |row| {
+                let name: String = row.get(1)?;
+                Ok(name)
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !cj_columns.contains(&"claimed_at".to_string()) {
+            conn.execute_batch(
+                "ALTER TABLE cron_jobs ADD COLUMN claimed_at TEXT;"
+            )?;
+        }
+    }
+
     Ok(())
 }
 

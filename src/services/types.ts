@@ -250,3 +250,57 @@ export interface SkillContent {
   raw_content: string;
   resource_files: string[];
 }
+
+// ── Cron types ──────────────────────────────────────
+export type CronScheduleType = 'at' | 'every' | 'cron';
+export type CronRunResult = 'success' | 'failed';
+
+export interface CronJob {
+  id: string;
+  agent_id: string;
+  name: string;
+  description: string;
+  schedule_type: CronScheduleType;
+  schedule_value: string;
+  prompt: string;
+  enabled: boolean;
+  last_run_at: string | null;
+  next_run_at: string | null;
+  last_result: CronRunResult | null;
+  last_error: string | null;
+  run_count: number;
+  claimed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CronRun {
+  id: string;
+  job_id: string;
+  agent_id: string;
+  status: 'running' | 'success' | 'failed';
+  prompt: string;
+  result_summary: string | null;
+  error: string | null;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface CreateCronJobRequest {
+  agent_id: string;
+  name: string;
+  description?: string;
+  schedule_type: CronScheduleType;
+  schedule_value: string;
+  prompt: string;
+  enabled?: boolean;
+}
+
+export interface UpdateCronJobRequest {
+  name?: string;
+  description?: string;
+  schedule_type?: CronScheduleType;
+  schedule_value?: string;
+  prompt?: string;
+  enabled?: boolean;
+}

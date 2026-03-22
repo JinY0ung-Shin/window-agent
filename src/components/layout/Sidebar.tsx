@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Bot, Check, Eraser, Network, Plus, Settings, Users, X } from "lucide-react";
+import { BookOpen, Bot, Check, Clock, Eraser, Network, Plus, Settings, Users, X } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useTeamStore } from "../../stores/teamStore";
+import { useCronStore } from "../../stores/cronStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useNavigationStore } from "../../stores/navigationStore";
@@ -21,9 +22,11 @@ export default function Sidebar() {
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
   const teams = useTeamStore((s) => s.teams);
+  const cronJobs = useCronStore((s) => s.jobs);
   const { mainView, toggleView, setMainView } = useNavigationStore();
   const { t } = useTranslation("glossary");
   const tt = useTranslation("team").t;
+  const tc = useTranslation("cron").t;
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const companyName = useSettingsStore((s) => s.companyName);
   const onDrag = useDragRegion();
@@ -197,6 +200,16 @@ export default function Sidebar() {
           <span>{tt("title")}</span>
           {teams.length > 0 && (
             <span className="sidebar-badge">{teams.length}</span>
+          )}
+        </div>
+        <div
+          className={`menu-item ${mainView === "cron" ? "active" : ""}`}
+          onClick={() => toggleView("cron")}
+        >
+          <Clock size={20} />
+          <span>{tc("title")}</span>
+          {cronJobs.length > 0 && (
+            <span className="sidebar-badge">{cronJobs.length}</span>
           )}
         </div>
         <div

@@ -1,0 +1,59 @@
+{
+  "title": "스케줄",
+  "newJob": "새 작업",
+  "editJob": "작업 편집",
+  "createJob": "작업 만들기",
+  "noJobs": "아직 예약된 작업이 없습니다. 새 작업을 만들어 보세요.",
+  "deleteConfirm": "이 작업을 삭제할까요?",
+  "save": "저장",
+  "cancel": "취소",
+  "enabled": "활성",
+  "disabled": "비활성",
+  "jobName": "이름",
+  "jobNamePlaceholder": "작업 이름을 입력하세요",
+  "description": "설명",
+  "descriptionPlaceholder": "이 작업은 무엇을 하나요?",
+  "agent": "에이전트",
+  "selectAgent": "에이전트를 선택하세요",
+  "scheduleType": "스케줄 유형",
+  "scheduleValue": "스케줄",
+  "prompt": "프롬프트",
+  "promptPlaceholder": "이 작업의 프롬프트를 입력하세요...",
+  "types": {
+    "at": "일회성",
+    "every": "반복",
+    "cron": "Cron 표현식"
+  },
+  "units": {
+    "seconds": "초",
+    "minutes": "분",
+    "hours": "시간",
+    "days": "일"
+  },
+  "everyPrefix": "매",
+  "cronPlaceholder": "0 9 * * 1-5",
+  "validation": {
+    "nameRequired": "이름을 입력하세요",
+    "agentRequired": "에이전트를 선택하세요",
+    "promptRequired": "프롬프트를 입력하세요",
+    "scheduleRequired": "스케줄 값을 입력하세요",
+    "invalidCron": "유효하지 않은 cron 표현식입니다",
+    "pastTimestamp": "미래 시간을 선택하세요",
+    "minInterval": "최소 간격은 60초입니다"
+  },
+  "status": {
+    "running": "실행 중",
+    "success": "성공",
+    "failed": "실패",
+    "idle": "대기"
+  },
+  "nextRun": "다음 실행",
+  "lastRun": "마지막 실행",
+  "runCount": "{{count}}회 실행",
+  "runHistory": "실행 이력",
+  "noRuns": "아직 실행 이력이 없습니다",
+  "runResult": "결과",
+  "runError": "오류",
+  "runStarted": "시작",
+  "runFinished": "완료"
+}

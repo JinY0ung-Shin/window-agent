@@ -10,5 +10,6 @@
 @import './styles/vault.css';
 @import './styles/network.css';
 @import './styles/team.css';
+@import './styles/cron.css';
 @import './styles/onboarding.css';
 @import './styles/debug.css';

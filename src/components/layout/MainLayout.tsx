@@ -10,6 +10,7 @@ import NetworkPanel from "../network/NetworkPanel";
 import VaultPanel from "../vault/VaultPanel";
 import TeamPanel from "../team/TeamPanel";
 import TeamChatWindow from "../team/TeamChatWindow";
+import CronPanel from "../cron/CronPanel";
 
 import { useDebugStore } from "../../stores/debugStore";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -87,6 +88,8 @@ export default function MainLayout() {
         ) : (
           <TeamPanel />
         )
+      ) : mainView === "cron" ? (
+        <CronPanel />
       ) : mainView === "vault" ? (
         <VaultPanel />
       ) : mainView === "network" ? (
