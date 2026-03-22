@@ -137,10 +137,12 @@
 /* ── Main Area ── */
 .main-area {
   flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background-color: var(--bg-color);
   position: relative;
+  overflow: hidden;
 }
 
 /* ── Chat Header ── */
