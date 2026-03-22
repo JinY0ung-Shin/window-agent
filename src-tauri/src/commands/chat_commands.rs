@@ -1,11 +1,10 @@
 use crate::commands::vault_commands::VaultState;
-use crate::db::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, Message, SaveMessageRequest, ToolCallLog};
+use crate::db::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, Message, PendingConsolidation, SaveMessageRequest, ToolCallLog};
 use crate::db::operations;
 use crate::db::Database;
 use crate::error::AppError;
 use crate::memory::SystemMemoryManager;
 use crate::vault::strip_title_heading;
-use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -258,43 +257,11 @@ pub fn read_consolidated_memory(
     memory.read_consolidated(&agent_id)
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct PendingConsolidation {
-    pub conversation_id: String,
-    pub agent_id: String,
-}
-
 #[tauri::command]
 pub fn list_pending_consolidations(
     db: State<'_, Database>,
 ) -> Result<Vec<PendingConsolidation>, AppError> {
-    db.with_conn(|conn| {
-        let mut stmt = conn
-            .prepare(
-                "SELECT c.id, c.agent_id
-                 FROM conversations c
-                 WHERE (c.digest_id IS NULL OR c.consolidated_at IS NULL)
-                   AND (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) >= 3
-                 ORDER BY c.updated_at DESC",
-            )
-            .map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))?;
-
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(PendingConsolidation {
-                    conversation_id: row.get(0)?,
-                    agent_id: row.get(1)?,
-                })
-            })
-            .map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))?;
-
-        let mut result = Vec::new();
-        for row in rows {
-            result.push(row.map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))?);
-        }
-        Ok(result)
-    })
-    .map_err(AppError::from)
+    Ok(operations::list_pending_consolidations_impl(&db)?)
 }
 
 #[tauri::command]

@@ -44,7 +44,6 @@ impl From<DbError> for AppError {
     fn from(e: DbError) -> Self {
         match e {
             DbError::Sqlite(msg) => AppError::Database(msg),
-            DbError::Lock => AppError::Database("database lock error".to_string()),
         }
     }
 }
@@ -145,6 +144,16 @@ mod tests {
         let db_err = DbError::Sqlite("constraint".into());
         let app_err: AppError = db_err.into();
         assert!(matches!(app_err, AppError::Database(_)));
+    }
+
+    #[test]
+    fn test_from_db_lock_error() {
+        let db_err = DbError::lock();
+        let app_err: AppError = db_err.into();
+        match app_err {
+            AppError::Database(msg) => assert!(msg.contains("lock"), "expected lock in message, got: {msg}"),
+            other => panic!("expected Database variant, got: {other:?}"),
+        }
     }
 
     #[test]

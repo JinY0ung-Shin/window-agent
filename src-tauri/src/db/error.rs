@@ -5,9 +5,13 @@ use thiserror::Error;
 pub enum DbError {
     #[error("Database error: {0}")]
     Sqlite(String),
+}
 
-    #[error("Lock error")]
-    Lock,
+impl DbError {
+    /// Create a lock-acquisition error (convenience for Mutex poisoning).
+    pub fn lock() -> Self {
+        DbError::Sqlite("database lock poisoned".to_string())
+    }
 }
 
 impl From<rusqlite::Error> for DbError {

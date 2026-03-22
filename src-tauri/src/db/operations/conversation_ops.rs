@@ -1,5 +1,5 @@
 use super::super::error::DbError;
-use super::super::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult};
+use super::super::models::{ConversationDetail, ConversationListItem, DeleteMessagesResult, PendingConsolidation};
 use super::super::Database;
 use super::with_transaction;
 use chrono::Utc;
@@ -277,6 +277,31 @@ pub fn update_conversation_consolidated_at_impl(
             rusqlite::params![consolidated_at, id],
         )?;
         Ok(())
+    })
+}
+
+// ── Pending Consolidations ──
+
+pub fn list_pending_consolidations_impl(
+    db: &Database,
+) -> Result<Vec<PendingConsolidation>, DbError> {
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT c.id, c.agent_id
+             FROM conversations c
+             WHERE (c.digest_id IS NULL OR c.consolidated_at IS NULL)
+               AND (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id) >= 3
+             ORDER BY c.updated_at DESC",
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok(PendingConsolidation {
+                conversation_id: row.get(0)?,
+                agent_id: row.get(1)?,
+            })
+        })?;
+
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
 

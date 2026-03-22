@@ -235,6 +235,12 @@ pub struct DeleteMessagesResult {
     pub summary_was_reset: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct PendingConsolidation {
+    pub conversation_id: String,
+    pub agent_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Message {
     pub id: String,

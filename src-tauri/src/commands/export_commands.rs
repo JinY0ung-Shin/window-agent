@@ -338,75 +338,25 @@ pub fn import_agent(
         }
     }
 
-    // 6. Execute import in a single transaction
-    let mut conn = db.conn.lock().map_err(|_| AppError::Database("DB lock failed".to_string()))?;
-    let mut tx = conn.savepoint().map_err(|e| AppError::Database(format!("Transaction start failed: {e}")))?;
-
+    // 6. Execute import in a single transaction via operations layer
     let now = chrono::Utc::now().to_rfc3339();
 
-    // Insert agent
-    tx.execute(
-        "INSERT INTO agents (id, folder_name, name, avatar, description, model, temperature, thinking_enabled, thinking_budget, is_default, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-        rusqlite::params![
-            new_agent_id,
-            new_folder,
-            old_agent.name,
-            old_agent.avatar,
-            old_agent.description,
-            old_agent.model,
-            old_agent.temperature,
-            old_agent.thinking_enabled,
-            old_agent.thinking_budget,
-            false, // never import as default
-            old_agent.sort_order,
-            now,
-            now,
-        ],
-    ).map_err(|e| AppError::Database(format!("Failed to insert agent: {e}")))?;
+    let db_result = crate::db::operations::import_ops::import_agent_to_db(
+        &db,
+        &new_agent_id,
+        &new_folder,
+        &old_agent,
+        &now,
+        &conversations,
+    )?;
 
-    let mut conversations_imported = 0usize;
-    let mut messages_imported = 0usize;
+    let conversations_imported = db_result.conversations_imported;
+    let messages_imported = db_result.messages_imported;
 
-    // Insert conversations and messages
-    for (conv_detail, msgs) in &conversations {
-        let new_conv_id = Uuid::new_v4().to_string();
-
-        let active_skills_json: Option<String> = conv_detail.active_skills
-            .as_ref()
-            .map(|skills| serde_json::to_string(skills).unwrap_or_default());
-        tx.execute(
-            "INSERT INTO conversations (id, title, agent_id, summary, summary_up_to_message_id, active_skills, learning_mode, digest_id, consolidated_at, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, NULL, ?5, ?6, NULL, NULL, ?7, ?8)",
-            rusqlite::params![
-                new_conv_id,
-                conv_detail.title,
-                new_agent_id,
-                conv_detail.summary,
-                active_skills_json,
-                conv_detail.learning_mode as i64,
-                conv_detail.created_at,
-                conv_detail.updated_at,
-            ],
-        ).map_err(|e| AppError::Database(format!("Failed to insert conversation: {e}")))?;
-        conversations_imported += 1;
-
-        for msg in msgs {
-            let new_msg_id = Uuid::new_v4().to_string();
-            tx.execute(
-                "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                rusqlite::params![
-                    new_msg_id,
-                    new_conv_id,
-                    msg.role,
-                    msg.content,
-                    msg.tool_call_id,
-                    msg.tool_name,
-                    msg.tool_input,
-                    msg.created_at,
-                ],
-            ).map_err(|e| AppError::Database(format!("Failed to insert message: {e}")))?;
-            messages_imported += 1;
-        }
-    }
+    // Helper closure: clean up DB on filesystem failure (FK cascades handle conversations/messages)
+    let cleanup_db = |db: &Database, agent_id: &str| {
+        let _ = crate::db::operations::import_ops::delete_imported_agent(db, agent_id);
+    };
 
     // Import memory notes — vault format or legacy
     // Track ALL vault files written for cleanup on failure
@@ -536,7 +486,7 @@ pub fn import_agent(
 
     if let Err(e) = std::fs::create_dir_all(&agents_dir) {
         for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
-        tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
+        cleanup_db(&db, &new_agent_id);
         return Err(AppError::Io(format!("Failed to create agent directory: {e}")));
     }
 
@@ -545,7 +495,7 @@ pub fn import_agent(
         if let Err(e) = std::fs::write(&path, content) {
             for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
             let _ = std::fs::remove_dir_all(&agents_dir);
-            tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
+            cleanup_db(&db, &new_agent_id);
             return Err(AppError::Io(format!("Failed to write {fname}: {e}")));
         }
     }
@@ -558,7 +508,7 @@ pub fn import_agent(
         if validate_zip_entry(relative).is_err() {
             for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
             let _ = std::fs::remove_dir_all(&agents_dir);
-            tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
+            cleanup_db(&db, &new_agent_id);
             return Err(AppError::Validation(format!("Invalid skill path in ZIP: {}", zip_path)));
         }
 
@@ -577,7 +527,7 @@ pub fn import_agent(
             if !canonical_target.starts_with(&canonical_skills) {
                 for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
                 let _ = std::fs::remove_dir_all(&agents_dir);
-                tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed: {re}")))?;
+                cleanup_db(&db, &new_agent_id);
                 return Err(AppError::Validation(format!("Skill path escapes agent directory: {}", zip_path)));
             }
         }
@@ -585,26 +535,17 @@ pub fn import_agent(
             if let Err(e) = std::fs::create_dir_all(parent) {
                 for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
                 let _ = std::fs::remove_dir_all(&agents_dir);
-                tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
+                cleanup_db(&db, &new_agent_id);
                 return Err(AppError::Io(format!("Failed to create skill dir: {e}")));
             }
         }
         if let Err(e) = std::fs::write(&target_path, content) {
             for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
             let _ = std::fs::remove_dir_all(&agents_dir);
-            tx.rollback().map_err(|re| AppError::Database(format!("Rollback failed after fs error: {re}")))?;
+            cleanup_db(&db, &new_agent_id);
             return Err(AppError::Io(format!("Failed to write skill file '{}': {e}", zip_path)));
         }
     }
-
-    // Only commit DB after all filesystem writes succeed
-    if let Err(e) = tx.commit() {
-        // DB commit failed — clean up vault files and filesystem
-        for vp in &imported_vault_paths { let _ = std::fs::remove_file(vp); }
-        let _ = std::fs::remove_dir_all(&agents_dir);
-        return Err(AppError::Database(format!("Transaction commit failed: {e}")));
-    }
-    drop(conn);
 
     // Rebuild vault index after import to pick up new files
     if has_vault_memory {

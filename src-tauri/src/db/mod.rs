@@ -64,7 +64,7 @@ impl Database {
     where
         F: FnOnce(&Connection) -> Result<T, DbError>,
     {
-        let conn = self.conn.lock().map_err(|_| DbError::Lock)?;
+        let conn = self.conn.lock().map_err(|_| DbError::lock())?;
         f(&conn)
     }
 }

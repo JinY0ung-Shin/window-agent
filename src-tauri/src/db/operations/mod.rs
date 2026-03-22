@@ -1,4 +1,5 @@
 mod conversation_ops;
+pub mod import_ops;
 mod message_ops;
 
 use super::error::DbError;
@@ -8,7 +9,7 @@ pub fn with_transaction<F, T>(db: &Database, f: F) -> Result<T, DbError>
 where
     F: FnOnce(&rusqlite::Transaction) -> Result<T, rusqlite::Error>,
 {
-    let mut conn = db.conn.lock().map_err(|_| DbError::Lock)?;
+    let mut conn = db.conn.lock().map_err(|_| DbError::lock())?;
     let tx = conn.transaction()?;
     let result = f(&tx)?;
     tx.commit()?;
