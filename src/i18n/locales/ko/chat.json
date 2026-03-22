@@ -49,6 +49,8 @@
   },
   "layout": {
     "toolLog": "도구 로그",
+    "chromiumInstalling": "Chromium 설치 중...",
+    "chromiumInstallingDesc": "최초 브라우저 설정입니다. 잠시만 기다려 주세요.",
     "chromiumFailed": "Chromium 설치 실패",
     "minimize": "최소화",
     "maximize": "최대화",

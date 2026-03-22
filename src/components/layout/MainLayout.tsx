@@ -147,10 +147,10 @@ export default function MainLayout() {
             ) : (
               <>
                 <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
-                  Installing Chromium...
+                  {t("layout.chromiumInstalling")}
                 </div>
                 <div style={{ fontSize: '13px', opacity: 0.7 }}>
-                  First-time browser setup. This may take a moment.
+                  {t("layout.chromiumInstallingDesc")}
                 </div>
               </>
             )}

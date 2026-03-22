@@ -36,6 +36,12 @@
     "reflectionAlt": "Reflection"
   },
   "toolbar": {
+    "bold": "Bold (Ctrl+B)",
+    "italic": "Italic (Ctrl+I)",
+    "heading1": "Heading 1",
+    "heading2": "Heading 2",
+    "heading3": "Heading 3",
+    "wikilink": "Wikilink",
     "togglePreview": "Toggle Preview"
   },
   "note": {

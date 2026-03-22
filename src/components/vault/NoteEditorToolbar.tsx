@@ -21,22 +21,22 @@ export default function NoteEditorToolbar({
   const { t } = useTranslation("vault");
   return (
     <div className="vault-editor-toolbar">
-      <button type="button" className="icon-btn icon-btn-sm" title="Bold (Ctrl+B)" onClick={onBold}>
+      <button type="button" className="icon-btn icon-btn-sm" title={t("toolbar.bold")} onClick={onBold}>
         <Bold size={16} />
       </button>
-      <button type="button" className="icon-btn icon-btn-sm" title="Italic (Ctrl+I)" onClick={onItalic}>
+      <button type="button" className="icon-btn icon-btn-sm" title={t("toolbar.italic")} onClick={onItalic}>
         <Italic size={16} />
       </button>
-      <button type="button" className="icon-btn icon-btn-sm" title="Heading 1" onClick={() => onHeading(1)}>
+      <button type="button" className="icon-btn icon-btn-sm" title={t("toolbar.heading1")} onClick={() => onHeading(1)}>
         <Heading1 size={16} />
       </button>
-      <button type="button" className="icon-btn icon-btn-sm" title="Heading 2" onClick={() => onHeading(2)}>
+      <button type="button" className="icon-btn icon-btn-sm" title={t("toolbar.heading2")} onClick={() => onHeading(2)}>
         <Heading2 size={16} />
       </button>
-      <button type="button" className="icon-btn icon-btn-sm" title="Heading 3" onClick={() => onHeading(3)}>
+      <button type="button" className="icon-btn icon-btn-sm" title={t("toolbar.heading3")} onClick={() => onHeading(3)}>
         <Heading3 size={16} />
       </button>
-      <button type="button" className="icon-btn icon-btn-sm" title="Wikilink" onClick={onWikilink}>
+      <button type="button" className="icon-btn icon-btn-sm" title={t("toolbar.wikilink")} onClick={onWikilink}>
         <Link2 size={16} />
       </button>
 

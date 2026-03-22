@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { i18n } from "../../i18n";
 import { Clock, Plus, Trash2, Settings, Bot, ChevronDown, ChevronRight } from "lucide-react";
 import { useCronStore } from "../../stores/cronStore";
 import { useAgentStore } from "../../stores/agentStore";
@@ -12,7 +13,7 @@ import EmptyState from "../common/EmptyState";
 function formatSchedule(job: CronJob): string {
   switch (job.schedule_type) {
     case "at":
-      return new Date(job.schedule_value).toLocaleString();
+      return new Date(job.schedule_value).toLocaleString(i18n.language === "ko" ? "ko-KR" : "en-US");
     case "every": {
       const secs = parseInt(job.schedule_value, 10);
       if (secs >= 86400) return `${Math.floor(secs / 86400)}d`;
@@ -107,7 +108,7 @@ function JobCard({ job }: { job: CronJob }) {
       {job.next_run_at && (
         <div className="cron-card-schedule" style={{ fontSize: "0.75rem" }}>
           <span>{t("nextRun")}:</span>
-          <span>{new Date(job.next_run_at).toLocaleString()}</span>
+          <span>{new Date(job.next_run_at).toLocaleString(i18n.language === "ko" ? "ko-KR" : "en-US")}</span>
         </div>
       )}
 
@@ -126,7 +127,7 @@ function JobCard({ job }: { job: CronJob }) {
                   <div key={run.id} className="cron-run-item">
                     <span className={`cron-status-dot ${run.status}`} />
                     <span className="cron-run-time">
-                      {new Date(run.started_at).toLocaleString()}
+                      {new Date(run.started_at).toLocaleString(i18n.language === "ko" ? "ko-KR" : "en-US")}
                     </span>
                     <span className="cron-run-summary">
                       {run.error ?? run.result_summary ?? ""}
@@ -196,7 +197,7 @@ export default function CronPanel() {
               <div key={agentId} className="cron-agent-group">
                 <div className="cron-agent-group-header">
                   {agent?.avatar ? (
-                    <img src={agent.avatar} alt="" className="cron-agent-group-avatar" />
+                    <img src={agent.avatar} alt={agent.name} className="cron-agent-group-avatar" />
                   ) : (
                     <Bot size={18} />
                   )}

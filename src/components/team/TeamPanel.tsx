@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { i18n } from "../../i18n";
 import { Users, Plus, Trash2, Crown, Bot, Settings, MessageSquare } from "lucide-react";
 import { useTeamStore } from "../../stores/teamStore";
 import { useAgentStore } from "../../stores/agentStore";
@@ -148,7 +149,7 @@ export default function TeamPanel() {
                     <div className="team-card-leader">
                       <Crown size={14} />
                       {leaderAvatar ? (
-                        <img src={leaderAvatar} alt="" className="team-card-avatar" />
+                        <img src={leaderAvatar} alt={getAgentName(team.leader_agent_id)} className="team-card-avatar" />
                       ) : (
                         <Bot size={14} />
                       )}
@@ -179,7 +180,7 @@ export default function TeamPanel() {
                           <MessageSquare size={12} />
                           <span className="team-conv-title">{conv.title}</span>
                           <span className="team-conv-date">
-                            {new Date(conv.updated_at).toLocaleDateString()}
+                            {new Date(conv.updated_at).toLocaleDateString(i18n.language === "ko" ? "ko-KR" : "en-US")}
                           </span>
                         </div>
                       ))}

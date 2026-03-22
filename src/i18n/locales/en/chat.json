@@ -49,6 +49,8 @@
   },
   "layout": {
     "toolLog": "Tool Log",
+    "chromiumInstalling": "Installing Chromium...",
+    "chromiumInstallingDesc": "First-time browser setup. This may take a moment.",
     "chromiumFailed": "Chromium Installation Failed",
     "minimize": "Minimize",
     "maximize": "Maximize",

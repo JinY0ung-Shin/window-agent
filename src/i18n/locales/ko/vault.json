@@ -36,6 +36,12 @@
     "reflectionAlt": "성찰"
   },
   "toolbar": {
+    "bold": "굵게 (Ctrl+B)",
+    "italic": "기울임 (Ctrl+I)",
+    "heading1": "제목 1",
+    "heading2": "제목 2",
+    "heading3": "제목 3",
+    "wikilink": "위키링크",
     "togglePreview": "미리보기 토글"
   },
   "note": {
