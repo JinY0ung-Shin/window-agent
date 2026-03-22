@@ -1,4 +1,5 @@
 import { i18n } from "./i18n";
+import { toErrorMessage } from "./utils/errorUtils";
 
 // ── History & Conversation ──────────────────────────
 export const MAX_HISTORY_MESSAGES = 10;
@@ -30,7 +31,7 @@ const ERROR_KEY_MAP: Record<string, string> = {
 };
 
 export function parseErrorMessage(error: unknown): string {
-  const msg = error instanceof Error ? error.message : String(error);
+  const msg = toErrorMessage(error);
   const match = msg.match(/(HTTP_\d{3}|PARSE_ERROR|EMPTY_RESPONSE):(.*)/s);
   const prefix = match?.[1];
   const serverDetail = match?.[2]?.trim();

@@ -8,6 +8,7 @@ import { getNoProxy, setNoProxy } from "../../services/commands/apiCommands";
 import { relayGetRelayUrl, relaySetRelayUrl } from "../../services/commands/relayCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "../../constants";
 import { logger } from "../../services/logger";
+import { toErrorMessage } from "../../utils/errorUtils";
 
 export interface NetworkPanelValues {
   apiKey: string;
@@ -109,7 +110,7 @@ const NetworkSettingsPanel = forwardRef<NetworkSettingsPanelRef, Props>(
         });
         setHealthResult(result);
       } catch (e) {
-        setHealthError(e instanceof Error ? e.message : String(e));
+        setHealthError(toErrorMessage(e));
       } finally {
         setHealthLoading(false);
       }
@@ -358,7 +359,7 @@ const NetworkSettingsPanel = forwardRef<NetworkSettingsPanelRef, Props>(
                   await relaySetRelayUrl(val);
                   setRelaySaved(true);
                 } catch (e) {
-                  setRelayError(e instanceof Error ? e.message : String(e));
+                  setRelayError(toErrorMessage(e));
                 } finally {
                   setRelaySaving(false);
                 }

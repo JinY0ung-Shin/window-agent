@@ -13,6 +13,7 @@ import {
 import { i18n } from "../i18n";
 import { useSettingsStore } from "./settingsStore";
 import { logger } from "../services/logger";
+import { toErrorMessage } from "../utils/errorUtils";
 
 interface AgentState {
   agents: Agent[];
@@ -182,9 +183,8 @@ export const useAgentStore = create<AgentState>((set, get) => ({
         await writeToolConfig(folderName, toolConfig);
       }
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
       logger.error("Failed to save agent:", e);
-      set({ editorError: i18n.t("glossary:agentSaveFailed", { error: errorMsg, context: useSettingsStore.getState().uiTheme }) });
+      set({ editorError: i18n.t("glossary:agentSaveFailed", { error: toErrorMessage(e), context: useSettingsStore.getState().uiTheme }) });
       return;
     }
 

@@ -19,6 +19,7 @@ import {
   CONVERSATION_TITLE_MAX_LENGTH,
   parseErrorMessage,
 } from "../constants";
+import { toErrorMessage } from "../utils/errorUtils";
 import { i18n } from "../i18n";
 import {
   type StreamChunkEvent,
@@ -687,7 +688,7 @@ async function sendTeamMessageFlow() {
       messages: updateMessageInList(msg().messages, leaderMsgId, {
         content: parseErrorMessage(error),
         status: "failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       }),
     });
     stream().removeRun(teamRun.id);

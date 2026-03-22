@@ -17,6 +17,7 @@ import {
 import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
 import { readToolConfig } from "../services/nativeToolRegistry";
 import { DEFAULT_SYSTEM_PROMPT, parseErrorMessage } from "../constants";
+import { toErrorMessage } from "../utils/errorUtils";
 import { i18n } from "../i18n";
 import {
   msg,
@@ -289,7 +290,7 @@ export function handleStreamError(error: unknown, msgId: string): void {
     messages: updateMessageInList(msg().messages, msgId, {
       content: parseErrorMessage(error),
       status: "failed",
-      error: error instanceof Error ? error.message : String(error),
+      error: toErrorMessage(error),
     }),
   });
   useStreamStore.setState({ activeRun: null });

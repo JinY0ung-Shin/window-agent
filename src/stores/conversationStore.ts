@@ -35,6 +35,7 @@ interface ConversationState {
 
   dmConversations: () => Conversation[];
   teamConversations: () => Conversation[];
+  getConversationsByTeam: () => Record<string, Conversation[]>;
   loadConversations: () => Promise<void>;
   selectConversation: (id: string) => Promise<{ messages: ChatMessage[] }>;
   createNewConversation: () => void;
@@ -57,6 +58,16 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   // Computed getters
   dmConversations: () => get().conversations.filter((c) => !c.team_id),
   teamConversations: () => get().conversations.filter((c) => !!c.team_id),
+  getConversationsByTeam: () => {
+    const map: Record<string, Conversation[]> = {};
+    for (const conv of get().conversations) {
+      if (conv.team_id) {
+        if (!map[conv.team_id]) map[conv.team_id] = [];
+        map[conv.team_id].push(conv);
+      }
+    }
+    return map;
+  },
 
   // Consolidated memory
   consolidatedMemory: null,

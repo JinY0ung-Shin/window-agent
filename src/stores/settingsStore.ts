@@ -9,6 +9,7 @@ import { refreshDefaultManagerPersona } from "../services/commands/agentCommands
 import { useNavigationStore } from "./navigationStore";
 import { i18n, type Locale } from "../i18n";
 import { logger } from "../services/logger";
+import { toErrorMessage } from "../utils/errorUtils";
 
 export type UITheme = "classic" | "org";
 
@@ -143,9 +144,8 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const storedExists = await checkStoredKey();
       set({ hasApiKey: keyExists, hasStoredKey: storedExists });
     } catch (e) {
-      const errorMsg = e instanceof Error ? e.message : String(e);
       logger.error("Failed to set API config:", e);
-      set({ settingsError: i18n.t("common:errors.settingsSaveFailed", { error: errorMsg }) });
+      set({ settingsError: i18n.t("common:errors.settingsSaveFailed", { error: toErrorMessage(e) }) });
       return;
     }
 

@@ -5,6 +5,7 @@ import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { exportAgent, importAgent } from "../../services/tauriCommands";
 import type { ImportResult } from "../../services/tauriCommands";
+import { toErrorMessage } from "../../utils/errorUtils";
 
 export default function ExportSection() {
   const { t } = useTranslation("glossary");
@@ -38,7 +39,7 @@ export default function ExportSection() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      setError(ta("export.exportFailed", { error: e instanceof Error ? e.message : String(e) }));
+      setError(ta("export.exportFailed", { error: toErrorMessage(e) }));
     } finally {
       setExporting(false);
     }

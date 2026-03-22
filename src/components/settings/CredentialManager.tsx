@@ -9,6 +9,7 @@ import {
   updateCredential,
   removeCredential,
 } from "../../services/commands/credentialCommands";
+import { toErrorMessage } from "../../utils/errorUtils";
 
 function toSlug(name: string): string {
   return name
@@ -152,7 +153,7 @@ export default function CredentialManager() {
       setError(null);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toErrorMessage(e));
     }
   };
 
@@ -162,7 +163,7 @@ export default function CredentialManager() {
       setDeleteConfirm(null);
       await refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toErrorMessage(e));
     }
   };
 

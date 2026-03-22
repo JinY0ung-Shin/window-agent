@@ -26,6 +26,7 @@ import { i18n } from "../i18n";
 type NetworkStatus = "dormant" | "starting" | "active" | "stopping" | "reconnecting";
 
 import { logger } from "../services/logger";
+import { toErrorMessage } from "../utils/errorUtils";
 
 // Event payload types emitted by the Rust backend
 interface ConnectionStatePayload {
@@ -142,7 +143,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         networkEnabled: true,
       });
     } catch (e) {
-      set({ status: "dormant", error: e instanceof Error ? e.message : String(e) });
+      set({ status: "dormant", error: toErrorMessage(e) });
       throw e;
     }
   },
@@ -171,7 +172,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         connectedPeers: new Set<string>(),
       });
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: toErrorMessage(e) });
     }
   },
 
@@ -180,7 +181,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       const statusStr = await relayStatus();
       set({ status: statusStr as NetworkStatus });
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: toErrorMessage(e) });
     }
   },
 
@@ -189,7 +190,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       const contacts = await relayListContacts();
       set({ contacts });
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: toErrorMessage(e) });
     }
   },
 
@@ -233,7 +234,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       if (get().selectedContactId !== contactId) return;
       set({ threads });
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: toErrorMessage(e) });
     }
   },
 
@@ -242,7 +243,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       const messages = await relayGetThreadMessages(threadId);
       set({ messages });
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : String(e) });
+      set({ error: toErrorMessage(e) });
     }
   },
 

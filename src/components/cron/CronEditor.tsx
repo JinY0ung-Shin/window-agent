@@ -6,6 +6,7 @@ import { useAgentStore } from "../../stores/agentStore";
 import type { CronScheduleType } from "../../services/types";
 import { getCronJob } from "../../services/commands/cronCommands";
 import { logger } from "../../services/logger";
+import { toErrorMessage } from "../../utils/errorUtils";
 
 const INTERVAL_UNITS = [
   { key: "seconds", factor: 1 },
@@ -150,7 +151,7 @@ export default function CronEditor() {
       closeEditor();
     } catch (e) {
       logger.error("Failed to save cron job:", e);
-      setSaveError(String(e));
+      setSaveError(toErrorMessage(e));
     } finally {
       setSaving(false);
     }

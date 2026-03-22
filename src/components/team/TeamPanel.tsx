@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Users, Plus, Trash2, Crown, Bot, Settings, MessageSquare } from "lucide-react";
 import { useTeamStore } from "../../stores/teamStore";
@@ -23,7 +23,7 @@ export default function TeamPanel() {
   const getTeamDetail = useTeamStore((s) => s.getTeamDetail);
   const agents = useAgentStore((s) => s.agents);
   const loadAgents = useAgentStore((s) => s.loadAgents);
-  const conversations = useConversationStore((s) => s.conversations);
+  const getConversationsByTeam = useConversationStore((s) => s.getConversationsByTeam);
   const selectConversation = useConversationStore((s) => s.selectConversation);
   const setMainView = useNavigationStore((s) => s.setMainView);
   const clearMessages = useMessageStore((s) => s.clearMessages);
@@ -31,17 +31,7 @@ export default function TeamPanel() {
   const [teamDetails, setTeamDetails] = useState<Record<string, TeamDetail>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Group team conversations by team_id
-  const teamConversationsMap = useMemo(() => {
-    const map: Record<string, typeof conversations> = {};
-    for (const conv of conversations) {
-      if (conv.team_id) {
-        if (!map[conv.team_id]) map[conv.team_id] = [];
-        map[conv.team_id].push(conv);
-      }
-    }
-    return map;
-  }, [conversations]);
+  const teamConversationsMap = getConversationsByTeam();
 
   useEffect(() => {
     loadTeams();

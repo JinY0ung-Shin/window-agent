@@ -5,6 +5,7 @@ import { X, Trash2, Plus, AlertTriangle, Pencil, Check } from "lucide-react";
 import { listSkills, createSkill, readSkill, updateSkill, deleteSkill } from "../../services/tauriCommands";
 import type { SkillMetadata } from "../../services/types";
 import type { Agent } from "../../services/types";
+import { toErrorMessage } from "../../utils/errorUtils";
 
 interface Props {
   agent: Agent | null;
@@ -55,7 +56,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       setShowNewSkill(false);
       await loadAgentSkills();
     } catch (e) {
-      setSkillError(t("skills.createFailed", { error: e instanceof Error ? e.message : String(e) }));
+      setSkillError(t("skills.createFailed", { error: toErrorMessage(e) }));
     }
   };
 
@@ -67,7 +68,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       setEditingSkillName(skillName);
       setEditingSkillContent(content.raw_content);
     } catch (e) {
-      setSkillError(t("skills.readFailed", { error: e instanceof Error ? e.message : String(e) }));
+      setSkillError(t("skills.readFailed", { error: toErrorMessage(e) }));
     }
   };
 
@@ -80,7 +81,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       setEditingSkillContent("");
       await loadAgentSkills();
     } catch (e) {
-      setSkillError(t("skills.saveFailed", { error: e instanceof Error ? e.message : String(e) }));
+      setSkillError(t("skills.saveFailed", { error: toErrorMessage(e) }));
     }
   };
 
@@ -96,7 +97,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       }
       await loadAgentSkills();
     } catch (e) {
-      setSkillError(t("skills.deleteFailed", { error: e instanceof Error ? e.message : String(e) }));
+      setSkillError(t("skills.deleteFailed", { error: toErrorMessage(e) }));
     }
   };
 

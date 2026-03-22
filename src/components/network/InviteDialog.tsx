@@ -4,6 +4,7 @@ import { Copy, Check, Loader2 } from "lucide-react";
 import Modal from "../common/Modal";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { toErrorMessage } from "../../utils/errorUtils";
 
 type Tab = "generate" | "accept";
 
@@ -71,7 +72,7 @@ function GenerateTab({ onClose, t }: { onClose: () => void; t: (key: string, opt
       );
       setInviteCode(code);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -194,7 +195,7 @@ function AcceptTab({ onClose, t }: { onClose: () => void; t: (key: string, opts?
       await acceptInvite(code.trim(), selectedAgentId || undefined);
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toErrorMessage(e));
     } finally {
       setLoading(false);
     }

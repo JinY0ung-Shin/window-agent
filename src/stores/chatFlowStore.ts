@@ -28,6 +28,7 @@ import {
   CONVERSATION_TITLE_MAX_LENGTH,
   parseErrorMessage,
 } from "../constants";
+import { toErrorMessage } from "../utils/errorUtils";
 import { i18n } from "../i18n";
 import { emitLifecycleEvent, onLifecycleEvent } from "../services/lifecycleEvents";
 import { shouldFlush, preCompactFlush } from "../services/preCompactService";
@@ -669,7 +670,7 @@ async function sendBootstrapMessage() {
       messages: updateMessageInList(msg().messages, msgId, {
         content: parseErrorMessage(error),
         status: "failed",
-        error: error instanceof Error ? error.message : String(error),
+        error: toErrorMessage(error),
       }),
     });
   }
