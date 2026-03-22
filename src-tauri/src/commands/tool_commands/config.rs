@@ -128,6 +128,19 @@ pub fn normalize_tool_config(config_str: &str) -> Result<(String, bool), String>
                 changed = true;
             }
         }
+
+        // Migration: ensure self-awareness tools are enabled even if previously
+        // added as disabled (before the self-category auto-enable was introduced).
+        for def in &defs {
+            if def.category == "self" {
+                if let Some(entry) = native.get_mut(&def.name) {
+                    if entry.get("enabled").and_then(|v| v.as_bool()) == Some(false) {
+                        entry["enabled"] = serde_json::json!(true);
+                        changed = true;
+                    }
+                }
+            }
+        }
     }
 
     // Ensure auto_approve field exists (default: false)
