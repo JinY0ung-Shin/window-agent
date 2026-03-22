@@ -192,23 +192,23 @@ describe("NoteEditor", () => {
 
   it("toolbar bold button exists", () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
-    expect(screen.getByTitle("Bold (Ctrl+B)")).toBeInTheDocument();
+    expect(screen.getByTitle("굵게 (Ctrl+B)")).toBeInTheDocument();
   });
 
   it("toolbar italic button exists", () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
-    expect(screen.getByTitle("Italic (Ctrl+I)")).toBeInTheDocument();
+    expect(screen.getByTitle("기울임 (Ctrl+I)")).toBeInTheDocument();
   });
 
   it("toolbar heading buttons exist", () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
-    expect(screen.getByTitle("Heading 1")).toBeInTheDocument();
-    expect(screen.getByTitle("Heading 2")).toBeInTheDocument();
-    expect(screen.getByTitle("Heading 3")).toBeInTheDocument();
+    expect(screen.getByTitle("제목 1")).toBeInTheDocument();
+    expect(screen.getByTitle("제목 2")).toBeInTheDocument();
+    expect(screen.getByTitle("제목 3")).toBeInTheDocument();
   });
 
   it("toolbar wikilink button exists", () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
-    expect(screen.getByTitle("Wikilink")).toBeInTheDocument();
+    expect(screen.getByTitle("위키링크")).toBeInTheDocument();
   });
 });
