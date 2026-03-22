@@ -482,6 +482,37 @@ pub fn update_outbox_retry(
     })
 }
 
+/// peer_messages 테이블의 raw_envelope 컬럼을 업데이트
+pub fn update_message_raw_envelope(
+    db: &Database,
+    message_id: &str,
+    raw_envelope: &str,
+) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE peer_messages SET raw_envelope = ?1 WHERE id = ?2",
+            rusqlite::params![raw_envelope, message_id],
+        )?;
+        Ok(())
+    })
+}
+
+/// contacts 테이블의 invite_card_raw, public_key 컬럼을 직접 업데이트
+pub fn update_contact_invite_and_key(
+    db: &Database,
+    contact_id: &str,
+    invite_card_raw: &str,
+    public_key: &str,
+) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "UPDATE contacts SET invite_card_raw = ?1, public_key = ?2 WHERE id = ?3",
+            rusqlite::params![invite_card_raw, public_key, contact_id],
+        )?;
+        Ok(())
+    })
+}
+
 fn map_outbox_row(row: &rusqlite::Row) -> Result<OutboxRow, rusqlite::Error> {
     Ok(OutboxRow {
         id: row.get(0)?,

@@ -119,14 +119,8 @@ pub async fn relay_accept_invite(
         }
         relay_db::update_contact(&db, &existing.id, update).map_err(|e| AppError::Relay(e.to_string()))?;
         // Update invite_card_raw and public_key directly
-        db.with_conn(|conn| {
-            conn.execute(
-                "UPDATE contacts SET invite_card_raw = ?1, public_key = ?2 WHERE id = ?3",
-                rusqlite::params![code, public_key_b64, existing.id],
-            )?;
-            Ok(())
-        })
-        .map_err(|e| AppError::Relay(e.to_string()))?;
+        relay_db::update_contact_invite_and_key(&db, &existing.id, &code, &public_key_b64)
+            .map_err(|e| AppError::Relay(e.to_string()))?;
         // Re-fetch to return fresh data
         relay_db::get_contact(&db, &existing.id)
             .map_err(|e| AppError::Relay(e.to_string()))?
@@ -404,13 +398,7 @@ pub async fn relay_send_message(
         .map_err(|e| AppError::Relay(e.to_string()))?;
 
     // Store encrypted version in raw_envelope
-    let _ = db.with_conn(|conn| {
-        conn.execute(
-            "UPDATE peer_messages SET raw_envelope = ?1 WHERE id = ?2",
-            rusqlite::params![encrypted_json, msg_id],
-        )?;
-        Ok(())
-    });
+    let _ = relay_db::update_message_raw_envelope(&db, &msg_id, &encrypted_json);
 
     match manager.send_raw_envelope(&contact.peer_id, &encrypted_json).await {
         Ok(()) => {
@@ -458,13 +446,7 @@ pub async fn relay_approve_message(
     };
 
     // Store encrypted version
-    let _ = db.with_conn(|conn| {
-        conn.execute(
-            "UPDATE peer_messages SET raw_envelope = ?1 WHERE id = ?2",
-            rusqlite::params![encrypted_json, result.response_message_id],
-        )?;
-        Ok(())
-    });
+    let _ = relay_db::update_message_raw_envelope(&db, &result.response_message_id, &encrypted_json);
 
     match manager.send_raw_envelope(&result.target_peer_id, &encrypted_json).await {
         Ok(()) => {
@@ -648,14 +630,7 @@ async fn process_pending_outbox(db: &Database, manager: &RelayManager) {
                 };
                 match manager.encrypt_for_peer(&entry.target_peer_id, &envelope) {
                     Ok(enc) => {
-                        // Store encrypted version
-                        let _ = db.with_conn(|conn| {
-                            conn.execute(
-                                "UPDATE peer_messages SET raw_envelope = ?1 WHERE id = ?2",
-                                rusqlite::params![enc, entry.peer_message_id],
-                            )?;
-                            Ok(())
-                        });
+                        let _ = relay_db::update_message_raw_envelope(db, &entry.peer_message_id, &enc);
                         enc
                     }
                     Err(_) => continue,

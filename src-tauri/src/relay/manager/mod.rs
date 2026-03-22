@@ -366,13 +366,7 @@ impl RelayManager {
                 Ok(encrypted_json) => {
                     // Update raw_envelope with encrypted version
                     let _ = relay_db::update_message_state(&db, &entry.peer_message_id, None, None);
-                    // Store encrypted JSON in raw_envelope via direct DB update
-                    let _ = db.with_conn(|conn| {
-                        conn.execute(
-                            "UPDATE peer_messages SET raw_envelope = ?1 WHERE id = ?2",
-                            rusqlite::params![encrypted_json, entry.peer_message_id],
-                        ).map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))
-                    });
+                    let _ = relay_db::update_message_raw_envelope(&db, &entry.peer_message_id, &encrypted_json);
                 }
                 Err(_) => {
                     let _ = relay_db::update_outbox_status(&db, &entry.id, "failed", entry.attempts);
@@ -645,12 +639,7 @@ impl RelayManager {
                     };
                     match self.encrypt_for_peer(&entry.target_peer_id, &envelope) {
                         Ok(enc) => {
-                            let _ = db.with_conn(|conn| {
-                                conn.execute(
-                                    "UPDATE peer_messages SET raw_envelope = ?1 WHERE id = ?2",
-                                    rusqlite::params![enc, entry.peer_message_id],
-                                ).map_err(|e| crate::db::error::DbError::Sqlite(e.to_string()))
-                            });
+                            let _ = relay_db::update_message_raw_envelope(&db, &entry.peer_message_id, &enc);
                             enc
                         }
                         Err(_) => continue,

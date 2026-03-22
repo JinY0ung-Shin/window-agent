@@ -124,21 +124,11 @@ impl CronScheduler {
 
     /// Query the minimum next_run_at from enabled jobs and return the duration to sleep.
     fn compute_sleep_duration(db: &Database) -> std::time::Duration {
+        use crate::db::cron_operations::get_min_next_run_at;
+
         let default = std::time::Duration::from_secs(60);
 
-        let result = db.with_conn(|conn| {
-            let next: Option<String> = conn
-                .query_row(
-                    "SELECT MIN(next_run_at) FROM cron_jobs WHERE enabled = 1 AND next_run_at IS NOT NULL AND claimed_at IS NULL",
-                    [],
-                    |row| row.get(0),
-                )
-                .ok();
-
-            Ok(next)
-        });
-
-        match result {
+        match get_min_next_run_at(db) {
             Ok(Some(next_run_str)) => {
                 if let Ok(next_run) = chrono::DateTime::parse_from_rfc3339(&next_run_str) {
                     let now = Utc::now();

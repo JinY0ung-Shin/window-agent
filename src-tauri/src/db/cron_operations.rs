@@ -493,6 +493,21 @@ pub fn reset_stale_claims_impl(
     })
 }
 
+/// 다음 실행 예정 시각 중 가장 빠른 값을 반환 (스케줄러 sleep 계산용)
+pub fn get_min_next_run_at(db: &Database) -> Result<Option<String>, DbError> {
+    db.with_conn(|conn| {
+        let next: Option<String> = conn
+            .query_row(
+                "SELECT MIN(next_run_at) FROM cron_jobs WHERE enabled = 1 AND next_run_at IS NOT NULL AND claimed_at IS NULL",
+                [],
+                |row| row.get(0),
+            )
+            .ok();
+
+        Ok(next)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
