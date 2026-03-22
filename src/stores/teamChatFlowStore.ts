@@ -827,6 +827,8 @@ async function streamLeaderTurn(params: {
     messages: msg().messages,
     summary: null,
     baseSystemPrompt,
+    vaultNotes: useVaultStore.getState().notes,
+    consolidatedMemory: conv().consolidatedMemory,
   });
 
   return executeStreamCall({

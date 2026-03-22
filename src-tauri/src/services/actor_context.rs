@@ -1,23 +1,28 @@
 use crate::db::agent_operations;
 use crate::db::Database;
 use crate::error::AppError;
+use crate::memory::SystemMemoryManager;
 use serde_json;
 
 // ── Enums ──────────────────────────────────────────────────
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // TODO: wire into stream handler to branch DM vs team execution paths
+#[allow(dead_code)]
 pub enum ExecutionRole {
     /// Single-agent (direct message) mode
     Dm,
-    /// Leader of a team run
+    /// Leader of a team run (user-initiated)
     TeamLeader,
     /// Member executing a delegated task
     TeamMember,
+    /// Leader synthesizing team member reports
+    TeamLeaderSynthesis,
+    /// Executing a scheduled (cron) task
+    CronExecution,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)] // TODO: use in execution scope to determine context injection strategy
+#[allow(dead_code)]
 pub enum ExecutionTrigger {
     /// Initiated by a user message
     UserInitiated,
@@ -44,7 +49,6 @@ pub struct ExecutionScope {
 
 /// Fully resolved execution context ready for an LLM turn.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // TODO: pass to LLM call site to replace individual parameter threading
 pub struct ResolvedContext {
     pub system_prompt: String,
     pub enabled_tool_names: Vec<String>,
@@ -52,6 +56,14 @@ pub struct ResolvedContext {
     pub temperature: Option<f64>,
     pub thinking_enabled: bool,
     pub thinking_budget: Option<i64>,
+    /// Consolidated long-term memory for this agent (if available).
+    pub consolidated_memory: Option<String>,
+    /// Whether this agent is the default (manager) agent.
+    pub is_manager: bool,
+    /// Preformatted [REGISTERED AGENTS] section (manager agents only).
+    pub registered_agents_section: Option<String>,
+    /// Preformatted [SYSTEM CONTEXT] section with available tool names.
+    pub tools_section: Option<String>,
 }
 
 // ── Default LLM settings ──────────────────────────────────
@@ -67,17 +79,27 @@ const TOOL_REPORT: &str = "report";
 
 /// Resolve an [`ExecutionScope`] into a [`ResolvedContext`] by loading the
 /// agent from DB, assembling persona files, and filtering tools by role.
+///
+/// `memory_mgr` is optional for backward compatibility (tests may pass `None`).
 pub fn resolve(
     scope: &ExecutionScope,
     db: &Database,
     app_data_dir: &std::path::Path,
+    memory_mgr: Option<&SystemMemoryManager>,
 ) -> Result<ResolvedContext, AppError> {
     // 1. Load agent record
     let agent = agent_operations::get_agent_impl(db, scope.actor_agent_id.clone())?;
 
     // 2. Read persona files from the agent's folder
     let agent_dir = app_data_dir.join("agents").join(&agent.folder_name);
-    let system_prompt = assemble_system_prompt(&agent_dir);
+    let mut system_prompt = assemble_system_prompt(&agent_dir);
+
+    // Strip {{company_name}} placeholders — the backend doesn't have access to
+    // the frontend settings store. Removing the placeholder is safer than leaking
+    // raw template syntax into the LLM prompt.
+    if system_prompt.contains("{{company_name}}") {
+        system_prompt = system_prompt.replace("{{company_name}}", "");
+    }
 
     // 3. Determine enabled tools based on role + trigger + TOOL_CONFIG.json
     let enabled_tool_names = resolve_tool_names(&scope.role, &scope.trigger, &agent_dir);
@@ -91,6 +113,28 @@ pub fn resolve(
     let thinking_enabled = agent.thinking_enabled.unwrap_or(false);
     let thinking_budget = agent.thinking_budget;
 
+    // 5. Consolidated memory (if memory manager available)
+    let consolidated_memory =
+        memory_mgr.and_then(|mgr| mgr.read_consolidated(&scope.actor_agent_id));
+
+    // 6. Manager agent context
+    let is_manager = agent.is_default;
+    let registered_agents_section = if is_manager {
+        build_registered_agents_section(db)
+    } else {
+        None
+    };
+
+    // 7. Tools section
+    let tools_section = if !enabled_tool_names.is_empty() {
+        Some(format!(
+            "[SYSTEM CONTEXT]\nAvailable tools: {}",
+            enabled_tool_names.join(", ")
+        ))
+    } else {
+        None
+    };
+
     Ok(ResolvedContext {
         system_prompt,
         enabled_tool_names,
@@ -98,7 +142,45 @@ pub fn resolve(
         temperature,
         thinking_enabled,
         thinking_budget,
+        consolidated_memory,
+        is_manager,
+        registered_agents_section,
+        tools_section,
     })
+}
+
+/// Return the role-specific instruction string for backend execution paths.
+pub fn role_instruction(role: &ExecutionRole) -> Option<&'static str> {
+    match role {
+        ExecutionRole::TeamMember => Some(
+            "You are a team member executing a delegated task. \
+             When you have completed your work, use the `report` tool to submit your findings.",
+        ),
+        ExecutionRole::TeamLeaderSynthesis => Some(
+            "You are the team leader. Synthesize the reports from your team members \
+             into a coherent, comprehensive response for the user.",
+        ),
+        ExecutionRole::CronExecution => Some(
+            "You are executing a scheduled task. Complete the task described below \
+             and provide a concise summary of your results.",
+        ),
+        _ => None,
+    }
+}
+
+/// Build the [REGISTERED AGENTS] section for manager agents.
+fn build_registered_agents_section(db: &Database) -> Option<String> {
+    let agents = agent_operations::list_agents_impl(db).ok()?;
+    let others: Vec<_> = agents.iter().filter(|a| !a.is_default).collect();
+    if others.is_empty() {
+        return Some("[REGISTERED AGENTS]\nNo registered agents.".to_string());
+    }
+    let list = others
+        .iter()
+        .map(|a| format!("- **{}**: {}", a.name, if a.description.is_empty() { "(no description)" } else { &a.description }))
+        .collect::<Vec<_>>()
+        .join("\n");
+    Some(format!("[REGISTERED AGENTS]\n{list}"))
 }
 
 // ── Persona assembly (best-effort) ────────────────────────
@@ -106,21 +188,29 @@ pub fn resolve(
 /// Read and concatenate persona markdown files from the agent's directory.
 /// Missing files are silently skipped — this is intentional so that agents
 /// work even before persona files are created.
+///
+/// Format matches the frontend `personaService.ts::assembleSystemPrompt`:
+/// `[SECTION]\ncontent` separated by `\n\n---\n\n`.
 fn assemble_system_prompt(agent_dir: &std::path::Path) -> String {
-    let files = ["IDENTITY.md", "SOUL.md"];
+    let files = [
+        ("IDENTITY", "IDENTITY.md"),
+        ("SOUL", "SOUL.md"),
+        ("USER", "USER.md"),
+        ("AGENTS", "AGENTS.md"),
+    ];
     let mut parts: Vec<String> = Vec::new();
 
-    for fname in &files {
+    for (section, fname) in &files {
         let path = agent_dir.join(fname);
         if let Ok(content) = std::fs::read_to_string(&path) {
             let trimmed = content.trim();
             if !trimmed.is_empty() {
-                parts.push(trimmed.to_string());
+                parts.push(format!("[{section}]\n{trimmed}"));
             }
         }
     }
 
-    parts.join("\n\n")
+    parts.join("\n\n---\n\n")
 }
 
 // ── Tool config reading ─────────────────────────────────────
@@ -179,14 +269,18 @@ fn resolve_tool_names(
         // DM — full tool access; empty vec signals "use default frontend config"
         ExecutionRole::Dm => Vec::new(),
 
-        // Team member — report only for v1. Auto-tier tool support (read_file,
-        // list_directory, etc.) will be added in v2 when the execution loop can
-        // actually invoke them.
+        // Cron execution — same as DM (empty vec, no frontend tools in backend)
+        ExecutionRole::CronExecution => Vec::new(),
+
+        // Team member — report only for v1.
         ExecutionRole::TeamMember => {
             vec![TOOL_REPORT.to_string()]
         }
 
-        // Team leader
+        // Team leader synthesis — no tools needed (read-only synthesis)
+        ExecutionRole::TeamLeaderSynthesis => Vec::new(),
+
+        // Team leader (user-initiated or backend-triggered delegation)
         ExecutionRole::TeamLeader => match trigger {
             // User-initiated: all enabled tools + delegate
             ExecutionTrigger::UserInitiated => {
@@ -285,16 +379,20 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path(), None).unwrap();
 
         assert_eq!(ctx.model, "gpt-4o");
         assert_eq!(ctx.temperature, Some(0.7));
         assert!(ctx.thinking_enabled);
         assert_eq!(ctx.thinking_budget, Some(8000));
+        assert!(ctx.system_prompt.contains("[IDENTITY]"));
         assert!(ctx.system_prompt.contains("You are a test agent."));
+        assert!(ctx.system_prompt.contains("[SOUL]"));
         assert!(ctx.system_prompt.contains("Be helpful."));
         // DM mode returns empty tool list (frontend provides)
         assert!(ctx.enabled_tool_names.is_empty());
+        assert!(!ctx.is_manager);
+        assert!(ctx.consolidated_memory.is_none());
     }
 
     #[test]
@@ -310,7 +408,7 @@ mod tests {
             trigger: ExecutionTrigger::BackendTriggered,
         };
 
-        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path(), None).unwrap();
 
         // v1: TeamMember only gets "report" — no auto-tier tools yet
         assert_eq!(ctx.enabled_tool_names, vec!["report".to_string()]);
@@ -329,7 +427,7 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path(), None).unwrap();
 
         // User-initiated leader: all enabled tools (any tier) + delegate
         assert!(ctx.enabled_tool_names.contains(&"delegate".to_string()));
@@ -354,7 +452,7 @@ mod tests {
             trigger: ExecutionTrigger::BackendTriggered,
         };
 
-        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path(), None).unwrap();
 
         // Backend-triggered leader: auto-tier tools only + delegate
         assert!(ctx.enabled_tool_names.contains(&"delegate".to_string()));
@@ -397,7 +495,7 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let ctx = resolve(&scope, &db, tmp.path()).unwrap();
+        let ctx = resolve(&scope, &db, tmp.path(), None).unwrap();
 
         // No persona files → empty prompt, but no error
         assert!(ctx.system_prompt.is_empty());
@@ -421,7 +519,7 @@ mod tests {
             trigger: ExecutionTrigger::UserInitiated,
         };
 
-        let result = resolve(&scope, &db, tmp.path());
+        let result = resolve(&scope, &db, tmp.path(), None);
         assert!(result.is_err());
     }
 }

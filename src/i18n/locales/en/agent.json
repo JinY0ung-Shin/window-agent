@@ -55,6 +55,7 @@
     "categoryWeb": "Web",
     "categoryMemory": "Memory",
     "categoryBrowser": "Browser",
+    "categorySelf": "Self-Awareness",
     "loading": "Loading...",
     "noNativeTools": "No native tools registered",
     "maxIterations": "Maximum tool call iterations reached."

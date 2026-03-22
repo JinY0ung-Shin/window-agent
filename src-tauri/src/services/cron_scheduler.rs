@@ -4,6 +4,7 @@ use crate::db::cron_operations::{
 };
 use crate::db::models::{CronJob, CronRun};
 use crate::db::Database;
+use crate::memory::SystemMemoryManager;
 use crate::services::actor_context::{self, ExecutionRole, ExecutionScope, ExecutionTrigger};
 use crate::services::{api_service, credential_service};
 use chrono::Utc;
@@ -185,11 +186,12 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
         team_id: None,
         team_run_id: None,
         team_task_id: None,
-        role: ExecutionRole::Dm,
+        role: ExecutionRole::CronExecution,
         trigger: ExecutionTrigger::BackendTriggered,
     };
 
-    let resolved = match actor_context::resolve(&scope, &db, &app_data_dir) {
+    let memory_mgr = app.state::<SystemMemoryManager>();
+    let resolved = match actor_context::resolve(&scope, &db, &app_data_dir, Some(&*memory_mgr)) {
         Ok(ctx) => ctx,
         Err(e) => {
             let error_msg = format!("Failed to resolve agent context: {e}");
@@ -203,8 +205,16 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
     if !resolved.system_prompt.is_empty() {
         system_parts.push(resolved.system_prompt.clone());
     }
+    if let Some(ref agents_sec) = resolved.registered_agents_section {
+        system_parts.push(agents_sec.clone());
+    }
+    if let Some(ref mem) = resolved.consolidated_memory {
+        system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
+    }
     system_parts.push(
-        "You are executing a scheduled task. Complete the task described below and provide a concise summary of your results.".to_string()
+        actor_context::role_instruction(&scope.role)
+            .unwrap_or("Complete the task below.")
+            .to_string(),
     );
     let system_prompt = system_parts.join("\n\n");
 

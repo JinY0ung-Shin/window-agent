@@ -130,6 +130,62 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         },
     ];
 
+    // Self-awareness tools — allow agents to inspect their own state and manage schedules.
+    defs.push(NativeToolDef {
+        name: "self_inspect".into(),
+        description: "자신의 설정, 활성화된 도구(대화 모드 기준), 예약된 작업 등 에이전트 상태를 조회합니다".into(),
+        category: "self".into(),
+        default_tier: "auto".into(),
+        parameters: serde_json::json!({"type":"object","properties":{}}),
+    });
+
+    defs.push(NativeToolDef {
+        name: "manage_schedule".into(),
+        description: "자신의 예약 작업(크론 잡)을 관리합니다: 조회, 생성, 수정, 삭제, 활성화/비활성화. 주의: 예약된 작업은 프롬프트 전용으로 실행되며 도구(tool) 호출은 지원되지 않습니다.".into(),
+        category: "self".into(),
+        default_tier: "confirm".into(),
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string",
+                    "enum": ["list", "create", "update", "delete", "toggle"],
+                    "description": "수행할 작업"
+                },
+                "job_id": {
+                    "type": "string",
+                    "description": "대상 크론 잡 ID (update/delete/toggle 시 필수)"
+                },
+                "name": {
+                    "type": "string",
+                    "description": "크론 잡 이름 (create 시 필수)"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "크론 잡 설명"
+                },
+                "schedule_type": {
+                    "type": "string",
+                    "enum": ["at", "every", "cron"],
+                    "description": "스케줄 유형 (create 시 필수)"
+                },
+                "schedule_value": {
+                    "type": "string",
+                    "description": "스케줄 값 (create 시 필수). at: RFC3339 타임스탬프 (예: 2026-04-01T09:00:00+09:00), every: 초 단위 정수 (최소 60, 예: 3600), cron: 5필드 cron 표현식 (예: 0 9 * * 1-5)"
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": "실행 시 사용할 프롬프트 (create 시 필수)"
+                },
+                "enabled": {
+                    "type": "boolean",
+                    "description": "활성화 여부 (toggle 시 필수)"
+                }
+            },
+            "required": ["action"]
+        }),
+    });
+
     // Orchestration tools — these are not directly executed by execute_tool;
     // they are intercepted by the frontend/orchestrator layer.
     defs.push(NativeToolDef {

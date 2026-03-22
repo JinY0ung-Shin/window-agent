@@ -55,6 +55,7 @@
     "categoryWeb": "웹",
     "categoryMemory": "메모리",
     "categoryBrowser": "브라우저",
+    "categorySelf": "자기 인식",
     "loading": "로딩 중...",
     "noNativeTools": "등록된 네이티브 도구가 없습니다",
     "maxIterations": "최대 도구 호출 반복 횟수에 도달했습니다."

@@ -3,6 +3,7 @@ use crate::commands::tool_commands::native_tool_definitions;
 use crate::db::models::{TaskStatus, TeamRunStatus};
 use crate::db::team_operations;
 use crate::db::Database;
+use crate::memory::SystemMemoryManager;
 use crate::services::actor_context::{self, ExecutionRole, ExecutionScope, ExecutionTrigger};
 use chrono::Utc;
 use serde::Serialize;
@@ -92,7 +93,8 @@ impl TeamOrchestrator {
             };
 
             // 3. Resolve context via ActorExecutionContext
-            let resolved = actor_context::resolve(&scope, db, &app_data_dir)
+            let memory_mgr = app.state::<SystemMemoryManager>();
+            let resolved = actor_context::resolve(&scope, db, &app_data_dir, Some(&*memory_mgr))
                 .map_err(|e| format!("Failed to resolve context for agent {agent_id}: {e}"))?;
 
             // 4. Update task status to running
@@ -110,10 +112,18 @@ impl TeamOrchestrator {
             if !resolved.system_prompt.is_empty() {
                 system_parts.push(resolved.system_prompt.clone());
             }
+            if let Some(ref agents_sec) = resolved.registered_agents_section {
+                system_parts.push(agents_sec.clone());
+            }
+            if let Some(ref tools_sec) = resolved.tools_section {
+                system_parts.push(tools_sec.clone());
+            }
+            if let Some(ref mem) = resolved.consolidated_memory {
+                system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
+            }
             system_parts.push(format!(
-                "You are a team member executing a delegated task. \
-                 When you have completed your work, use the `report` tool to submit your findings.\n\
-                 Your task: {task}"
+                "{}\nYour task: {task}",
+                actor_context::role_instruction(&scope.role).unwrap_or_default()
             ));
             if let Some(ref ctx) = context {
                 system_parts.push(format!("Context from leader:\n{ctx}"));
@@ -349,11 +359,12 @@ impl TeamOrchestrator {
                 team_id: Some(run.team_id.clone()),
                 team_run_id: Some(run_id.to_string()),
                 team_task_id: None,
-                role: ExecutionRole::TeamLeader,
+                role: ExecutionRole::TeamLeaderSynthesis,
                 trigger: ExecutionTrigger::BackendTriggered,
             };
 
-            let leader_ctx = actor_context::resolve(&leader_scope, db, &app_data_dir)
+            let memory_mgr = app.state::<SystemMemoryManager>();
+            let leader_ctx = actor_context::resolve(&leader_scope, db, &app_data_dir, Some(&*memory_mgr))
                 .map_err(|e| format!("Failed to resolve leader context: {e}"))?;
 
             // Build reports text for synthesis prompt (before moving reports into emit)
@@ -379,9 +390,15 @@ impl TeamOrchestrator {
             if !leader_ctx.system_prompt.is_empty() {
                 system_parts.push(leader_ctx.system_prompt.clone());
             }
+            if let Some(ref agents_sec) = leader_ctx.registered_agents_section {
+                system_parts.push(agents_sec.clone());
+            }
+            if let Some(ref mem) = leader_ctx.consolidated_memory {
+                system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
+            }
             system_parts.push(
-                "You are the team leader. Synthesize the reports from your team members \
-                 into a coherent, comprehensive response for the user."
+                actor_context::role_instruction(&leader_scope.role)
+                    .unwrap_or("Synthesize the reports into a coherent response.")
                     .to_string(),
             );
             let system_prompt = system_parts.join("\n\n");
