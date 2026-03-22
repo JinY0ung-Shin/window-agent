@@ -4,7 +4,7 @@ use crate::vault::graph::GraphData;
 use crate::vault::search::SearchResult;
 use crate::vault::{IndexStats, VaultManager, VaultNote, VaultNoteSummary};
 use chrono::Utc;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::{AppHandle, State};
 use tauri_plugin_opener::OpenerExt;
@@ -23,6 +23,56 @@ pub struct VaultNoteSummaryWithDecay {
 /// Thread-safe wrapper for VaultManager used as Tauri managed state.
 pub type VaultState = Mutex<VaultManager>;
 
+// ── Internal param structs (keeps Tauri command signatures under clippy threshold) ──
+
+#[derive(Deserialize)]
+struct CreateNoteParams {
+    agent_id: String,
+    scope: Option<String>,
+    category: String,
+    title: String,
+    content: String,
+    tags: Vec<String>,
+    related_ids: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct UpdateNoteParams {
+    note_id: String,
+    caller_agent_id: String,
+    title: Option<String>,
+    content: Option<String>,
+    tags: Option<Vec<String>>,
+    confidence: Option<f64>,
+    add_links: Option<Vec<String>>,
+}
+
+fn create_note_impl(vm: &mut VaultManager, p: CreateNoteParams) -> Result<VaultNote, AppError> {
+    vm.create_note(
+        &p.agent_id,
+        p.scope.as_deref(),
+        &p.category,
+        &p.title,
+        &p.content,
+        p.tags,
+        p.related_ids,
+    )
+    .map_err(AppError::Vault)
+}
+
+fn update_note_impl(vm: &mut VaultManager, p: UpdateNoteParams) -> Result<VaultNote, AppError> {
+    vm.update_note(
+        &p.note_id,
+        &p.caller_agent_id,
+        p.title.as_deref(),
+        p.content.as_deref(),
+        p.tags,
+        p.confidence,
+        p.add_links,
+    )
+    .map_err(AppError::Vault)
+}
+
 // ── Note CRUD ──
 
 #[tauri::command]
@@ -38,15 +88,9 @@ pub fn vault_create_note(
     related_ids: Vec<String>,
 ) -> Result<VaultNote, AppError> {
     let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
-    vm.create_note(
-        &agent_id,
-        scope.as_deref(),
-        &category,
-        &title,
-        &content,
-        tags,
-        related_ids,
-    ).map_err(AppError::Vault)
+    create_note_impl(&mut vm, CreateNoteParams {
+        agent_id, scope, category, title, content, tags, related_ids,
+    })
 }
 
 #[tauri::command]
@@ -71,15 +115,9 @@ pub fn vault_update_note(
     add_links: Option<Vec<String>>,
 ) -> Result<VaultNote, AppError> {
     let mut vm = vault.lock().map_err(|_| AppError::Lock("Vault lock failed".into()))?;
-    vm.update_note(
-        &note_id,
-        &caller_agent_id,
-        title.as_deref(),
-        content.as_deref(),
-        tags,
-        confidence,
-        add_links,
-    ).map_err(AppError::Vault)
+    update_note_impl(&mut vm, UpdateNoteParams {
+        note_id, caller_agent_id, title, content, tags, confidence, add_links,
+    })
 }
 
 #[tauri::command]

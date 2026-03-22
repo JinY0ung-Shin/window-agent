@@ -173,10 +173,6 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
     // 1. Resolve agent context
     let scope = ExecutionScope {
         actor_agent_id: job.agent_id.clone(),
-        conversation_id: String::new(),
-        team_id: None,
-        team_run_id: None,
-        team_task_id: None,
         role: ExecutionRole::CronExecution,
         trigger: ExecutionTrigger::BackendTriggered,
     };

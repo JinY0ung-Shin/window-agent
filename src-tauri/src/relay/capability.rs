@@ -23,7 +23,6 @@ impl CapabilitySet {
     }
 
     /// Maximum restriction — block everything.
-    #[allow(dead_code)] // TODO: wire into relay message handler for untrusted peers
     pub fn deny_all() -> Self {
         Self {
             can_send_messages: false,

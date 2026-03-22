@@ -6,12 +6,16 @@ use serde_json;
 
 // ── Enums ──────────────────────────────────────────────────
 
+/// Variants `Dm` and `TeamLeader` are matched in `resolve_tool_names` but
+/// only constructed by frontend-driven paths (via tests). Keep them for
+/// exhaustive match coverage.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum ExecutionRole {
-    /// Single-agent (direct message) mode
+    /// Single-agent (direct message) mode — resolved by frontend
+    #[allow(dead_code)]
     Dm,
-    /// Leader of a team run (user-initiated)
+    /// Leader of a team run (user-initiated) — resolved by frontend
+    #[allow(dead_code)]
     TeamLeader,
     /// Member executing a delegated task
     TeamMember,
@@ -21,10 +25,12 @@ pub enum ExecutionRole {
     CronExecution,
 }
 
+/// `UserInitiated` is matched in `resolve_tool_names` but only constructed
+/// by frontend-driven paths (via tests).
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[allow(dead_code)]
 pub enum ExecutionTrigger {
-    /// Initiated by a user message
+    /// Initiated by a user message — resolved by frontend
+    #[allow(dead_code)]
     UserInitiated,
     /// Initiated by backend orchestration (e.g. team leader delegating)
     BackendTriggered,
@@ -34,13 +40,8 @@ pub enum ExecutionTrigger {
 
 /// Describes *who* is acting and *why*, before any DB lookups.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // TODO: consume fields in unified stream handler to replace ad-hoc arg passing
 pub struct ExecutionScope {
     pub actor_agent_id: String,
-    pub conversation_id: String,
-    pub team_id: Option<String>,
-    pub team_run_id: Option<String>,
-    pub team_task_id: Option<String>,
     pub role: ExecutionRole,
     pub trigger: ExecutionTrigger,
 }
@@ -377,10 +378,6 @@ mod tests {
         let (db, tmp, agent_id) = setup();
         let scope = ExecutionScope {
             actor_agent_id: agent_id,
-            conversation_id: "conv-1".into(),
-            team_id: None,
-            team_run_id: None,
-            team_task_id: None,
             role: ExecutionRole::Dm,
             trigger: ExecutionTrigger::UserInitiated,
         };
@@ -405,10 +402,6 @@ mod tests {
         let (db, tmp, agent_id) = setup();
         let scope = ExecutionScope {
             actor_agent_id: agent_id,
-            conversation_id: "conv-1".into(),
-            team_id: Some("team-1".into()),
-            team_run_id: Some("run-1".into()),
-            team_task_id: Some("task-1".into()),
             role: ExecutionRole::TeamMember,
             trigger: ExecutionTrigger::BackendTriggered,
         };
@@ -424,10 +417,6 @@ mod tests {
         let (db, tmp, agent_id) = setup();
         let scope = ExecutionScope {
             actor_agent_id: agent_id,
-            conversation_id: "conv-1".into(),
-            team_id: Some("team-1".into()),
-            team_run_id: Some("run-1".into()),
-            team_task_id: None,
             role: ExecutionRole::TeamLeader,
             trigger: ExecutionTrigger::UserInitiated,
         };
@@ -449,10 +438,6 @@ mod tests {
         let (db, tmp, agent_id) = setup();
         let scope = ExecutionScope {
             actor_agent_id: agent_id,
-            conversation_id: "conv-1".into(),
-            team_id: Some("team-1".into()),
-            team_run_id: Some("run-1".into()),
-            team_task_id: None,
             role: ExecutionRole::TeamLeader,
             trigger: ExecutionTrigger::BackendTriggered,
         };
@@ -492,10 +477,6 @@ mod tests {
 
         let scope = ExecutionScope {
             actor_agent_id: agent.id,
-            conversation_id: "conv-1".into(),
-            team_id: None,
-            team_run_id: None,
-            team_task_id: None,
             role: ExecutionRole::Dm,
             trigger: ExecutionTrigger::UserInitiated,
         };
@@ -516,10 +497,6 @@ mod tests {
 
         let scope = ExecutionScope {
             actor_agent_id: "nonexistent".into(),
-            conversation_id: "conv-1".into(),
-            team_id: None,
-            team_run_id: None,
-            team_task_id: None,
             role: ExecutionRole::Dm,
             trigger: ExecutionTrigger::UserInitiated,
         };

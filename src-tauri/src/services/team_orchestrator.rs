@@ -55,7 +55,7 @@ impl TeamOrchestrator {
     pub async fn execute_delegation(
         app: &AppHandle,
         db: &Database,
-        conversation_id: &str,
+        _conversation_id: &str,
         run_id: &str,
         agent_ids: Vec<String>,
         task: String,
@@ -84,10 +84,6 @@ impl TeamOrchestrator {
             // 2. Build ExecutionScope for this member
             let scope = ExecutionScope {
                 actor_agent_id: agent_id.clone(),
-                conversation_id: conversation_id.to_string(),
-                team_id: None, // Will be populated when we have team_id in context
-                team_run_id: Some(run_id.to_string()),
-                team_task_id: Some(team_task.id.clone()),
                 role: ExecutionRole::TeamMember,
                 trigger: ExecutionTrigger::BackendTriggered,
             };
@@ -355,10 +351,6 @@ impl TeamOrchestrator {
 
             let leader_scope = ExecutionScope {
                 actor_agent_id: run.leader_agent_id.clone(),
-                conversation_id: run.conversation_id.clone(),
-                team_id: Some(run.team_id.clone()),
-                team_run_id: Some(run_id.to_string()),
-                team_task_id: None,
                 role: ExecutionRole::TeamLeaderSynthesis,
                 trigger: ExecutionTrigger::BackendTriggered,
             };
