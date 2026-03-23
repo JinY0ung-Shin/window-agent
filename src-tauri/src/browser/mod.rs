@@ -119,12 +119,15 @@ impl BrowserManager {
         let browsers_path = self.resolve_browsers_path();
         let fallback_path = self.app_data_dir.join("playwright-browsers");
 
+        tracing::info!("sidecar: node={} script={}", node_path.display(), script_path.display());
+        tracing::info!("sidecar: browsers_path={} fallback={}", browsers_path.display(), fallback_path.display());
+
         let mut cmd = Command::new(&node_path);
         cmd.arg(&script_path)
             .env("PLAYWRIGHT_BROWSERS_PATH", &browsers_path)
             .env("PLAYWRIGHT_BROWSERS_PATH_FALLBACK", &fallback_path)
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit());
+            .stderr(Stdio::piped());
 
         // Suppress console window on Windows
         #[cfg(target_os = "windows")]
@@ -134,7 +137,7 @@ impl BrowserManager {
         }
 
         let mut child = cmd.spawn()
-            .map_err(|e| format!("failed to spawn browser sidecar: {}", e))?;
+            .map_err(|e| format!("failed to spawn browser sidecar (node={}): {}", node_path.display(), e))?;
 
         // Read port from stdout
         let stdout = child
@@ -167,7 +170,27 @@ impl BrowserManager {
             }
         }
 
-        let port = port.ok_or_else(|| "sidecar did not report port".to_string())?;
+        let port = match port {
+            Some(p) => p,
+            None => {
+                // Capture stderr to diagnose why sidecar failed
+                let stderr_output = child.stderr.take()
+                    .and_then(|mut stderr| {
+                        let mut buf = String::new();
+                        std::io::Read::read_to_string(&mut stderr, &mut buf).ok()?;
+                        Some(buf)
+                    })
+                    .unwrap_or_default();
+                let exit_status = child.wait().ok().map(|s| format!("{}", s)).unwrap_or_else(|| "unknown".to_string());
+                return Err(format!(
+                    "sidecar did not report port (exit: {}, node={}, script={})\nstderr: {}",
+                    exit_status,
+                    node_path.display(),
+                    script_path.display(),
+                    if stderr_output.is_empty() { "(empty)" } else { &stderr_output }
+                ));
+            }
+        };
 
         // Health check with retries
         let url = format!("http://127.0.0.1:{}/health", port);
