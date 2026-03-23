@@ -64,7 +64,7 @@ function resolveAgentInfo(agentId: string): {
 // Track requestId → { agentId, taskId, msgId } for routing stream events to agent bubbles
 const agentStreamMap = new Map<
   string,
-  { agentId: string; taskId: string; msgId: string; runId: string }
+  { agentId: string; taskId: string; msgId: string; runId: string; finalContent?: string }
 >();
 
 // ── TeamChatFlowStore ─────────────────────────────────
@@ -158,12 +158,19 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
               }),
             });
           } else {
+            const synthContent = full_content || i18n.t("common:noResponse");
             useMessageStore.setState({
               messages: updateMessageInList(msg().messages, msgId, {
-                content: full_content || i18n.t("common:noResponse"),
+                content: synthContent,
                 status: "complete",
               }),
             });
+            // Cache finalContent so synthesis-done handler can read it
+            // without a race against message store update
+            const currentMapping = agentStreamMap.get(request_id);
+            if (currentMapping) {
+              agentStreamMap.set(request_id, { ...currentMapping, finalContent: synthContent });
+            }
           }
           return;
         }
@@ -181,6 +188,7 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
 
         // Check if agent called the `report` tool
         const reportCall = tool_calls?.find((tc) => tc.function.name === "report");
+        let finalContent: string;
         if (reportCall) {
           let reportArgs: { summary?: string; details?: string } = {};
           try {
@@ -189,8 +197,8 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
             logger.debug("Failed to parse report arguments", e);
           }
           const summaryText = reportArgs.summary ?? full_content;
+          finalContent = full_content || summaryText;
 
-          const finalContent = full_content || summaryText;
           useMessageStore.setState({
             messages: updateMessageInList(msg().messages, msgId, {
               content: finalContent,
@@ -205,7 +213,7 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
           }
         } else {
           // Normal completion (no report tool) — treat content as implicit report
-          const finalContent = full_content || i18n.t("common:noResponse");
+          finalContent = full_content || i18n.t("common:noResponse");
           useMessageStore.setState({
             messages: updateMessageInList(msg().messages, msgId, {
               content: finalContent,
@@ -220,7 +228,7 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
           }
         }
 
-        // Save agent message to DB
+        // Save agent message to DB — use same finalContent as UI
         const currentConvId = conv().currentConversationId;
         if (currentConvId) {
           const agentInfo = resolveAgentInfo(agentId);
@@ -228,7 +236,7 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
             const saved = await cmds.saveMessage({
               conversation_id: currentConvId,
               role: "assistant",
-              content: full_content || "",
+              content: finalContent,
               sender_agent_id: agentId,
               team_run_id: runId,
               team_task_id: taskId,
@@ -288,8 +296,10 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
         if (!mapping) return;
 
         if (!synthError) {
-          const currentMsg = msg().messages.find((m) => m.id === mapping.msgId);
-          const finalContent = currentMsg?.content || i18n.t("common:noResponse");
+          // Prefer cached finalContent (set during stream-done) to avoid race with message store
+          const finalContent = mapping.finalContent
+            || msg().messages.find((m) => m.id === mapping.msgId)?.content
+            || i18n.t("common:noResponse");
           const currentConvId = conv().currentConversationId;
 
           if (currentConvId) {
@@ -641,9 +651,21 @@ async function sendTeamMessageFlow() {
           convId,
           toolDefinitions,
           autoApproveEnabled,
+          runId: teamRun.id,
         });
 
-        useToolRunStore.getState().resetToolState();
+        useToolRunStore.getState().resetToolState(teamRun.id);
+
+        // If the team context was abandoned during tool execution, stop the loop
+        if (!useTeamStore.getState().selectedTeamId) {
+          try {
+            await teamCmds.updateTeamRunStatus(teamRun.id, "cancelled", new Date().toISOString());
+          } catch (e) {
+            logger.debug("Failed to persist cancelled team run status", e);
+          }
+          stream().removeRun(teamRun.id);
+          break;
+        }
 
         // Create next pending message for continued loop
         currentRequestId = `req-team-leader-${Date.now()}`;

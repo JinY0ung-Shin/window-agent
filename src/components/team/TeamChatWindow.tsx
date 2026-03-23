@@ -16,7 +16,7 @@ import TeamChatInput from "./TeamChatInput";
 import { useDragRegion } from "../../hooks/useDragRegion";
 import { useMessageScroll } from "../../hooks/useMessageScroll";
 import { emitLifecycleEvent } from "../../services/lifecycleEvents";
-import { resetTransientChatState } from "../../stores/resetHelper";
+import { resetTransientChatState, resetTeamRunState } from "../../stores/resetHelper";
 
 export default function TeamChatWindow() {
   const { t } = useTranslation("team");
@@ -27,8 +27,18 @@ export default function TeamChatWindow() {
   const selectTeam = useTeamStore((s) => s.selectTeam);
   const agents = useAgentStore((s) => s.agents);
   const activeRuns = useTeamRunStore((s) => s.activeRuns);
-  const toolRunState = useToolRunStore((s) => s.toolRunState);
-  const pendingToolCalls = useToolRunStore((s) => s.pendingToolCalls);
+
+  // Derive the latest team runId for per-run tool state
+  const activeTeamRunId = (() => {
+    const runIds = Object.keys(activeRuns);
+    return runIds.length > 0 ? runIds[runIds.length - 1] : undefined;
+  })();
+  const toolRunState = useToolRunStore((s) =>
+    activeTeamRunId ? (s.toolRunStates[activeTeamRunId] ?? "idle") : s.toolRunState,
+  );
+  const pendingToolCalls = useToolRunStore((s) =>
+    activeTeamRunId ? (s.pendingToolCallsByRun[activeTeamRunId] ?? []) : s.pendingToolCalls,
+  );
 
   const onDrag = useDragRegion();
 
@@ -105,6 +115,7 @@ export default function TeamChatWindow() {
             selectTeam(null);
             convStore.setCurrentConversationId(null);
             resetTransientChatState();
+            resetTeamRunState();
           }}
           title={t("chat.backToTeams")}
         >
@@ -137,6 +148,7 @@ export default function TeamChatWindow() {
                     isActiveRun={block.isActiveRun}
                     leadingContent={block.leadingContent}
                     senderInfo={getSenderInfo(block.assistantMessage)}
+                    runId={activeTeamRunId}
                   />
                 );
               }

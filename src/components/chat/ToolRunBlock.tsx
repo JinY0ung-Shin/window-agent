@@ -37,6 +37,8 @@ interface ToolRunBlockProps {
   steps: ToolRunStep[];
   isActiveRun: boolean;
   senderInfo?: SenderInfo;
+  /** 팀 실행 시 per-run 상태 조회 및 approve/reject 스코핑용 */
+  runId?: string;
 }
 
 function statusIcon(status: ToolCallStatus) {
@@ -97,10 +99,13 @@ export default function ToolRunBlock({
   steps,
   isActiveRun,
   senderInfo,
+  runId,
 }: ToolRunBlockProps) {
   const { t } = useTranslation("chat");
   const { t: tTeam } = useTranslation("team");
-  const toolRunState = useToolRunStore((state) => state.toolRunState);
+  const toolRunState = useToolRunStore((state) =>
+    runId ? (state.toolRunStates[runId] ?? "idle") : state.toolRunState,
+  );
   const approveToolCall = useToolRunStore((state) => state.approveToolCall);
   const rejectToolCall = useToolRunStore((state) => state.rejectToolCall);
   const hasOnlySuccessfulSteps = steps.every((step) => step.status === "executed");
@@ -168,10 +173,10 @@ export default function ToolRunBlock({
 
           {hasPendingApprovals && (
             <div className="tool-call-actions tool-run-actions">
-              <button type="button" className="tool-approve-btn" onClick={approveToolCall}>
+              <button type="button" className="tool-approve-btn" onClick={() => approveToolCall(runId)}>
                 <Check size={14} /> {t("tool.approve")}
               </button>
-              <button type="button" className="tool-reject-btn" onClick={rejectToolCall}>
+              <button type="button" className="tool-reject-btn" onClick={() => rejectToolCall(runId)}>
                 <X size={14} /> {t("tool.reject")}
               </button>
             </div>

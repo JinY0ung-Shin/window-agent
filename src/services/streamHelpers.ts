@@ -242,26 +242,20 @@ export async function executeToolPipeline(
   convId: string,
   options?: {
     iterationCount?: number;
+    runId?: string;
     onConfirmApproved?: (tools: ToolCall[]) => void;
   },
 ): Promise<ChatMessage[]> {
   const { autoTools, confirmTools, denyTools } = classification;
   const savedToolMsgs: ChatMessage[] = [];
+  const runId = options?.runId;
 
   // Set initial tool run state (chatFlowStore passes iterationCount; teamChatFlowStore skips)
   if (options?.iterationCount !== undefined) {
     if (confirmTools.length > 0) {
-      useToolRunStore.setState({
-        toolRunState: "tool_pending",
-        pendingToolCalls: confirmTools,
-        toolIterationCount: options.iterationCount,
-      });
+      useToolRunStore.getState().setPending(confirmTools, options.iterationCount, runId);
     } else {
-      useToolRunStore.setState({
-        toolRunState: "tool_running",
-        pendingToolCalls: [],
-        toolIterationCount: options.iterationCount,
-      });
+      useToolRunStore.getState().setRunning(runId);
     }
   }
 
@@ -286,7 +280,7 @@ export async function executeToolPipeline(
 
   // Execute auto-approved tools
   if (autoTools.length > 0) {
-    useToolRunStore.setState({ toolRunState: "tool_running" });
+    useToolRunStore.getState().setRunning(runId);
     const autoResults = await executeToolCalls(autoTools, convId);
     for (const toolMsg of autoResults) {
       const saved = await cmds.saveMessage({
@@ -304,11 +298,15 @@ export async function executeToolPipeline(
 
   // Execute confirm-tier tools with user approval
   if (confirmTools.length > 0) {
-    useToolRunStore.setState({ toolRunState: "tool_waiting", pendingToolCalls: confirmTools });
-    const approved = await useToolRunStore.getState().waitForToolApproval();
+    useToolRunStore.getState().setWaiting(confirmTools, runId);
+    const approved = await useToolRunStore.getState().waitForToolApproval(runId);
+    if (!approved && useToolRunStore.getState().isRunCancelled(runId)) {
+      // Run was cancelled (e.g. user navigated away) — skip rejection messages
+      return savedToolMsgs;
+    }
     if (approved) {
       options?.onConfirmApproved?.(confirmTools);
-      useToolRunStore.setState({ toolRunState: "tool_running" });
+      useToolRunStore.getState().setRunning(runId);
       const confirmResults = await executeToolCalls(confirmTools, convId);
       for (const toolMsg of confirmResults) {
         const saved = await cmds.saveMessage({

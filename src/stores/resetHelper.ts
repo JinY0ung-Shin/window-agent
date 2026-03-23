@@ -9,6 +9,7 @@ import { useMemoryStore } from "./memoryStore";
 import { useConversationStore } from "./conversationStore";
 import { useAgentStore } from "./agentStore";
 import { useTeamStore } from "./teamStore";
+import { useTeamRunStore } from "./teamRunStore";
 
 /**
  * Level 1: Reset only transient chat state.
@@ -26,6 +27,21 @@ export function resetTransientChatState() {
 }
 
 /**
+ * Clear team-specific run state (runsById, activeRuns, per-run tool state).
+ * Call when leaving team view or switching teams to prevent stale state leaking.
+ */
+export function resetTeamRunState() {
+  useTeamRunStore.getState().clearAll();
+  useStreamStore.setState({ runsById: {} });
+  // Cancel any pending per-run tool approvals before clearing state,
+  // so that waiting executeToolPipeline calls don't resume after navigation.
+  const { toolRunStates } = useToolRunStore.getState();
+  for (const runId of Object.keys(toolRunStates)) {
+    useToolRunStore.getState().resetToolState(runId);
+  }
+}
+
+/**
  * Level 2: Full reset including conversation and agent selection.
  */
 export function resetChatContext() {
@@ -34,4 +50,5 @@ export function resetChatContext() {
   useAgentStore.getState().selectAgent(null);
   useTeamStore.getState().selectTeam(null);
   resetTransientChatState();
+  resetTeamRunState();
 }

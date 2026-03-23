@@ -380,7 +380,7 @@ export async function runToolLoop(
     useMessageStore.setState({
       messages: [...msg().messages, ...savedToolMsgs, nextPending],
     });
-    useToolRunStore.setState({ toolRunState: "continuing" });
+    useToolRunStore.getState().setContinuing();
     useStreamStore.setState({
       activeRun: {
         requestId: currentRequestId,
@@ -534,6 +534,8 @@ export interface ProcessToolCallsOptions {
   autoApproveEnabled: boolean;
   workspacePath?: string;
   iterationCount?: number;
+  /** 팀 실행 시 run별 상태 분리를 위한 runId */
+  runId?: string;
   /** 도구 확인 승인 시 추가 콜백 */
   onConfirmApproved?: (tools: ToolCall[]) => void;
 }
@@ -546,7 +548,7 @@ export async function processToolCalls(
   parsedToolCalls: ToolCall[],
   options: ProcessToolCallsOptions,
 ): Promise<ChatMessage[]> {
-  const { convId, toolDefinitions, autoApproveEnabled, workspacePath, iterationCount, onConfirmApproved } = options;
+  const { convId, toolDefinitions, autoApproveEnabled, workspacePath, iterationCount, runId, onConfirmApproved } = options;
 
   const classification = classifyToolCalls(parsedToolCalls, toolDefinitions, {
     workspacePath,
@@ -556,6 +558,7 @@ export async function processToolCalls(
 
   const savedToolMsgs = await executeToolPipeline(classification, convId, {
     iterationCount,
+    runId,
     onConfirmApproved: (tools) => {
       // 브라우저 도메인 승인 기록 (workspace가 있는 경우)
       for (const tc of tools) {

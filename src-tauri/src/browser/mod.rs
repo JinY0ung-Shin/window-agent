@@ -489,6 +489,13 @@ impl BrowserManager {
             let _ = s.child.kill();
         }
 
+        // Clear all cached sessions — they belong to the old sidecar process
+        // and will fail with "Session not found" in the new sidecar.
+        {
+            let mut sessions = self.sessions.write().await;
+            sessions.clear();
+        }
+
         // Persist to Tauri store
         if let Some(ref handle) = self.app_handle {
             save_browser_proxy(handle, &proxy);
