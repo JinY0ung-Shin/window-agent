@@ -91,7 +91,10 @@ impl BrowserManager {
             proxy_server: Arc::new(Mutex::new(proxy)),
             app_data_dir,
             app_handle,
-            client: Client::new(),
+            client: Client::builder()
+                .no_proxy()
+                .build()
+                .expect("failed to build reqwest client"),
         }
     }
 
