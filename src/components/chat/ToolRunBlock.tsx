@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Crown,
   Loader,
   Wrench,
   X,
@@ -24,11 +25,18 @@ import {
   type ToolCallStatus,
 } from "./toolCallUtils";
 
+export interface SenderInfo {
+  agentName?: string;
+  agentAvatar?: string | null;
+  isLeader?: boolean;
+}
+
 interface ToolRunBlockProps {
   assistantMessage: ChatMessage;
   leadingContent?: string;
   steps: ToolRunStep[];
   isActiveRun: boolean;
+  senderInfo?: SenderInfo;
 }
 
 function statusIcon(status: ToolCallStatus) {
@@ -88,8 +96,10 @@ export default function ToolRunBlock({
   leadingContent,
   steps,
   isActiveRun,
+  senderInfo,
 }: ToolRunBlockProps) {
   const { t } = useTranslation("chat");
+  const { t: tTeam } = useTranslation("team");
   const toolRunState = useToolRunStore((state) => state.toolRunState);
   const approveToolCall = useToolRunStore((state) => state.approveToolCall);
   const rejectToolCall = useToolRunStore((state) => state.rejectToolCall);
@@ -102,11 +112,32 @@ export default function ToolRunBlock({
     && steps.some((step) => step.status === "pending");
 
   return (
-    <div className="message agent tool-run-message">
-      <div className="avatar">
-        <Bot size={22} color="#6366f1" />
+    <div className={`message agent tool-run-message${senderInfo ? " team-message team-message-agent" : ""}`}>
+      <div className={senderInfo ? "team-msg-avatar team-msg-avatar-agent" : "avatar"}>
+        {senderInfo?.agentAvatar ? (
+          <img src={senderInfo.agentAvatar} alt={senderInfo.agentName || tTeam("chat.unknownAgent")} className="team-msg-avatar-img" />
+        ) : (
+          <Bot size={senderInfo ? 18 : 22} color="#6366f1" />
+        )}
       </div>
-      <div className="bubble tool-run-bubble">
+      <div className={senderInfo ? "team-msg-content" : ""}>
+        {senderInfo && (
+          <div className="team-msg-header">
+            <span className="team-msg-name">{senderInfo.agentName || tTeam("chat.unknownAgent")}</span>
+            {senderInfo.isLeader && (
+              <span className="team-role-badge team-role-leader">
+                <Crown size={10} />
+                {tTeam("chat.leader")}
+              </span>
+            )}
+            {!senderInfo.isLeader && senderInfo.agentName && (
+              <span className="team-role-badge team-role-member">
+                {tTeam("chat.member")}
+              </span>
+            )}
+          </div>
+        )}
+        <div className={senderInfo ? "team-msg-bubble team-msg-bubble-agent" : "bubble tool-run-bubble"}>
         {(assistantMessage.reasoningContent || leadingContent) && (
           <div className="tool-run-leading">
             <MessageBody
@@ -220,6 +251,7 @@ export default function ToolRunBlock({
             </div>
           )}
         </section>
+        </div>
       </div>
     </div>
   );

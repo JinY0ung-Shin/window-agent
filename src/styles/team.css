@@ -502,3 +502,63 @@
   margin-left: auto;
   font-weight: 500;
 }
+
+/* ── DM Components (ToolRunBlock / ChatMessage) in Team Chat ── */
+
+/* Wrapper for tool-run blocks with team sender info */
+.team-tool-run-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 85%;
+  animation: slideUp 0.3s ease-out forwards;
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* Sender header aligned past the avatar column */
+.team-tool-run-wrapper > .team-msg-header {
+  padding-left: 44px; /* avatar 32px + gap 12px */
+}
+
+/* DM .message inside team chat — match team sizing */
+.team-chat-container .message {
+  max-width: 85%;
+  gap: 12px;
+}
+
+.team-chat-container .message.user {
+  margin-left: auto;
+}
+
+/* Shrink DM avatar to team size (32px circle) */
+.team-chat-container .message .avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+/* Tool-run message width in team context */
+.team-chat-container .tool-run-message {
+  max-width: 85%;
+}
+
+/* Tool-run summary bar — use team surface style */
+.team-chat-container .tool-run-summary {
+  background: var(--surface);
+}
+
+/* Smaller bubble padding in team context for consistency */
+.team-chat-container .message .bubble {
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 0.9375rem;
+}
+
+.team-chat-container .message.agent .bubble {
+  border-top-left-radius: 4px;
+}
+
+.team-chat-container .message.user .bubble {
+  border-top-right-radius: 4px;
+}
