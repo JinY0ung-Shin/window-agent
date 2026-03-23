@@ -66,7 +66,7 @@ export default function ConversationSwitcher() {
   const agentConversations = useMemo(() => {
     if (!currentAgentId) return [];
     const list = conversations
-      .filter((c) => c.agent_id === currentAgentId)
+      .filter((c) => c.agent_id === currentAgentId && !c.team_id)
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
 
     // Optimistic fallback: if currentConversationId exists but isn't in the list yet

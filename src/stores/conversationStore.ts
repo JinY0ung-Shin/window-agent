@@ -12,6 +12,7 @@ import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
 import { useMessageStore } from "./messageStore";
 import { resetTransientChatState, resetChatContext } from "./resetHelper";
+import { useTeamStore } from "./teamStore";
 import { logger } from "../services/logger";
 
 interface ConversationState {
@@ -42,6 +43,7 @@ interface ConversationState {
   deleteConversation: (id: string) => Promise<void>;
   setCurrentConversationId: (id: string | null) => void;
   openAgentChat: (agentId: string) => Promise<void>;
+  openTeamChat: (teamId: string, leaderAgentId: string) => Promise<void>;
   clearAgentChat: (agentId: string) => Promise<void>;
   startNewAgentConversation: (agentId: string) => Promise<void>;
 }
@@ -263,7 +265,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   openAgentChat: async (agentId) => {
     const { conversations } = get();
     // Find the most recent conversation for this agent (conversations are sorted by updated_at DESC)
-    const agentConv = conversations.find((c) => c.agent_id === agentId);
+    const agentConv = conversations.find((c) => c.agent_id === agentId && !c.team_id);
 
     if (agentConv) {
       await get().selectConversation(agentConv.id);
@@ -290,10 +292,49 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     }
   },
 
+  openTeamChat: async (teamId, leaderAgentId) => {
+    // Ensure conversations are up-to-date before lookup (prevents race with mount-time load)
+    try { await get().loadConversations(); } catch { /* fall back to in-memory list */ }
+
+    const { conversations } = get();
+    // Find the most recent conversation for this team
+    const teamConv = conversations.find((c) => c.team_id === teamId);
+
+    // Select team early so the UI switches immediately
+    useTeamStore.getState().selectTeam(teamId);
+
+    if (teamConv) {
+      // Load existing team conversation
+      await get().selectConversation(teamConv.id);
+    } else {
+      // Trigger consolidation for previous conversation
+      const prevConvId = get().currentConversationId;
+      if (prevConvId) {
+        const prevConv = conversations.find((c) => c.id === prevConvId);
+        if (prevConv) {
+          emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
+          get().triggerConsolidation(prevConvId, prevConv.agent_id);
+        }
+      }
+      // Prepare empty chat for this team's leader agent
+      resetChatContext();
+      // Re-select team after resetChatContext cleared it
+      useTeamStore.getState().selectTeam(teamId);
+      useAgentStore.getState().selectAgent(leaderAgentId);
+      await get().loadConsolidatedMemory(leaderAgentId);
+      const agent = useAgentStore.getState().agents.find((a) => a.id === leaderAgentId);
+      if (agent) {
+        useMemoryStore.getState().loadNotes(leaderAgentId);
+        useVaultStore.getState().loadNotes(leaderAgentId);
+        await useSkillStore.getState().loadSkills(agent.folder_name);
+      }
+    }
+  },
+
   clearAgentChat: async (agentId) => {
     const { conversations, currentConversationId } = get();
     // Delete ALL conversations for this agent
-    const agentConvs = conversations.filter((c) => c.agent_id === agentId);
+    const agentConvs = conversations.filter((c) => c.agent_id === agentId && !c.team_id);
 
     // Emit session:end if the active conversation is being cleared
     const wasActive = agentConvs.some((c) => c.id === currentConversationId);

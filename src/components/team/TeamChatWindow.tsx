@@ -11,6 +11,8 @@ import AgentMessageBubble from "./AgentMessageBubble";
 import TeamChatInput from "./TeamChatInput";
 import { useDragRegion } from "../../hooks/useDragRegion";
 import { useMessageScroll } from "../../hooks/useMessageScroll";
+import { emitLifecycleEvent } from "../../services/lifecycleEvents";
+import { resetTransientChatState } from "../../stores/resetHelper";
 
 export default function TeamChatWindow() {
   const { t } = useTranslation("team");
@@ -76,8 +78,18 @@ export default function TeamChatWindow() {
         <button
           className="icon-btn team-back-btn"
           onClick={() => {
+            const convStore = useConversationStore.getState();
+            const convId = convStore.currentConversationId;
+            if (convId) {
+              const convObj = convStore.conversations.find((c) => c.id === convId);
+              if (convObj) {
+                emitLifecycleEvent({ type: "session:end", conversationId: convId, agentId: convObj.agent_id });
+                convStore.triggerConsolidation(convId, convObj.agent_id);
+              }
+            }
             selectTeam(null);
-            useConversationStore.getState().setCurrentConversationId(null);
+            convStore.setCurrentConversationId(null);
+            resetTransientChatState();
           }}
           title={t("chat.backToTeams")}
         >

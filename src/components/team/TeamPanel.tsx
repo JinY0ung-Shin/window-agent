@@ -5,7 +5,6 @@ import { Users, Plus, Trash2, Crown, Bot, Settings, MessageSquare } from "lucide
 import { useTeamStore } from "../../stores/teamStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useConversationStore } from "../../stores/conversationStore";
-import { useMessageStore } from "../../stores/messageStore";
 import { useNavigationStore } from "../../stores/navigationStore";
 import TeamEditor from "./TeamEditor";
 import type { TeamDetail } from "../../services/types";
@@ -26,8 +25,9 @@ export default function TeamPanel() {
   const loadAgents = useAgentStore((s) => s.loadAgents);
   const getConversationsByTeam = useConversationStore((s) => s.getConversationsByTeam);
   const selectConversation = useConversationStore((s) => s.selectConversation);
+  const openTeamChat = useConversationStore((s) => s.openTeamChat);
+  const loadConversations = useConversationStore((s) => s.loadConversations);
   const setMainView = useNavigationStore((s) => s.setMainView);
-  const clearMessages = useMessageStore((s) => s.clearMessages);
 
   const [teamDetails, setTeamDetails] = useState<Record<string, TeamDetail>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -37,7 +37,8 @@ export default function TeamPanel() {
   useEffect(() => {
     loadTeams();
     loadAgents();
-  }, [loadTeams, loadAgents]);
+    loadConversations();
+  }, [loadTeams, loadAgents, loadConversations]);
 
   // Load details for all teams to get member counts
   useEffect(() => {
@@ -98,8 +99,7 @@ export default function TeamPanel() {
                   key={team.id}
                   className="team-card"
                   onClick={() => {
-                    clearMessages();
-                    selectTeam(team.id);
+                    openTeamChat(team.id, team.leader_agent_id);
                   }}
                 >
                   <div className="team-card-header">

@@ -24,6 +24,7 @@ beforeEach(() => {
   useTeamStore.setState(initialTeamState, true);
   useAgentStore.setState(initialAgentState, true);
   useConversationStore.setState(initialConvState, true);
+  useConversationStore.setState({ loadConversations: vi.fn() });
   useMessageStore.setState(initialMsgState, true);
   useNavigationStore.setState(initialNavState, true);
 });
@@ -277,24 +278,21 @@ describe("TeamPanel", () => {
     expect(screen.getByText("Team Discussion")).toBeInTheDocument();
   });
 
-  it("selects team and clears messages on team card click", () => {
-    const selectTeam = vi.fn();
-    const clearMessages = vi.fn();
+  it("calls openTeamChat on team card click", () => {
+    const openTeamChat = vi.fn();
     useTeamStore.setState({
       teams: [mockTeams[0]],
       loadTeams: vi.fn(),
-      selectTeam,
       getTeamDetail: vi.fn().mockResolvedValue({ team: mockTeams[0], members: [] }),
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
-    useMessageStore.setState({ clearMessages });
+    useConversationStore.setState({ openTeamChat });
 
     const { container } = render(<TeamPanel />);
     const card = container.querySelector(".team-card")!;
     fireEvent.click(card);
 
-    expect(clearMessages).toHaveBeenCalled();
-    expect(selectTeam).toHaveBeenCalledWith("team-1");
+    expect(openTeamChat).toHaveBeenCalledWith("team-1", "agent-1");
   });
 
   it("displays member count from team detail", async () => {

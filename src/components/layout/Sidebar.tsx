@@ -31,23 +31,23 @@ export default function Sidebar() {
   const onDrag = useDragRegion();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Build a map: agentId → most recent conversation's updated_at
+  // Build a map: agentId → most recent conversation's updated_at (DM only)
   const agentLastActivity = useMemo(() => {
     const map = new Map<string, string>();
     // conversations are sorted by updated_at DESC, so first match is the latest
     for (const conv of conversations) {
-      if (!map.has(conv.agent_id)) {
+      if (!conv.team_id && !map.has(conv.agent_id)) {
         map.set(conv.agent_id, conv.updated_at);
       }
     }
     return map;
   }, [conversations]);
 
-  // Build a map: agentId → has conversation
+  // Build a map: agentId → has DM conversation
   const agentHasConv = useMemo(() => {
     const set = new Set<string>();
     for (const conv of conversations) {
-      set.add(conv.agent_id);
+      if (!conv.team_id) set.add(conv.agent_id);
     }
     return set;
   }, [conversations]);

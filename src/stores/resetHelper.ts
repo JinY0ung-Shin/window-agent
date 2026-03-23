@@ -8,6 +8,7 @@ import { useSkillStore } from "./skillStore";
 import { useMemoryStore } from "./memoryStore";
 import { useConversationStore } from "./conversationStore";
 import { useAgentStore } from "./agentStore";
+import { useTeamStore } from "./teamStore";
 
 /**
  * Level 1: Reset only transient chat state.
@@ -31,5 +32,6 @@ export function resetChatContext() {
   useConversationStore.setState({ currentConversationId: null });
   useConversationStore.getState().resetLearningModeState();
   useAgentStore.getState().selectAgent(null);
+  useTeamStore.getState().selectTeam(null);
   resetTransientChatState();
 }
