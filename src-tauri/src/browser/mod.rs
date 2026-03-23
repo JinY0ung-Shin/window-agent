@@ -108,15 +108,18 @@ impl BrowserManager {
         }
 
         // Resolve sidecar script path.
-        let script_path = resolve_sidecar_script(self.app_handle.as_ref())
-            .ok_or_else(|| "browser-sidecar server.js not found".to_string())?;
+        // Strip \\?\ prefix from all paths — Node.js cannot handle Windows extended-length paths.
+        let script_path = strip_unc_prefix(
+            resolve_sidecar_script(self.app_handle.as_ref())
+                .ok_or_else(|| "browser-sidecar server.js not found".to_string())?
+        );
 
-        let node_path = resolve_node_executable(self.app_handle.as_ref())?;
+        let node_path = strip_unc_prefix(resolve_node_executable(self.app_handle.as_ref())?);
 
         // Resolve browser paths:
         // - Primary: bundled Chromium in Tauri resources (release builds)
         // - Fallback: writable app_data_dir (for runtime download)
-        let browsers_path = self.resolve_browsers_path();
+        let browsers_path = strip_unc_prefix(self.resolve_browsers_path());
         let fallback_path = self.app_data_dir.join("playwright-browsers");
 
         tracing::info!("sidecar: node={} script={}", node_path.display(), script_path.display());
@@ -509,6 +512,19 @@ impl Default for SessionSecurityPolicy {
             approved_domains: HashSet::new(),
         }
     }
+}
+
+/// Strip Windows extended-length path prefix (`\\?\`) which Tauri's path resolver adds.
+/// Node.js cannot handle these paths, causing EISDIR errors during module resolution.
+fn strip_unc_prefix(path: PathBuf) -> PathBuf {
+    #[cfg(target_os = "windows")]
+    {
+        let s = path.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix("\\\\?\\") {
+            return PathBuf::from(stripped);
+        }
+    }
+    path
 }
 
 /// Resolve the Node.js executable path.
