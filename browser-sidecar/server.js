@@ -183,23 +183,33 @@ module.exports = { generateSnapshot, buildResponse, buildSelector, buildTreeFrom
 
 const LAUNCH_ARGS = ['--no-first-run', '--no-default-browser-check'];
 
+function getLaunchOptions(extra = {}) {
+  const opts = { headless: false, args: LAUNCH_ARGS, ...extra };
+  const proxyServer = process.env.BROWSER_PROXY_SERVER;
+  if (proxyServer) {
+    opts.proxy = { server: proxyServer };
+    log(`Proxy configured: ${proxyServer}`);
+  }
+  return opts;
+}
+
 async function ensureBrowser() {
   if (!browser) {
     try {
       // 1st: Playwright bundled/downloaded Chromium
-      browser = await chromium.launch({ headless: false, args: LAUNCH_ARGS });
+      browser = await chromium.launch(getLaunchOptions());
       log('Browser launched (Playwright Chromium)');
     } catch (err1) {
       log(`Playwright Chromium unavailable: ${err1.message}`);
       try {
         // 2nd: System Chrome fallback
-        browser = await chromium.launch({ channel: 'chrome', headless: false, args: LAUNCH_ARGS });
+        browser = await chromium.launch(getLaunchOptions({ channel: 'chrome' }));
         log('Browser launched (system Chrome)');
       } catch (err2) {
         log(`System Chrome also unavailable: ${err2.message}`);
         // 3rd: Runtime download as last resort
         await installChromiumRuntime();
-        browser = await chromium.launch({ headless: false, args: LAUNCH_ARGS });
+        browser = await chromium.launch(getLaunchOptions());
         log('Browser launched (freshly installed Chromium)');
       }
     }

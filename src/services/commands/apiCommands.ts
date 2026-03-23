@@ -37,6 +37,20 @@ export async function setNoProxy(enabled: boolean): Promise<void> {
   return invoke("set_no_proxy", { enabled });
 }
 
+// ── Browser Proxy ──
+
+export async function getBrowserProxy(): Promise<string> {
+  return invoke("get_browser_proxy");
+}
+
+export async function setBrowserProxy(proxy: string): Promise<void> {
+  return invoke("set_browser_proxy", { proxy });
+}
+
+export async function detectSystemProxy(): Promise<string> {
+  return invoke("detect_system_proxy");
+}
+
 export interface ApiHealthCheckRequest {
   api_key?: string | null;
   base_url?: string | null;

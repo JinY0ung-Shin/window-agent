@@ -22,6 +22,8 @@ pub struct BrowserManager {
     /// Applied when the session is created.
     pending_approvals: Arc<Mutex<HashMap<String, HashSet<String>>>>,
     idle_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    /// Proxy server URL for browser (e.g. "http://proxy:8080"). Empty = system default.
+    proxy_server: Arc<Mutex<String>>,
     pub(crate) app_data_dir: PathBuf,
     pub(crate) app_handle: Option<tauri::AppHandle>,
     pub(crate) client: Client,
@@ -77,11 +79,16 @@ impl BrowserManager {
         let screenshots_dir = app_data_dir.join("browser_screenshots");
         std::fs::create_dir_all(&screenshots_dir).ok();
 
+        // Load saved proxy or detect system proxy
+        let proxy = load_browser_proxy(&app_handle)
+            .unwrap_or_else(|| detect_system_proxy().unwrap_or_default());
+
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
             sidecar: Arc::new(Mutex::new(None)),
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
             idle_task: Arc::new(Mutex::new(None)),
+            proxy_server: Arc::new(Mutex::new(proxy)),
             app_data_dir,
             app_handle,
             client: Client::new(),
@@ -125,10 +132,14 @@ impl BrowserManager {
         tracing::info!("sidecar: node={} script={}", node_path.display(), script_path.display());
         tracing::info!("sidecar: browsers_path={} fallback={}", browsers_path.display(), fallback_path.display());
 
+        let proxy = self.proxy_server.lock().await.clone();
+        tracing::info!("sidecar: proxy={}", if proxy.is_empty() { "(none)" } else { &proxy });
+
         let mut cmd = Command::new(&node_path);
         cmd.arg(&script_path)
             .env("PLAYWRIGHT_BROWSERS_PATH", &browsers_path)
             .env("PLAYWRIGHT_BROWSERS_PATH_FALLBACK", &fallback_path)
+            .env("BROWSER_PROXY_SERVER", &proxy)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
 
@@ -460,6 +471,27 @@ impl BrowserManager {
         Ok(())
     }
 
+    /// Get the current browser proxy server URL.
+    pub async fn get_proxy_server(&self) -> String {
+        self.proxy_server.lock().await.clone()
+    }
+
+    /// Set the browser proxy server URL and restart sidecar to apply.
+    pub async fn set_proxy_server(&self, proxy: String) {
+        *self.proxy_server.lock().await = proxy.clone();
+
+        // Kill existing sidecar so it restarts with new proxy on next use
+        let mut sidecar = self.sidecar.lock().await;
+        if let Some(mut s) = sidecar.take() {
+            let _ = s.child.kill();
+        }
+
+        // Persist to Tauri store
+        if let Some(ref handle) = self.app_handle {
+            save_browser_proxy(handle, &proxy);
+        }
+    }
+
     // === Internal helpers ===
 
     /// Validate the final URL after any navigation-producing action.
@@ -586,6 +618,106 @@ fn resolve_sidecar_script(app_handle: Option<&tauri::AppHandle>) -> Option<PathB
         }
     }
 
+    None
+}
+
+const BROWSER_STORE_FILE: &str = "browser-config.json";
+const STORE_KEY_PROXY: &str = "proxy_server";
+
+/// Load saved browser proxy from Tauri store.
+fn load_browser_proxy(app_handle: &Option<tauri::AppHandle>) -> Option<String> {
+    let handle = app_handle.as_ref()?;
+    let store = tauri_plugin_store::StoreExt::store(handle, BROWSER_STORE_FILE).ok()?;
+    store.get(STORE_KEY_PROXY)?.as_str().map(|s| s.to_string())
+}
+
+/// Persist browser proxy to Tauri store.
+fn save_browser_proxy(app_handle: &tauri::AppHandle, proxy: &str) {
+    if let Ok(store) = tauri_plugin_store::StoreExt::store(app_handle, BROWSER_STORE_FILE) {
+        store.set(STORE_KEY_PROXY, serde_json::json!(proxy));
+        let _ = store.save();
+    }
+}
+
+/// Detect system proxy settings.
+/// Windows: reads from environment variables (HTTP_PROXY / HTTPS_PROXY).
+/// These are also set by many corporate proxy tools.
+pub fn detect_system_proxy() -> Option<String> {
+    // Check standard env vars (case-insensitive on Windows, but check both)
+    for var in ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"] {
+        if let Ok(val) = std::env::var(var) {
+            let trimmed = val.trim().to_string();
+            if !trimmed.is_empty() {
+                return Some(trimmed);
+            }
+        }
+    }
+
+    // Windows: read from registry (Internet Settings)
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(proxy) = detect_windows_registry_proxy() {
+            return Some(proxy);
+        }
+    }
+
+    None
+}
+
+/// Read proxy from Windows registry (Internet Settings > ProxyServer).
+#[cfg(target_os = "windows")]
+fn detect_windows_registry_proxy() -> Option<String> {
+    use std::process::Command as StdCommand;
+    let output = StdCommand::new("reg")
+        .args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+            "/v", "ProxyServer",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Parse REG_SZ value: "    ProxyServer    REG_SZ    http://proxy:8080"
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.starts_with("ProxyServer") {
+            // Also check ProxyEnable
+            let enable_output = StdCommand::new("reg")
+                .args([
+                    "query",
+                    r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+                    "/v", "ProxyEnable",
+                ])
+                .output()
+                .ok()?;
+            let enable_str = String::from_utf8_lossy(&enable_output.stdout);
+            let enabled = enable_str.lines().any(|l| {
+                let l = l.trim();
+                l.starts_with("ProxyEnable") && l.contains("0x1")
+            });
+            if !enabled {
+                return None;
+            }
+
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(val) = parts.last() {
+                let val = val.trim();
+                if !val.is_empty() {
+                    // Add http:// prefix if missing
+                    return if val.starts_with("http://") || val.starts_with("https://") || val.starts_with("socks") {
+                        Some(val.to_string())
+                    } else {
+                        Some(format!("http://{}", val))
+                    };
+                }
+            }
+        }
+    }
     None
 }
 

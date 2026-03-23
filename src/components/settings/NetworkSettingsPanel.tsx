@@ -4,7 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNetworkStore } from "../../stores/networkStore";
 import { checkApiHealth, listModels, type ApiHealthCheckResponse } from "../../services/tauriCommands";
-import { getNoProxy, setNoProxy } from "../../services/commands/apiCommands";
+import { getNoProxy, setNoProxy, getBrowserProxy, setBrowserProxy, detectSystemProxy } from "../../services/commands/apiCommands";
 import { relayGetRelayUrl, relaySetRelayUrl } from "../../services/commands/relayCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "../../constants";
 import { logger } from "../../services/logger";
@@ -45,6 +45,13 @@ const NetworkSettingsPanel = forwardRef<NetworkSettingsPanelRef, Props>(
     const [healthError, setHealthError] = useState("");
     const [noProxyEnabled, setNoProxyEnabled] = useState(false);
 
+    /* ── Browser proxy state ── */
+    const [browserProxy, setBrowserProxyState] = useState("");
+    const [browserProxySaving, setBrowserProxySaving] = useState(false);
+    const [browserProxySaved, setBrowserProxySaved] = useState(false);
+    const [browserProxyDetecting, setBrowserProxyDetecting] = useState(false);
+    const [browserProxyDetectMsg, setBrowserProxyDetectMsg] = useState("");
+
     /* ── Agent network state ── */
     const [networkToggleLoading, setNetworkToggleLoading] = useState(false);
     const [peerIdCopied, setPeerIdCopied] = useState(false);
@@ -80,6 +87,11 @@ const NetworkSettingsPanel = forwardRef<NetworkSettingsPanelRef, Props>(
         setHealthError("");
         fetchModels();
         getNoProxy().then(setNoProxyEnabled).catch((e) => logger.debug("Failed to get proxy setting", e));
+        getBrowserProxy().then((p) => {
+          setBrowserProxyState(p);
+          setBrowserProxySaved(false);
+          setBrowserProxyDetectMsg("");
+        }).catch((e) => logger.debug("Failed to get browser proxy", e));
 
         /* Network init */
         relayGetRelayUrl().then((url) => {
@@ -197,6 +209,75 @@ const NetworkSettingsPanel = forwardRef<NetworkSettingsPanelRef, Props>(
               {t("general.proxyBypass")}
             </label>
           </div>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="browserProxy">{t("general.browserProxyLabel")}</label>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              id="browserProxy"
+              type="text"
+              placeholder={t("general.browserProxyPlaceholder")}
+              value={browserProxy}
+              onChange={(e) => {
+                setBrowserProxyState(e.target.value);
+                setBrowserProxySaved(false);
+                setBrowserProxyDetectMsg("");
+              }}
+              style={{ flex: 1 }}
+            />
+            <button
+              className="btn-secondary"
+              disabled={browserProxySaving}
+              onClick={async () => {
+                setBrowserProxySaving(true);
+                try {
+                  await setBrowserProxy(browserProxy.trim());
+                  setBrowserProxySaved(true);
+                } catch (e) {
+                  logger.debug("Failed to save browser proxy", e);
+                } finally {
+                  setBrowserProxySaving(false);
+                }
+              }}
+            >
+              {browserProxySaving ? t("common:saving") : t("common:save")}
+            </button>
+            <button
+              className="btn-secondary"
+              disabled={browserProxyDetecting}
+              onClick={async () => {
+                setBrowserProxyDetecting(true);
+                setBrowserProxyDetectMsg("");
+                try {
+                  const detected = await detectSystemProxy();
+                  if (detected) {
+                    setBrowserProxyState(detected);
+                    setBrowserProxyDetectMsg(t("general.browserProxyDetected"));
+                  } else {
+                    setBrowserProxyDetectMsg(t("general.browserProxyNotDetected"));
+                  }
+                } catch (e) {
+                  logger.debug("Failed to detect system proxy", e);
+                  setBrowserProxyDetectMsg(t("general.browserProxyNotDetected"));
+                } finally {
+                  setBrowserProxyDetecting(false);
+                }
+              }}
+            >
+              {t("general.browserProxyDetect")}
+            </button>
+          </div>
+          {browserProxySaved && (
+            <p className="form-text text-success">{t("general.browserProxySaved")}</p>
+          )}
+          {browserProxyDetectMsg && (
+            <p className="form-text">{browserProxyDetectMsg}</p>
+          )}
+          <p className="form-text">{t("general.browserProxyHint")}</p>
+        </div>
+
+        <div className="form-group">
           <div className="settings-health-row">
             <button
               type="button"

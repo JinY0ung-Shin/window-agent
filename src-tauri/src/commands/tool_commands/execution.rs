@@ -715,3 +715,24 @@ pub async fn get_browser_artifact(
 ) -> Result<BrowserArtifact, AppError> {
     Ok(operations::get_browser_artifact(&db, &id)?)
 }
+
+/// Get the current browser proxy server URL.
+#[tauri::command]
+pub async fn get_browser_proxy(app: AppHandle) -> Result<String, AppError> {
+    let browser = app.state::<crate::browser::BrowserManager>();
+    Ok(browser.get_proxy_server().await)
+}
+
+/// Set the browser proxy server URL.
+#[tauri::command]
+pub async fn set_browser_proxy(app: AppHandle, proxy: String) -> Result<(), AppError> {
+    let browser = app.state::<crate::browser::BrowserManager>();
+    browser.set_proxy_server(proxy).await;
+    Ok(())
+}
+
+/// Detect system proxy settings and return the URL (or empty string).
+#[tauri::command]
+pub fn detect_system_proxy() -> Result<String, AppError> {
+    Ok(crate::browser::detect_system_proxy().unwrap_or_default())
+}
