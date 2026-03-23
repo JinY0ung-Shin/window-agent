@@ -8,6 +8,7 @@ import { useBootstrapStore } from "./bootstrapStore";
 import { useNavigationStore } from "./navigationStore";
 import { useMessageStore } from "./messageStore";
 import { useStreamStore } from "./streamStore";
+import { useToolRunStore } from "./toolRunStore";
 import { useSummaryStore } from "./summaryStore";
 import { resetChatContext } from "./resetHelper";
 import {
@@ -397,6 +398,9 @@ async function regenerateStream(
         replyContent,
         reasoningContent,
       });
+
+      useStreamStore.setState({ activeRun: null });
+      useToolRunStore.getState().resetToolState();
 
       summary().maybeGenerateSummary(
         convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),

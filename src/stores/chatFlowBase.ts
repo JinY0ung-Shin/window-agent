@@ -339,6 +339,9 @@ export async function runToolLoop(
         saveExtras,
       });
 
+      useStreamStore.setState({ activeRun: null });
+      useToolRunStore.getState().resetToolState();
+
       summary().maybeGenerateSummary(
         convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
       );
