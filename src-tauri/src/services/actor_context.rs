@@ -23,6 +23,8 @@ pub enum ExecutionRole {
     TeamLeaderSynthesis,
     /// Executing a scheduled (cron) task
     CronExecution,
+    /// Responding to an incoming relay peer message
+    RelayResponse,
 }
 
 /// `UserInitiated` is matched in `resolve_tool_names` but only constructed
@@ -161,6 +163,11 @@ pub fn role_instruction(role: &ExecutionRole) -> Option<&'static str> {
             "You are executing a scheduled task. Complete the task described below \
              and provide a concise summary of your results.",
         ),
+        ExecutionRole::RelayResponse => Some(
+            "You are responding to a message from an external peer. \
+             Read the conversation and respond naturally, as you would in a normal conversation with a user. \
+             Use available tools when needed to fulfill requests.",
+        ),
         _ => None,
     }
 }
@@ -275,6 +282,17 @@ fn resolve_tool_names(
                 .filter(|(name, _)| {
                     !name.starts_with("browser_") && name != "delegate" && name != "report"
                 })
+                .map(|(name, _)| name)
+                .collect()
+        }
+
+        // Relay response — all enabled tools (same as user DM, but backend-driven)
+        // Excludes orchestration tools (delegate/report require team context)
+        ExecutionRole::RelayResponse => {
+            let config_tools = read_tool_config(agent_dir);
+            config_tools
+                .into_iter()
+                .filter(|(name, _)| name != "delegate" && name != "report")
                 .map(|(name, _)| name)
                 .collect()
         }

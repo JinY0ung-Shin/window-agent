@@ -121,15 +121,5 @@
     "sendMessageLabel": "메시지 보내기",
     "messagePlaceholder": "메시지를 입력하세요...",
     "sendButton": "전송"
-  },
-  "approval": {
-    "defaultResponse": "감사합니다. 확인했습니다.",
-    "showOriginal": "원문 보기",
-    "hideOriginal": "원문 접기",
-    "responsePlaceholder": "응답 내용을 입력하세요...",
-    "drafting": "생성 중...",
-    "requestDraft": "초안 요청",
-    "approveAndSend": "승인 & 전송",
-    "reject": "거절"
   }
 }

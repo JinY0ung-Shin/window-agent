@@ -89,24 +89,6 @@ export async function relaySendMessage(
   return invoke("relay_send_message", { contactId, content });
 }
 
-export async function relayApproveMessage(
-  messageId: string,
-  responseContent: string,
-): Promise<string> {
-  return invoke("relay_approve_message", { messageId, responseContent });
-}
-
-export async function relayRejectMessage(messageId: string): Promise<void> {
-  return invoke("relay_reject_message", { messageId });
-}
-
-export async function relayRequestDraft(
-  messageId: string,
-  agentId: string,
-): Promise<string> {
-  return invoke("relay_request_draft", { messageId, agentId });
-}
-
 // ── Network Enabled ──
 
 export async function relayGetNetworkEnabled(): Promise<boolean> {

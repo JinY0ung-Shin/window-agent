@@ -121,15 +121,5 @@
     "sendMessageLabel": "Send Message",
     "messagePlaceholder": "Type a message...",
     "sendButton": "Send"
-  },
-  "approval": {
-    "defaultResponse": "Thank you. Acknowledged.",
-    "showOriginal": "Show Original",
-    "hideOriginal": "Hide Original",
-    "responsePlaceholder": "Enter response...",
-    "drafting": "Drafting...",
-    "requestDraft": "Request Draft",
-    "approveAndSend": "Approve & Send",
-    "reject": "Reject"
   }
 }

@@ -10,8 +10,6 @@ import {
   relayAcceptInvite,
   relayListThreads,
   relayGetThreadMessages,
-  relayApproveMessage,
-  relayRejectMessage,
   relaySendMessage,
   relayGetNetworkEnabled,
   relaySetNetworkEnabled,
@@ -21,7 +19,6 @@ import {
   type PeerThreadRow,
   type PeerMessageRow,
 } from "../services/commands/relayCommands";
-import { i18n } from "../i18n";
 
 type NetworkStatus = "dormant" | "starting" | "active" | "stopping" | "reconnecting";
 
@@ -44,14 +41,6 @@ interface ErrorPayload {
   message: string;
 }
 
-interface ApprovalNeededPayload {
-  thread_id: string;
-  message_id: string;
-  sender_agent: string;
-  summary: string;
-  original_content: string;
-}
-
 const STORAGE_KEY = "network_enabled";
 
 interface NetworkState {
@@ -65,8 +54,8 @@ interface NetworkState {
   threads: PeerThreadRow[];
   messages: PeerMessageRow[];
   pendingApprovals: number;
-  approvalSummaries: Record<string, string>; // messageId -> summary
   connectedPeers: Set<string>; // live connected peer_ids
+  isGeneratingResponse: boolean;
   error: string | null;
 
   // ── Actions ──
@@ -82,8 +71,6 @@ interface NetworkState {
   loadThreads: (contactId: string) => Promise<void>;
   loadMessages: (threadId: string) => Promise<void>;
   sendMessage: (contactId: string, content: string) => Promise<void>;
-  approveMessage: (messageId: string, responseContent?: string) => Promise<void>;
-  rejectMessage: (messageId: string) => Promise<void>;
   approveContact: (contactId: string) => Promise<void>;
   rejectContact: (contactId: string) => Promise<void>;
   setupEventListeners: () => Promise<() => void>;
@@ -99,8 +86,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   threads: [],
   messages: [],
   pendingApprovals: 0,
-  approvalSummaries: {},
   connectedPeers: new Set<string>(),
+  isGeneratingResponse: false,
   error: null,
 
   initialize: async () => {
@@ -168,8 +155,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         selectedContactId: null,
         selectedThreadId: null,
         pendingApprovals: 0,
-        approvalSummaries: {},
         connectedPeers: new Set<string>(),
+        isGeneratingResponse: false,
       });
     } catch (e) {
       set({ error: toErrorMessage(e) });
@@ -207,7 +194,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     set({ selectedContactId: contactId, selectedThreadId: null, threads: [], messages: [] });
     if (contactId) {
       get().loadThreads(contactId).then(() => {
-        // 비동기 완료 전에 다른 contact가 선택됐으면 스킵
         if (get().selectedContactId !== contactId) return;
         const threads = get().threads;
         if (threads.length > 0) {
@@ -230,7 +216,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   loadThreads: async (contactId) => {
     try {
       const threads = await relayListThreads(contactId);
-      // Guard against stale results if contact changed during async call
       if (get().selectedContactId !== contactId) return;
       set({ threads });
     } catch (e) {
@@ -251,46 +236,14 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     await relaySendMessage(contactId, content);
     const { selectedContactId } = get();
     if (selectedContactId === contactId) {
-      // Reload threads (a new thread may have been created)
       await get().loadThreads(contactId);
       const { threads, selectedThreadId } = get();
       if (!selectedThreadId && threads.length > 0) {
-        // Auto-select the new thread
         await get().selectThread(threads[0].id);
       } else if (selectedThreadId) {
         await get().loadMessages(selectedThreadId);
       }
     }
-  },
-
-  approveMessage: async (messageId, responseContent = i18n.t("network:approval.defaultResponse")) => {
-    await relayApproveMessage(messageId, responseContent);
-    const { selectedThreadId } = get();
-    if (selectedThreadId) {
-      await get().loadMessages(selectedThreadId);
-    }
-    set((s) => {
-      const { [messageId]: _, ...rest } = s.approvalSummaries;
-      return {
-        approvalSummaries: rest,
-        pendingApprovals: Math.max(0, s.pendingApprovals - 1),
-      };
-    });
-  },
-
-  rejectMessage: async (messageId) => {
-    await relayRejectMessage(messageId);
-    const { selectedThreadId } = get();
-    if (selectedThreadId) {
-      await get().loadMessages(selectedThreadId);
-    }
-    set((s) => {
-      const { [messageId]: _, ...rest } = s.approvalSummaries;
-      return {
-        approvalSummaries: rest,
-        pendingApprovals: Math.max(0, s.pendingApprovals - 1),
-      };
-    });
   },
 
   approveContact: async (contactId) => {
@@ -340,24 +293,35 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       }),
     );
 
+    // Contact introduction — refresh contacts list to show pending_approval contact
     unlisteners.push(
-      await listen<ApprovalNeededPayload & { type?: string }>("relay:approval-needed", (event) => {
-        const payload = event.payload;
-        if (payload.type === "introduce") {
-          // Contact introduction — refresh contacts list to show pending_approval contact
+      await listen<{ type?: string }>("relay:approval-needed", (event) => {
+        if (event.payload.type === "introduce") {
           set((s) => ({ pendingApprovals: s.pendingApprovals + 1 }));
           get().refreshContacts();
-          return;
         }
-        set((s) => ({
-          pendingApprovals: s.pendingApprovals + 1,
-          approvalSummaries: { ...s.approvalSummaries, [payload.message_id]: payload.summary },
-        }));
-        // Also refresh messages if viewing the relevant thread
+      }),
+    );
+
+    unlisteners.push(
+      await listen("relay:auto-response-started", () => {
+        set({ isGeneratingResponse: true });
+      }),
+    );
+
+    unlisteners.push(
+      await listen("relay:auto-response-completed", () => {
+        set({ isGeneratingResponse: false });
         const { selectedThreadId } = get();
         if (selectedThreadId) {
           get().loadMessages(selectedThreadId);
         }
+      }),
+    );
+
+    unlisteners.push(
+      await listen("relay:auto-response-error", () => {
+        set({ isGeneratingResponse: false });
       }),
     );
 

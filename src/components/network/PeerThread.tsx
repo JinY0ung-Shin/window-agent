@@ -5,16 +5,11 @@ import { i18n } from "../../i18n";
 import { useNetworkStore } from "../../stores/networkStore";
 import type { PeerMessageRow } from "../../services/commands/relayCommands";
 import DeliveryBadge from "./DeliveryBadge";
-import ApprovalPanel from "./ApprovalPanel";
 import ContactDetail from "./ContactDetail";
 import DraggableHeader from "../layout/DraggableHeader";
 
-function PeerMessageBubble({ msg, t }: { msg: PeerMessageRow; t: (key: string) => string }) {
-  const approveMessage = useNetworkStore((s) => s.approveMessage);
-  const rejectMessage = useNetworkStore((s) => s.rejectMessage);
-  const approvalSummaries = useNetworkStore((s) => s.approvalSummaries);
+function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
   const isOutgoing = msg.direction === "outgoing";
-  const isPending = msg.approval_state === "pending" && !isOutgoing;
 
   const time = (() => {
     try {
@@ -37,22 +32,6 @@ function PeerMessageBubble({ msg, t }: { msg: PeerMessageRow; t: (key: string) =
           )}
         </div>
       </div>
-      {isPending && (
-        <ApprovalPanel
-          messageId={msg.id}
-          summary={approvalSummaries[msg.id] || ""}
-          originalContent={msg.content}
-          agentId={msg.sender_agent}
-          onApprove={(responseText) => approveMessage(msg.id, responseText)}
-          onReject={() => rejectMessage(msg.id)}
-        />
-      )}
-      {!isOutgoing && msg.approval_state === "approved" && (
-        <span className="peer-msg-approval approved">✓ {t("peer.approved")}</span>
-      )}
-      {!isOutgoing && msg.approval_state === "rejected" && (
-        <span className="peer-msg-approval rejected">✗ {t("peer.rejected")}</span>
-      )}
     </div>
   );
 }
@@ -166,7 +145,7 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
             {t("peer.noMessages")}
           </div>
         ) : (
-          messages.map((msg) => <PeerMessageBubble key={msg.id} msg={msg} t={t} />)
+          messages.map((msg) => <PeerMessageBubble key={msg.id} msg={msg} />)
         )}
         <div ref={messagesEndRef} />
       </div>

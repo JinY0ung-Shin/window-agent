@@ -6,7 +6,6 @@ use crate::relay::envelope::{Envelope, Payload};
 use crate::relay::identity::NodeIdentity;
 use crate::relay::invite;
 use crate::relay::manager::RelayManager;
-use crate::relay::secretary;
 use tauri::{Manager, State};
 
 // ── Lifecycle commands ──
@@ -419,73 +418,6 @@ pub async fn relay_send_message(
     }
 
     Ok(())
-}
-
-#[tauri::command]
-pub async fn relay_approve_message(
-    db: State<'_, Database>,
-    manager: State<'_, RelayManager>,
-    message_id: String,
-    response_content: String,
-) -> Result<String, AppError> {
-    let result = secretary::approve_message(&db, &message_id, &response_content)
-        .map_err(AppError::Relay)?;
-
-    // Skip sending if relay is not active
-    if !manager.is_peer_authenticated(&result.target_peer_id).map_err(|e| AppError::Relay(e.to_string()))? {
-        return Ok(result.response_message_id);
-    }
-
-    // Encrypt + send
-    let encrypted_json = match manager.encrypt_for_peer(&result.target_peer_id, &result.envelope) {
-        Ok(enc) => enc,
-        Err(e) => {
-            tracing::error!("Failed to encrypt approved response: {e}");
-            return Ok(result.response_message_id);
-        }
-    };
-
-    // Store encrypted version
-    let _ = relay_db::update_message_raw_envelope(&db, &result.response_message_id, &encrypted_json);
-
-    match manager.send_raw_envelope(&result.target_peer_id, &encrypted_json).await {
-        Ok(()) => {
-            let _ = relay_db::update_message_state(
-                &db,
-                &result.response_message_id,
-                None,
-                Some("sending"),
-            );
-            let _ = relay_db::update_outbox_status(
-                &db,
-                &result.outbox_id,
-                "sending",
-                0,
-            );
-        }
-        Err(e) => {
-            tracing::error!("Failed to send approved response: {e}");
-        }
-    }
-
-    Ok(result.response_message_id)
-}
-
-#[tauri::command]
-pub fn relay_reject_message(db: State<'_, Database>, message_id: String) -> Result<(), AppError> {
-    secretary::reject_message(&db, &message_id).map_err(AppError::Relay)
-}
-
-#[tauri::command]
-pub async fn relay_request_draft(
-    app: tauri::AppHandle,
-    db: State<'_, Database>,
-    message_id: String,
-    agent_id: String,
-) -> Result<String, AppError> {
-    secretary::generate_draft_response(&app, &db, &message_id, &agent_id)
-        .await
-        .map_err(AppError::Relay)
 }
 
 // ── Thread commands ──

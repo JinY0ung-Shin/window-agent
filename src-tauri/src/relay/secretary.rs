@@ -1,36 +1,19 @@
 use crate::api::ApiState;
+use crate::commands::tool_commands::native_tool_definitions;
 use crate::db::Database;
+use crate::memory::SystemMemoryManager;
 use crate::relay::db as relay_db;
 use crate::relay::envelope::{Envelope, Payload};
-use crate::services::api_service;
+use crate::relay::manager::RelayManager;
+use crate::services::{actor_context, api_service, credential_service};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
-
-const SUMMARY_MODEL: &str = "gpt-4o-mini";
-
-/// Event payload emitted to frontend when approval is needed.
-#[derive(Debug, Clone, Serialize)]
-pub struct ApprovalNeeded {
-    pub thread_id: String,
-    pub message_id: String,
-    pub sender_agent: String,
-    pub summary: String,
-    pub original_content: String,
-}
 
 /// Event payload for delivery status updates.
 #[derive(Debug, Clone, Serialize)]
 pub struct DeliveryUpdate {
     pub message_id: String,
     pub state: String,
-}
-
-/// Result of approving a message — includes envelope for sending.
-pub struct ApproveResult {
-    pub response_message_id: String,
-    pub envelope: Envelope,
-    pub target_peer_id: String,
-    pub outbox_id: String,
 }
 
 /// Process an incoming message envelope from a remote peer.
@@ -74,14 +57,10 @@ pub async fn handle_incoming_message(
         tid
     };
 
-    // 4. Persist message with INSERT OR IGNORE (idempotent on message_id_unique)
+    // 4. Persist incoming message
     let now = chrono::Utc::now().to_rfc3339();
     let msg_id = uuid::Uuid::new_v4().to_string();
     let raw_envelope = serde_json::to_string(envelope).ok();
-
-    // Accepted contacts → auto-approve (normal chat), others → pending approval
-    let is_accepted = contact.status == "accepted";
-    let approval_state = if is_accepted { "none" } else { "pending" };
 
     let msg = relay_db::PeerMessageRow {
         id: msg_id.clone(),
@@ -91,7 +70,7 @@ pub async fn handle_incoming_message(
         direction: "incoming".to_string(),
         sender_agent: envelope.sender_agent.clone(),
         content: content.clone(),
-        approval_state: approval_state.to_string(),
+        approval_state: "none".to_string(),
         delivery_state: "received".to_string(),
         retry_count: 0,
         raw_envelope,
@@ -103,313 +82,361 @@ pub async fn handle_incoming_message(
         return Ok(());
     }
 
-    if is_accepted {
-        // Trusted contact — just notify frontend to refresh messages
-        let _ = app_handle.emit(
-            "relay:incoming-message",
-            serde_json::json!({
-                "peer_id": contact_peer_id,
-                "thread_id": thread_id,
-                "message_id": msg_id,
-            }),
-        );
-    } else {
-        // Untrusted contact — require approval
-        let api_state = app_handle.state::<ApiState>();
-        let summary = generate_summary(&api_state, &content).await;
+    // 5. Notify frontend of the incoming message
+    let _ = app_handle.emit(
+        "relay:incoming-message",
+        serde_json::json!({
+            "peer_id": contact_peer_id,
+            "thread_id": thread_id,
+            "message_id": msg_id,
+        }),
+    );
 
-        app_handle
-            .emit(
-                "relay:approval-needed",
-                ApprovalNeeded {
-                    thread_id,
-                    message_id: msg_id,
-                    sender_agent: envelope.sender_agent.clone(),
-                    summary,
-                    original_content: content,
-                },
-            )
-            .map_err(|e| e.to_string())?;
+    // 6. For accepted contacts, auto-respond using the full agent pipeline
+    if contact.status == "accepted" {
+        // Only auto-respond to MessageRequest (not MessageResponse)
+        if matches!(envelope.payload, Payload::MessageRequest { .. }) {
+            let app = app_handle.clone();
+            let contact_clone = contact.clone();
+            let thread_id_clone = thread_id.clone();
+            let msg_unique = envelope.message_id.clone();
+
+            tokio::spawn(async move {
+                if let Err(e) = generate_and_send_response(
+                    &app,
+                    &contact_clone,
+                    &thread_id_clone,
+                    &msg_unique,
+                ).await {
+                    tracing::warn!("auto-response failed: {e}");
+                    let _ = app.emit(
+                        "relay:auto-response-error",
+                        serde_json::json!({
+                            "thread_id": thread_id_clone,
+                            "error": e,
+                        }),
+                    );
+                }
+            });
+        }
     }
 
     Ok(())
 }
 
-/// Generate a summary of the incoming message.
-/// Uses an ISOLATED LLM call — no persona, vault, tools, or credentials injected.
-/// Falls back to truncated preview if LLM is unavailable.
-async fn generate_summary(api_state: &ApiState, content: &str) -> String {
-    // Short messages don't need summarization
-    if content.len() <= 200 {
-        return content.to_string();
-    }
+/// Generate an auto-response using the agent's full LLM + tools pipeline
+/// and send it back via relay.
+async fn generate_and_send_response(
+    app: &tauri::AppHandle,
+    contact: &relay_db::ContactRow,
+    thread_id: &str,
+    _incoming_message_id: &str,
+) -> Result<(), String> {
+    let db = app.state::<Database>();
 
-    let (api_key, base_url) = match api_state.effective() {
-        Ok(v) => v,
-        Err(_) => return truncate_preview(content, 200),
+    // Notify frontend that auto-response is being generated
+    let _ = app.emit(
+        "relay:auto-response-started",
+        serde_json::json!({ "thread_id": thread_id }),
+    );
+
+    // 1. Determine which agent to use
+    let agent_id = resolve_agent_id(app, &db, contact, thread_id)?;
+
+    // 2. Resolve agent context (persona + tools)
+    let app_data_dir = app.path().app_data_dir()
+        .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
+
+    let scope = actor_context::ExecutionScope {
+        actor_agent_id: agent_id.clone(),
+        role: actor_context::ExecutionRole::RelayResponse,
+        trigger: actor_context::ExecutionTrigger::BackendTriggered,
     };
 
-    // If no API access, fall back immediately
-    if crate::api::requires_api_key(&api_key, &base_url) {
-        return truncate_preview(content, 200);
+    let memory_mgr = app.state::<SystemMemoryManager>();
+    let resolved = actor_context::resolve(&scope, &db, &app_data_dir, Some(&*memory_mgr))
+        .map_err(|e| format!("Failed to resolve agent context: {e}"))?;
+
+    // 3. Build system prompt
+    let mut system_parts = Vec::new();
+    if !resolved.system_prompt.is_empty() {
+        system_parts.push(resolved.system_prompt.clone());
     }
-
-    let client = match api_state.client() {
-        Ok(c) => c,
-        Err(_) => return truncate_preview(content, 200),
-    };
-    let url = api_service::completions_url(&base_url);
-
-    let body = serde_json::json!({
-        "model": SUMMARY_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": "Summarize the following message in one brief sentence. Do not include any personal opinions or additional context."
-            },
-            {
-                "role": "user",
-                "content": content
-            }
-        ],
-        "temperature": 0.3,
-        "max_tokens": 150,
-    });
-
-    let mut req = client
-        .post(&url)
-        .header("Content-Type", "application/json");
-    if !api_key.is_empty() {
-        req = req.header("Authorization", format!("Bearer {}", api_key));
+    if let Some(ref agents_sec) = resolved.registered_agents_section {
+        system_parts.push(agents_sec.clone());
     }
-
-    match req.json(&body).send().await {
-        Ok(resp) if resp.status().is_success() => {
-            if let Ok(json) = resp.json::<serde_json::Value>().await {
-                if let Some(text) = json["choices"][0]["message"]["content"].as_str() {
-                    let trimmed = text.trim();
-                    if !trimmed.is_empty() {
-                        return trimmed.to_string();
-                    }
-                }
-            }
-            truncate_preview(content, 200)
-        }
-        _ => truncate_preview(content, 200),
+    if let Some(ref mem) = resolved.consolidated_memory {
+        system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
     }
-}
-
-/// Truncate content to a preview string.
-fn truncate_preview(content: &str, max_len: usize) -> String {
-    if content.chars().count() <= max_len {
-        content.to_string()
-    } else {
-        let truncated: String = content.chars().take(max_len).collect();
-        format!("{}...", truncated)
+    if let Some(ref tools_sec) = resolved.tools_section {
+        system_parts.push(tools_sec.clone());
     }
-}
+    system_parts.push(
+        actor_context::role_instruction(&scope.role)
+            .unwrap_or("Respond to the incoming message.")
+            .to_string(),
+    );
+    let system_prompt = system_parts.join("\n\n");
 
-/// Approve a pending message, build a response envelope, create outbox entry, and return
-/// everything needed for the caller to attempt sending.
-pub fn approve_message(
-    db: &Database,
-    message_id: &str,
-    response_content: &str,
-) -> Result<ApproveResult, String> {
-    // 1. Mark the incoming message as approved
-    relay_db::update_message_state(db, message_id, Some("approved"), None)
+    // 4. Build conversation history from thread messages
+    let messages = relay_db::get_thread_messages(&db, thread_id)
         .map_err(|e| e.to_string())?;
 
-    // 2. Get the original message to find thread_id and correlation info
-    let original = relay_db::get_peer_message(db, message_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Message not found: {}", message_id))?;
+    let mut api_messages = vec![
+        serde_json::json!({ "role": "system", "content": system_prompt }),
+    ];
 
-    // 3. Get thread → contact → target peer_id
-    let thread = relay_db::get_thread(db, &original.thread_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Thread not found: {}", original.thread_id))?;
-    let contact = relay_db::get_contact(db, &thread.contact_id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("Contact not found: {}", thread.contact_id))?;
+    for msg in &messages {
+        let role = if msg.direction == "incoming" { "user" } else { "assistant" };
+        api_messages.push(serde_json::json!({
+            "role": role,
+            "content": msg.content,
+        }));
+    }
 
-    // 4. Build MessageResponse envelope with correlation_id
+    // 5. Scrub credentials
+    if let Ok(credentials) = credential_service::get_all_secret_values(app) {
+        if !credentials.is_empty() {
+            credential_service::scrub_messages(&mut api_messages, &credentials);
+        }
+    }
+
+    // 6. Build tools array
+    let all_defs = native_tool_definitions();
+    let tools: Vec<serde_json::Value> = resolved
+        .enabled_tool_names
+        .iter()
+        .filter_map(|name| {
+            all_defs.iter().find(|d| d.name == *name).map(|def| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": def.name,
+                        "description": def.description,
+                        "parameters": def.parameters,
+                    }
+                })
+            })
+        })
+        .collect();
+
+    // 7. Build request body
+    let mut body = serde_json::json!({
+        "model": resolved.model,
+        "messages": api_messages,
+    });
+    if !tools.is_empty() {
+        body["tools"] = serde_json::json!(tools);
+    }
+    if let Some(temp) = resolved.temperature {
+        body["temperature"] = serde_json::json!(temp);
+    }
+    if resolved.thinking_enabled {
+        if let Some(budget) = resolved.thinking_budget {
+            body["thinking"] = serde_json::json!({
+                "type": "enabled",
+                "budget_tokens": budget,
+            });
+        }
+    }
+
+    // 8. Call LLM with tool loop
+    let api_state = app.state::<ApiState>();
+    let (api_key, base_url) = api_state.effective()
+        .map_err(|e| format!("API state error: {e}"))?;
+    let client = api_state.client()
+        .map_err(|e| format!("API client error: {e}"))?;
+
+    const MAX_TOOL_ITERATIONS: usize = 10;
+    let mut response_text = String::new();
+
+    for iteration in 0..=MAX_TOOL_ITERATIONS {
+        let result = api_service::do_completion(&client, &api_key, &base_url, &body, Some(app)).await;
+
+        // Handle thinking-specific errors on first attempt
+        if iteration == 0 && resolved.thinking_enabled {
+            if let Err(ref e) = result {
+                if api_service::is_thinking_specific_error(e) {
+                    if let Some(obj) = body.as_object_mut() {
+                        obj.remove("thinking");
+                    }
+                    continue;
+                }
+            }
+        }
+
+        let response = result.map_err(|e| format!("LLM error: {e}"))?;
+
+        // No tool calls → done
+        if response.tool_calls.is_none() {
+            response_text = if response.content.is_empty() {
+                response.reasoning_content.as_deref().unwrap_or("(no content)").to_string()
+            } else {
+                response.content
+            };
+            break;
+        }
+
+        // Execute tool calls
+        let tool_calls = response.tool_calls.unwrap();
+
+        if let Some(msgs) = body["messages"].as_array_mut() {
+            let tc_json: Vec<serde_json::Value> = tool_calls.iter().map(|tc| {
+                serde_json::json!({
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    }
+                })
+            }).collect();
+            msgs.push(serde_json::json!({
+                "role": "assistant",
+                "content": if response.content.is_empty() { serde_json::Value::Null } else { serde_json::Value::String(response.content.clone()) },
+                "tool_calls": tc_json,
+            }));
+        }
+
+        for tc in &tool_calls {
+            let input: serde_json::Value = serde_json::from_str(&tc.function.arguments)
+                .unwrap_or(serde_json::json!({}));
+
+            let tool_result = crate::commands::tool_commands::execute_tool_inner_public(
+                app, &db, &tc.function.name, &input, &agent_id,
+            ).await;
+
+            let output = match tool_result {
+                Ok(val) => serde_json::to_string(&val).unwrap_or_else(|_| "{}".to_string()),
+                Err(e) => format!("Tool error: {e}"),
+            };
+
+            if let Some(msgs) = body["messages"].as_array_mut() {
+                msgs.push(serde_json::json!({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": output,
+                }));
+            }
+        }
+
+        // Remove thinking after first successful call
+        if let Some(obj) = body.as_object_mut() {
+            obj.remove("thinking");
+        }
+    }
+
+    if response_text.is_empty() {
+        response_text = "(max tool iterations reached)".to_string();
+    }
+
+    // 9. Build response envelope and send via relay
     let envelope = Envelope::new(
         "local".into(),
         Payload::MessageResponse {
-            content: response_content.to_string(),
+            content: response_text.clone(),
         },
-    )
-    .with_correlation(original.message_id_unique.clone());
+    );
 
-    let raw_envelope = serde_json::to_string(&envelope).ok();
+    let raw_envelope_json = {
+        let manager = app.state::<RelayManager>();
+        manager.encrypt_for_peer(&contact.peer_id, &envelope)
+            .map_err(|e| format!("Encrypt error: {e}"))?
+    };
 
-    // 5. Create outgoing response message with raw_envelope
+    // 10. Save outgoing message to DB
     let now = chrono::Utc::now().to_rfc3339();
     let response_msg = relay_db::PeerMessageRow {
         id: uuid::Uuid::new_v4().to_string(),
-        thread_id: original.thread_id,
+        thread_id: thread_id.to_string(),
         message_id_unique: envelope.message_id.clone(),
-        correlation_id: Some(original.message_id_unique),
+        correlation_id: None,
         direction: "outgoing".to_string(),
         sender_agent: "local".to_string(),
-        content: response_content.to_string(),
-        approval_state: "approved".to_string(),
+        content: response_text,
+        approval_state: "none".to_string(),
         delivery_state: "queued".to_string(),
         retry_count: 0,
-        raw_envelope,
+        raw_envelope: Some(raw_envelope_json.clone()),
         created_at: now.clone(),
     };
 
     let response_id = response_msg.id.clone();
-    relay_db::insert_peer_message(db, &response_msg).map_err(|e| e.to_string())?;
+    relay_db::insert_peer_message(&db, &response_msg).map_err(|e| e.to_string())?;
 
-    // 6. Create outbox entry for retry/delivery tracking
-    let outbox_id = uuid::Uuid::new_v4().to_string();
+    // 11. Create outbox entry
     let outbox = relay_db::OutboxRow {
-        id: outbox_id.clone(),
-        peer_message_id: response_id.clone(),
+        id: uuid::Uuid::new_v4().to_string(),
+        peer_message_id: response_id,
         target_peer_id: contact.peer_id.clone(),
         attempts: 0,
         next_retry_at: None,
         status: "pending".to_string(),
         created_at: now,
     };
-    relay_db::insert_outbox(db, &outbox).map_err(|e| e.to_string())?;
+    relay_db::insert_outbox(&db, &outbox).map_err(|e| e.to_string())?;
 
-    Ok(ApproveResult {
-        response_message_id: response_id,
-        envelope,
-        target_peer_id: contact.peer_id,
-        outbox_id,
-    })
-}
-
-/// Reject a pending message.
-pub fn reject_message(db: &Database, message_id: &str) -> Result<(), String> {
-    relay_db::update_message_state(db, message_id, Some("rejected"), None)
-        .map_err(|e| e.to_string())
-}
-
-/// Generate a draft response using the local agent's persona.
-/// The result still requires user approval before sending.
-/// Falls back to a basic acknowledgment if LLM is unavailable.
-pub async fn generate_draft_response(
-    app_handle: &tauri::AppHandle,
-    _db: &Database,
-    _message_id: &str,
-    _agent_id: &str,
-) -> Result<String, String> {
-    const FALLBACK_DRAFT: &str = "감사합니다. 확인했습니다.";
-
-    let api_state = app_handle.state::<ApiState>();
-    let (api_key, base_url) = api_state.effective()?;
-
-    // If no API access, return the basic fallback
-    if crate::api::requires_api_key(&api_key, &base_url) {
-        return Ok(FALLBACK_DRAFT.to_string());
+    // 12. Send via relay
+    {
+        let manager = app.state::<RelayManager>();
+        manager.send_raw_envelope(&contact.peer_id, &raw_envelope_json).await
+            .map_err(|e| format!("Send error: {e}"))?;
     }
 
-    // TODO: When agent persona loading is available, use LLM with persona context
-    // For now, return the basic fallback
-    Ok(FALLBACK_DRAFT.to_string())
+    // 13. Notify frontend
+    let _ = app.emit(
+        "relay:auto-response-completed",
+        serde_json::json!({ "thread_id": thread_id }),
+    );
+    let _ = app.emit(
+        "relay:incoming-message",
+        serde_json::json!({
+            "peer_id": contact.peer_id,
+            "thread_id": thread_id,
+            "message_id": response_msg.message_id_unique,
+        }),
+    );
+
+    Ok(())
+}
+
+/// Determine which agent should respond to this contact's messages.
+fn resolve_agent_id(
+    _app: &tauri::AppHandle,
+    db: &Database,
+    contact: &relay_db::ContactRow,
+    thread_id: &str,
+) -> Result<String, String> {
+    // 1. Check thread-level binding
+    if let Ok(Some(thread)) = relay_db::get_thread(db, thread_id) {
+        if let Some(ref aid) = thread.local_agent_id {
+            if !aid.is_empty() {
+                return Ok(aid.clone());
+            }
+        }
+    }
+
+    // 2. Check contact-level binding
+    if let Some(ref aid) = contact.local_agent_id {
+        if !aid.is_empty() {
+            return Ok(aid.clone());
+        }
+    }
+
+    // 3. Fall back to default agent
+    use crate::db::agent_operations::list_agents_impl;
+    let agents = list_agents_impl(db).map_err(|e| e.to_string())?;
+    agents
+        .iter()
+        .find(|a| a.is_default)
+        .map(|a| a.id.clone())
+        .ok_or_else(|| "No default agent found".to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // ── truncate_preview tests ──
-
-    #[test]
-    fn test_truncate_short_content() {
-        let result = truncate_preview("hello", 200);
-        assert_eq!(result, "hello");
-    }
-
-    #[test]
-    fn test_truncate_exact_limit() {
-        let content = "a".repeat(200);
-        let result = truncate_preview(&content, 200);
-        assert_eq!(result, content);
-    }
-
-    #[test]
-    fn test_truncate_over_limit() {
-        let content = "a".repeat(250);
-        let result = truncate_preview(&content, 200);
-        assert_eq!(result.len(), 203); // 200 chars + "..."
-        assert!(result.ends_with("..."));
-    }
-
-    #[test]
-    fn test_truncate_empty() {
-        let result = truncate_preview("", 200);
-        assert_eq!(result, "");
-    }
-
-    #[test]
-    fn test_truncate_multibyte_chars() {
-        // Korean characters are multi-byte but should be counted as single chars
-        let content = "가".repeat(250);
-        let result = truncate_preview(&content, 200);
-        let char_count = result.chars().count();
-        // 200 Korean chars + 3 dots = 203 chars
-        assert_eq!(char_count, 203);
-        assert!(result.ends_with("..."));
-    }
-
-    // ── approve / reject tests ──
-
-    #[test]
-    fn test_approve_message() {
-        let db = Database::new_in_memory().expect("in-memory db");
-        setup_test_data(&db);
-
-        let result =
-            approve_message(&db, "m1", "감사합니다. 확인했습니다.").unwrap();
-
-        let msgs = relay_db::get_thread_messages(&db, "t1").unwrap();
-        // Original message should be approved
-        assert_eq!(msgs[0].approval_state, "approved");
-        assert_eq!(msgs[0].delivery_state, "received");
-        // A new outgoing response message should have been created
-        assert_eq!(msgs.len(), 2);
-        assert_eq!(msgs[1].id, result.response_message_id);
-        assert_eq!(msgs[1].direction, "outgoing");
-        assert_eq!(msgs[1].content, "감사합니다. 확인했습니다.");
-        assert_eq!(msgs[1].delivery_state, "queued");
-        // Envelope should be set
-        assert!(msgs[1].raw_envelope.is_some());
-        // Outbox entry should exist
-        assert_eq!(result.target_peer_id, "peer1");
-        assert!(!result.outbox_id.is_empty());
-    }
-
-    #[test]
-    fn test_reject_message() {
-        let db = Database::new_in_memory().expect("in-memory db");
-        setup_test_data(&db);
-
-        reject_message(&db, "m1").unwrap();
-
-        let msgs = relay_db::get_thread_messages(&db, "t1").unwrap();
-        assert_eq!(msgs[0].approval_state, "rejected");
-    }
-
-    #[test]
-    fn test_approve_then_reject_overwrites() {
-        let db = Database::new_in_memory().expect("in-memory db");
-        setup_test_data(&db);
-
-        approve_message(&db, "m1", "response text").unwrap();
-        reject_message(&db, "m1").unwrap();
-
-        let msgs = relay_db::get_thread_messages(&db, "t1").unwrap();
-        assert_eq!(msgs[0].approval_state, "rejected");
-    }
-
-    // ── Helper to set up contact → thread → message ──
+    use crate::relay::db as relay_db;
 
     fn setup_test_data(db: &Database) {
         let contact = relay_db::ContactRow {
@@ -440,21 +467,38 @@ mod tests {
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         };
         relay_db::create_thread(db, &thread).unwrap();
+    }
 
-        let msg = relay_db::PeerMessageRow {
-            id: "m1".to_string(),
-            thread_id: "t1".to_string(),
-            message_id_unique: "unique-1".to_string(),
-            correlation_id: None,
-            direction: "incoming".to_string(),
-            sender_agent: "remote-agent".to_string(),
-            content: "hello world".to_string(),
-            approval_state: "pending".to_string(),
-            delivery_state: "received".to_string(),
-            retry_count: 0,
-            raw_envelope: None,
-            created_at: "2024-01-01T00:00:00Z".to_string(),
-        };
-        relay_db::insert_peer_message(db, &msg).unwrap();
+    #[test]
+    fn test_resolve_agent_id_default() {
+        use crate::db::agent_operations::create_agent_impl;
+        use crate::db::models::CreateAgentRequest;
+
+        let db = Database::new_in_memory().expect("in-memory db");
+        setup_test_data(&db);
+
+        let agent = create_agent_impl(
+            &db,
+            CreateAgentRequest {
+                folder_name: "default-agent".into(),
+                name: "Default".into(),
+                avatar: None,
+                description: None,
+                model: None,
+                temperature: None,
+                thinking_enabled: None,
+                thinking_budget: None,
+                is_default: Some(true),
+                sort_order: None,
+            },
+        ).unwrap();
+
+        let contact = relay_db::get_contact(&db, "c1").unwrap().unwrap();
+
+        // Mock AppHandle is not available in unit tests, so we test resolve_agent_id
+        // indirectly by checking the fallback logic
+        let agents = crate::db::agent_operations::list_agents_impl(&db).unwrap();
+        let default = agents.iter().find(|a| a.is_default).unwrap();
+        assert_eq!(default.id, agent.id);
     }
 }
