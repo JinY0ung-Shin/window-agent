@@ -37,5 +37,8 @@ browser-sidecar/playwright-browsers/
 # Rust/Cargo build output
 target/
 
+# Test coverage
+coverage/
+
 # AutoFlow plan artifacts
 .ccb/
