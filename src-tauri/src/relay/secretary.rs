@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::sync::Mutex;
+
 use crate::api::ApiState;
 use crate::commands::tool_commands::native_tool_definitions;
 use crate::db::Database;
@@ -8,6 +11,10 @@ use crate::relay::manager::RelayManager;
 use crate::services::{actor_context, api_service, credential_service};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
+
+/// Per-thread lock to prevent concurrent auto-responses on the same thread.
+static ACTIVE_THREADS: std::sync::LazyLock<Mutex<HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(HashSet::new()));
 
 /// Event payload for delivery status updates.
 #[derive(Debug, Clone, Serialize)]
@@ -96,6 +103,15 @@ pub async fn handle_incoming_message(
     if contact.status == "accepted" {
         // Only auto-respond to MessageRequest (not MessageResponse)
         if matches!(envelope.payload, Payload::MessageRequest { .. }) {
+            // Skip if this thread already has an auto-response in progress
+            {
+                let mut active = ACTIVE_THREADS.lock().unwrap();
+                if !active.insert(thread_id.clone()) {
+                    tracing::info!(thread_id, "skipping auto-response: already in progress");
+                    return Ok(());
+                }
+            }
+
             let app = app_handle.clone();
             let contact_clone = contact.clone();
             let thread_id_clone = thread_id.clone();
@@ -117,6 +133,8 @@ pub async fn handle_incoming_message(
                         }),
                     );
                 }
+                // Release the thread lock
+                ACTIVE_THREADS.lock().unwrap().remove(&thread_id_clone);
             });
         }
     }
@@ -130,7 +148,7 @@ async fn generate_and_send_response(
     app: &tauri::AppHandle,
     contact: &relay_db::ContactRow,
     thread_id: &str,
-    _incoming_message_id: &str,
+    incoming_message_id: &str,
 ) -> Result<(), String> {
     let db = app.state::<Database>();
 
@@ -178,8 +196,8 @@ async fn generate_and_send_response(
     );
     let system_prompt = system_parts.join("\n\n");
 
-    // 4. Build conversation history from thread messages
-    let messages = relay_db::get_thread_messages(&db, thread_id)
+    // 4. Build conversation history from thread messages (last 50 for context window)
+    let messages = relay_db::get_thread_messages_recent(&db, thread_id, 50)
         .map_err(|e| e.to_string())?;
 
     let mut api_messages = vec![
@@ -250,7 +268,7 @@ async fn generate_and_send_response(
     const MAX_TOOL_ITERATIONS: usize = 10;
     let mut response_text = String::new();
 
-    for iteration in 0..=MAX_TOOL_ITERATIONS {
+    for iteration in 0..MAX_TOOL_ITERATIONS {
         let result = api_service::do_completion(&client, &api_key, &base_url, &body, Some(app)).await;
 
         // Handle thinking-specific errors on first attempt
@@ -336,7 +354,7 @@ async fn generate_and_send_response(
         Payload::MessageResponse {
             content: response_text.clone(),
         },
-    );
+    ).with_correlation(incoming_message_id.to_string());
 
     let raw_envelope_json = {
         let manager = app.state::<RelayManager>();
@@ -350,7 +368,7 @@ async fn generate_and_send_response(
         id: uuid::Uuid::new_v4().to_string(),
         thread_id: thread_id.to_string(),
         message_id_unique: envelope.message_id.clone(),
-        correlation_id: None,
+        correlation_id: Some(incoming_message_id.to_string()),
         direction: "outgoing".to_string(),
         sender_agent: "local".to_string(),
         content: response_text,
@@ -367,7 +385,7 @@ async fn generate_and_send_response(
     // 11. Create outbox entry
     let outbox = relay_db::OutboxRow {
         id: uuid::Uuid::new_v4().to_string(),
-        peer_message_id: response_id,
+        peer_message_id: response_id.clone(),
         target_peer_id: contact.peer_id.clone(),
         attempts: 0,
         next_retry_at: None,
@@ -379,22 +397,17 @@ async fn generate_and_send_response(
     // 12. Send via relay
     {
         let manager = app.state::<RelayManager>();
-        manager.send_raw_envelope(&contact.peer_id, &raw_envelope_json).await
-            .map_err(|e| format!("Send error: {e}"))?;
+        if let Err(e) = manager.send_raw_envelope(&contact.peer_id, &raw_envelope_json).await {
+            tracing::error!("Failed to send auto-response: {e}");
+            let _ = relay_db::update_message_state(&db, &response_id, None, Some("failed"));
+            // Don't return error — the message is saved and outbox will retry
+        }
     }
 
-    // 13. Notify frontend
+    // 13. Notify frontend that auto-response is complete
     let _ = app.emit(
         "relay:auto-response-completed",
         serde_json::json!({ "thread_id": thread_id }),
-    );
-    let _ = app.emit(
-        "relay:incoming-message",
-        serde_json::json!({
-            "peer_id": contact.peer_id,
-            "thread_id": thread_id,
-            "message_id": response_msg.message_id_unique,
-        }),
     );
 
     Ok(())

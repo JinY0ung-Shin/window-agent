@@ -55,7 +55,7 @@ interface NetworkState {
   messages: PeerMessageRow[];
   pendingApprovals: number;
   connectedPeers: Set<string>; // live connected peer_ids
-  isGeneratingResponse: boolean;
+  generatingThreads: Set<string>; // thread IDs currently generating auto-response
   error: string | null;
 
   // ── Actions ──
@@ -87,7 +87,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   messages: [],
   pendingApprovals: 0,
   connectedPeers: new Set<string>(),
-  isGeneratingResponse: false,
+  generatingThreads: new Set<string>(),
   error: null,
 
   initialize: async () => {
@@ -156,7 +156,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         selectedThreadId: null,
         pendingApprovals: 0,
         connectedPeers: new Set<string>(),
-        isGeneratingResponse: false,
+        generatingThreads: new Set<string>(),
       });
     } catch (e) {
       set({ error: toErrorMessage(e) });
@@ -304,14 +304,22 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen("relay:auto-response-started", () => {
-        set({ isGeneratingResponse: true });
+      await listen<{ thread_id: string }>("relay:auto-response-started", (event) => {
+        set((s) => {
+          const next = new Set(s.generatingThreads);
+          next.add(event.payload.thread_id);
+          return { generatingThreads: next };
+        });
       }),
     );
 
     unlisteners.push(
-      await listen("relay:auto-response-completed", () => {
-        set({ isGeneratingResponse: false });
+      await listen<{ thread_id: string }>("relay:auto-response-completed", (event) => {
+        set((s) => {
+          const next = new Set(s.generatingThreads);
+          next.delete(event.payload.thread_id);
+          return { generatingThreads: next };
+        });
         const { selectedThreadId } = get();
         if (selectedThreadId) {
           get().loadMessages(selectedThreadId);
@@ -320,8 +328,12 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
-      await listen("relay:auto-response-error", () => {
-        set({ isGeneratingResponse: false });
+      await listen<{ thread_id: string; error: string }>("relay:auto-response-error", (event) => {
+        set((s) => {
+          const next = new Set(s.generatingThreads);
+          next.delete(event.payload.thread_id);
+          return { generatingThreads: next, error: event.payload.error };
+        });
       }),
     );
 

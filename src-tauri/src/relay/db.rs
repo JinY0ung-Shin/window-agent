@@ -330,6 +330,24 @@ pub fn get_thread_messages(
     })
 }
 
+/// Get the most recent N messages for a thread (for LLM context window).
+pub fn get_thread_messages_recent(
+    db: &Database,
+    thread_id: &str,
+    limit: u32,
+) -> Result<Vec<PeerMessageRow>, DbError> {
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT * FROM (
+                SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, created_at
+                FROM peer_messages WHERE thread_id = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2
+             ) ORDER BY created_at ASC, id ASC",
+        )?;
+        let rows = stmt.query_map(rusqlite::params![thread_id, limit], map_message_row)?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    })
+}
+
 pub fn update_message_state(
     db: &Database,
     id: &str,
