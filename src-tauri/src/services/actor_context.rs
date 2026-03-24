@@ -286,13 +286,20 @@ fn resolve_tool_names(
                 .collect()
         }
 
-        // Relay response — all enabled tools (same as user DM, but backend-driven)
-        // Excludes orchestration tools (delegate/report require team context)
+        // Relay response — read-only tools for external peer safety.
+        // Excludes: write/delete/browser/orchestration/schedule
         ExecutionRole::RelayResponse => {
+            const RELAY_BLOCKED: &[&str] = &[
+                "write_file", "delete_file",
+                "delegate", "report",
+                "manage_schedule",
+            ];
             let config_tools = read_tool_config(agent_dir);
             config_tools
                 .into_iter()
-                .filter(|(name, _)| name != "delegate" && name != "report")
+                .filter(|(name, _)| {
+                    !name.starts_with("browser_") && !RELAY_BLOCKED.contains(&name.as_str())
+                })
                 .map(|(name, _)| name)
                 .collect()
         }
