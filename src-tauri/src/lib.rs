@@ -234,6 +234,8 @@ pub fn run() {
             commands::relay_get_connection_info,
             commands::relay_get_relay_url,
             commands::relay_set_relay_url,
+            commands::relay_get_allowed_tools,
+            commands::relay_set_allowed_tools,
             commands::read_consolidated_memory,
             commands::list_pending_consolidations,
             commands::read_digest,

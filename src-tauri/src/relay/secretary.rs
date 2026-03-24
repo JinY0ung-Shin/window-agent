@@ -195,9 +195,27 @@ async fn generate_and_send_response(
         trigger: actor_context::ExecutionTrigger::BackendTriggered,
     };
 
+    // Read relay allowed tools from settings
+    let relay_allowed_tools: Vec<String> = {
+        use tauri_plugin_store::StoreExt;
+        app.store("relay-settings.json")
+            .ok()
+            .and_then(|s| s.get("allowed_tools"))
+            .and_then(|v| {
+                v.as_array().map(|arr| {
+                    arr.iter()
+                        .filter_map(|item| item.as_str().map(String::from))
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    };
+
     let memory_mgr = app.state::<SystemMemoryManager>();
-    let resolved = actor_context::resolve(&scope, &db, &app_data_dir, Some(&*memory_mgr))
-        .map_err(|e| format!("Failed to resolve agent context: {e}"))?;
+    let resolved = actor_context::resolve_with_relay_tools(
+        &scope, &db, &app_data_dir, Some(&*memory_mgr),
+        if relay_allowed_tools.is_empty() { None } else { Some(&relay_allowed_tools) },
+    ).map_err(|e| format!("Failed to resolve agent context: {e}"))?;
 
     // 3. Build system prompt
     let mut system_parts = Vec::new();

@@ -16,6 +16,12 @@
     "saved": "Saved — restart the network to apply",
     "hint": "URL of the WebSocket relay server used for peer connections."
   },
+  "tools": {
+    "label": "Relay Allowed Tools",
+    "hint": "Configure which tools the agent can use when chatting with external peers.",
+    "saved": "Saved",
+    "reset": "Reset"
+  },
   "status": {
     "label": "Connection Status",
     "dormant": "Inactive",

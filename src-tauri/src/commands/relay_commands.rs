@@ -489,6 +489,37 @@ pub fn relay_get_connection_info(
     })
 }
 
+// ── Relay allowed tools commands ──
+
+/// Get the list of tools allowed for relay auto-response.
+/// Returns tool names that are explicitly allowed. Empty = use default (read-only).
+#[tauri::command]
+pub fn relay_get_allowed_tools(app: tauri::AppHandle) -> Vec<String> {
+    use tauri_plugin_store::StoreExt;
+    app.store("relay-settings.json")
+        .ok()
+        .and_then(|s| s.get("allowed_tools"))
+        .and_then(|v| {
+            v.as_array().map(|arr| {
+                arr.iter()
+                    .filter_map(|item| item.as_str().map(String::from))
+                    .collect()
+            })
+        })
+        .unwrap_or_default()
+}
+
+/// Set the list of tools allowed for relay auto-response.
+#[tauri::command]
+pub fn relay_set_allowed_tools(app: tauri::AppHandle, tools: Vec<String>) -> Result<(), AppError> {
+    use tauri_plugin_store::StoreExt;
+    let store = app
+        .store("relay-settings.json")
+        .map_err(|e| AppError::Config(e.to_string()))?;
+    store.set("allowed_tools", serde_json::json!(tools));
+    store.save().map_err(|e| AppError::Config(e.to_string()))
+}
+
 // ── Relay URL commands ──
 
 #[tauri::command]

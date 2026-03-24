@@ -82,11 +82,24 @@ const TOOL_REPORT: &str = "report";
 /// agent from DB, assembling persona files, and filtering tools by role.
 ///
 /// `memory_mgr` is optional for backward compatibility (tests may pass `None`).
+/// Optional relay-specific allowed tools list (from relay-settings.json).
+/// When `Some`, only these tools are permitted for `RelayResponse` role.
+/// When `None` or empty, defaults to built-in read-only set.
 pub fn resolve(
     scope: &ExecutionScope,
     db: &Database,
     app_data_dir: &std::path::Path,
     memory_mgr: Option<&SystemMemoryManager>,
+) -> Result<ResolvedContext, AppError> {
+    resolve_with_relay_tools(scope, db, app_data_dir, memory_mgr, None)
+}
+
+pub fn resolve_with_relay_tools(
+    scope: &ExecutionScope,
+    db: &Database,
+    app_data_dir: &std::path::Path,
+    memory_mgr: Option<&SystemMemoryManager>,
+    relay_allowed_tools: Option<&[String]>,
 ) -> Result<ResolvedContext, AppError> {
     // 1. Load agent record
     let agent = agent_operations::get_agent_impl(db, scope.actor_agent_id.clone())?;
@@ -103,7 +116,7 @@ pub fn resolve(
     }
 
     // 3. Determine enabled tools based on role + trigger + TOOL_CONFIG.json
-    let enabled_tool_names = resolve_tool_names(&scope.role, &scope.trigger, &agent_dir);
+    let enabled_tool_names = resolve_tool_names(&scope.role, &scope.trigger, &agent_dir, relay_allowed_tools);
 
     // 4. LLM settings — agent-level with global fallback
     let model = agent
@@ -268,6 +281,7 @@ fn resolve_tool_names(
     role: &ExecutionRole,
     trigger: &ExecutionTrigger,
     agent_dir: &std::path::Path,
+    relay_allowed_tools: Option<&[String]>,
 ) -> Vec<String> {
     match role {
         // DM — full tool access; empty vec signals "use default frontend config"
@@ -286,20 +300,21 @@ fn resolve_tool_names(
                 .collect()
         }
 
-        // Relay response — read-only tools for external peer safety.
-        // Excludes: write/delete/browser/orchestration/schedule
+        // Relay response — filter by user-configured allowed list.
+        // If no custom list is set, defaults to read-only tools.
         ExecutionRole::RelayResponse => {
-            const RELAY_BLOCKED: &[&str] = &[
-                "write_file", "delete_file",
-                "delegate", "report",
-                "manage_schedule",
+            const DEFAULT_RELAY_ALLOWED: &[&str] = &[
+                "read_file", "list_directory", "web_search",
+                "http_request", "self_inspect",
             ];
             let config_tools = read_tool_config(agent_dir);
+            let allowed: Vec<&str> = match relay_allowed_tools {
+                Some(list) if !list.is_empty() => list.iter().map(|s| s.as_str()).collect(),
+                _ => DEFAULT_RELAY_ALLOWED.to_vec(),
+            };
             config_tools
                 .into_iter()
-                .filter(|(name, _)| {
-                    !name.starts_with("browser_") && !RELAY_BLOCKED.contains(&name.as_str())
-                })
+                .filter(|(name, _)| allowed.contains(&name.as_str()))
                 .map(|(name, _)| name)
                 .collect()
         }

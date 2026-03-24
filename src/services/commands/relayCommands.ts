@@ -99,6 +99,16 @@ export async function relaySetNetworkEnabled(enabled: boolean): Promise<void> {
   return invoke("relay_set_network_enabled", { enabled });
 }
 
+// ── Relay Allowed Tools ──
+
+export async function relayGetAllowedTools(): Promise<string[]> {
+  return invoke("relay_get_allowed_tools");
+}
+
+export async function relaySetAllowedTools(tools: string[]): Promise<void> {
+  return invoke("relay_set_allowed_tools", { tools });
+}
+
 // ── Relay URL ──
 
 export async function relayGetRelayUrl(): Promise<string> {
