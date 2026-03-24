@@ -107,7 +107,7 @@ pub async fn handle_incoming_message(
             {
                 let mut active = ACTIVE_THREADS.lock().unwrap();
                 if !active.insert(thread_id.clone()) {
-                    tracing::info!(thread_id, "skipping auto-response: already in progress");
+                    tracing::info!(thread_id, "deferring auto-response: already in progress");
                     return Ok(());
                 }
             }
@@ -115,23 +115,49 @@ pub async fn handle_incoming_message(
             let app = app_handle.clone();
             let contact_clone = contact.clone();
             let thread_id_clone = thread_id.clone();
-            let msg_unique = envelope.message_id.clone();
 
             tokio::spawn(async move {
-                if let Err(e) = generate_and_send_response(
-                    &app,
-                    &contact_clone,
-                    &thread_id_clone,
-                    &msg_unique,
-                ).await {
-                    tracing::warn!("auto-response failed: {e}");
-                    let _ = app.emit(
-                        "relay:auto-response-error",
-                        serde_json::json!({
-                            "thread_id": thread_id_clone,
-                            "error": e,
-                        }),
-                    );
+                // Process all unanswered messages in a loop until none remain
+                loop {
+                    // Find the latest unanswered incoming message
+                    let db = app.state::<Database>();
+                    let latest_incoming_id = {
+                        let messages = relay_db::get_thread_messages_recent(&db, &thread_id_clone, 50)
+                            .unwrap_or_default();
+                        // Find the last incoming message that has no subsequent outgoing response
+                        let last_incoming = messages.iter().rposition(|m| m.direction == "incoming");
+                        let last_outgoing = messages.iter().rposition(|m| m.direction == "outgoing");
+                        match (last_incoming, last_outgoing) {
+                            (Some(i_idx), Some(o_idx)) if i_idx > o_idx => {
+                                Some(messages[i_idx].message_id_unique.clone())
+                            }
+                            (Some(i_idx), None) => {
+                                Some(messages[i_idx].message_id_unique.clone())
+                            }
+                            _ => None, // already answered
+                        }
+                    };
+
+                    let Some(msg_unique) = latest_incoming_id else {
+                        break; // all messages answered
+                    };
+
+                    if let Err(e) = generate_and_send_response(
+                        &app,
+                        &contact_clone,
+                        &thread_id_clone,
+                        &msg_unique,
+                    ).await {
+                        tracing::warn!("auto-response failed: {e}");
+                        let _ = app.emit(
+                            "relay:auto-response-error",
+                            serde_json::json!({
+                                "thread_id": thread_id_clone,
+                                "error": e,
+                            }),
+                        );
+                        break;
+                    }
                 }
                 // Release the thread lock
                 ACTIVE_THREADS.lock().unwrap().remove(&thread_id_clone);
@@ -395,20 +421,37 @@ async fn generate_and_send_response(
     relay_db::insert_outbox(&db, &outbox).map_err(|e| e.to_string())?;
 
     // 12. Send via relay
-    {
+    let send_ok = {
         let manager = app.state::<RelayManager>();
-        if let Err(e) = manager.send_raw_envelope(&contact.peer_id, &raw_envelope_json).await {
-            tracing::error!("Failed to send auto-response: {e}");
-            let _ = relay_db::update_message_state(&db, &response_id, None, Some("failed"));
-            // Don't return error — the message is saved and outbox will retry
+        match manager.send_raw_envelope(&contact.peer_id, &raw_envelope_json).await {
+            Ok(()) => {
+                let _ = relay_db::update_message_state(&db, &response_id, None, Some("sending"));
+                true
+            }
+            Err(e) => {
+                tracing::error!("Failed to send auto-response: {e}");
+                // Keep outbox status "pending" so reconnect-triggered retry picks it up
+                let _ = relay_db::update_message_state(&db, &response_id, None, Some("queued"));
+                false
+            }
         }
-    }
+    };
 
-    // 13. Notify frontend that auto-response is complete
-    let _ = app.emit(
-        "relay:auto-response-completed",
-        serde_json::json!({ "thread_id": thread_id }),
-    );
+    // 13. Notify frontend
+    if send_ok {
+        let _ = app.emit(
+            "relay:auto-response-completed",
+            serde_json::json!({ "thread_id": thread_id }),
+        );
+    } else {
+        let _ = app.emit(
+            "relay:auto-response-error",
+            serde_json::json!({
+                "thread_id": thread_id,
+                "error": "Failed to send response, will retry on reconnect",
+            }),
+        );
+    }
 
     Ok(())
 }
