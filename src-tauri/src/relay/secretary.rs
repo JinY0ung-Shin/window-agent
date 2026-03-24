@@ -117,28 +117,26 @@ pub async fn handle_incoming_message(
             let thread_id_clone = thread_id.clone();
 
             tokio::spawn(async move {
-                // Process all unanswered messages in a loop until none remain
+                // Process all unanswered messages in a loop until none remain.
+                // Uses correlation_id to determine which incoming messages have responses.
                 loop {
-                    // Find the latest unanswered incoming message
                     let db = app.state::<Database>();
-                    let latest_incoming_id = {
+                    let unanswered_id = {
                         let messages = relay_db::get_thread_messages_recent(&db, &thread_id_clone, 50)
                             .unwrap_or_default();
-                        // Find the last incoming message that has no subsequent outgoing response
-                        let last_incoming = messages.iter().rposition(|m| m.direction == "incoming");
-                        let last_outgoing = messages.iter().rposition(|m| m.direction == "outgoing");
-                        match (last_incoming, last_outgoing) {
-                            (Some(i_idx), Some(o_idx)) if i_idx > o_idx => {
-                                Some(messages[i_idx].message_id_unique.clone())
-                            }
-                            (Some(i_idx), None) => {
-                                Some(messages[i_idx].message_id_unique.clone())
-                            }
-                            _ => None, // already answered
-                        }
+                        // Collect correlation_ids from all outgoing messages
+                        let answered: std::collections::HashSet<&str> = messages.iter()
+                            .filter(|m| m.direction == "outgoing")
+                            .filter_map(|m| m.correlation_id.as_deref())
+                            .collect();
+                        // Find the first incoming MessageRequest without a correlated response
+                        messages.iter()
+                            .filter(|m| m.direction == "incoming")
+                            .find(|m| !answered.contains(m.message_id_unique.as_str()))
+                            .map(|m| m.message_id_unique.clone())
                     };
 
-                    let Some(msg_unique) = latest_incoming_id else {
+                    let Some(msg_unique) = unanswered_id else {
                         break; // all messages answered
                     };
 

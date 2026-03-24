@@ -330,11 +330,17 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
     unlisteners.push(
       await listen<{ thread_id: string; error: string }>("relay:auto-response-error", (event) => {
+        const tid = event.payload.thread_id;
         set((s) => {
           const next = new Set(s.generatingThreads);
-          next.delete(event.payload.thread_id);
+          next.delete(tid);
           return { generatingThreads: next, error: event.payload.error };
         });
+        // Reload thread to show the queued response message
+        const { selectedThreadId } = get();
+        if (selectedThreadId && selectedThreadId === tid) {
+          get().loadMessages(selectedThreadId);
+        }
       }),
     );
 
