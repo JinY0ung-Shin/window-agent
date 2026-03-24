@@ -27,5 +27,18 @@
   "apiBaseUrlPlaceholder": "https://api.openai.com/v1",
   "apiSavingMessage": "Saving...",
   "apiSaveError": "Failed to save API settings. Please try again.",
-  "apiSkipButton": "Set up later"
+  "apiSkipButton": "Set up later",
+  "tour.step1Title": "Agent List",
+  "tour.step1Desc": "Select and chat with your agents (employees) here.",
+  "tour.step2Title": "Chat Input",
+  "tour.step2Desc": "Start working by sending messages to your agent.",
+  "tour.step3Title": "Add Agent",
+  "tour.step3Desc": "Create new agents to expand your team.",
+  "tour.step4Title": "Settings",
+  "tour.step4Desc": "Change API keys, themes, language, and more.",
+  "tour.step5Title": "Teams",
+  "tour.step5Desc": "Build teams where multiple agents collaborate.",
+  "tour.skipButton": "Skip",
+  "tour.nextButton": "Next",
+  "tour.doneButton": "Done"
 }

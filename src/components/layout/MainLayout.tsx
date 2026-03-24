@@ -12,6 +12,7 @@ import TeamPanel from "../team/TeamPanel";
 import TeamChatWindow from "../team/TeamChatWindow";
 import CronPanel from "../cron/CronPanel";
 import AgentPanel from "../agent/AgentPanel";
+import TourOverlay from "../tour/TourOverlay";
 
 import { useDebugStore } from "../../stores/debugStore";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -108,6 +109,7 @@ export default function MainLayout() {
         <Bug size={18} />
       </button>
       <DebugPanel />
+      <TourOverlay />
       {(chromiumInstalling || chromiumError) && (
         <div style={{
           position: 'fixed',

@@ -6,6 +6,7 @@ import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { seedManagerAfterOnboarding } from "../../services/initService";
 import type { UITheme } from "../../stores/settingsStore";
 import type { Locale } from "../../i18n";
+import { useTourStore } from "../../stores/tourStore";
 import { logger } from "../../services/logger";
 
 type OnboardingStep = "language" | "setup" | "api";
@@ -30,6 +31,7 @@ export default function OnboardingScreen() {
   const setLocale = useSettingsStore((s) => s.setLocale);
   const initializeBranding = useSettingsStore((s) => s.initializeBranding);
   const saveOnboardingApiConfig = useSettingsStore((s) => s.saveOnboardingApiConfig);
+  const setTourPending = useTourStore((s) => s.setTourPending);
   const locale = useSettingsStore((s) => s.locale);
   const [step, setStep] = useState<OnboardingStep>("language");
   const [selectedLocale, setSelectedLocale] = useState<Locale>(locale);
@@ -87,6 +89,12 @@ export default function OnboardingScreen() {
     if (idx > 0) transitionTo(STEP_ORDER[idx - 1]);
   };
 
+  // Separate from initializeBranding — only called from onboarding (not upgrade path)
+  const completeOnboarding = () => {
+    setTourPending();
+    initializeBranding(companyName.trim(), selectedTheme, selectedLocale);
+  };
+
   const handleSetupComplete = async () => {
     setSeeding(true);
     setSeedError(false);
@@ -96,7 +104,7 @@ export default function OnboardingScreen() {
       await useSettingsStore.getState().waitForEnv();
       const { hasApiKey } = useSettingsStore.getState();
       if (hasApiKey) {
-        initializeBranding(companyName.trim(), selectedTheme, selectedLocale);
+        completeOnboarding();
       } else {
         transitionTo("api");
         setSeeding(false);
@@ -113,7 +121,7 @@ export default function OnboardingScreen() {
     setApiError("");
     try {
       await saveOnboardingApiConfig(apiKey, (apiBaseUrl || useSettingsStore.getState().baseUrl).trim());
-      initializeBranding(companyName.trim(), selectedTheme, selectedLocale);
+      completeOnboarding();
     } catch {
       setApiError(t("apiSaveError"));
       setApiTesting(false);
@@ -121,7 +129,7 @@ export default function OnboardingScreen() {
   };
 
   const handleApiSkip = () => {
-    initializeBranding(companyName.trim(), selectedTheme, selectedLocale);
+    completeOnboarding();
   };
 
   const renderLanguageStep = () => (

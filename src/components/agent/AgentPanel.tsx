@@ -45,7 +45,7 @@ export default function AgentPanel() {
           <Users size={22} />
           <h2>{t("editorTitle", { context: uiTheme })}</h2>
         </div>
-        <button className="btn-primary agent-create-btn" onClick={handleNewAgent}>
+        <button className="btn-primary agent-create-btn" onClick={handleNewAgent} data-tour-id="agent-add-btn">
           <Plus size={16} />
           {t("editorNewTitle", { context: uiTheme })}
         </button>

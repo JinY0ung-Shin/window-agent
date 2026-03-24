@@ -99,7 +99,7 @@ export default function Sidebar() {
           <span>{t("sidebarNewButton", { context: uiTheme })}</span>
         </div>
 
-        <div className="conversation-list">
+        <div className="conversation-list" data-tour-id="sidebar-agents">
           {sortedAgents.map((agent) => (
             <div
               key={agent.id}
@@ -185,6 +185,7 @@ export default function Sidebar() {
         <div
           className={`menu-item ${mainView === "team" ? "active" : ""}`}
           onClick={() => toggleView("team")}
+          data-tour-id="sidebar-team"
         >
           <Users size={20} />
           <span>{tt("title")}</span>
@@ -205,6 +206,7 @@ export default function Sidebar() {
         <div
           className={`menu-item settings-btn ${mainView === "settings" ? "active" : ""}`}
           onClick={() => toggleView("settings")}
+          data-tour-id="sidebar-settings"
         >
           <Settings size={20} />
           <span>{t("settings:title")}</span>

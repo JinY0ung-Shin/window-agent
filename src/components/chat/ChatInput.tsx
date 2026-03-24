@@ -41,7 +41,7 @@ export default function ChatInput() {
   const learningModeWarningText = t("chat:learningMode.warning", { context: uiTheme });
 
   return (
-    <div className="input-area">
+    <div className="input-area" data-tour-id="chat-input">
       <div className="input-toolbar">
         <button
           className={`learning-mode-toggle${learningMode ? " active" : ""}`}
