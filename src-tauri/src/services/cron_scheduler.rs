@@ -372,3 +372,152 @@ fn finish_run(
         }),
     );
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::cron_operations::*;
+    use crate::db::models::{CreateAgentRequest, CreateCronJobRequest, CronScheduleType};
+    use crate::db::agent_operations::create_agent_impl;
+
+    fn setup_db() -> Database {
+        Database::new_in_memory().expect("in-memory db")
+    }
+
+    fn create_test_agent(db: &Database) -> String {
+        let agent = create_agent_impl(
+            db,
+            CreateAgentRequest {
+                folder_name: "cron-agent".into(),
+                name: "Cron Agent".into(),
+                avatar: None,
+                description: None,
+                model: None,
+                temperature: None,
+                thinking_enabled: None,
+                thinking_budget: None,
+                is_default: None,
+                sort_order: None,
+            },
+        )
+        .unwrap();
+        agent.id
+    }
+
+    #[test]
+    fn test_cron_scheduler_new_default_enabled() {
+        let scheduler = CronScheduler::new();
+        assert!(scheduler.is_enabled());
+    }
+
+    #[test]
+    fn test_cron_scheduler_set_enabled_false() {
+        let scheduler = CronScheduler::new();
+        scheduler.set_enabled(false);
+        assert!(!scheduler.is_enabled());
+    }
+
+    #[test]
+    fn test_cron_scheduler_set_enabled_toggle() {
+        let scheduler = CronScheduler::new();
+        scheduler.set_enabled(false);
+        assert!(!scheduler.is_enabled());
+        scheduler.set_enabled(true);
+        assert!(scheduler.is_enabled());
+    }
+
+    #[test]
+    fn test_cron_scheduler_notify_change_does_not_panic() {
+        let scheduler = CronScheduler::new();
+        // Should not panic even when no one is waiting
+        scheduler.notify_change();
+    }
+
+    #[test]
+    fn test_compute_sleep_duration_no_jobs() {
+        let db = setup_db();
+        let duration = CronScheduler::compute_sleep_duration(&db);
+        assert_eq!(duration, std::time::Duration::from_secs(60));
+    }
+
+    #[test]
+    fn test_compute_sleep_duration_with_future_job() {
+        let db = setup_db();
+        let agent_id = create_test_agent(&db);
+        let _job = create_cron_job_impl(
+            &db,
+            CreateCronJobRequest {
+                agent_id,
+                name: "Future Job".into(),
+                description: None,
+                schedule_type: CronScheduleType::Every,
+                schedule_value: "3600".into(),
+                prompt: "test".into(),
+                enabled: Some(true),
+            },
+        )
+        .unwrap();
+
+        // Job has next_run_at ~1 hour from now
+        let duration = CronScheduler::compute_sleep_duration(&db);
+        // Should be roughly 3600 seconds, but at least > 0
+        assert!(duration.as_secs() > 0);
+        assert!(duration.as_secs() <= 3601);
+    }
+
+    #[test]
+    fn test_compute_sleep_duration_with_past_due_job() {
+        let db = setup_db();
+        let agent_id = create_test_agent(&db);
+        let job = create_cron_job_impl(
+            &db,
+            CreateCronJobRequest {
+                agent_id,
+                name: "Past Job".into(),
+                description: None,
+                schedule_type: CronScheduleType::Every,
+                schedule_value: "3600".into(),
+                prompt: "test".into(),
+                enabled: Some(true),
+            },
+        )
+        .unwrap();
+
+        // Set next_run_at to the past
+        db.with_conn(|conn| {
+            conn.execute(
+                "UPDATE cron_jobs SET next_run_at = '2020-01-01T00:00:00+00:00' WHERE id = ?1",
+                rusqlite::params![job.id],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let duration = CronScheduler::compute_sleep_duration(&db);
+        // Already due — should wake quickly (100ms)
+        assert!(duration.as_millis() <= 100);
+    }
+
+    #[test]
+    fn test_compute_sleep_duration_disabled_jobs_ignored() {
+        let db = setup_db();
+        let agent_id = create_test_agent(&db);
+        let _job = create_cron_job_impl(
+            &db,
+            CreateCronJobRequest {
+                agent_id,
+                name: "Disabled Job".into(),
+                description: None,
+                schedule_type: CronScheduleType::Every,
+                schedule_value: "3600".into(),
+                prompt: "test".into(),
+                enabled: Some(false),
+            },
+        )
+        .unwrap();
+
+        // No enabled jobs → default 60s
+        let duration = CronScheduler::compute_sleep_duration(&db);
+        assert_eq!(duration, std::time::Duration::from_secs(60));
+    }
+}

@@ -910,4 +910,164 @@ mod tests {
         let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
         assert!(!detail.learning_mode);
     }
+
+    // ── Team conversation tests ──
+
+    #[test]
+    fn test_create_team_conversation() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        // Create a team first (needed for FK)
+        use crate::db::team_operations::create_team_impl;
+        use crate::db::models::CreateTeamRequest;
+        let team = create_team_impl(
+            &db,
+            CreateTeamRequest {
+                name: "Test Team".into(),
+                description: None,
+                leader_agent_id: agent.id.clone(),
+                member_agent_ids: None,
+            },
+        )
+        .unwrap();
+
+        let conv = create_team_conversation_impl(
+            &db,
+            team.id.clone(),
+            agent.id.clone(),
+            Some("Team Chat".into()),
+        )
+        .unwrap();
+        assert_eq!(conv.title, "Team Chat");
+        assert_eq!(conv.team_id, Some(team.id));
+        assert_eq!(conv.agent_id, agent.id);
+    }
+
+    #[test]
+    fn test_create_team_conversation_default_title() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        use crate::db::team_operations::create_team_impl;
+        use crate::db::models::CreateTeamRequest;
+        let team = create_team_impl(
+            &db,
+            CreateTeamRequest {
+                name: "T".into(),
+                description: None,
+                leader_agent_id: agent.id.clone(),
+                member_agent_ids: None,
+            },
+        )
+        .unwrap();
+
+        let conv = create_team_conversation_impl(&db, team.id, agent.id, None).unwrap();
+        assert_eq!(conv.title, "팀 대화");
+    }
+
+    // ── Skills tests ──
+
+    #[test]
+    fn test_update_conversation_skills() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        let skills = serde_json::json!(["skill1", "skill2"]).to_string();
+        update_conversation_skills_impl(&db, conv.id.clone(), Some(skills.clone())).unwrap();
+
+        let detail = get_conversation_detail_impl(&db, conv.id.clone()).unwrap();
+        assert_eq!(detail.active_skills, Some(vec!["skill1".to_string(), "skill2".to_string()]));
+
+        // Clear skills
+        update_conversation_skills_impl(&db, conv.id.clone(), None).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert!(detail.active_skills.is_none());
+    }
+
+    // ── Digest & consolidation tests ──
+
+    #[test]
+    fn test_update_conversation_digest() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        update_conversation_digest_impl(&db, conv.id.clone(), Some("digest-123".into())).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id.clone()).unwrap();
+        assert_eq!(detail.digest_id.as_deref(), Some("digest-123"));
+
+        // Clear digest
+        update_conversation_digest_impl(&db, conv.id.clone(), None).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert!(detail.digest_id.is_none());
+    }
+
+    #[test]
+    fn test_update_conversation_consolidated_at() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, None, agent.id).unwrap();
+
+        let ts = "2025-01-01T00:00:00+00:00".to_string();
+        update_conversation_consolidated_at_impl(&db, conv.id.clone(), Some(ts.clone())).unwrap();
+        let detail = get_conversation_detail_impl(&db, conv.id.clone()).unwrap();
+        assert_eq!(detail.consolidated_at.as_deref(), Some(ts.as_str()));
+    }
+
+    #[test]
+    fn test_list_pending_consolidations() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+
+        // Empty at first
+        let pending = list_pending_consolidations_impl(&db).unwrap();
+        assert!(pending.is_empty());
+
+        // Create a conversation with 3 messages (minimum for pending consolidation)
+        let conv = create_conversation_impl(&db, None, agent.id.clone()).unwrap();
+        for i in 0..3 {
+            save_message_impl(
+                &db,
+                SaveMessageRequest {
+                    conversation_id: conv.id.clone(),
+                    role: "user".into(),
+                    content: format!("msg {i}"),
+                    tool_call_id: None,
+                    tool_name: None,
+                    tool_input: None,
+                    sender_agent_id: None,
+                    team_run_id: None,
+                    team_task_id: None,
+                },
+            )
+            .unwrap();
+        }
+
+        let pending = list_pending_consolidations_impl(&db).unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].conversation_id, conv.id);
+        assert_eq!(pending[0].agent_id, agent.id);
+    }
+
+    #[test]
+    fn test_update_title_with_expected_current_guard() {
+        let db = setup_db();
+        let agent = create_test_agent(&db);
+        let conv = create_conversation_impl(&db, Some("Original".into()), agent.id).unwrap();
+
+        // Guard matches → update succeeds
+        let affected = update_conversation_title_impl(
+            &db, conv.id.clone(), "New".into(), Some("Original".into()),
+        ).unwrap();
+        assert_eq!(affected, 1);
+
+        // Guard doesn't match → no update
+        let affected = update_conversation_title_impl(
+            &db, conv.id.clone(), "Newer".into(), Some("Original".into()),
+        ).unwrap();
+        assert_eq!(affected, 0);
+
+        let detail = get_conversation_detail_impl(&db, conv.id).unwrap();
+        assert_eq!(detail.title, "New"); // unchanged from last successful update
+    }
 }

@@ -768,4 +768,280 @@ mod tests {
             .all(|t| matches!(t.status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Cancelled));
         assert!(all_done);
     }
+
+    // ── Full delegation flow (DB-only) ─────────────────────
+
+    #[test]
+    fn test_full_delegation_flow_create_run_add_tasks_update_status() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let m1_id = create_test_agent(&db, "m1", "Member1");
+        let m2_id = create_test_agent(&db, "m2", "Member2");
+
+        let team = create_team_impl(
+            &db,
+            crate::db::models::CreateTeamRequest {
+                name: "Delegation Team".into(),
+                description: None,
+                leader_agent_id: leader_id.clone(),
+                member_agent_ids: Some(vec![m1_id.clone(), m2_id.clone()]),
+            },
+        )
+        .unwrap();
+
+        let conv = create_conversation_impl(&db, Some("Delegation".into()), leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id.clone(), conv.id.clone(), leader_id.clone()).unwrap();
+        assert_eq!(run.status, TeamRunStatus::Running);
+
+        // Create tasks for each member
+        let t1 = create_team_task_impl(&db, run.id.clone(), m1_id.clone(), "Research topic A".into(), None).unwrap();
+        let t2 = create_team_task_impl(&db, run.id.clone(), m2_id.clone(), "Research topic B".into(), None).unwrap();
+        assert_eq!(t1.status, TaskStatus::Queued);
+        assert_eq!(t2.status, TaskStatus::Queued);
+
+        // Move to running
+        update_team_task_impl(&db, &t1.id, Some(TaskStatus::Running), Some("req-1".into()), None, None).unwrap();
+        update_team_task_impl(&db, &t2.id, Some(TaskStatus::Running), Some("req-2".into()), None, None).unwrap();
+
+        // Update run status to waiting_reports
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::WaitingReports, None).unwrap();
+        let updated_run = get_team_run_impl(&db, &run.id).unwrap();
+        assert_eq!(updated_run.status, TeamRunStatus::WaitingReports);
+
+        // Complete tasks
+        update_team_task_impl(
+            &db, &t1.id, Some(TaskStatus::Completed), None,
+            Some("Result A".into()), Some(Utc::now().to_rfc3339()),
+        ).unwrap();
+        update_team_task_impl(
+            &db, &t2.id, Some(TaskStatus::Completed), None,
+            Some("Result B".into()), Some(Utc::now().to_rfc3339()),
+        ).unwrap();
+
+        // Move to synthesizing then completed
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::Synthesizing, None).unwrap();
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::Completed, Some(Utc::now().to_rfc3339())).unwrap();
+
+        let final_run = get_team_run_impl(&db, &run.id).unwrap();
+        assert_eq!(final_run.status, TeamRunStatus::Completed);
+        assert!(final_run.finished_at.is_some());
+    }
+
+    // ── Recovery with multiple runs ────────────────────────
+
+    #[test]
+    fn test_recover_runs_multiple_runs_different_states() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let member_id = create_test_agent(&db, "member", "Member");
+
+        let team = create_team_impl(
+            &db,
+            crate::db::models::CreateTeamRequest {
+                name: "Multi Team".into(),
+                description: None,
+                leader_agent_id: leader_id.clone(),
+                member_agent_ids: Some(vec![member_id.clone()]),
+            },
+        )
+        .unwrap();
+
+        let conv = create_conversation_impl(&db, Some("Chat".into()), leader_id.clone()).unwrap();
+
+        // Create 3 runs
+        let run1 = create_team_run_impl(&db, team.id.clone(), conv.id.clone(), leader_id.clone()).unwrap();
+        let run2 = create_team_run_impl(&db, team.id.clone(), conv.id.clone(), leader_id.clone()).unwrap();
+        let run3 = create_team_run_impl(&db, team.id.clone(), conv.id.clone(), leader_id.clone()).unwrap();
+
+        // run1: completed (should NOT be recovered)
+        update_team_run_status_impl(&db, &run1.id, TeamRunStatus::Completed, Some(Utc::now().to_rfc3339())).unwrap();
+
+        // run2: still running with a running task
+        let t2 = create_team_task_impl(&db, run2.id.clone(), member_id.clone(), "Task 2".into(), None).unwrap();
+        update_team_task_impl(&db, &t2.id, Some(TaskStatus::Running), None, None, None).unwrap();
+
+        // run3: still running with queued and running tasks
+        let t3a = create_team_task_impl(&db, run3.id.clone(), member_id.clone(), "Task 3a".into(), None).unwrap();
+        let _t3b = create_team_task_impl(&db, run3.id.clone(), leader_id.clone(), "Task 3b".into(), None).unwrap();
+        update_team_task_impl(&db, &t3a.id, Some(TaskStatus::Running), None, None, None).unwrap();
+
+        let recovered = TeamOrchestrator::recover_runs(&db).unwrap();
+        assert_eq!(recovered, 2); // run2 and run3
+
+        // Verify run1 is still completed
+        let r1 = get_team_run_impl(&db, &run1.id).unwrap();
+        assert_eq!(r1.status, TeamRunStatus::Completed);
+
+        // Verify run2 and run3 are failed
+        let r2 = get_team_run_impl(&db, &run2.id).unwrap();
+        assert_eq!(r2.status, TeamRunStatus::Failed);
+        let r3 = get_team_run_impl(&db, &run3.id).unwrap();
+        assert_eq!(r3.status, TeamRunStatus::Failed);
+    }
+
+    #[test]
+    fn test_recover_runs_only_running_and_queued_tasks_affected() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let m1 = create_test_agent(&db, "m1", "Member1");
+        let m2 = create_test_agent(&db, "m2", "Member2");
+
+        let team = create_team_impl(
+            &db,
+            crate::db::models::CreateTeamRequest {
+                name: "Mixed Team".into(),
+                description: None,
+                leader_agent_id: leader_id.clone(),
+                member_agent_ids: Some(vec![m1.clone(), m2.clone()]),
+            },
+        )
+        .unwrap();
+
+        let conv = create_conversation_impl(&db, Some("Chat".into()), leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id.clone(), conv.id.clone(), leader_id.clone()).unwrap();
+
+        // Task 1: already completed
+        let t1 = create_team_task_impl(&db, run.id.clone(), m1.clone(), "Done task".into(), None).unwrap();
+        update_team_task_impl(
+            &db, &t1.id, Some(TaskStatus::Completed), None,
+            Some("Already done".into()), Some(Utc::now().to_rfc3339()),
+        ).unwrap();
+
+        // Task 2: still running
+        let t2 = create_team_task_impl(&db, run.id.clone(), m2.clone(), "Running task".into(), None).unwrap();
+        update_team_task_impl(&db, &t2.id, Some(TaskStatus::Running), None, None, None).unwrap();
+
+        TeamOrchestrator::recover_runs(&db).unwrap();
+
+        // Task 1 should still be completed (not overwritten)
+        let tasks = get_team_tasks_impl(&db, &run.id).unwrap();
+        let completed_task = tasks.iter().find(|t| t.id == t1.id).unwrap();
+        assert_eq!(completed_task.status, TaskStatus::Completed);
+        assert_eq!(completed_task.result_summary.as_deref(), Some("Already done"));
+
+        // Task 2 should be failed
+        let recovered_task = tasks.iter().find(|t| t.id == t2.id).unwrap();
+        assert_eq!(recovered_task.status, TaskStatus::Failed);
+        assert!(recovered_task.result_summary.as_ref().unwrap().contains("Recovered on startup"));
+    }
+
+    // ── Task status transitions ────────────────────────────
+
+    #[test]
+    fn test_task_status_transitions_queued_to_running_to_completed() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let team = create_team_impl(&db, crate::db::models::CreateTeamRequest {
+            name: "T".into(), description: None,
+            leader_agent_id: leader_id.clone(), member_agent_ids: None,
+        }).unwrap();
+        let conv = create_conversation_impl(&db, None, leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id, conv.id, leader_id.clone()).unwrap();
+        let task = create_team_task_impl(&db, run.id, leader_id, "Do it".into(), None).unwrap();
+
+        // Queued -> Running
+        let t = update_team_task_impl(&db, &task.id, Some(TaskStatus::Running), None, None, None).unwrap();
+        assert_eq!(t.status, TaskStatus::Running);
+
+        // Running -> Completed
+        let t = update_team_task_impl(&db, &task.id, Some(TaskStatus::Completed), None, Some("Done".into()), Some(Utc::now().to_rfc3339())).unwrap();
+        assert_eq!(t.status, TaskStatus::Completed);
+        assert!(t.finished_at.is_some());
+    }
+
+    #[test]
+    fn test_task_status_transition_to_failed() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let team = create_team_impl(&db, crate::db::models::CreateTeamRequest {
+            name: "T".into(), description: None,
+            leader_agent_id: leader_id.clone(), member_agent_ids: None,
+        }).unwrap();
+        let conv = create_conversation_impl(&db, None, leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id, conv.id, leader_id.clone()).unwrap();
+        let task = create_team_task_impl(&db, run.id, leader_id, "Fail it".into(), None).unwrap();
+
+        let t = update_team_task_impl(&db, &task.id, Some(TaskStatus::Running), None, None, None).unwrap();
+        assert_eq!(t.status, TaskStatus::Running);
+
+        let t = update_team_task_impl(
+            &db, &task.id, Some(TaskStatus::Failed), None,
+            Some("LLM error: something".into()), Some(Utc::now().to_rfc3339()),
+        ).unwrap();
+        assert_eq!(t.status, TaskStatus::Failed);
+        assert!(t.result_summary.as_ref().unwrap().contains("LLM error"));
+    }
+
+    #[test]
+    fn test_task_status_transition_to_cancelled() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let team = create_team_impl(&db, crate::db::models::CreateTeamRequest {
+            name: "T".into(), description: None,
+            leader_agent_id: leader_id.clone(), member_agent_ids: None,
+        }).unwrap();
+        let conv = create_conversation_impl(&db, None, leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id, conv.id, leader_id.clone()).unwrap();
+        let task = create_team_task_impl(&db, run.id, leader_id, "Cancel it".into(), None).unwrap();
+
+        let t = update_team_task_impl(&db, &task.id, Some(TaskStatus::Cancelled), None, None, Some(Utc::now().to_rfc3339())).unwrap();
+        assert_eq!(t.status, TaskStatus::Cancelled);
+    }
+
+    #[test]
+    fn test_run_status_full_lifecycle() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let team = create_team_impl(&db, crate::db::models::CreateTeamRequest {
+            name: "T".into(), description: None,
+            leader_agent_id: leader_id.clone(), member_agent_ids: None,
+        }).unwrap();
+        let conv = create_conversation_impl(&db, None, leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id, conv.id, leader_id).unwrap();
+
+        // Running -> WaitingReports
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::WaitingReports, None).unwrap();
+        assert_eq!(get_team_run_impl(&db, &run.id).unwrap().status, TeamRunStatus::WaitingReports);
+
+        // WaitingReports -> Synthesizing
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::Synthesizing, None).unwrap();
+        assert_eq!(get_team_run_impl(&db, &run.id).unwrap().status, TeamRunStatus::Synthesizing);
+
+        // Synthesizing -> Completed
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::Completed, Some(Utc::now().to_rfc3339())).unwrap();
+        let final_run = get_team_run_impl(&db, &run.id).unwrap();
+        assert_eq!(final_run.status, TeamRunStatus::Completed);
+        assert!(final_run.finished_at.is_some());
+    }
+
+    #[test]
+    fn test_run_status_to_failed() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let team = create_team_impl(&db, crate::db::models::CreateTeamRequest {
+            name: "T".into(), description: None,
+            leader_agent_id: leader_id.clone(), member_agent_ids: None,
+        }).unwrap();
+        let conv = create_conversation_impl(&db, None, leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id, conv.id, leader_id).unwrap();
+
+        update_team_run_status_impl(&db, &run.id, TeamRunStatus::Failed, Some(Utc::now().to_rfc3339())).unwrap();
+        let r = get_team_run_impl(&db, &run.id).unwrap();
+        assert_eq!(r.status, TeamRunStatus::Failed);
+        assert!(r.finished_at.is_some());
+    }
+
+    #[test]
+    fn test_task_with_parent_message_id() {
+        let db = setup_db();
+        let leader_id = create_test_agent(&db, "leader", "Leader");
+        let team = create_team_impl(&db, crate::db::models::CreateTeamRequest {
+            name: "T".into(), description: None,
+            leader_agent_id: leader_id.clone(), member_agent_ids: None,
+        }).unwrap();
+        let conv = create_conversation_impl(&db, None, leader_id.clone()).unwrap();
+        let run = create_team_run_impl(&db, team.id, conv.id, leader_id.clone()).unwrap();
+        let task = create_team_task_impl(&db, run.id, leader_id, "With parent".into(), Some("msg-123".into())).unwrap();
+        assert_eq!(task.parent_message_id, Some("msg-123".into()));
+    }
 }

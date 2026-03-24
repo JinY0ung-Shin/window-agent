@@ -222,3 +222,100 @@ impl RunRegistry {
         entries.remove(request_id);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── is_default_url tests ──
+
+    #[test]
+    fn is_default_url_exact_match() {
+        assert!(is_default_url("https://api.openai.com/v1"));
+    }
+
+    #[test]
+    fn is_default_url_with_trailing_slash() {
+        assert!(is_default_url("https://api.openai.com/v1/"));
+    }
+
+    #[test]
+    fn is_default_url_custom_url() {
+        assert!(!is_default_url("https://my-proxy.example.com/v1"));
+    }
+
+    #[test]
+    fn is_default_url_empty_string() {
+        assert!(!is_default_url(""));
+    }
+
+    #[test]
+    fn is_default_url_localhost() {
+        assert!(!is_default_url("http://localhost:8080/v1"));
+    }
+
+    // ── requires_api_key tests ──
+
+    #[test]
+    fn requires_key_empty_key_default_url() {
+        assert!(requires_api_key("", DEFAULT_BASE_URL));
+    }
+
+    #[test]
+    fn requires_key_has_key_default_url() {
+        assert!(!requires_api_key("sk-test-key", DEFAULT_BASE_URL));
+    }
+
+    #[test]
+    fn requires_key_empty_key_custom_url() {
+        assert!(!requires_api_key("", "http://localhost:8080/v1"));
+    }
+
+    #[test]
+    fn requires_key_has_key_custom_url() {
+        assert!(!requires_api_key("sk-test", "http://localhost:8080/v1"));
+    }
+
+    // ── RunRegistry tests ──
+
+    #[tokio::test]
+    async fn run_registry_register_and_abort() {
+        let registry = RunRegistry::new();
+        let handle = tokio::task::spawn(async { 42 }).abort_handle();
+        registry.register("req-1".into(), handle).await;
+        let aborted = registry.abort("req-1").await;
+        assert!(aborted);
+    }
+
+    #[tokio::test]
+    async fn run_registry_abort_nonexistent() {
+        let registry = RunRegistry::new();
+        let aborted = registry.abort("does-not-exist").await;
+        assert!(!aborted);
+    }
+
+    #[tokio::test]
+    async fn run_registry_remove_cleans_up() {
+        let registry = RunRegistry::new();
+        let handle = tokio::task::spawn(async {}).abort_handle();
+        registry.register("req-2".into(), handle).await;
+        registry.remove("req-2").await;
+        // After remove, abort should return false
+        let aborted = registry.abort("req-2").await;
+        assert!(!aborted);
+    }
+
+    #[tokio::test]
+    async fn run_registry_multiple_entries() {
+        let registry = RunRegistry::new();
+        let h1 = tokio::task::spawn(async {}).abort_handle();
+        let h2 = tokio::task::spawn(async {}).abort_handle();
+        registry.register("a".into(), h1).await;
+        registry.register("b".into(), h2).await;
+        assert!(registry.abort("a").await);
+        assert!(registry.abort("b").await);
+        // Both removed after abort
+        assert!(!registry.abort("a").await);
+        assert!(!registry.abort("b").await);
+    }
+}

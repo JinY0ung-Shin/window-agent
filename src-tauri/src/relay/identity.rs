@@ -187,4 +187,57 @@ mod tests {
         assert!(verifying_key.verify(message, &sig).is_ok());
         assert!(verifying_key.verify(b"tampered", &sig).is_err());
     }
+
+    #[test]
+    fn test_sign_produces_64_byte_signature() {
+        let id = NodeIdentity::generate();
+        let sig = id.sign(b"test message");
+        assert_eq!(sig.len(), 64);
+    }
+
+    #[test]
+    fn test_clone_preserves_identity() {
+        let id1 = NodeIdentity::generate();
+        let id2 = id1.clone();
+        assert_eq!(id1.public_key_bytes(), id2.public_key_bytes());
+        assert_eq!(id1.secret_bytes(), id2.secret_bytes());
+    }
+
+    #[test]
+    fn test_x25519_public_key_is_32_bytes() {
+        let id = NodeIdentity::generate();
+        let x25519_pub = id.to_x25519_public();
+        assert_eq!(x25519_pub.len(), 32);
+    }
+
+    #[test]
+    fn test_x25519_public_differs_from_ed25519_public() {
+        let id = NodeIdentity::generate();
+        let ed_pub = id.public_key_bytes();
+        let x_pub = id.to_x25519_public();
+        // They should (almost certainly) differ since they are different curve representations
+        assert_ne!(ed_pub, x_pub);
+    }
+
+    #[test]
+    fn test_from_secret_bytes_wrong_length_31() {
+        let result = NodeIdentity::from_secret_bytes(&[0u8; 31]);
+        assert!(result.is_err());
+        match result {
+            Err(IdentityError::InvalidKey(msg)) => assert!(msg.contains("32 bytes")),
+            _ => panic!("expected InvalidKey error"),
+        }
+    }
+
+    #[test]
+    fn test_from_secret_bytes_wrong_length_33() {
+        let result = NodeIdentity::from_secret_bytes(&[0u8; 33]);
+        assert!(matches!(result, Err(IdentityError::InvalidKey(_))));
+    }
+
+    #[test]
+    fn test_from_secret_bytes_empty() {
+        let result = NodeIdentity::from_secret_bytes(&[]);
+        assert!(matches!(result, Err(IdentityError::InvalidKey(_))));
+    }
 }

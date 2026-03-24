@@ -445,3 +445,141 @@ pub async fn stream_completion(
     );
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::AppError;
+
+    // ── truncate_text tests ──
+
+    #[test]
+    fn truncate_text_short_string_unchanged() {
+        assert_eq!(truncate_text("hello", 10), "hello");
+    }
+
+    #[test]
+    fn truncate_text_exact_length_unchanged() {
+        assert_eq!(truncate_text("hello", 5), "hello");
+    }
+
+    #[test]
+    fn truncate_text_long_string_truncated() {
+        assert_eq!(truncate_text("hello world", 5), "hello...");
+    }
+
+    #[test]
+    fn truncate_text_empty_string() {
+        assert_eq!(truncate_text("", 10), "");
+    }
+
+    #[test]
+    fn truncate_text_multibyte_utf8() {
+        // Korean characters are multi-byte in UTF-8
+        let korean = "안녕하세요세계";
+        assert_eq!(truncate_text(korean, 3), "안녕하...");
+    }
+
+    #[test]
+    fn truncate_text_zero_max() {
+        assert_eq!(truncate_text("abc", 0), "...");
+    }
+
+    // ── models_url tests ──
+
+    #[test]
+    fn models_url_from_base() {
+        assert_eq!(models_url("https://api.openai.com/v1"), "https://api.openai.com/v1/models");
+    }
+
+    #[test]
+    fn models_url_trailing_slash() {
+        assert_eq!(models_url("https://api.openai.com/v1/"), "https://api.openai.com/v1/models");
+    }
+
+    #[test]
+    fn models_url_strips_chat_completions() {
+        assert_eq!(
+            models_url("https://api.openai.com/v1/chat/completions"),
+            "https://api.openai.com/v1/models"
+        );
+    }
+
+    #[test]
+    fn models_url_strips_chat_completions_with_trailing_slash() {
+        assert_eq!(
+            models_url("https://api.openai.com/v1/chat/completions/"),
+            "https://api.openai.com/v1/models"
+        );
+    }
+
+    // ── completions_url tests ──
+
+    #[test]
+    fn completions_url_appends_path() {
+        assert_eq!(
+            completions_url("https://api.openai.com/v1"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn completions_url_already_complete() {
+        assert_eq!(
+            completions_url("https://api.openai.com/v1/chat/completions"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn completions_url_trailing_slash_stripped() {
+        assert_eq!(
+            completions_url("https://api.openai.com/v1/"),
+            "https://api.openai.com/v1/chat/completions"
+        );
+    }
+
+    // ── is_thinking_specific_error tests ──
+
+    #[test]
+    fn thinking_error_http_400_with_thinking() {
+        let err = AppError::Api("HTTP_400: thinking is not supported for this model".into());
+        assert!(is_thinking_specific_error(&err));
+    }
+
+    #[test]
+    fn thinking_error_http_422_with_unsupported() {
+        let err = AppError::Api("HTTP_422: unsupported parameter budget_tokens".into());
+        assert!(is_thinking_specific_error(&err));
+    }
+
+    #[test]
+    fn thinking_error_http_400_with_not_supported() {
+        let err = AppError::Api("HTTP_400: feature not_supported".into());
+        assert!(is_thinking_specific_error(&err));
+    }
+
+    #[test]
+    fn thinking_error_non_api_variant_returns_false() {
+        let err = AppError::Io("HTTP_400: thinking error".into());
+        assert!(!is_thinking_specific_error(&err));
+    }
+
+    #[test]
+    fn thinking_error_wrong_status_code() {
+        let err = AppError::Api("HTTP_401: thinking not supported".into());
+        assert!(!is_thinking_specific_error(&err));
+    }
+
+    #[test]
+    fn thinking_error_no_relevant_keywords() {
+        let err = AppError::Api("HTTP_400: invalid model parameter".into());
+        assert!(!is_thinking_specific_error(&err));
+    }
+
+    #[test]
+    fn thinking_error_budget_tokens_keyword() {
+        let err = AppError::Api("HTTP_400: budget_tokens is invalid".into());
+        assert!(is_thinking_specific_error(&err));
+    }
+}

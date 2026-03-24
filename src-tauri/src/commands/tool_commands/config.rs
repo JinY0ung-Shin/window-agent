@@ -179,4 +179,112 @@ mod tests {
         assert_eq!(delete["enabled"], true);
         assert!(changed);
     }
+
+    #[test]
+    fn test_normalize_bumps_version_from_1_to_2() {
+        let config = r#"{"version":1,"auto_approve":false,"native":{},"credentials":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        assert!(changed);
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        assert_eq!(parsed["version"], 2);
+    }
+
+    #[test]
+    fn test_normalize_bumps_version_from_missing() {
+        let config = r#"{"native":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        assert!(changed);
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        assert_eq!(parsed["version"], 2);
+    }
+
+    #[test]
+    fn test_normalize_adds_missing_native_section() {
+        let config = r#"{"version":2,"auto_approve":false,"credentials":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        assert!(changed);
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        assert!(parsed["native"].is_object());
+    }
+
+    #[test]
+    fn test_normalize_adds_missing_credentials_section() {
+        let config = r#"{"version":2,"auto_approve":false,"native":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        assert!(changed);
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        assert!(parsed["credentials"].is_object());
+    }
+
+    #[test]
+    fn test_normalize_adds_missing_auto_approve() {
+        let config = r#"{"version":2,"native":{},"credentials":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        assert!(changed);
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        assert_eq!(parsed["auto_approve"], false);
+    }
+
+    #[test]
+    fn test_normalize_invalid_json_returns_error() {
+        let result = normalize_tool_config("{bad json}");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid TOOL_CONFIG.json"));
+    }
+
+    #[test]
+    fn test_normalize_adds_all_native_tools() {
+        // Start with empty native section — all tools should be added
+        let config = r#"{"version":2,"auto_approve":false,"native":{},"credentials":{}}"#;
+        let (normalized, changed) = normalize_tool_config(config).unwrap();
+        assert!(changed);
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        let native = parsed["native"].as_object().unwrap();
+        // read_file should definitely be present
+        assert!(native.contains_key("read_file"));
+        assert!(native.contains_key("write_file"));
+        assert!(native.contains_key("list_directory"));
+    }
+
+    #[test]
+    fn test_normalize_does_not_overwrite_existing_tools() {
+        // Pre-set read_file to disabled with custom tier; normalize should NOT overwrite it
+        // (but if default_enabled=true, it WILL force-enable it per the migration logic)
+        let config = r#"{"version":2,"auto_approve":false,"native":{"read_file":{"enabled":false,"tier":"confirm"}},"credentials":{}}"#;
+        let (normalized, _changed) = normalize_tool_config(config).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&normalized).unwrap();
+        // read_file has default_enabled=true, so migration force-enables it
+        assert_eq!(parsed["native"]["read_file"]["enabled"], true);
+        // But tier should remain as-is (migration only touches "enabled")
+        assert_eq!(parsed["native"]["read_file"]["tier"], "confirm");
+    }
+
+    #[test]
+    fn test_get_default_tool_config_is_valid_json() {
+        let config_str = get_default_tool_config().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&config_str).unwrap();
+        assert_eq!(parsed["version"], 2);
+        assert_eq!(parsed["auto_approve"], false);
+        assert!(parsed["native"].is_object());
+        assert!(parsed["credentials"].is_object());
+    }
+
+    #[test]
+    fn test_get_default_tool_config_excludes_orchestration() {
+        let config_str = get_default_tool_config().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&config_str).unwrap();
+        let native = parsed["native"].as_object().unwrap();
+        // delegate and report are orchestration tools — should be excluded
+        assert!(!native.contains_key("delegate"));
+        assert!(!native.contains_key("report"));
+    }
+
+    #[test]
+    fn test_get_default_tool_config_includes_file_tools() {
+        let config_str = get_default_tool_config().unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&config_str).unwrap();
+        let native = parsed["native"].as_object().unwrap();
+        assert!(native.contains_key("read_file"));
+        assert!(native.contains_key("write_file"));
+    }
 }

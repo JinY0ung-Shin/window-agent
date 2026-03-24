@@ -993,4 +993,308 @@ mod tests {
             "addresses_json should be unchanged"
         );
     }
+
+    // ── get_contact by id ──
+
+    #[test]
+    fn test_get_contact_returns_none_for_missing() {
+        let db = setup_db();
+        let found = get_contact(&db, "nonexistent").unwrap();
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn test_get_contact_returns_all_fields() {
+        let db = setup_db();
+        let mut c = make_contact("c1", "peer1");
+        c.display_name = "Alice".to_string();
+        c.agent_name = "Agent Alice".to_string();
+        c.agent_description = "Desc".to_string();
+        c.invite_card_raw = Some("card-raw".to_string());
+        // Note: local_agent_id requires FK to agents table, so leave as None
+        insert_contact(&db, &c).unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(found.display_name, "Alice");
+        assert_eq!(found.agent_name, "Agent Alice");
+        assert_eq!(found.agent_description, "Desc");
+        assert!(found.local_agent_id.is_none());
+        assert_eq!(found.invite_card_raw.as_deref(), Some("card-raw"));
+    }
+
+    // ── update_contact with no fields ──
+
+    #[test]
+    fn test_update_contact_empty_update_is_noop() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+
+        // Empty update should succeed and not change anything
+        update_contact(&db, "c1", ContactUpdate::default()).unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(found.display_name, "User c1");
+    }
+
+    // ── update_contact all fields ──
+
+    #[test]
+    fn test_update_contact_all_fields() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+
+        // Create an agent for local_agent_id FK
+        use crate::db::agent_operations::create_agent_impl;
+        use crate::db::models::CreateAgentRequest;
+        let agent = create_agent_impl(
+            &db,
+            CreateAgentRequest {
+                folder_name: "relay-agent".into(),
+                name: "Relay Agent".into(),
+                avatar: None, description: None, model: None,
+                temperature: None, thinking_enabled: None, thinking_budget: None,
+                is_default: None, sort_order: None,
+            },
+        )
+        .unwrap();
+
+        update_contact(
+            &db,
+            "c1",
+            ContactUpdate {
+                display_name: Some("Updated Name".to_string()),
+                agent_name: Some("New Agent".to_string()),
+                agent_description: Some("New Desc".to_string()),
+                local_agent_id: Some(Some(agent.id.clone())),
+                mode: Some("autonomous".to_string()),
+                capabilities_json: Some(r#"{"can_tools":true}"#.to_string()),
+                status: Some("accepted".to_string()),
+                addresses_json: Some(Some(r#"["/ip4/10.0.0.1/tcp/80"]"#.to_string())),
+            },
+        )
+        .unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(found.display_name, "Updated Name");
+        assert_eq!(found.agent_name, "New Agent");
+        assert_eq!(found.agent_description, "New Desc");
+        assert_eq!(found.local_agent_id.as_deref(), Some(agent.id.as_str()));
+        assert_eq!(found.mode, "autonomous");
+        assert_eq!(found.capabilities_json, r#"{"can_tools":true}"#);
+        assert_eq!(found.status, "accepted");
+        assert_eq!(found.addresses_json.as_deref(), Some(r#"["/ip4/10.0.0.1/tcp/80"]"#));
+    }
+
+    // ── Thread operations ──
+
+    #[test]
+    fn test_list_threads_empty_for_contact() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let threads = list_threads_for_contact(&db, "c1").unwrap();
+        assert!(threads.is_empty());
+    }
+
+    // ── Recent messages ──
+
+    #[test]
+    fn test_get_thread_messages_recent_limit() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+
+        // Insert 5 messages with sequential timestamps
+        for i in 0..5 {
+            let mut m = make_message(&format!("m{i}"), "t1", &format!("uniq-{i}"));
+            m.created_at = format!("2024-01-0{}T00:00:00Z", i + 1);
+            insert_peer_message(&db, &m).unwrap();
+        }
+
+        let all = get_thread_messages(&db, "t1").unwrap();
+        assert_eq!(all.len(), 5);
+
+        let recent = get_thread_messages_recent(&db, "t1", 3).unwrap();
+        assert_eq!(recent.len(), 3);
+        // Should be the 3 most recent, in ascending order
+        assert_eq!(recent[0].id, "m2");
+        assert_eq!(recent[1].id, "m3");
+        assert_eq!(recent[2].id, "m4");
+    }
+
+    // ── get_peer_message ──
+
+    #[test]
+    fn test_get_peer_message_found_and_not_found() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+        let m = make_message("m1", "t1", "uniq-1");
+        insert_peer_message(&db, &m).unwrap();
+
+        let found = get_peer_message(&db, "m1").unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().message_id_unique, "uniq-1");
+
+        let not_found = get_peer_message(&db, "nonexistent").unwrap();
+        assert!(not_found.is_none());
+    }
+
+    // ── get_message_by_unique_id ──
+
+    #[test]
+    fn test_get_message_by_unique_id() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+        let m = make_message("m1", "t1", "uniq-abc");
+        insert_peer_message(&db, &m).unwrap();
+
+        let found = get_message_by_unique_id(&db, "uniq-abc").unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, "m1");
+
+        let not_found = get_message_by_unique_id(&db, "nonexistent").unwrap();
+        assert!(not_found.is_none());
+    }
+
+    // ── update_message_state partial ──
+
+    #[test]
+    fn test_update_message_state_partial_approval_only() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+        let m = make_message("m1", "t1", "uniq-1");
+        insert_peer_message(&db, &m).unwrap();
+
+        update_message_state(&db, "m1", Some("approved"), None).unwrap();
+
+        let msg = get_peer_message(&db, "m1").unwrap().unwrap();
+        assert_eq!(msg.approval_state, "approved");
+        assert_eq!(msg.delivery_state, "pending"); // unchanged
+    }
+
+    #[test]
+    fn test_update_message_state_partial_delivery_only() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+        let m = make_message("m1", "t1", "uniq-1");
+        insert_peer_message(&db, &m).unwrap();
+
+        update_message_state(&db, "m1", None, Some("delivered")).unwrap();
+
+        let msg = get_peer_message(&db, "m1").unwrap().unwrap();
+        assert_eq!(msg.approval_state, "none"); // unchanged
+        assert_eq!(msg.delivery_state, "delivered");
+    }
+
+    // ── Outbox operations ──
+
+    #[test]
+    fn test_get_outbox_by_message_id() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+        let m = make_message("m1", "t1", "uniq-1");
+        insert_peer_message(&db, &m).unwrap();
+        let o = make_outbox("o1", "m1", "peer1");
+        insert_outbox(&db, &o).unwrap();
+
+        let found = get_outbox_by_message_id(&db, "m1").unwrap();
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, "o1");
+
+        let not_found = get_outbox_by_message_id(&db, "nonexistent").unwrap();
+        assert!(not_found.is_none());
+    }
+
+    #[test]
+    fn test_update_outbox_retry() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+        let m = make_message("m1", "t1", "uniq-1");
+        insert_peer_message(&db, &m).unwrap();
+
+        let mut o = make_outbox("o1", "m1", "peer1");
+        o.status = "sending".to_string();
+        insert_outbox(&db, &o).unwrap();
+
+        // Mark for retry
+        update_outbox_retry(&db, "o1", 2, "2025-01-01T00:00:00Z").unwrap();
+
+        let found = get_outbox_by_message_id(&db, "m1").unwrap().unwrap();
+        assert_eq!(found.status, "pending"); // back to pending
+        assert_eq!(found.attempts, 2);
+        assert_eq!(found.next_retry_at.as_deref(), Some("2025-01-01T00:00:00Z"));
+    }
+
+    // ── Raw envelope update ──
+
+    #[test]
+    fn test_update_message_raw_envelope() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+        let m = make_message("m1", "t1", "uniq-1");
+        insert_peer_message(&db, &m).unwrap();
+
+        update_message_raw_envelope(&db, "m1", r#"{"encrypted":"data"}"#).unwrap();
+
+        let msg = get_peer_message(&db, "m1").unwrap().unwrap();
+        assert_eq!(msg.raw_envelope.as_deref(), Some(r#"{"encrypted":"data"}"#));
+    }
+
+    // ── Invite card update ──
+
+    #[test]
+    fn test_update_contact_invite_and_key() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+
+        update_contact_invite_and_key(&db, "c1", "new-card-raw", "new-public-key").unwrap();
+
+        let found = get_contact(&db, "c1").unwrap().unwrap();
+        assert_eq!(found.invite_card_raw.as_deref(), Some("new-card-raw"));
+        assert_eq!(found.public_key, "new-public-key");
+    }
+
+    // ── Message with correlation_id ──
+
+    #[test]
+    fn test_message_with_correlation_id() {
+        let db = setup_db();
+        let c = make_contact("c1", "peer1");
+        insert_contact(&db, &c).unwrap();
+        let t = make_thread("t1", "c1");
+        create_thread(&db, &t).unwrap();
+
+        let mut m = make_message("m1", "t1", "uniq-1");
+        m.correlation_id = Some("corr-123".to_string());
+        insert_peer_message(&db, &m).unwrap();
+
+        let found = get_peer_message(&db, "m1").unwrap().unwrap();
+        assert_eq!(found.correlation_id.as_deref(), Some("corr-123"));
+    }
 }

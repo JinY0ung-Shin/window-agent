@@ -22,6 +22,8 @@ vi.mock("../../../services/tauriCommands", async (importOriginal) => {
 vi.mock("../../../services/commands/relayCommands", () => ({
   relayGetRelayUrl: vi.fn().mockResolvedValue(""),
   relaySetRelayUrl: vi.fn().mockResolvedValue(undefined),
+  relayGetAllowedTools: vi.fn().mockResolvedValue([]),
+  relaySetAllowedTools: vi.fn().mockResolvedValue(undefined),
 }));
 
 const initialSettings = useSettingsStore.getState();

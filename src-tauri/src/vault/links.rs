@@ -462,4 +462,206 @@ mod tests {
             _ => panic!("Expected Resolved"),
         }
     }
+
+    // ── parse_wikilinks edge cases ──
+
+    #[test]
+    fn test_parse_wikilinks_multiple_on_same_line() {
+        let content = "See [[note-a]] and [[note-b]] here.";
+        let links = parse_wikilinks(content);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0].target, "note-a");
+        assert_eq!(links[1].target, "note-b");
+        assert_eq!(links[0].line_number, 1);
+        assert_eq!(links[1].line_number, 1);
+    }
+
+    #[test]
+    fn test_parse_wikilinks_with_path_prefix() {
+        let content = "Link: [[agents/research/my-note]]";
+        let links = parse_wikilinks(content);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].target, "agents/research/my-note");
+    }
+
+    #[test]
+    fn test_parse_wikilinks_whitespace_trimmed() {
+        let content = "Link: [[ my-note | display ]]";
+        let links = parse_wikilinks(content);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].target, "my-note");
+        assert_eq!(links[0].display_text.as_deref(), Some("display"));
+    }
+
+    // ── resolve_wikilink ambiguous cases ──
+
+    #[test]
+    fn test_resolve_ambiguous_same_agent_preferred() {
+        let id_to_path = HashMap::new();
+        let mut name_to_ids = HashMap::new();
+        name_to_ids.insert(
+            "shared-note".to_string(),
+            vec!["uuid-a".to_string(), "uuid-b".to_string()],
+        );
+        let mut agent_map = HashMap::new();
+        agent_map.insert("uuid-a".to_string(), "agent1".to_string());
+        agent_map.insert("uuid-b".to_string(), "agent2".to_string());
+        let updated_map = HashMap::new();
+        let ctx = ResolverContext {
+            current_agent: "agent1".into(),
+        };
+        match resolve_wikilink("shared-note", &id_to_path, &name_to_ids, &agent_map, &updated_map, &ctx) {
+            ResolveResult::Ambiguous { chosen, alternatives } => {
+                assert_eq!(chosen, "uuid-a"); // same agent preferred
+                assert_eq!(alternatives, vec!["uuid-b"]);
+            }
+            _ => panic!("Expected Ambiguous"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_ambiguous_most_recent_when_no_same_agent() {
+        let id_to_path = HashMap::new();
+        let mut name_to_ids = HashMap::new();
+        name_to_ids.insert(
+            "note".to_string(),
+            vec!["uuid-a".to_string(), "uuid-b".to_string()],
+        );
+        let mut agent_map = HashMap::new();
+        agent_map.insert("uuid-a".to_string(), "agent2".to_string());
+        agent_map.insert("uuid-b".to_string(), "agent3".to_string());
+        let mut updated_map = HashMap::new();
+        updated_map.insert("uuid-a".to_string(), "2024-01-01".to_string());
+        updated_map.insert("uuid-b".to_string(), "2024-06-01".to_string()); // newer
+        let ctx = ResolverContext {
+            current_agent: "agent1".into(),
+        };
+        match resolve_wikilink("note", &id_to_path, &name_to_ids, &agent_map, &updated_map, &ctx) {
+            ResolveResult::Ambiguous { chosen, .. } => {
+                assert_eq!(chosen, "uuid-b"); // most recently updated
+            }
+            _ => panic!("Expected Ambiguous"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_name_with_path_uses_last_component() {
+        let id_to_path = HashMap::new();
+        let mut name_to_ids = HashMap::new();
+        name_to_ids.insert("my-note".to_string(), vec!["uuid-1".to_string()]);
+        let agent_map = HashMap::new();
+        let updated_map = HashMap::new();
+        let ctx = ResolverContext {
+            current_agent: "agent1".into(),
+        };
+        // Target has path prefix, but resolution uses last component
+        match resolve_wikilink("agents/research/my-note", &id_to_path, &name_to_ids, &agent_map, &updated_map, &ctx) {
+            ResolveResult::Resolved(id) => assert_eq!(id, "uuid-1"),
+            _ => panic!("Expected Resolved"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_broken_empty_candidates() {
+        let id_to_path = HashMap::new();
+        let mut name_to_ids = HashMap::new();
+        name_to_ids.insert("empty".to_string(), vec![]); // empty candidates
+        let agent_map = HashMap::new();
+        let updated_map = HashMap::new();
+        let ctx = ResolverContext {
+            current_agent: "agent1".into(),
+        };
+        match resolve_wikilink("empty", &id_to_path, &name_to_ids, &agent_map, &updated_map, &ctx) {
+            ResolveResult::Broken => {}
+            _ => panic!("Expected Broken for empty candidates"),
+        }
+    }
+
+    // ── LinkIndex tests ──
+
+    #[test]
+    fn test_link_index_rebuild_basic() {
+        let mut id_to_path = HashMap::new();
+        id_to_path.insert("note-a".to_string(), std::path::PathBuf::from("a.md"));
+        id_to_path.insert("note-b".to_string(), std::path::PathBuf::from("b.md"));
+
+        let mut name_to_ids = HashMap::new();
+        name_to_ids.insert("note-b".to_string(), vec!["note-b".to_string()]);
+
+        let mut agent_map = HashMap::new();
+        agent_map.insert("note-a".to_string(), "agent1".to_string());
+        agent_map.insert("note-b".to_string(), "agent1".to_string());
+
+        let updated_map = HashMap::new();
+
+        let tags_a = vec!["tag1".to_string()];
+        let tags_b: Vec<String> = vec![];
+        let notes = vec![
+            ("note-a", "agent1", &tags_a[..], "Link to [[note-b]]"),
+            ("note-b", "agent1", &tags_b[..], "No links"),
+        ];
+
+        let index = LinkIndex::rebuild(
+            notes.iter().map(|(id, agent, tags, content)| (*id, *agent, *tags, *content)),
+            &id_to_path,
+            &name_to_ids,
+            &agent_map,
+            &updated_map,
+        );
+
+        // note-a has 1 outgoing link
+        assert_eq!(index.outgoing.get("note-a").map(|v| v.len()), Some(1));
+        // note-b has 1 incoming link
+        assert_eq!(index.incoming.get("note-b").map(|v| v.len()), Some(1));
+        // tag index
+        assert_eq!(index.tag_index.get("tag1").map(|v| v.len()), Some(1));
+    }
+
+    #[test]
+    fn test_link_index_remove_note() {
+        let mut index = LinkIndex::default();
+
+        // Manually add outgoing/incoming links
+        let link = LinkRef {
+            source_id: "src".to_string(),
+            target_id: "tgt".to_string(),
+            raw_link: "[[tgt]]".to_string(),
+            display_text: None,
+            line_number: 1,
+            resolved: true,
+        };
+        index.outgoing.insert("src".to_string(), vec![link.clone()]);
+        index.incoming.insert("tgt".to_string(), vec![link]);
+        index.tag_index.insert("tag1".to_string(), vec!["src".to_string()]);
+
+        index.remove_note("src");
+
+        assert!(!index.outgoing.contains_key("src"));
+        assert!(index.incoming.get("tgt").unwrap().is_empty());
+        assert!(index.tag_index.get("tag1").is_none() || index.tag_index.get("tag1").unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_link_index_remove_note_marks_incoming_as_broken() {
+        let mut index = LinkIndex::default();
+
+        // note-a links to note-b
+        let link = LinkRef {
+            source_id: "note-a".to_string(),
+            target_id: "note-b".to_string(),
+            raw_link: "[[note-b]]".to_string(),
+            display_text: None,
+            line_number: 1,
+            resolved: true,
+        };
+        index.outgoing.insert("note-a".to_string(), vec![link.clone()]);
+        index.incoming.insert("note-b".to_string(), vec![link]);
+
+        // Delete note-b
+        index.remove_note("note-b");
+
+        // note-a's outgoing link should be marked as broken
+        let out = &index.outgoing["note-a"];
+        assert!(!out[0].resolved);
+    }
 }

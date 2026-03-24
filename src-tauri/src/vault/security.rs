@@ -251,4 +251,90 @@ mod tests {
         fs::write(&path, "test").unwrap();
         assert!(sec.validate_agent_access("manager", &path).is_err());
     }
+
+    // ── validate_within_vault new file (parent exists) ──
+
+    #[test]
+    fn test_validate_within_vault_new_file_parent_exists() {
+        let (tmp, sec) = setup_vault();
+        // File doesn't exist but parent does
+        let new_file = tmp.path().join("agents/manager/new-note.md");
+        let result = sec.validate_within_vault(&new_file);
+        assert!(result.is_ok());
+    }
+
+    // ── validate_within_vault new file (parent doesn't exist, component check) ──
+
+    #[test]
+    fn test_validate_within_vault_new_file_parent_not_exists_valid() {
+        let (tmp, sec) = setup_vault();
+        // Neither parent nor file exists — falls back to component check
+        let deep = tmp.path().join("agents/manager/subdir/note.md");
+        let result = sec.validate_within_vault(&deep);
+        // Should succeed since path starts with vault root and no traversal
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_within_vault_component_check_traversal_rejected() {
+        let (tmp, sec) = setup_vault();
+        // Parent doesn't exist AND has traversal
+        let evil = tmp.path().join("agents/manager/../../outside/note.md");
+        // The component check should catch ".." even when parent doesn't exist
+        let result = sec.validate_within_vault(&evil);
+        assert!(result.is_err());
+    }
+
+    // ── sanitize_filename control character ──
+
+    #[test]
+    fn test_sanitize_filename_control_char() {
+        let result = VaultSecurity::sanitize_filename("name\x07bell.md");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("control character"));
+    }
+
+    // ── sanitize_filename exact boundary ──
+
+    #[test]
+    fn test_sanitize_filename_exact_200_chars_ok() {
+        let name = "a".repeat(200);
+        assert!(VaultSecurity::sanitize_filename(&name).is_ok());
+    }
+
+    // ── agent access: denied outside vault ──
+
+    #[test]
+    fn test_agent_access_outside_vault_denied() {
+        let (_tmp, sec) = setup_vault();
+        let outside = PathBuf::from("/tmp/evil-file.md");
+        // Even for a valid agent, access outside vault is denied
+        let result = sec.validate_agent_access("manager", &outside);
+        assert!(result.is_err());
+    }
+
+    // ── agent access: invalid path within agents/ ──
+
+    #[test]
+    fn test_agent_access_agents_root_denied() {
+        let (tmp, sec) = setup_vault();
+        // File directly in agents/ (not under any agent folder)
+        let path = tmp.path().join("agents/some-file.md");
+        fs::write(&path, "test").unwrap();
+        let result = sec.validate_agent_access("manager", &path);
+        assert!(result.is_err());
+    }
+
+    // ── agent access: unknown top-level path ──
+
+    #[test]
+    fn test_agent_access_unknown_top_level_denied() {
+        let (tmp, sec) = setup_vault();
+        let unknown_dir = tmp.path().join("unknown");
+        fs::create_dir_all(&unknown_dir).unwrap();
+        let path = unknown_dir.join("file.md");
+        fs::write(&path, "test").unwrap();
+        let result = sec.validate_agent_access("manager", &path);
+        assert!(result.is_err());
+    }
 }
