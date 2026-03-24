@@ -5,6 +5,7 @@
   "languageEn": "English",
   "languageEnDesc": "Use in English",
   "nextButton": "다음",
+  "backButton": "이전",
   "welcomeTitle": "환영합니다!",
   "welcomeSubtitle": "회사 이름을 정해주세요",
   "companyNameLabel": "회사 또는 워크스페이스 이름",
@@ -14,6 +15,7 @@
   "classicModeDesc": "에이전트, 스킬 등 기존 용어 사용",
   "orgMode": "조직 운영 모드",
   "orgModeDesc": "직원, 채용 등 회사 메타포 사용",
+  "summaryText": "\"{{company}}\" — {{theme}}으로 시작합니다",
   "startButton": "시작하기",
   "seedingMessage": "설정 중...",
   "seedingError": "초기 설정에 실패했습니다. 다시 시도해주세요."

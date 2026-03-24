@@ -5,6 +5,7 @@
   "languageEn": "English",
   "languageEnDesc": "Use in English",
   "nextButton": "Next",
+  "backButton": "Back",
   "welcomeTitle": "Welcome!",
   "welcomeSubtitle": "Choose a name for your company",
   "companyNameLabel": "Company or Workspace Name",
@@ -14,6 +15,7 @@
   "classicModeDesc": "Uses traditional terms: agents, skills, etc.",
   "orgMode": "Organization Mode",
   "orgModeDesc": "Uses company metaphor: employees, hiring, etc.",
+  "summaryText": "\"{{company}}\" — Starting with {{theme}}",
   "startButton": "Get Started",
   "seedingMessage": "Setting up...",
   "seedingError": "Setup failed. Please try again."
