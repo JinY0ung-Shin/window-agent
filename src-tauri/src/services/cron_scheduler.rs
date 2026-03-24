@@ -1,5 +1,4 @@
 use crate::api::ApiState;
-use crate::commands::tool_commands::native_tool_definitions;
 use crate::db::cron_operations::{
     claim_due_jobs_impl, complete_cron_run_impl, reset_stale_claims_impl,
 };
@@ -7,7 +6,7 @@ use crate::db::models::{CronJob, CronRun};
 use crate::db::Database;
 use crate::memory::SystemMemoryManager;
 use crate::services::actor_context::{self, ExecutionRole, ExecutionScope, ExecutionTrigger};
-use crate::services::{api_service, credential_service};
+use crate::services::{api_service, credential_service, llm_helpers};
 use chrono::Utc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -188,22 +187,7 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
     };
 
     // 2. Build request body
-    let mut system_parts = Vec::new();
-    if !resolved.system_prompt.is_empty() {
-        system_parts.push(resolved.system_prompt.clone());
-    }
-    if let Some(ref agents_sec) = resolved.registered_agents_section {
-        system_parts.push(agents_sec.clone());
-    }
-    if let Some(ref mem) = resolved.consolidated_memory {
-        system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
-    }
-    system_parts.push(
-        actor_context::role_instruction(&scope.role)
-            .unwrap_or("Complete the task below.")
-            .to_string(),
-    );
-    let system_prompt = system_parts.join("\n\n");
+    let system_prompt = llm_helpers::build_system_prompt(&resolved, &scope);
 
     let mut api_messages = vec![
         serde_json::json!({ "role": "system", "content": system_prompt }),
@@ -218,23 +202,7 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
     }
 
     // 3. Build tools array from agent's enabled tools
-    let all_defs = native_tool_definitions();
-    let tools: Vec<serde_json::Value> = resolved
-        .enabled_tool_names
-        .iter()
-        .filter_map(|name| {
-            all_defs.iter().find(|d| d.name == *name).map(|def| {
-                serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": def.name,
-                        "description": def.description,
-                        "parameters": def.parameters,
-                    }
-                })
-            })
-        })
-        .collect();
+    let tools = llm_helpers::build_tools_json(&resolved.enabled_tool_names);
 
     let mut body = serde_json::json!({
         "model": resolved.model,
@@ -279,7 +247,7 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
 
     const MAX_TOOL_ITERATIONS: usize = 10;
 
-    for iteration in 0..=MAX_TOOL_ITERATIONS {
+    for iteration in 0..MAX_TOOL_ITERATIONS {
         let result = api_service::do_completion(&client, &api_key, &base_url, &body, Some(&app)).await;
 
         // On first attempt with thinking, handle thinking-specific errors

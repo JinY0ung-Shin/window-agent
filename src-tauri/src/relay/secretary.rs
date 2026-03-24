@@ -2,13 +2,12 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 
 use crate::api::ApiState;
-use crate::commands::tool_commands::native_tool_definitions;
 use crate::db::Database;
 use crate::memory::SystemMemoryManager;
 use crate::relay::db as relay_db;
 use crate::relay::envelope::{Envelope, Payload};
 use crate::relay::manager::RelayManager;
-use crate::services::{actor_context, api_service, credential_service};
+use crate::services::{actor_context, api_service, credential_service, llm_helpers};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
@@ -218,25 +217,7 @@ async fn generate_and_send_response(
     ).map_err(|e| format!("Failed to resolve agent context: {e}"))?;
 
     // 3. Build system prompt
-    let mut system_parts = Vec::new();
-    if !resolved.system_prompt.is_empty() {
-        system_parts.push(resolved.system_prompt.clone());
-    }
-    if let Some(ref agents_sec) = resolved.registered_agents_section {
-        system_parts.push(agents_sec.clone());
-    }
-    if let Some(ref mem) = resolved.consolidated_memory {
-        system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
-    }
-    if let Some(ref tools_sec) = resolved.tools_section {
-        system_parts.push(tools_sec.clone());
-    }
-    system_parts.push(
-        actor_context::role_instruction(&scope.role)
-            .unwrap_or("Respond to the incoming message.")
-            .to_string(),
-    );
-    let system_prompt = system_parts.join("\n\n");
+    let system_prompt = llm_helpers::build_system_prompt(&resolved, &scope);
 
     // 4. Build conversation history from thread messages (last 50 for context window)
     let messages = relay_db::get_thread_messages_recent(&db, thread_id, 50)
@@ -262,23 +243,7 @@ async fn generate_and_send_response(
     }
 
     // 6. Build tools array
-    let all_defs = native_tool_definitions();
-    let tools: Vec<serde_json::Value> = resolved
-        .enabled_tool_names
-        .iter()
-        .filter_map(|name| {
-            all_defs.iter().find(|d| d.name == *name).map(|def| {
-                serde_json::json!({
-                    "type": "function",
-                    "function": {
-                        "name": def.name,
-                        "description": def.description,
-                        "parameters": def.parameters,
-                    }
-                })
-            })
-        })
-        .collect();
+    let tools = llm_helpers::build_tools_json(&resolved.enabled_tool_names);
 
     // 7. Build request body
     let mut body = serde_json::json!({
