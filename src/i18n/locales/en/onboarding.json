@@ -18,5 +18,14 @@
   "summaryText": "\"{{company}}\" — Starting with {{theme}}",
   "startButton": "Get Started",
   "seedingMessage": "Setting up...",
-  "seedingError": "Setup failed. Please try again."
+  "seedingError": "Setup failed. Please try again.",
+  "apiTitle": "API Setup",
+  "apiSubtitle": "Enter your API credentials to connect to an AI model",
+  "apiKeyLabel": "API Key",
+  "apiKeyPlaceholder": "sk-...",
+  "apiBaseUrlLabel": "API Base URL (optional)",
+  "apiBaseUrlPlaceholder": "https://api.openai.com/v1",
+  "apiSavingMessage": "Saving...",
+  "apiSaveError": "Failed to save API settings. Please try again.",
+  "apiSkipButton": "Set up later"
 }

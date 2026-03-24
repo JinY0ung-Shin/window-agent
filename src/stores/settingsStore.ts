@@ -47,6 +47,8 @@ interface SettingsState {
   setCompanyName: (name: string) => void;
   setLocale: (locale: Locale) => void;
   initializeBranding: (companyName: string, theme?: UITheme, locale?: Locale) => void;
+  // ── Onboarding API setup ──
+  saveOnboardingApiConfig: (apiKey: string, baseUrl: string) => Promise<void>;
 }
 
 export interface SettingValues {
@@ -192,5 +194,20 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     localStorage.setItem(LS_BRANDING_INITIALIZED, "true");
     i18n.changeLanguage(locale);
     set({ companyName, uiTheme: theme, locale, brandingInitialized: true });
+  },
+
+  saveOnboardingApiConfig: async (apiKey, baseUrl) => {
+    const apiUpdate: { api_key?: string; base_url: string } = { base_url: baseUrl };
+    if (apiKey) apiUpdate.api_key = apiKey;
+    try {
+      await setApiConfig(apiUpdate);
+      const keyExists = await checkApiKey();
+      const storedExists = await checkStoredKey();
+      localStorage.setItem(LS_BASE_URL, baseUrl);
+      set({ baseUrl, hasApiKey: keyExists, hasStoredKey: storedExists, settingsError: null });
+    } catch (e) {
+      logger.error("Onboarding API config failed:", e);
+      throw e;
+    }
   },
 }));

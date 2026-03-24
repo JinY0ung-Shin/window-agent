@@ -18,5 +18,14 @@
   "summaryText": "\"{{company}}\" — {{theme}}으로 시작합니다",
   "startButton": "시작하기",
   "seedingMessage": "설정 중...",
-  "seedingError": "초기 설정에 실패했습니다. 다시 시도해주세요."
+  "seedingError": "초기 설정에 실패했습니다. 다시 시도해주세요.",
+  "apiTitle": "API 설정",
+  "apiSubtitle": "AI 모델에 연결할 API 정보를 입력하세요",
+  "apiKeyLabel": "API Key",
+  "apiKeyPlaceholder": "sk-...",
+  "apiBaseUrlLabel": "API Base URL (선택)",
+  "apiBaseUrlPlaceholder": "https://api.openai.com/v1",
+  "apiSavingMessage": "저장 중...",
+  "apiSaveError": "API 설정에 실패했습니다. 다시 시도해주세요.",
+  "apiSkipButton": "나중에 설정하기"
 }

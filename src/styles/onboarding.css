@@ -242,3 +242,26 @@
   margin: 0 0 12px;
   text-align: center;
 }
+
+/* ── Skip Button ── */
+.onboarding-skip-btn {
+  display: block;
+  margin: 12px auto 0;
+  padding: 6px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+
+.onboarding-skip-btn:hover:not(:disabled) {
+  color: var(--text-main);
+}
+
+.onboarding-skip-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
