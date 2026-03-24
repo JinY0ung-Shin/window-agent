@@ -139,3 +139,82 @@ export async function seedManagerAfterOnboarding(locale: string): Promise<void> 
     logger.warn("loadAgents:", e);
   }
 }
+
+/**
+ * Seed selected template agents after onboarding (idempotent).
+ * Uses existing createAgent + writeAgentFile commands.
+ * On file-write failure, cleans up the DB row to prevent half-created agents.
+ */
+export async function seedTemplateAgents(
+  templateKeys: string[],
+  locale: string,
+): Promise<void> {
+  const { AGENT_TEMPLATES } = await import("../data/agentTemplates");
+  const loadAgents = useAgentStore.getState().loadAgents;
+
+  // Get existing agents to check for duplicates
+  const existingAgents = useAgentStore.getState().agents;
+  const existingFolders = new Set(existingAgents.map((a) => a.folder_name));
+
+  // Get default tool config to write for each template
+  let defaultToolConfigJson: string | null = null;
+  try {
+    defaultToolConfigJson = await cmds.getDefaultToolConfig();
+  } catch (e) {
+    logger.warn("getDefaultToolConfig:", e);
+  }
+
+  for (const key of templateKeys) {
+    const template = AGENT_TEMPLATES.find((t) => t.key === key);
+    if (!template) continue;
+
+    // Idempotency: skip if folder already exists
+    if (existingFolders.has(template.folderName)) continue;
+
+    let createdAgent: { id: string } | null = null;
+    try {
+      const loc = (locale === "en" ? "en" : "ko") as "ko" | "en";
+      createdAgent = await cmds.createAgent({
+        folder_name: template.folderName,
+        name: template.displayName[loc],
+        description: template.description[loc],
+      });
+
+      const persona = template.personaFiles[loc];
+      await cmds.writeAgentFile(template.folderName, "IDENTITY.md", persona.identity);
+      await cmds.writeAgentFile(template.folderName, "SOUL.md", persona.soul);
+      await cmds.writeAgentFile(template.folderName, "USER.md", persona.user);
+      await cmds.writeAgentFile(template.folderName, "AGENTS.md", persona.agents);
+
+      // Write default TOOL_CONFIG.json so templates have the same tools as manually created agents
+      if (defaultToolConfigJson) {
+        await cmds.writeAgentFile(template.folderName, "TOOL_CONFIG.json", defaultToolConfigJson);
+      }
+
+      // Track successful create for self-deduplication within this batch
+      existingFolders.add(template.folderName);
+    } catch (e) {
+      // Clean up DB row if file writes failed, so retry won't skip a half-created agent
+      if (createdAgent) {
+        try {
+          await cmds.deleteAgent(createdAgent.id);
+        } catch (cleanupErr) {
+          logger.warn(`Cleanup failed for ${key}:`, cleanupErr);
+        }
+      }
+      logger.warn(`Template seed failed for ${key}:`, e);
+    }
+  }
+
+  try {
+    await cmds.syncAgentsFromFs();
+  } catch (e) {
+    logger.warn("syncAgentsFromFs:", e);
+  }
+
+  try {
+    await loadAgents();
+  } catch (e) {
+    logger.warn("loadAgents:", e);
+  }
+}

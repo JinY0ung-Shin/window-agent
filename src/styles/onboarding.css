@@ -243,6 +243,58 @@
   text-align: center;
 }
 
+/* ── Template Grid ── */
+.onboarding-template-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.onboarding-template-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 12px;
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+  text-align: left;
+}
+
+.onboarding-template-card:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+
+.onboarding-template-card.selected {
+  border-color: var(--primary);
+  background-color: var(--focus-ring);
+}
+
+.onboarding-template-card:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.template-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.onboarding-template-card.selected .template-card-name {
+  color: var(--primary);
+}
+
+.template-card-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
 /* ── Skip Button ── */
 .onboarding-skip-btn {
   display: block;

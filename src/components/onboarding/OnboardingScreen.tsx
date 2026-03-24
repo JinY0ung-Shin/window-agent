@@ -1,17 +1,18 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Building2, Bot, Globe, Key, Loader, Sparkles } from "lucide-react";
+import { Building2, Bot, Globe, Key, Loader, Sparkles, Users } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
-import { seedManagerAfterOnboarding } from "../../services/initService";
+import { seedManagerAfterOnboarding, seedTemplateAgents } from "../../services/initService";
+import { AGENT_TEMPLATES } from "../../data/agentTemplates";
 import type { UITheme } from "../../stores/settingsStore";
 import type { Locale } from "../../i18n";
 import { useTourStore } from "../../stores/tourStore";
 import { logger } from "../../services/logger";
 
-type OnboardingStep = "language" | "setup" | "api";
+type OnboardingStep = "language" | "setup" | "templates" | "api";
 
-const STEP_ORDER: OnboardingStep[] = ["language", "setup", "api"];
+const STEP_ORDER: OnboardingStep[] = ["language", "setup", "templates", "api"];
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
@@ -40,6 +41,9 @@ export default function OnboardingScreen() {
   const [seeding, setSeeding] = useState(false);
   const [seedError, setSeedError] = useState(false);
   const [animState, setAnimState] = useState<"in" | "out">("in");
+  // Template step state
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
+  const [templateSeeding, setTemplateSeeding] = useState(false);
   // API step state
   const [apiKey, setApiKey] = useState("");
   const [apiBaseUrl, setApiBaseUrl] = useState("");
@@ -100,19 +104,41 @@ export default function OnboardingScreen() {
     setSeedError(false);
     try {
       await seedManagerAfterOnboarding(selectedLocale);
-      // Check if API is already configured (env vars) — auto-skip api step
-      await useSettingsStore.getState().waitForEnv();
-      const { hasApiKey } = useSettingsStore.getState();
-      if (hasApiKey) {
-        completeOnboarding();
-      } else {
-        transitionTo("api");
-        setSeeding(false);
-      }
+      transitionTo("templates");
+      setSeeding(false);
     } catch (e) {
       logger.error("Onboarding seed failed:", e);
       setSeedError(true);
       setSeeding(false);
+    }
+  };
+
+  const toggleTemplate = (key: string) => {
+    setSelectedTemplates((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleTemplatesComplete = async () => {
+    if (selectedTemplates.size > 0) {
+      setTemplateSeeding(true);
+      try {
+        await seedTemplateAgents([...selectedTemplates], selectedLocale);
+      } catch (e) {
+        logger.warn("Template seeding partial failure:", e);
+      }
+      setTemplateSeeding(false);
+    }
+    // Check if API is already configured — auto-skip api step
+    await useSettingsStore.getState().waitForEnv();
+    const { hasApiKey } = useSettingsStore.getState();
+    if (hasApiKey) {
+      completeOnboarding();
+    } else {
+      transitionTo("api");
     }
   };
 
@@ -246,6 +272,54 @@ export default function OnboardingScreen() {
     </>
   );
 
+  const renderTemplatesStep = () => {
+    const loc = (selectedLocale === "en" ? "en" : "ko") as Locale;
+    return (
+      <>
+        <div className="onboarding-icon">
+          <Users size={40} />
+        </div>
+        <h1 className="onboarding-title">{t("templatesTitle")}</h1>
+        <p className="onboarding-subtitle">{t("templatesSubtitle")}</p>
+
+        <div className="onboarding-template-grid">
+          {AGENT_TEMPLATES.map((tmpl) => (
+            <button
+              key={tmpl.key}
+              className={`onboarding-template-card ${selectedTemplates.has(tmpl.key) ? "selected" : ""}`}
+              onClick={() => toggleTemplate(tmpl.key)}
+              disabled={templateSeeding}
+            >
+              <span className="template-card-name">{tmpl.displayName[loc]}</span>
+              <span className="template-card-desc">{tmpl.description[loc]}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="onboarding-btn-row">
+          <button className="onboarding-back-btn" onClick={handleBack} disabled={templateSeeding}>
+            {t("backButton")}
+          </button>
+          <button
+            ref={nextBtnRef}
+            className="onboarding-start-btn"
+            onClick={handleTemplatesComplete}
+            disabled={templateSeeding}
+          >
+            {templateSeeding ? (
+              <>
+                <Loader size={16} className="spinning" />
+                {t("seedingMessage")}
+              </>
+            ) : (
+              selectedTemplates.size > 0 ? t("nextButton") : t("templatesSkipButton")
+            )}
+          </button>
+        </div>
+      </>
+    );
+  };
+
   const renderApiStep = () => (
     <>
       <div className="onboarding-icon">
@@ -311,6 +385,7 @@ export default function OnboardingScreen() {
     switch (step) {
       case "language": return renderLanguageStep();
       case "setup": return renderSetupStep();
+      case "templates": return renderTemplatesStep();
       case "api": return renderApiStep();
     }
   };
