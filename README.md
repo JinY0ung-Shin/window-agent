@@ -56,7 +56,7 @@ Environment variables:
 | `DATABASE_URL` | `sqlite:relay.db?mode=rwc` | SQLite path |
 | `RUST_LOG` | - | Log level (e.g. `info`, `debug`) |
 
-Set the relay server URL to `ws://address:8080` in Settings > Network tab to connect.
+Set the relay server URL to `ws://address:8080/ws` in Settings > Network tab to connect.
 
 ## Testing
 

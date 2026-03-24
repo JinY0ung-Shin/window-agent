@@ -56,7 +56,7 @@ cargo run
 | `DATABASE_URL` | `sqlite:relay.db?mode=rwc` | SQLite 경로 |
 | `RUST_LOG` | - | 로그 레벨 (예: `info`, `debug`) |
 
-데스크톱 앱의 설정 > 네트워크 탭에서 릴레이 서버 URL을 `ws://주소:8080`으로 설정하면 연결됩니다.
+데스크톱 앱의 설정 > 네트워크 탭에서 릴레이 서버 URL을 `ws://주소:8080/ws`로 설정하면 연결됩니다.
 
 ## 테스트
 

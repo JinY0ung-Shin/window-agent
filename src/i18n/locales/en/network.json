@@ -11,7 +11,7 @@
   },
   "relay": {
     "label": "Relay Server URL",
-    "placeholder": "wss://relay.example.com",
+    "placeholder": "wss://relay.example.com/ws",
     "validationError": "Enter a valid WebSocket URL (ws:// or wss://)",
     "saved": "Saved — restart the network to apply",
     "hint": "URL of the WebSocket relay server used for peer connections."

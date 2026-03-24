@@ -170,7 +170,7 @@ impl RelayManager {
             app_handle.store("relay-settings.json").ok()
                 .and_then(|s| s.get("relay_url"))
                 .and_then(|v| v.as_str().map(String::from))
-                .unwrap_or_else(|| "wss://relay.windowagent.io".to_string())
+                .unwrap_or_else(|| "wss://relay.windowagent.io/ws".to_string())
         };
 
         // Build peer indexes from contacts DB
