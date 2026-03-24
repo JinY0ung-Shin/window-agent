@@ -20,6 +20,7 @@ base64 = "0.22"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
 hex = "0.4"
+dotenvy = "0.15"
 
 [dev-dependencies]
 tokio-tungstenite = "0.26"

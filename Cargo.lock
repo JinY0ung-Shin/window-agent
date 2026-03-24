@@ -4075,6 +4075,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "dotenvy",
  "ed25519-dalek",
  "futures-util",
  "hex",
@@ -5286,7 +5287,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-app"
-version = "0.9.5"
+version = "0.10.1"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
