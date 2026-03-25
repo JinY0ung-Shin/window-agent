@@ -1,6 +1,7 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { RefreshCw } from "lucide-react";
+import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNetworkStore } from "../../stores/networkStore";
 import { checkApiHealth, listModels, type ApiHealthCheckResponse } from "../../services/tauriCommands";
@@ -54,7 +55,7 @@ const NetworkSettingsPanel = forwardRef<NetworkSettingsPanelRef, Props>(
 
     /* ── Agent network state ── */
     const [networkToggleLoading, setNetworkToggleLoading] = useState(false);
-    const [peerIdCopied, setPeerIdCopied] = useState(false);
+    const { copied: peerIdCopied, copy: copyPeerId } = useClipboardFeedback(2000);
     const hasEnabledBefore = useRef(localStorage.getItem("network_enabled") !== null);
     const [showConsent, setShowConsent] = useState(false);
     const [tempRelayUrl, setTempRelayUrl] = useState("");
@@ -569,11 +570,7 @@ const NetworkSettingsPanel = forwardRef<NetworkSettingsPanelRef, Props>(
               <code>{network.peerId}</code>
               <button
                 className="btn-secondary peer-id-copy-btn"
-                onClick={() => {
-                  navigator.clipboard.writeText(network.peerId!);
-                  setPeerIdCopied(true);
-                  setTimeout(() => setPeerIdCopied(false), 2000);
-                }}
+                onClick={() => copyPeerId(network.peerId!)}
               >
                 {peerIdCopied ? tn("peerId.copied") : tn("peerId.copy")}
               </button>

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Copy, Check, Loader2 } from "lucide-react";
 import Modal from "../common/Modal";
+import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { toErrorMessage } from "../../utils/errorUtils";
@@ -55,7 +56,7 @@ function GenerateTab({ onClose, t }: { onClose: () => void; t: (key: string, opt
   const [description, setDescription] = useState("");
   const [expiryHours, setExpiryHours] = useState(24);
   const [inviteCode, setInviteCode] = useState("");
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboardFeedback(2000);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -78,11 +79,7 @@ function GenerateTab({ onClose, t }: { onClose: () => void; t: (key: string, opt
     }
   };
 
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(inviteCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const handleCopy = () => copy(inviteCode);
 
   return (
     <div className="invite-tab-content">

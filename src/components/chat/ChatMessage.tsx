@@ -1,6 +1,6 @@
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Bot, User, Wrench, Copy, Check, RefreshCw, Crown } from "lucide-react";
+import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 import type { SenderInfo } from "./ToolRunBlock";
 import { useMessageStore } from "../../stores/messageStore";
@@ -19,7 +19,7 @@ export default function ChatMessage({ message, senderInfo }: Props) {
   const { t } = useTranslation("chat");
   const { t: tTeam } = useTranslation("team");
   const isPending = message.status === "pending";
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useClipboardFeedback(1500);
   const copyMessage = useMessageStore((s) => s.copyMessage);
   const regenerateMessage = useChatFlowStore((s) => s.regenerateMessage);
   const toolRunState = useToolRunStore((s) => s.toolRunState);
@@ -29,8 +29,7 @@ export default function ChatMessage({ message, senderInfo }: Props) {
 
   const handleCopy = () => {
     copyMessage(message.id);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    copy(message.content);
   };
 
   // Tool result message — render as tool bubble
