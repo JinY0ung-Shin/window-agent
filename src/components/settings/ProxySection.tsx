@@ -1,0 +1,96 @@
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { getBrowserProxy, setBrowserProxy, detectSystemProxy } from "../../services/commands/apiCommands";
+import { logger } from "../../services/logger";
+
+interface Props {
+  isOpen: boolean;
+}
+
+export default function ProxySection({ isOpen }: Props) {
+  const { t } = useTranslation("settings");
+
+  const [browserProxy, setBrowserProxyState] = useState("");
+  const [browserProxySaving, setBrowserProxySaving] = useState(false);
+  const [browserProxySaved, setBrowserProxySaved] = useState(false);
+  const [browserProxyDetecting, setBrowserProxyDetecting] = useState(false);
+  const [browserProxyDetectMsg, setBrowserProxyDetectMsg] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      getBrowserProxy().then((p) => {
+        setBrowserProxyState(p);
+        setBrowserProxySaved(false);
+        setBrowserProxyDetectMsg("");
+      }).catch((e) => logger.debug("Failed to get browser proxy", e));
+    }
+  }, [isOpen]);
+
+  return (
+    <div className="form-group">
+      <label htmlFor="browserProxy">{t("general.browserProxyLabel")}</label>
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <input
+          id="browserProxy"
+          type="text"
+          placeholder={t("general.browserProxyPlaceholder")}
+          value={browserProxy}
+          onChange={(e) => {
+            setBrowserProxyState(e.target.value);
+            setBrowserProxySaved(false);
+            setBrowserProxyDetectMsg("");
+          }}
+          style={{ flex: 1 }}
+        />
+        <button
+          className="btn-secondary"
+          disabled={browserProxySaving}
+          onClick={async () => {
+            setBrowserProxySaving(true);
+            try {
+              await setBrowserProxy(browserProxy.trim());
+              setBrowserProxySaved(true);
+            } catch (e) {
+              logger.debug("Failed to save browser proxy", e);
+            } finally {
+              setBrowserProxySaving(false);
+            }
+          }}
+        >
+          {browserProxySaving ? t("common:saving") : t("common:save")}
+        </button>
+        <button
+          className="btn-secondary"
+          disabled={browserProxyDetecting}
+          onClick={async () => {
+            setBrowserProxyDetecting(true);
+            setBrowserProxyDetectMsg("");
+            try {
+              const detected = await detectSystemProxy();
+              if (detected) {
+                setBrowserProxyState(detected);
+                setBrowserProxyDetectMsg(t("general.browserProxyDetected"));
+              } else {
+                setBrowserProxyDetectMsg(t("general.browserProxyNotDetected"));
+              }
+            } catch (e) {
+              logger.debug("Failed to detect system proxy", e);
+              setBrowserProxyDetectMsg(t("general.browserProxyNotDetected"));
+            } finally {
+              setBrowserProxyDetecting(false);
+            }
+          }}
+        >
+          {t("general.browserProxyDetect")}
+        </button>
+      </div>
+      {browserProxySaved && (
+        <p className="form-text text-success">{t("general.browserProxySaved")}</p>
+      )}
+      {browserProxyDetectMsg && (
+        <p className="form-text">{browserProxyDetectMsg}</p>
+      )}
+      <p className="form-text">{t("general.browserProxyHint")}</p>
+    </div>
+  );
+}
