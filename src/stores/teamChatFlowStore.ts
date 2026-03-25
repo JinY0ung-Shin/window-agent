@@ -12,9 +12,7 @@ import { useAgentStore } from "./agentStore";
 import { useSettingsStore } from "./settingsStore";
 import { useNavigationStore } from "./navigationStore";
 import { useToolRunStore } from "./toolRunStore";
-import { useVaultStore } from "./vaultStore";
-import { buildConversationContext } from "../services/chatHelpers";
-import { toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
+import { toOpenAITools } from "../services/toolRegistry";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
   parseErrorMessage,
@@ -27,7 +25,6 @@ import {
   msg, conv, stream,
   createPendingMessage,
   updateMessageInList,
-  executeStreamCall,
 } from "../services/streamHelpers";
 import { logger } from "../services/logger";
 import {
@@ -38,6 +35,7 @@ import {
   saveAssistantToolCallMessage,
   saveFinalResponse,
   parseRawToolCalls,
+  streamOneTurn,
 } from "./chatFlowBase";
 
 // ── Team-specific event types ─────────────────────────
@@ -465,19 +463,47 @@ async function sendTeamMessageFlow() {
 
     const saveExtras = { sender_agent_id: leaderAgentId, team_run_id: teamRun.id };
 
+    // Build tools: leader's configured tools + delegate orchestration tool
+    const delegateTool = {
+      type: "function",
+      function: {
+        name: "delegate",
+        description: "Delegate tasks to team members for parallel execution",
+        parameters: {
+          type: "object",
+          properties: {
+            agents: {
+              type: "array",
+              items: { type: "string" },
+              description: "Agent IDs to delegate to",
+            },
+            task: {
+              type: "string",
+              description: "Task description for the agents",
+            },
+            context: {
+              type: "string",
+              description: "Additional context for the agents",
+            },
+          },
+          required: ["agents", "task"],
+        },
+      },
+    };
+    const leaderTools = [...toOpenAITools(toolDefinitions), delegateTool];
+
     const MAX_LEADER_TOOL_ITERATIONS = 10;
     let iterationCount = 0;
     let currentRequestId = leaderRequestId;
     let currentMsgId = leaderMsgId;
 
     while (iterationCount <= MAX_LEADER_TOOL_ITERATIONS) {
-      const done = await streamLeaderTurn({
+      const done = await streamOneTurn({
         baseSystemPrompt,
         effective,
         requestId: currentRequestId,
         msgId: currentMsgId,
-        convId,
-        toolDefinitions,
+        tools: leaderTools,
       });
 
       if (done.error) {
@@ -725,73 +751,7 @@ async function sendTeamMessageFlow() {
   await conv().loadConversations();
 }
 
-// ── Stream leader turn ──────────────────────────────────
-
-async function streamLeaderTurn(params: {
-  baseSystemPrompt: string;
-  effective: {
-    model: string;
-    temperature: number | null;
-    thinkingEnabled: boolean;
-    thinkingBudget: number | null;
-  };
-  requestId: string;
-  msgId: string;
-  convId: string;
-  toolDefinitions: ToolDefinition[];
-}): Promise<StreamDoneEvent> {
-  const { baseSystemPrompt, effective, requestId, msgId, toolDefinitions } = params;
-
-  // Build tools: leader's configured tools + delegate orchestration tool
-  const delegateTool = {
-    type: "function",
-    function: {
-      name: "delegate",
-      description: "Delegate tasks to team members for parallel execution",
-      parameters: {
-        type: "object",
-        properties: {
-          agents: {
-            type: "array",
-            items: { type: "string" },
-            description: "Agent IDs to delegate to",
-          },
-          task: {
-            type: "string",
-            description: "Task description for the agents",
-          },
-          context: {
-            type: "string",
-            description: "Additional context for the agents",
-          },
-        },
-        required: ["agents", "task"],
-      },
-    },
-  };
-
-  const tools = [
-    ...toOpenAITools(toolDefinitions),
-    delegateTool,
-  ];
-
-  const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
-    messages: msg().messages,
-    summary: null,
-    baseSystemPrompt,
-    vaultNotes: useVaultStore.getState().notes,
-    consolidatedMemory: conv().consolidatedMemory,
-  });
-
-  return executeStreamCall({
-    requestId,
-    msgId,
-    messages: chatMessages as Record<string, unknown>[],
-    systemPrompt,
-    model: effective.model,
-    temperature: effective.temperature,
-    thinkingEnabled: effective.thinkingEnabled,
-    thinkingBudget: effective.thinkingBudget,
-    tools,
-  });
-}
+// streamLeaderTurn was removed: now uses streamOneTurn from chatFlowBase,
+// which provides pre-compaction checks, memory notes, and summary context
+// that the leader previously lacked. The delegate tool is built inline
+// and passed via the `tools` parameter.
