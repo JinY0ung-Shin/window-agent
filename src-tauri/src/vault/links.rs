@@ -362,6 +362,40 @@ impl LinkIndex {
         }
     }
 
+    /// After a rename, invalidate all outgoing links across the vault whose raw_link
+    /// target matched the old filename. These links are now broken because no note
+    /// has that name anymore.  Also cleans up the corresponding incoming entries.
+    pub fn invalidate_links_to_name(&mut self, old_name: &str) {
+        let mut to_break: Vec<(String, usize)> = Vec::new(); // (source_id, index)
+        for (source_id, links) in &self.outgoing {
+            for (idx, link) in links.iter().enumerate() {
+                if !link.resolved {
+                    continue;
+                }
+                let target = link
+                    .raw_link
+                    .trim_start_matches("[[")
+                    .trim_end_matches("]]");
+                let target_name = target.rsplit('/').next().unwrap_or(target).trim();
+                if target_name == old_name {
+                    to_break.push((source_id.clone(), idx));
+                }
+            }
+        }
+
+        for (source_id, idx) in to_break {
+            if let Some(links) = self.outgoing.get_mut(&source_id) {
+                if let Some(link) = links.get_mut(idx) {
+                    // Remove from incoming before marking broken
+                    if let Some(inc) = self.incoming.get_mut(&link.target_id) {
+                        inc.retain(|l| !(l.source_id == source_id && l.line_number == link.line_number));
+                    }
+                    link.resolved = false;
+                }
+            }
+        }
+    }
+
     /// Remove all link entries for a deleted note.
     /// Also marks outgoing links from other notes that pointed at this note as broken.
     pub fn remove_note(&mut self, note_id: &str) {

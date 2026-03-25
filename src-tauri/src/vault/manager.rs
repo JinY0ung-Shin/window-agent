@@ -167,6 +167,79 @@ impl VaultManager {
         })
     }
 
+    // ── Incremental index helpers (for external mutations) ──
+
+    /// Index (or re-index) a single note by its file path.
+    ///
+    /// Used after external writes (tool_vault_write_file, relay write_file, etc.)
+    /// instead of a full rebuild_index(). Reads the file, parses frontmatter,
+    /// registers/updates in NoteRegistry, and refreshes LinkIndex + tags.
+    pub fn index_single_note(&mut self, path: &Path) -> Result<(), String> {
+        if !path.is_file() {
+            return Err(format!("Not a file: {}", path.display()));
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            return Ok(()); // Not a markdown file, nothing to index
+        }
+
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+
+        let (fm, body) = parse_frontmatter(&content)?;
+
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        // Check if this note was already registered (update case)
+        let is_update = self.registry.id_to_path.contains_key(&fm.id);
+
+        if is_update {
+            // Update path mapping (file may have been renamed externally)
+            let old_path = self.registry.id_to_path.get(&fm.id).cloned();
+            self.registry.id_to_path.insert(fm.id.clone(), path.to_path_buf());
+            if let Some(ref old) = old_path {
+                self.registry.path_to_id.remove(old);
+            }
+            self.registry.path_to_id.insert(path.to_path_buf(), fm.id.clone());
+            self.registry.agent_map.insert(fm.id.clone(), fm.agent.clone());
+            self.registry.updated_map.insert(fm.id.clone(), fm.updated.clone());
+            self.registry.update_name(&fm.id, &name);
+        } else {
+            // New note — register
+            self.registry.register(
+                fm.id.clone(),
+                path.to_path_buf(),
+                &fm.agent,
+                &name,
+                &fm.updated,
+            );
+        }
+
+        // Refresh link_index + tag_index for this note
+        let wikilinks = links::parse_wikilinks(&body);
+        self.link_index
+            .update_note_with_tags(&fm.id, &wikilinks, &fm.tags, &self.registry, &fm.agent);
+
+        // Re-resolve any previously broken links that might now point to this note
+        self.link_index
+            .try_resolve_broken_links(&name, &fm.id, &self.registry);
+
+        Ok(())
+    }
+
+    /// Remove a note from the index by its file path.
+    ///
+    /// Used after external deletes instead of a full rebuild_index().
+    pub fn unindex_path(&mut self, path: &Path) {
+        if let Some(note_id) = self.registry.path_to_id.get(path).cloned() {
+            self.link_index.remove_note(&note_id);
+            self.registry.unregister(&note_id);
+        }
+    }
+
     // ── CRUD operations ──
 
     /// Create a new note in the vault.
