@@ -1,41 +1,33 @@
 use crate::db::error::DbError;
 use serde::Serialize;
-use std::fmt;
 
 /// Unified application error type for all Tauri commands and services.
 ///
 /// At the Tauri command boundary, AppError serializes to a plain string
 /// (via the Serialize impl), preserving the frontend's expectation of
 /// error strings.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum AppError {
+    #[error("Database error: {0}")]
     Database(String),
+    #[error("API error: {0}")]
     Api(String),
+    #[error("Validation error: {0}")]
     Validation(String),
+    #[error("IO error: {0}")]
     Io(String),
+    #[error("Not found: {0}")]
     NotFound(String),
+    #[error("Relay error: {0}")]
     Relay(String),
+    #[error("Vault error: {0}")]
     Vault(String),
+    #[error("Config error: {0}")]
     Config(String),
+    #[error("Lock error: {0}")]
     Lock(String),
+    #[error("JSON error: {0}")]
     Json(String),
-}
-
-impl fmt::Display for AppError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AppError::Database(msg) => write!(f, "Database error: {msg}"),
-            AppError::Api(msg) => write!(f, "API error: {msg}"),
-            AppError::Validation(msg) => write!(f, "Validation error: {msg}"),
-            AppError::Io(msg) => write!(f, "IO error: {msg}"),
-            AppError::NotFound(msg) => write!(f, "Not found: {msg}"),
-            AppError::Relay(msg) => write!(f, "Relay error: {msg}"),
-            AppError::Vault(msg) => write!(f, "Vault error: {msg}"),
-            AppError::Config(msg) => write!(f, "Config error: {msg}"),
-            AppError::Lock(msg) => write!(f, "Lock error: {msg}"),
-            AppError::Json(msg) => write!(f, "JSON error: {msg}"),
-        }
-    }
 }
 
 // ── From trait implementations ──
@@ -189,5 +181,51 @@ mod tests {
         let err = AppError::Validation("oops".into());
         let s: String = err.into();
         assert_eq!(s, "Validation error: oops");
+    }
+
+    // ── Serialization compatibility tests ──
+
+    #[test]
+    fn test_serialization_compatibility() {
+        assert_eq!(
+            serde_json::to_string(&AppError::Database("test error".into())).unwrap(),
+            "\"Database error: test error\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Api("timeout".into())).unwrap(),
+            "\"API error: timeout\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Validation("bad".into())).unwrap(),
+            "\"Validation error: bad\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Io("disk full".into())).unwrap(),
+            "\"IO error: disk full\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::NotFound("item".into())).unwrap(),
+            "\"Not found: item\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Relay("disconnected".into())).unwrap(),
+            "\"Relay error: disconnected\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Vault("corrupt".into())).unwrap(),
+            "\"Vault error: corrupt\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Config("missing key".into())).unwrap(),
+            "\"Config error: missing key\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Lock("poisoned".into())).unwrap(),
+            "\"Lock error: poisoned\""
+        );
+        assert_eq!(
+            serde_json::to_string(&AppError::Json("parse".into())).unwrap(),
+            "\"JSON error: parse\""
+        );
     }
 }
