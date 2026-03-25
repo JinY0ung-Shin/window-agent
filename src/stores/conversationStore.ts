@@ -3,7 +3,13 @@ import type { Conversation, ChatMessage } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { readToolConfig } from "../services/nativeToolRegistry";
 import { consolidateConversation, recoverPendingConsolidations } from "../services/consolidationService";
-import { emitLifecycleEvent } from "../services/lifecycleEvents";
+import {
+  endPreviousSession,
+  loadAgentContext,
+  onConversationSelected,
+  type AgentContextDeps,
+  type OnConversationSelectedDeps,
+} from "../services/conversationLifecycle";
 import { useAgentStore } from "./agentStore";
 import { useMemoryStore } from "./memoryStore";
 import { useVaultStore } from "./vaultStore";
@@ -46,6 +52,46 @@ interface ConversationState {
   openTeamChat: (teamId: string, leaderAgentId: string) => Promise<void>;
   clearAgentChat: (agentId: string) => Promise<void>;
   startNewAgentConversation: (agentId: string) => Promise<void>;
+}
+
+/** Build AgentContextDeps from live stores. */
+function buildAgentContextDeps(): AgentContextDeps {
+  return {
+    selectAgent: (id) => useAgentStore.getState().selectAgent(id),
+    findAgent: (id) => useAgentStore.getState().agents.find((a) => a.id === id),
+    loadMemoryNotes: (id) => useMemoryStore.getState().loadNotes(id),
+    loadVaultNotes: (id) => useVaultStore.getState().loadNotes(id),
+    loadSkills: (folder) => useSkillStore.getState().loadSkills(folder),
+    restoreActiveSkills: (folder, skills) => useSkillStore.getState().restoreActiveSkills(folder, skills),
+  };
+}
+
+/** Build full OnConversationSelectedDeps from live stores + the conversation store's set/get. */
+function buildSelectionDeps(
+  get: () => ConversationState,
+  set: (partial: Partial<ConversationState>) => void,
+): OnConversationSelectedDeps {
+  return {
+    commands: {
+      getConversationDetail: cmds.getConversationDetail,
+      getMessages: cmds.getMessages,
+    },
+    agentContext: buildAgentContextDeps(),
+    messageSync: {
+      setMessages: (messages) => useMessageStore.setState({ messages }),
+    },
+    summarySync: {
+      loadSummary: (summary, upTo) => useSummaryStore.getState().loadSummary(summary, upTo),
+    },
+    debug: {
+      loadLogs: (id) => useDebugStore.getState().loadLogs(id),
+    },
+    consolidatedMemory: {
+      loadConsolidatedMemory: (agentId) => get().loadConsolidatedMemory(agentId),
+    },
+    setLearningMode: (value) => set({ currentLearningMode: value }),
+    getCurrentConversationId: () => get().currentConversationId,
+  };
 }
 
 export const useConversationStore = create<ConversationState>((set, get) => ({
@@ -152,99 +198,27 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   selectConversation: async (id) => {
-    // Trigger consolidation for the previous conversation (fire-and-forget)
-    const prevConvId = get().currentConversationId;
-    if (prevConvId && prevConvId !== id) {
-      const prevConv = get().conversations.find((c) => c.id === prevConvId);
-      if (prevConv) {
-        emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
-        get().triggerConsolidation(prevConvId, prevConv.agent_id);
-      }
-    }
+    // End the previous session (lifecycle event + consolidation)
+    endPreviousSession(
+      get().currentConversationId,
+      get().conversations,
+      { triggerConsolidation: get().triggerConsolidation },
+      id,
+    );
 
     set({ currentConversationId: id, draftLearningMode: false, learningModeWarning: false, consolidatedMemory: null });
     resetTransientChatState();
 
-    const [detail, dbMessages] = await Promise.all([
-      cmds.getConversationDetail(id),
-      cmds.getMessages(id),
-    ]);
-    if (get().currentConversationId !== id) return { messages: [] }; // stale guard
-
-    const messages: ChatMessage[] = dbMessages
-      .filter((m) => !(m.role === "tool" && m.tool_name === "__team_synthesis_context"))
-      .map((m) => {
-        let chatMsg: ChatMessage;
-        if (m.role === "user") {
-          chatMsg = { id: m.id, dbMessageId: m.id, type: "user" as const, content: m.content, status: "complete" as const };
-        } else if (m.tool_call_id) {
-          chatMsg = {
-            id: m.id, dbMessageId: m.id, type: "tool" as const, content: m.content, status: "complete" as const,
-            tool_call_id: m.tool_call_id, tool_name: m.tool_name ?? undefined,
-          };
-        } else {
-          chatMsg = { id: m.id, dbMessageId: m.id, type: "agent" as const, content: m.content, status: "complete" as const };
-          if (m.tool_name && m.tool_input) {
-            try {
-              chatMsg.tool_calls = JSON.parse(m.tool_input);
-            } catch { /* ignore parse errors */ }
-          }
-        }
-        // Map team sender metadata
-        if (m.sender_agent_id) {
-          chatMsg.senderAgentId = m.sender_agent_id;
-          chatMsg.teamRunId = m.team_run_id ?? undefined;
-          chatMsg.teamTaskId = m.team_task_id ?? undefined;
-          const agent = useAgentStore.getState().agents.find((a) => a.id === m.sender_agent_id);
-          if (agent) {
-            chatMsg.senderAgentName = agent.name;
-            chatMsg.senderAgentAvatar = agent.avatar;
-          }
-        }
-        return chatMsg;
-      });
-
-    // Sync messages to messageStore
-    useMessageStore.setState({ messages });
-
-    useSummaryStore.getState().loadSummary(detail.summary, detail.summary_up_to_message_id);
-
-    // Sync learning mode from DB
-    set({ currentLearningMode: detail.learning_mode ?? false });
-
-    // Load consolidated memory for prompt injection (awaited to ensure it's ready before first send)
-    await get().loadConsolidatedMemory(detail.agent_id);
-
-    // Sync agent selection and load memory/skills/debug
-    if (detail.agent_id) {
-      useAgentStore.getState().selectAgent(detail.agent_id);
-      useMemoryStore.getState().loadNotes(detail.agent_id);
-      useVaultStore.getState().loadNotes(detail.agent_id);
-      const agent = useAgentStore.getState().agents.find((a) => a.id === detail.agent_id);
-      if (agent) {
-        await useSkillStore.getState().loadSkills(agent.folder_name);
-        if (detail.active_skills && Array.isArray(detail.active_skills) && detail.active_skills.length > 0) {
-          await useSkillStore.getState().restoreActiveSkills(agent.folder_name, detail.active_skills);
-        }
-      }
-    }
-    useDebugStore.getState().loadLogs(id);
-
-    emitLifecycleEvent({ type: "session:start", conversationId: id, agentId: detail.agent_id });
-
-    return { messages, summary: detail.summary, summaryUpToMessageId: detail.summary_up_to_message_id };
+    // Delegate the full side-effect chain to the lifecycle helper
+    return onConversationSelected(id, buildSelectionDeps(get, set));
   },
 
   createNewConversation: () => {
-    // Trigger consolidation for previous conversation
-    const prevConvId = get().currentConversationId;
-    if (prevConvId) {
-      const prevConv = get().conversations.find((c) => c.id === prevConvId);
-      if (prevConv) {
-        emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
-        get().triggerConsolidation(prevConvId, prevConv.agent_id);
-      }
-    }
+    endPreviousSession(
+      get().currentConversationId,
+      get().conversations,
+      { triggerConsolidation: get().triggerConsolidation },
+    );
     resetChatContext();
   },
 
@@ -252,10 +226,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     // Emit session:end if deleting the active conversation
     const { currentConversationId } = get();
     if (currentConversationId === id) {
-      const conv = get().conversations.find((c) => c.id === id);
-      if (conv) {
-        emitLifecycleEvent({ type: "session:end", conversationId: id, agentId: conv.agent_id });
-      }
+      endPreviousSession(id, get().conversations, { triggerConsolidation: () => {} });
       resetChatContext();
     }
     await cmds.deleteConversation(id);
@@ -270,25 +241,15 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     if (agentConv) {
       await get().selectConversation(agentConv.id);
     } else {
-      // Trigger consolidation for previous conversation
-      const prevConvId = get().currentConversationId;
-      if (prevConvId) {
-        const prevConv = get().conversations.find((c) => c.id === prevConvId);
-        if (prevConv) {
-          emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
-          get().triggerConsolidation(prevConvId, prevConv.agent_id);
-        }
-      }
+      endPreviousSession(
+        get().currentConversationId,
+        conversations,
+        { triggerConsolidation: get().triggerConsolidation },
+      );
       // No conversation exists — prepare empty DM for this agent
       resetChatContext();
-      useAgentStore.getState().selectAgent(agentId);
       await get().loadConsolidatedMemory(agentId);
-      const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
-      if (agent) {
-        useMemoryStore.getState().loadNotes(agentId);
-        useVaultStore.getState().loadNotes(agentId);
-        await useSkillStore.getState().loadSkills(agent.folder_name);
-      }
+      await loadAgentContext(agentId, buildAgentContextDeps());
     }
   },
 
@@ -307,27 +268,17 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       // Load existing team conversation
       await get().selectConversation(teamConv.id);
     } else {
-      // Trigger consolidation for previous conversation
-      const prevConvId = get().currentConversationId;
-      if (prevConvId) {
-        const prevConv = conversations.find((c) => c.id === prevConvId);
-        if (prevConv) {
-          emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
-          get().triggerConsolidation(prevConvId, prevConv.agent_id);
-        }
-      }
+      endPreviousSession(
+        get().currentConversationId,
+        conversations,
+        { triggerConsolidation: get().triggerConsolidation },
+      );
       // Prepare empty chat for this team's leader agent
       resetChatContext();
       // Re-select team after resetChatContext cleared it
       useTeamStore.getState().selectTeam(teamId);
-      useAgentStore.getState().selectAgent(leaderAgentId);
       await get().loadConsolidatedMemory(leaderAgentId);
-      const agent = useAgentStore.getState().agents.find((a) => a.id === leaderAgentId);
-      if (agent) {
-        useMemoryStore.getState().loadNotes(leaderAgentId);
-        useVaultStore.getState().loadNotes(leaderAgentId);
-        await useSkillStore.getState().loadSkills(agent.folder_name);
-      }
+      await loadAgentContext(leaderAgentId, buildAgentContextDeps());
     }
   },
 
@@ -339,7 +290,7 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     // Emit session:end if the active conversation is being cleared
     const wasActive = agentConvs.some((c) => c.id === currentConversationId);
     if (wasActive && currentConversationId) {
-      emitLifecycleEvent({ type: "session:end", conversationId: currentConversationId, agentId });
+      endPreviousSession(currentConversationId, conversations, { triggerConsolidation: () => {} });
     }
 
     await Promise.all(agentConvs.map((c) => cmds.deleteConversation(c.id)));
@@ -351,37 +302,21 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
       set({ currentConversationId: null });
       get().resetLearningModeState();
       resetTransientChatState();
-      useAgentStore.getState().selectAgent(agentId);
-      const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
-      if (agent) {
-        useMemoryStore.getState().loadNotes(agentId);
-        useVaultStore.getState().loadNotes(agentId);
-        await useSkillStore.getState().loadSkills(agent.folder_name);
-      }
+      await loadAgentContext(agentId, buildAgentContextDeps());
     }
     // If clearing a non-active agent, don't touch global state at all
   },
 
   startNewAgentConversation: async (agentId) => {
-    // Trigger consolidation for previous conversation
-    const prevConvId = get().currentConversationId;
-    if (prevConvId) {
-      const prevConv = get().conversations.find((c) => c.id === prevConvId);
-      if (prevConv) {
-        emitLifecycleEvent({ type: "session:end", conversationId: prevConvId, agentId: prevConv.agent_id });
-        get().triggerConsolidation(prevConvId, prevConv.agent_id);
-      }
-    }
+    endPreviousSession(
+      get().currentConversationId,
+      get().conversations,
+      { triggerConsolidation: get().triggerConsolidation },
+    );
     set({ currentConversationId: null });
     get().resetLearningModeState();
     resetTransientChatState();
-    useAgentStore.getState().selectAgent(agentId);
     await get().loadConsolidatedMemory(agentId);
-    const agent = useAgentStore.getState().agents.find((a) => a.id === agentId);
-    if (agent) {
-      useMemoryStore.getState().loadNotes(agentId);
-      useVaultStore.getState().loadNotes(agentId);
-      await useSkillStore.getState().loadSkills(agent.folder_name);
-    }
+    await loadAgentContext(agentId, buildAgentContextDeps());
   },
 }));
