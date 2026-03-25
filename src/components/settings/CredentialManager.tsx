@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
+import { useLoadOnOpen } from "../../hooks/useLoadOnOpen";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import type { CredentialMeta } from "../../services/types";
 import {
@@ -42,26 +43,10 @@ const EMPTY_FORM: FormState = {
 
 export default function CredentialManager() {
   const { t } = useTranslation("agent");
-  const [credentials, setCredentials] = useState<CredentialMeta[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: credentials, loading, reload: refresh } = useLoadOnOpen(listCredentials);
   const [form, setForm] = useState<FormState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      const list = await listCredentials();
-      setCredentials(list);
-    } catch {
-      setCredentials([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   const openAdd = () => {
     setForm({ ...EMPTY_FORM });
@@ -174,11 +159,11 @@ export default function CredentialManager() {
   return (
     <div className="cred-manager">
       {/* Credential list */}
-      {credentials.length === 0 && !form && (
+      {(credentials ?? []).length === 0 && !form && (
         <div className="cred-empty">{t("credentials.noCredentials")}</div>
       )}
 
-      {credentials.map((cred) => (
+      {(credentials ?? []).map((cred) => (
         <div key={cred.id} className="cred-item">
           <div className="cred-item-info">
             <span className="cred-item-name">{cred.name}</span>

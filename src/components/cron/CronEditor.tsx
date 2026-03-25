@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import Modal from "../common/Modal";
 import { useCronStore } from "../../stores/cronStore";
 import { useAgentStore } from "../../stores/agentStore";
+import { useLoadOnOpen } from "../../hooks/useLoadOnOpen";
 import type { CronScheduleType } from "../../services/types";
 import { getCronJob } from "../../services/commands/cronCommands";
-import { logger } from "../../services/logger";
 import { toErrorMessage } from "../../utils/errorUtils";
 
 const INTERVAL_UNITS = [
@@ -39,46 +39,45 @@ export default function CronEditor() {
 
   const isEditing = !!editingJobId;
 
-  useEffect(() => {
-    if (editingJobId) {
-      getCronJob(editingJobId)
-        .then((job) => {
-          setName(job.name);
-          setDescription(job.description);
-          setAgentId(job.agent_id);
-          setScheduleType(job.schedule_type);
-          setEnabled(job.enabled);
-          setPrompt(job.prompt);
+  const loadJob = useCallback(() => getCronJob(editingJobId!), [editingJobId]);
+  const { data: loadedJob } = useLoadOnOpen(loadJob, !!editingJobId);
 
-          if (job.schedule_type === "at") {
-            // Convert UTC to local datetime-local format
-            const d = new Date(job.schedule_value);
-            const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-              .toISOString()
-              .slice(0, 16);
-            setAtValue(local);
-          } else if (job.schedule_type === "every") {
-            const secs = parseInt(job.schedule_value, 10);
-            if (secs >= 86400 && secs % 86400 === 0) {
-              setEveryAmount(String(secs / 86400));
-              setEveryUnit("days");
-            } else if (secs >= 3600 && secs % 3600 === 0) {
-              setEveryAmount(String(secs / 3600));
-              setEveryUnit("hours");
-            } else if (secs >= 60 && secs % 60 === 0) {
-              setEveryAmount(String(secs / 60));
-              setEveryUnit("minutes");
-            } else {
-              setEveryAmount(String(secs));
-              setEveryUnit("seconds");
-            }
-          } else {
-            setCronExpr(job.schedule_value);
-          }
-        })
-        .catch((e) => logger.debug("Failed to load job for editing", e));
+  useEffect(() => {
+    if (!loadedJob) return;
+    const job = loadedJob;
+    setName(job.name);
+    setDescription(job.description);
+    setAgentId(job.agent_id);
+    setScheduleType(job.schedule_type);
+    setEnabled(job.enabled);
+    setPrompt(job.prompt);
+
+    if (job.schedule_type === "at") {
+      // Convert UTC to local datetime-local format
+      const d = new Date(job.schedule_value);
+      const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16);
+      setAtValue(local);
+    } else if (job.schedule_type === "every") {
+      const secs = parseInt(job.schedule_value, 10);
+      if (secs >= 86400 && secs % 86400 === 0) {
+        setEveryAmount(String(secs / 86400));
+        setEveryUnit("days");
+      } else if (secs >= 3600 && secs % 3600 === 0) {
+        setEveryAmount(String(secs / 3600));
+        setEveryUnit("hours");
+      } else if (secs >= 60 && secs % 60 === 0) {
+        setEveryAmount(String(secs / 60));
+        setEveryUnit("minutes");
+      } else {
+        setEveryAmount(String(secs));
+        setEveryUnit("seconds");
+      }
+    } else {
+      setCronExpr(job.schedule_value);
     }
-  }, [editingJobId]);
+  }, [loadedJob]);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
