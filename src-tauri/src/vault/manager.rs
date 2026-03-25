@@ -411,6 +411,13 @@ impl VaultManager {
 
         let new_content = serialize_note(&fm, &body);
 
+        // Capture old filename before path is moved
+        let old_filename = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+
         // If title changed, rename the file
         let final_path = if title.is_some() {
             let new_title = extract_title_from_body(&body);
@@ -463,14 +470,17 @@ impl VaultManager {
         let wikilinks = links::parse_wikilinks(&body);
         self.link_index.update_note_with_tags(note_id, &wikilinks, &fm.tags, &self.registry, caller_agent_id);
 
-        // If title/filename changed, update name_to_ids and rebuild link_index
-        // so that other notes referencing the old filename get re-resolved immediately.
+        // If title/filename changed, update name_to_ids and incrementally
+        // re-resolve cross-references instead of a full rebuild.
         if title.is_some() {
             let new_title = extract_title_from_body(&body);
             let new_filename = sanitize_title_to_filename(&new_title);
             self.registry.update_name(note_id, &new_filename);
-            // Full rebuild to re-resolve all cross-references after rename
-            let _ = self.rebuild_index();
+
+            // Invalidate links that pointed to the old filename
+            self.link_index.invalidate_links_to_name(&old_filename);
+            // Re-resolve any broken links that now match the new filename
+            self.link_index.try_resolve_broken_links(&new_filename, note_id, &self.registry);
         }
 
         let resolved_title = extract_title_from_body(&body);
@@ -733,5 +743,56 @@ impl VaultManager {
     /// Get the vault path.
     pub fn get_vault_path(&self) -> &Path {
         &self.vault_path
+    }
+
+    /// Index (or re-index) a single note by its file path.
+    /// Used for incremental indexing after external writes or renames,
+    /// avoiding the cost of a full `rebuild_index()`.
+    pub fn index_single_note(&mut self, path: &Path) -> Result<(), String> {
+        if !path.is_file() {
+            return Err(format!("Not a file: {}", path.display()));
+        }
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            return Ok(()); // not a markdown file, nothing to index
+        }
+
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+
+        let (fm, body) = super::note::parse_frontmatter(&content)?;
+
+        let name = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        // If this note was already registered, unregister the old entry first.
+        if let Some(old_path) = self.registry.id_to_path.get(&fm.id).cloned() {
+            if old_path != path {
+                // Path changed (rename) — clean up old entry
+                self.registry.path_to_id.remove(&old_path);
+            }
+        }
+
+        // Register / update in the registry
+        self.registry.register(
+            fm.id.clone(),
+            path.to_path_buf(),
+            &fm.agent,
+            &name,
+            &fm.updated,
+        );
+
+        // Re-index links and tags for this note
+        let wikilinks = links::parse_wikilinks(&body);
+        self.link_index
+            .update_note_with_tags(&fm.id, &wikilinks, &fm.tags, &self.registry, &fm.agent);
+
+        // Re-resolve any previously broken links that might now point to this note
+        self.link_index
+            .try_resolve_broken_links(&name, &fm.id, &self.registry);
+
+        Ok(())
     }
 }

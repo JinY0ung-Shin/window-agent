@@ -381,4 +381,90 @@ mod tests {
         assert_eq!(stats.total_notes, 1, "Non-agent workspace folders should still be indexed");
         assert!(manager.registry.id_to_path.contains_key("other-ws-note"));
     }
+
+    #[test]
+    fn test_index_single_note_adds_to_index() {
+        let (_tmp, mut manager) = create_test_manager();
+
+        // Write a note directly to disk (simulating external write)
+        let note_dir = manager.vault_path.join("agents").join("test-agent").join("knowledge");
+        std::fs::create_dir_all(&note_dir).unwrap();
+        let note_path = note_dir.join("external-note.md");
+        std::fs::write(&note_path, "---\nid: ext-123\nagent: test-agent\ntype: knowledge\ntags: [rust]\nconfidence: 0.8\ncreated: 2024-01-01T00:00:00Z\nupdated: 2024-01-01T00:00:00Z\nrevision: abc\n---\n# External Note\nWritten externally.\n").unwrap();
+
+        // Confirm it's not in the index yet
+        assert!(!manager.registry.id_to_path.contains_key("ext-123"));
+
+        // Incrementally index it
+        manager.index_single_note(&note_path).unwrap();
+
+        // Now it should be in the index
+        assert!(manager.registry.id_to_path.contains_key("ext-123"));
+        assert_eq!(
+            manager.registry.path_to_id.get(&note_path).cloned(),
+            Some("ext-123".to_string())
+        );
+
+        // Tags should also be indexed
+        assert!(manager.link_index.tag_index.get("rust").unwrap().contains(&"ext-123".to_string()));
+    }
+
+    #[test]
+    fn test_index_single_note_resolves_broken_links() {
+        let (_tmp, mut manager) = create_test_manager();
+
+        // Create a note that links to a non-existent "target-note"
+        let note_a = manager
+            .create_note("test-agent", None, "knowledge", "Referrer", "See [[target-note]] for more.", vec![], vec![])
+            .unwrap();
+
+        // The link should be broken
+        let outgoing = manager.get_outgoing_links(&note_a.id);
+        assert_eq!(outgoing.len(), 1);
+        assert!(!outgoing[0].resolved, "Link should be broken initially");
+
+        // Write the target note directly to disk
+        let note_dir = manager.vault_path.join("agents").join("test-agent").join("knowledge");
+        let target_path = note_dir.join("target-note.md");
+        std::fs::write(&target_path, "---\nid: target-id\nagent: test-agent\ntype: knowledge\ntags: []\nconfidence: 0.5\ncreated: 2024-01-01T00:00:00Z\nupdated: 2024-01-01T00:00:00Z\nrevision: xyz\n---\n# Target Note\nI am the target.\n").unwrap();
+
+        // Incrementally index the new note
+        manager.index_single_note(&target_path).unwrap();
+
+        // The previously broken link should now be resolved
+        let outgoing = manager.get_outgoing_links(&note_a.id);
+        assert_eq!(outgoing.len(), 1);
+        assert!(outgoing[0].resolved, "Link should be resolved after indexing target note");
+        assert_eq!(outgoing[0].target_id, "target-id");
+    }
+
+    #[test]
+    fn test_rename_note_uses_incremental_indexing() {
+        let (_tmp, mut manager) = create_test_manager();
+
+        // Create two notes: one that references the other
+        // sanitize_title_to_filename("Old Name") -> "Old Name" (spaces preserved)
+        let target = manager
+            .create_note("test-agent", None, "knowledge", "Old Name", "Target content.", vec![], vec![])
+            .unwrap();
+        let referrer = manager
+            .create_note("test-agent", None, "knowledge", "Referrer", "See [[Old Name]] here.", vec![], vec![])
+            .unwrap();
+
+        // Verify the link is resolved
+        let links = manager.get_outgoing_links(&referrer.id);
+        assert_eq!(links.len(), 1);
+        assert!(links[0].resolved, "Link should be resolved before rename");
+
+        // Rename the target note
+        let _updated = manager
+            .update_note(&target.id, "test-agent", Some("New Name"), None, None, None, None)
+            .unwrap();
+
+        // After rename, the referrer still has [[Old Name]] which no longer matches
+        // the renamed "New Name", so the link should now be broken.
+        let links = manager.get_outgoing_links(&referrer.id);
+        assert_eq!(links.len(), 1);
+        assert!(!links[0].resolved, "Link to old filename should be broken after rename");
+    }
 }
