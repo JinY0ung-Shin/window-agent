@@ -14,7 +14,7 @@ impl BrowserManager {
         {
             let sessions = self.sessions.read().await;
             if let Some(session) = sessions.get(conversation_id) {
-                Self::validate_url(url, &session.security_policy)?;
+                super::security::validate_url(url, &session.security_policy)?;
             }
         }
 
@@ -121,18 +121,5 @@ impl BrowserManager {
         self.update_session_from_response(conversation_id, &resp)
             .await?;
         self.build_tool_result(&resp)
-    }
-
-    /// Close browser session for a conversation
-    pub async fn close_session(&self, conversation_id: &str) -> Result<(), String> {
-        let mut sessions = self.sessions.write().await;
-        if let Some(session) = sessions.remove(conversation_id) {
-            let session_id = session.session_id.clone();
-            drop(sessions); // release lock before async call
-            let _ = self
-                .send_command("close_session", &session_id, serde_json::json!({}))
-                .await;
-        }
-        Ok(())
     }
 }
