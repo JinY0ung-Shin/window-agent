@@ -149,7 +149,6 @@ export default function CronEditor() {
       }
       closeEditor();
     } catch (e) {
-      logger.error("Failed to save cron job:", e);
       setSaveError(toErrorMessage(e));
     } finally {
       setSaving(false);

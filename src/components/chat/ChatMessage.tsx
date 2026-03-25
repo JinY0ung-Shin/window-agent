@@ -3,7 +3,6 @@ import { AlertCircle, Bot, User, Wrench, Copy, Check, RefreshCw, Crown } from "l
 import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 import type { SenderInfo } from "./ToolRunBlock";
-import { useMessageStore } from "../../stores/messageStore";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
 import ToolCallBubble from "./ToolCallBubble";
@@ -20,7 +19,6 @@ export default function ChatMessage({ message, senderInfo }: Props) {
   const { t: tTeam } = useTranslation("team");
   const isPending = message.status === "pending";
   const { copied, copy } = useClipboardFeedback(1500);
-  const copyMessage = useMessageStore((s) => s.copyMessage);
   const regenerateMessage = useChatFlowStore((s) => s.regenerateMessage);
   const toolRunState = useToolRunStore((s) => s.toolRunState);
   const pendingToolCalls = useToolRunStore((s) => s.pendingToolCalls);
@@ -28,7 +26,6 @@ export default function ChatMessage({ message, senderInfo }: Props) {
   const rejectToolCall = useToolRunStore((s) => s.rejectToolCall);
 
   const handleCopy = () => {
-    copyMessage(message.id);
     copy(message.content);
   };
 

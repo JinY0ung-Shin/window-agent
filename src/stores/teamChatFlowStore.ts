@@ -36,7 +36,6 @@ import {
   saveAssistantToolCallMessage,
   saveFinalResponse,
   parseRawToolCalls,
-  streamOneTurn,
 } from "./chatFlowBase";
 
 // ── Team-specific event types ─────────────────────────
@@ -505,6 +504,8 @@ async function sendTeamMessageFlow() {
         requestId: currentRequestId,
         msgId: currentMsgId,
         tools: leaderTools,
+        overrideSummary: null,
+        skipPreCompaction: true,
       });
 
       if (done.error) {
