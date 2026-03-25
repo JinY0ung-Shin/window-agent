@@ -197,7 +197,12 @@ impl VaultManager {
         let is_update = self.registry.id_to_path.contains_key(&fm.id);
 
         if is_update {
-            // Update path mapping (file may have been renamed externally)
+            // Detect if the filename changed (external rename)
+            let old_name = self.registry.name_to_ids.iter()
+                .find(|(_, ids)| ids.contains(&fm.id))
+                .map(|(n, _)| n.clone());
+
+            // Update path mapping
             let old_path = self.registry.id_to_path.get(&fm.id).cloned();
             self.registry.id_to_path.insert(fm.id.clone(), path.to_path_buf());
             if let Some(ref old) = old_path {
@@ -207,6 +212,13 @@ impl VaultManager {
             self.registry.agent_map.insert(fm.id.clone(), fm.agent.clone());
             self.registry.updated_map.insert(fm.id.clone(), fm.updated.clone());
             self.registry.update_name(&fm.id, &name);
+
+            // If filename changed, invalidate links pointing to the old name
+            if let Some(ref old) = old_name {
+                if old != &name {
+                    self.link_index.invalidate_links_to_name(old);
+                }
+            }
         } else {
             // New note — register
             self.registry.register(

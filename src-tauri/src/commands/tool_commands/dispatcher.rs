@@ -458,7 +458,9 @@ pub(crate) fn execute_file_tool_with_scope(
                 .map_err(|e| format!("Failed to write file: {e}"))?;
             // Incrementally index if this is a vault write
             if resolution.allowed_filenames.is_none() {
-                let _ = index_single_vault_note(app, &resolved);
+                if let Err(e) = index_single_vault_note(app, &resolved) {
+                    eprintln!("[vault-index] Failed to index after write: {e}");
+                }
             }
             Ok(serde_json::json!({ "success": true, "path": resolved }))
         }
@@ -469,7 +471,9 @@ pub(crate) fn execute_file_tool_with_scope(
             let resolved = resolve_path_fn(raw_path)?;
             // Remove from vault index before deleting
             if resolution.allowed_filenames.is_none() {
-                let _ = remove_vault_note_by_path(app, &resolved);
+                if let Err(e) = remove_vault_note_by_path(app, &resolved) {
+                    eprintln!("[vault-index] Failed to remove from index before delete: {e}");
+                }
             }
             std::fs::remove_file(&resolved)
                 .map_err(|e| format!("Failed to delete file: {e}"))?;
