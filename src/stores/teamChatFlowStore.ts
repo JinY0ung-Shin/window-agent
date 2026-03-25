@@ -12,9 +12,7 @@ import { useAgentStore } from "./agentStore";
 import { useSettingsStore } from "./settingsStore";
 import { useNavigationStore } from "./navigationStore";
 import { useToolRunStore } from "./toolRunStore";
-import { useVaultStore } from "./vaultStore";
-import { buildConversationContext } from "../services/chatHelpers";
-import { toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
+import { toOpenAITools } from "../services/toolRegistry";
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
   parseErrorMessage,
@@ -27,13 +25,13 @@ import {
   msg, conv, stream,
   createPendingMessage,
   updateMessageInList,
-  executeStreamCall,
 } from "../services/streamHelpers";
 import { logger } from "../services/logger";
 import {
   resolveEffectiveSettings,
   resolveToolConfig,
   resolveManagerPrompt,
+  streamOneTurn,
   processToolCalls,
   saveAssistantToolCallMessage,
   saveFinalResponse,

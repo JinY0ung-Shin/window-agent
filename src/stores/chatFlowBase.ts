@@ -216,9 +216,15 @@ export interface StreamOneTurnParams {
   requestId: string;
   msgId: string;
   tools?: object[];
+  /** 기존 tools에 추가할 도구 목록 (예: delegate) */
+  extraTools?: object[];
   skillsSection?: string;
   workspacePath?: string;
   bootContent?: string | null;
+  /** 명시적으로 summary를 override (예: 팀 리더는 null 사용) */
+  overrideSummary?: string | null;
+  /** true이면 pre-compaction 체크를 건너뜀 (팀 리더 등 경량 컨텍스트) */
+  skipPreCompaction?: boolean;
 }
 
 /**
@@ -226,25 +232,33 @@ export interface StreamOneTurnParams {
  * chatFlowStore와 teamChatFlowStore에서 공유
  */
 export async function streamOneTurn(params: StreamOneTurnParams): Promise<StreamDoneEvent> {
-  const { baseSystemPrompt, effective, requestId, msgId, tools, skillsSection, workspacePath, bootContent } = params;
+  const {
+    baseSystemPrompt, effective, requestId, msgId,
+    tools, extraTools, skillsSection, workspacePath, bootContent,
+    overrideSummary, skipPreCompaction,
+  } = params;
 
   // Pre-compaction check: flush if approaching context limit
-  const totalTokenEstimate = estimateContextTokens({
-    messages: msg().messages,
-    baseSystemPrompt,
-    skillsSection,
-    bootContent,
-    consolidatedMemory: conv().consolidatedMemory,
-    isLearning: conv().getCurrentLearningMode(),
-    vaultNotes: useVaultStore.getState().notes,
-    memNotes: useMemoryStore.getState().notes,
-    workspacePath,
-  });
-  await checkAndFlushPreCompaction(totalTokenEstimate, effective.model);
+  if (!skipPreCompaction) {
+    const totalTokenEstimate = estimateContextTokens({
+      messages: msg().messages,
+      baseSystemPrompt,
+      skillsSection,
+      bootContent,
+      consolidatedMemory: conv().consolidatedMemory,
+      isLearning: conv().getCurrentLearningMode(),
+      vaultNotes: useVaultStore.getState().notes,
+      memNotes: useMemoryStore.getState().notes,
+      workspacePath,
+    });
+    await checkAndFlushPreCompaction(totalTokenEstimate, effective.model);
+  }
+
+  const useSummary = overrideSummary !== undefined ? overrideSummary : summary().currentSummary;
 
   const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
     messages: msg().messages,
-    summary: summary().currentSummary,
+    summary: useSummary,
     baseSystemPrompt,
     skillsSection,
     bootContent,
@@ -255,6 +269,9 @@ export async function streamOneTurn(params: StreamOneTurnParams): Promise<Stream
     consolidatedMemory: conv().consolidatedMemory,
   });
 
+  // Merge tools + extraTools
+  const mergedTools = mergeTools(tools, extraTools);
+
   return executeStreamCall({
     requestId,
     msgId,
@@ -264,8 +281,14 @@ export async function streamOneTurn(params: StreamOneTurnParams): Promise<Stream
     temperature: effective.temperature,
     thinkingEnabled: effective.thinkingEnabled,
     thinkingBudget: effective.thinkingBudget,
-    tools: tools ?? null,
+    tools: mergedTools,
   });
+}
+
+/** tools와 extraTools를 병합 (둘 다 없으면 null) */
+function mergeTools(tools?: object[], extraTools?: object[]): object[] | null {
+  if (!extraTools || extraTools.length === 0) return tools ?? null;
+  return [...(tools ?? []), ...extraTools];
 }
 
 // ── 도구 반복 루프 ──────────────────────────────────
@@ -619,11 +642,13 @@ export interface SaveFinalResponseOptions {
   reasoningContent?: string;
   /** 추가 저장 필드 (team: sender_agent_id, team_run_id 등) */
   saveExtras?: Record<string, unknown>;
+  /** UI 메시지에 추가할 필드 (team: senderAgentId, senderAgentName 등) */
+  uiExtras?: Partial<ChatMessage>;
 }
 
 /** 도구 호출 없는 최종 응답을 DB에 저장하고 UI 상태 업데이트 */
 export async function saveFinalResponse(options: SaveFinalResponseOptions): Promise<string> {
-  const { convId, msgId, replyContent, reasoningContent, saveExtras = {} } = options;
+  const { convId, msgId, replyContent, reasoningContent, saveExtras = {}, uiExtras } = options;
   const finalContent = replyContent || i18n.t("common:noResponse");
 
   const savedAssistant = await cmds.saveMessage({
@@ -639,6 +664,7 @@ export async function saveFinalResponse(options: SaveFinalResponseOptions): Prom
       content: finalContent,
       reasoningContent,
       status: "complete",
+      ...uiExtras,
     }),
   });
 
