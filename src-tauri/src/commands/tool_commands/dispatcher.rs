@@ -8,8 +8,9 @@ use std::path::Path;
 use tauri::{AppHandle, Manager};
 
 use super::file_tools::{
-    rebuild_vault_index, tool_delete_file, tool_list_directory, tool_list_directory_recursive,
-    tool_read_file, tool_vault_write_file, tool_web_search, tool_write_file,
+    index_single_vault_note, rebuild_vault_index, remove_vault_note_by_path, tool_delete_file,
+    tool_list_directory, tool_list_directory_recursive, tool_read_file, tool_vault_write_file,
+    tool_web_search, tool_write_file,
 };
 use super::http::tool_http_request;
 use super::scope::{resolve_scope, ScopeResolution};
@@ -81,8 +82,8 @@ pub(crate) async fn execute_tool_inner(
                             &resolution.agent_id,
                             conversation_id,
                         )?;
-                        // Rebuild vault index after write
-                        rebuild_vault_index(app)?;
+                        // Incrementally index the written note
+                        index_single_vault_note(app, &resolved)?;
                         Ok(result)
                     } else {
                         tool_write_file(&resolved, content, &resolution.allowed_roots)
@@ -93,12 +94,11 @@ pub(crate) async fn execute_tool_inner(
                         .as_str()
                         .ok_or("delete_file: missing 'path' parameter")?;
                     let resolved = resolve_and_check(raw)?;
-                    let result = tool_delete_file(&resolved, &resolution.allowed_roots)?;
-
                     if scope == "vault" {
-                        // Rebuild vault index after delete
-                        rebuild_vault_index(app)?;
+                        // Remove from vault index before deleting
+                        remove_vault_note_by_path(app, &resolved)?;
                     }
+                    let result = tool_delete_file(&resolved, &resolution.allowed_roots)?;
                     Ok(result)
                 }
                 "list_directory" => {
@@ -456,9 +456,9 @@ pub(crate) fn execute_file_tool_with_scope(
             }
             std::fs::write(&resolved, content)
                 .map_err(|e| format!("Failed to write file: {e}"))?;
-            // Rebuild vault index if this is a vault write
+            // Incrementally index if this is a vault write
             if resolution.allowed_filenames.is_none() {
-                let _ = rebuild_vault_index(app);
+                let _ = index_single_vault_note(app, &resolved);
             }
             Ok(serde_json::json!({ "success": true, "path": resolved }))
         }
@@ -467,12 +467,12 @@ pub(crate) fn execute_file_tool_with_scope(
                 .as_str()
                 .ok_or("delete_file: missing 'path'")?;
             let resolved = resolve_path_fn(raw_path)?;
+            // Remove from vault index before deleting
+            if resolution.allowed_filenames.is_none() {
+                let _ = remove_vault_note_by_path(app, &resolved);
+            }
             std::fs::remove_file(&resolved)
                 .map_err(|e| format!("Failed to delete file: {e}"))?;
-            // Rebuild vault index if this is a vault delete
-            if resolution.allowed_filenames.is_none() {
-                let _ = rebuild_vault_index(app);
-            }
             Ok(serde_json::json!({ "success": true, "path": resolved }))
         }
         "list_directory" => {

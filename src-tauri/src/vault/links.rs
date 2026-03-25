@@ -362,35 +362,28 @@ impl LinkIndex {
         }
     }
 
-    /// After a rename, invalidate all outgoing links across the vault whose raw_link
-    /// target matched the old filename. These links are now broken because no note
-    /// has that name anymore.  Also cleans up the corresponding incoming entries.
-    pub fn invalidate_links_to_name(&mut self, old_name: &str) {
-        let mut to_break: Vec<(String, usize)> = Vec::new(); // (source_id, index)
-        for (source_id, links) in &self.outgoing {
-            for (idx, link) in links.iter().enumerate() {
+    /// Invalidate all outgoing links that currently resolve to a note with the given filename.
+    /// Used when a note is renamed: the old filename no longer maps to a valid note,
+    /// so any link referencing it must be marked broken until re-resolved.
+    pub fn invalidate_links_to_name(&mut self, old_filename: &str) {
+        for outgoing_list in self.outgoing.values_mut() {
+            for link in outgoing_list.iter_mut() {
                 if !link.resolved {
                     continue;
                 }
+                // Check if the raw_link target matches the old filename
                 let target = link
                     .raw_link
                     .trim_start_matches("[[")
                     .trim_end_matches("]]");
                 let target_name = target.rsplit('/').next().unwrap_or(target).trim();
-                if target_name == old_name {
-                    to_break.push((source_id.clone(), idx));
-                }
-            }
-        }
-
-        for (source_id, idx) in to_break {
-            if let Some(links) = self.outgoing.get_mut(&source_id) {
-                if let Some(link) = links.get_mut(idx) {
-                    // Remove from incoming before marking broken
-                    if let Some(inc) = self.incoming.get_mut(&link.target_id) {
-                        inc.retain(|l| !(l.source_id == source_id && l.line_number == link.line_number));
-                    }
+                if target_name == old_filename {
                     link.resolved = false;
+                    // Remove from incoming index
+                    if let Some(incoming_list) = self.incoming.get_mut(&link.target_id) {
+                        incoming_list
+                            .retain(|l| !(l.source_id == link.source_id && l.raw_link == link.raw_link));
+                    }
                 }
             }
         }
@@ -697,5 +690,68 @@ mod tests {
         // note-a's outgoing link should be marked as broken
         let out = &index.outgoing["note-a"];
         assert!(!out[0].resolved);
+    }
+
+    #[test]
+    fn test_invalidate_links_to_name() {
+        let mut index = LinkIndex::default();
+
+        // note-a links to "old-name" (which is currently resolved to note-b)
+        let link = LinkRef {
+            source_id: "note-a".to_string(),
+            target_id: "note-b".to_string(),
+            raw_link: "[[old-name]]".to_string(),
+            display_text: None,
+            line_number: 1,
+            resolved: true,
+        };
+        index.outgoing.insert("note-a".to_string(), vec![link.clone()]);
+        index.incoming.insert("note-b".to_string(), vec![link]);
+
+        // Invalidate links to "old-name" (simulating a rename from old-name to new-name)
+        index.invalidate_links_to_name("old-name");
+
+        // The outgoing link should now be broken
+        let out = &index.outgoing["note-a"];
+        assert!(!out[0].resolved, "Link to old-name should be broken after invalidation");
+
+        // The incoming entry for note-b should be cleaned up
+        let incoming = index.incoming.get("note-b");
+        assert!(
+            incoming.is_none() || incoming.unwrap().is_empty(),
+            "Incoming link should be removed after invalidation"
+        );
+    }
+
+    #[test]
+    fn test_invalidate_links_to_name_does_not_affect_other_links() {
+        let mut index = LinkIndex::default();
+
+        // note-a has two links: one to "old-name" and one to "unrelated"
+        let link1 = LinkRef {
+            source_id: "note-a".to_string(),
+            target_id: "note-b".to_string(),
+            raw_link: "[[old-name]]".to_string(),
+            display_text: None,
+            line_number: 1,
+            resolved: true,
+        };
+        let link2 = LinkRef {
+            source_id: "note-a".to_string(),
+            target_id: "note-c".to_string(),
+            raw_link: "[[unrelated]]".to_string(),
+            display_text: None,
+            line_number: 2,
+            resolved: true,
+        };
+        index.outgoing.insert("note-a".to_string(), vec![link1.clone(), link2.clone()]);
+        index.incoming.insert("note-b".to_string(), vec![link1]);
+        index.incoming.insert("note-c".to_string(), vec![link2]);
+
+        index.invalidate_links_to_name("old-name");
+
+        let out = &index.outgoing["note-a"];
+        assert!(!out[0].resolved, "Link to old-name should be broken");
+        assert!(out[1].resolved, "Link to unrelated should remain resolved");
     }
 }

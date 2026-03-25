@@ -213,6 +213,27 @@ pub(super) fn rebuild_vault_index(app: &AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Incremental index: re-index a single note instead of the entire vault.
+pub(super) fn index_single_vault_note(app: &AppHandle, path: &str) -> Result<(), String> {
+    let vault = app.state::<VaultState>();
+    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    vm.index_single_note(Path::new(path))
+        .map_err(|e| format!("Failed to index single note: {}", e))?;
+    Ok(())
+}
+
+/// Remove a deleted note from the vault index by its file path.
+pub(super) fn remove_vault_note_by_path(app: &AppHandle, path: &str) -> Result<(), String> {
+    let vault = app.state::<VaultState>();
+    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
+    let path_buf = PathBuf::from(path);
+    if let Some(note_id) = vm.registry.path_to_id.get(&path_buf).cloned() {
+        vm.link_index.remove_note(&note_id);
+        vm.registry.unregister(&note_id);
+    }
+    Ok(())
+}
+
 // ── Web search ──
 
 pub(super) async fn tool_web_search(input: &str) -> Result<serde_json::Value, String> {

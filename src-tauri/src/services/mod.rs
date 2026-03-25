@@ -5,3 +5,5 @@ pub mod cron_scheduler;
 pub mod llm_helpers;
 pub mod skill_service;
 pub mod team_orchestrator;
+pub mod team_synthesis;
+pub mod team_tasks;
