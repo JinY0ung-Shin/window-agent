@@ -1,6 +1,8 @@
+mod consolidation_ops;
 mod conversation_ops;
 pub mod import_ops;
 mod message_ops;
+mod summary_ops;
 
 use super::error::DbError;
 use super::Database;
@@ -17,5 +19,7 @@ where
 }
 
 // Re-export everything for backward compatibility
+pub use consolidation_ops::*;
 pub use conversation_ops::*;
 pub use message_ops::*;
+pub use summary_ops::*;
