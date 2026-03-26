@@ -11,6 +11,7 @@ use super::dispatcher::{execute_tool_inner, execute_tool_inner_for_agent};
 pub(crate) const TOOL_TIMEOUT: Duration = Duration::from_secs(30);
 const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const BROWSER_TOOL_TIMEOUT: Duration = Duration::from_secs(360); // 6 min: allows for Chromium install on first run
+const COMMAND_TOOL_TIMEOUT: Duration = Duration::from_secs(310); // 300s user max + 10s buffer for cleanup
 
 /// Result returned by execute_tool to the frontend.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +53,8 @@ pub async fn execute_tool(
         BROWSER_TOOL_TIMEOUT
     } else if tool_name == "http_request" {
         HTTP_REQUEST_TIMEOUT
+    } else if tool_name == "run_command" {
+        COMMAND_TOOL_TIMEOUT
     } else {
         TOOL_TIMEOUT
     };

@@ -81,6 +81,15 @@ pub(super) fn tool_self_inspect(
         })
         .collect();
 
+    // System environment info — helps the agent know which OS/shell it runs on
+    let os = std::env::consts::OS; // "linux", "windows", "macos"
+    let arch = std::env::consts::ARCH; // "x86_64", "aarch64", etc.
+    let shell = if cfg!(target_os = "windows") {
+        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+    } else {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
+    };
+
     Ok(serde_json::json!({
         "agent_id": agent_id,
         "name": agent.name,
@@ -91,6 +100,11 @@ pub(super) fn tool_self_inspect(
         "thinking_budget": agent.thinking_budget,
         "enabled_tools": enabled_tools,
         "schedules": schedules_json,
+        "system": {
+            "os": os,
+            "arch": arch,
+            "shell": shell,
+        },
     }))
 }
 

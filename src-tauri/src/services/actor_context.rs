@@ -303,6 +303,8 @@ fn resolve_tool_names(
         // Relay response — filter by user-configured allowed list.
         // If no custom list is set, defaults to read-only tools.
         ExecutionRole::RelayResponse => {
+            // Tools that must NEVER be available in relay context regardless of user config
+            const RELAY_BLOCKED_TOOLS: &[&str] = &["run_command"];
             const DEFAULT_RELAY_ALLOWED: &[&str] = &[
                 "read_file", "list_directory", "web_search",
                 "http_request", "self_inspect",
@@ -314,7 +316,10 @@ fn resolve_tool_names(
             };
             config_tools
                 .into_iter()
-                .filter(|(name, _)| allowed.contains(&name.as_str()))
+                .filter(|(name, _)| {
+                    allowed.contains(&name.as_str())
+                        && !RELAY_BLOCKED_TOOLS.contains(&name.as_str())
+                })
                 .map(|(name, _)| name)
                 .collect()
         }

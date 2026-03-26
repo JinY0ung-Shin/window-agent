@@ -15,6 +15,7 @@ use super::file_tools::{
 use super::http::tool_http_request;
 use super::scope::{resolve_scope, ScopeResolution};
 use super::self_tools::{tool_manage_schedule, tool_self_inspect};
+use super::shell_tools::tool_run_command;
 
 /// Inner dispatch — routes to the correct tool implementation.
 /// Runs inside the timeout wrapper.
@@ -294,6 +295,13 @@ pub(crate) async fn execute_tool_inner(
 
         "http_request" => tool_http_request(app, input, conversation_id, db).await,
 
+        // ── System tools ──
+        "run_command" => {
+            let workspace = super::scope::resolve_workspace_path(app, db, conversation_id)?;
+            let default_dir = workspace.to_string_lossy().to_string();
+            tool_run_command(input, &default_dir).await
+        }
+
         // ── Self-awareness tools ──
         "self_inspect" => tool_self_inspect(app, db, conversation_id),
         "manage_schedule" => tool_manage_schedule(app, db, input, conversation_id),
@@ -394,6 +402,12 @@ pub(crate) async fn execute_tool_inner_for_agent(
                 };
                 execute_file_tool_with_scope(app, tool_name, input, &resolution)
             }
+        }
+        "run_command" => {
+            let default_dir = std::env::var("HOME")
+                .or_else(|_| std::env::var("USERPROFILE"))
+                .unwrap_or_else(|_| "/tmp".to_string());
+            tool_run_command(input, &default_dir).await
         }
         t if t.starts_with("browser_") => {
             Err("Browser tools are not available in scheduled task execution.".to_string())

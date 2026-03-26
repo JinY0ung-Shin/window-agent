@@ -54,6 +54,7 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
       memory: "tools.categoryMemory",
       browser: "tools.categoryBrowser",
       self: "tools.categorySelf",
+      system: "tools.categorySystem",
     };
     return keyMap[category] ? t(keyMap[category]) : category;
   };

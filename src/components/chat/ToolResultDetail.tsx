@@ -8,6 +8,28 @@ interface ToolResultDetailProps {
 }
 
 export default function ToolResultDetail({ toolName, result, isError = false }: ToolResultDetailProps) {
+  if (toolName === "run_command") {
+    try {
+      const parsed = JSON.parse(result);
+      if (parsed && typeof parsed.exit_code === "number") {
+        const exitOk = parsed.exit_code === 0;
+        return (
+          <div className="command-result">
+            <div className={`command-exit-code ${exitOk ? "" : "command-exit-error"}`}>
+              exit: {parsed.exit_code}{parsed.truncated ? " (truncated)" : ""}
+            </div>
+            {parsed.stdout && (
+              <pre className="command-stdout">{parsed.stdout}</pre>
+            )}
+            {parsed.stderr && (
+              <pre className="command-stderr">{parsed.stderr}</pre>
+            )}
+          </div>
+        );
+      }
+    } catch { /* fall through to default */ }
+  }
+
   if (isBrowserTool(toolName)) {
     const browserResult = parseBrowserResult(result);
     if (browserResult) {

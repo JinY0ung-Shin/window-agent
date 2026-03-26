@@ -147,6 +147,42 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         },
     ];
 
+    // System tools — allow agents to execute shell commands on the host.
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+    let shell = if cfg!(target_os = "windows") {
+        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string())
+    } else {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
+    };
+    defs.push(NativeToolDef {
+        name: "run_command".into(),
+        description: format!(
+            "셸 명령을 실행하고 결과를 반환합니다. 현재 시스템: os={os}, arch={arch}, shell={shell}"
+        ),
+        category: "system".into(),
+        default_tier: "confirm".into(),
+        default_enabled: true,
+        parameters: serde_json::json!({
+            "type": "object",
+            "properties": {
+                "command": {
+                    "type": "string",
+                    "description": "실행할 셸 명령어"
+                },
+                "timeout_secs": {
+                    "type": "number",
+                    "description": "타임아웃 (초, 기본 30, 최대 300)"
+                },
+                "working_dir": {
+                    "type": "string",
+                    "description": "작업 디렉토리 (기본: 에이전트 workspace)"
+                }
+            },
+            "required": ["command"]
+        }),
+    });
+
     // Self-awareness tools — allow agents to inspect their own state and manage schedules.
     defs.push(NativeToolDef {
         name: "self_inspect".into(),

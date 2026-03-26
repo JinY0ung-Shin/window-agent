@@ -6,6 +6,7 @@ pub(crate) mod http;
 mod schema;
 mod scope;
 mod self_tools;
+mod shell_tools;
 
 // Re-export all public items to maintain backward compatibility
 pub use config::*;
