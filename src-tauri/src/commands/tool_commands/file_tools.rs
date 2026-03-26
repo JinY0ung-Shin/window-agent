@@ -203,16 +203,6 @@ pub(super) fn tool_vault_write_file(
     Ok(serde_json::json!({ "success": true, "path": validated.to_string_lossy() }))
 }
 
-// ── Vault index rebuild helper ──
-
-pub(super) fn rebuild_vault_index(app: &AppHandle) -> Result<(), String> {
-    let vault = app.state::<VaultState>();
-    let mut vm = vault.lock().map_err(|_| "Vault lock failed".to_string())?;
-    vm.rebuild_index()
-        .map_err(|e| format!("Failed to rebuild vault index: {}", e))?;
-    Ok(())
-}
-
 /// Incremental index: re-index a single note instead of the entire vault.
 pub(super) fn index_single_vault_note(app: &AppHandle, path: &str) -> Result<(), String> {
     let vault = app.state::<VaultState>();

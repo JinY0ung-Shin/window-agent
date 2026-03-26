@@ -8,7 +8,7 @@ use std::path::Path;
 use tauri::{AppHandle, Manager};
 
 use super::file_tools::{
-    index_single_vault_note, rebuild_vault_index, remove_vault_note_by_path, tool_delete_file,
+    index_single_vault_note, remove_vault_note_by_path, tool_delete_file,
     tool_list_directory, tool_list_directory_recursive, tool_read_file, tool_vault_write_file,
     tool_web_search, tool_write_file,
 };
