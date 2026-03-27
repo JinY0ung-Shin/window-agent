@@ -240,7 +240,36 @@ pub(crate) async fn execute_tool_inner(
                     let text = input["text"]
                         .as_str()
                         .ok_or("browser_type: missing 'text' parameter")?;
-                    browser.type_text(conversation_id, ref_num, text).await?
+
+                    if credential_service::contains_credential_placeholder(text) {
+                        // Credential-bearing type: resolve placeholders, allow password, skip screenshot
+                        let allowed_ids = credential_service::get_agent_allowed_credentials(app, db, conversation_id)
+                            .unwrap_or_default();
+                        let resolved = credential_service::resolve_credential_placeholders(app, text, &allowed_ids)?;
+
+                        let type_result = browser
+                            .type_text(conversation_id, ref_num, &resolved.text, true, true)
+                            .await;
+
+                        // Redact both success and error paths
+                        match type_result {
+                            Ok(mut result) => {
+                                if !resolved.credential_pairs.is_empty() {
+                                    result.snapshot = credential_service::redact_output(&result.snapshot, &resolved.credential_pairs);
+                                    result.snapshot_full = credential_service::redact_output(&result.snapshot_full, &resolved.credential_pairs);
+                                    result.url = credential_service::redact_output(&result.url, &resolved.credential_pairs);
+                                    result.title = credential_service::redact_output(&result.title, &resolved.credential_pairs);
+                                }
+                                result
+                            }
+                            Err(e) => {
+                                let redacted_err = credential_service::redact_output(&e, &resolved.credential_pairs);
+                                return Err(redacted_err);
+                            }
+                        }
+                    } else {
+                        browser.type_text(conversation_id, ref_num, text, false, false).await?
+                    }
                 }
                 "browser_wait" => {
                     let seconds = input["seconds"].as_f64().unwrap_or(2.0);

@@ -55,15 +55,19 @@ impl BrowserManager {
         self.build_tool_result(&resp)
     }
 
-    /// Type text into element by ref number
+    /// Type text into element by ref number.
+    /// `allow_password`: when true, skip the password field check (for credential injection).
+    /// `skip_screenshot`: when true, suppress screenshot capture (prevent visual credential leakage).
     pub async fn type_text(
         &self,
         conversation_id: &str,
         ref_num: u32,
         text: &str,
+        allow_password: bool,
+        skip_screenshot: bool,
     ) -> Result<BrowserToolResult, String> {
         // Check if target is password field (read-only check)
-        {
+        if !allow_password {
             let sessions = self.sessions.read().await;
             if let Some(session) = sessions.get(conversation_id) {
                 if let Some(elem) = session.last_ref_map.get(&ref_num) {
@@ -81,7 +85,12 @@ impl BrowserManager {
             .send_command(
                 "type",
                 &session_id,
-                serde_json::json!({ "ref": ref_num, "text": text }),
+                serde_json::json!({
+                    "ref": ref_num,
+                    "text": text,
+                    "allow_password": allow_password,
+                    "skip_screenshot": skip_screenshot,
+                }),
             )
             .await?;
         self.update_session_from_response(conversation_id, &resp)

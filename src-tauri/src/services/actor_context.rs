@@ -152,8 +152,10 @@ pub fn resolve_with_relay_tools(
     };
 
     // 8. Credentials section (only when run_command is enabled and agent has credentials)
-    let credentials_section = if enabled_tool_names.contains(&"run_command".to_string()) {
-        build_credentials_section(&agent_dir, app_data_dir)
+    let has_run_command = enabled_tool_names.contains(&"run_command".to_string());
+    let has_browser_type = enabled_tool_names.contains(&"browser_type".to_string());
+    let credentials_section = if has_run_command || has_browser_type {
+        build_credentials_section(&agent_dir, app_data_dir, has_run_command, has_browser_type)
     } else {
         None
     };
@@ -370,12 +372,13 @@ fn resolve_tool_names(
 
 // ── Credentials section ──────────────────────────────────
 
-/// Build the [AVAILABLE CREDENTIALS] prompt section for agents that have
-/// allowed credentials and run_command enabled.
+/// Build the [AVAILABLE CREDENTIALS] prompt section.
 /// Reads TOOL_CONFIG.json for credential IDs, and credentials_meta.json for display names.
 fn build_credentials_section(
     agent_dir: &std::path::Path,
     app_data_dir: &std::path::Path,
+    has_run_command: bool,
+    has_browser_type: bool,
 ) -> Option<String> {
     let allowed = credential_service::read_allowed_credentials_from_dir(agent_dir).ok()?;
     if allowed.is_empty() {
@@ -389,29 +392,63 @@ fn build_credentials_section(
         .and_then(|data| serde_json::from_str(&data).ok())
         .unwrap_or_default();
 
+    // Validate which IDs are safe for browser placeholder syntax
+    let is_valid_browser_id = |id: &str| -> bool {
+        !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    };
+
     let mut lines = Vec::new();
     for id in &allowed {
-        let env_name = credential_service::credential_id_to_env_var(id);
         let display_name = metas
             .iter()
             .find(|m| m.id == *id)
             .map(|m| m.name.as_str())
             .unwrap_or(id.as_str());
 
-        if cfg!(target_os = "windows") {
-            lines.push(format!("- %{}% ({})", env_name, display_name));
+        let env_var = if has_run_command {
+            let env_name = credential_service::credential_id_to_env_var(id);
+            if cfg!(target_os = "windows") {
+                Some(format!("%{}%", env_name))
+            } else {
+                Some(format!("${}", env_name))
+            }
         } else {
-            lines.push(format!("- ${} ({})", env_name, display_name));
+            None
+        };
+
+        let browser_placeholder = if has_browser_type && is_valid_browser_id(id) {
+            Some(format!("{{{{credential:{}}}}}", id))
+        } else {
+            None
+        };
+
+        let usage: Vec<String> = [env_var, browser_placeholder]
+            .into_iter()
+            .flatten()
+            .collect();
+
+        if !usage.is_empty() {
+            lines.push(format!("- {} ({}): {}", id, display_name, usage.join(", ")));
         }
     }
-    lines.sort(); // stable ordering
+    lines.sort();
+
+    let mut instructions = Vec::new();
+    if has_run_command {
+        instructions.push("Use env vars in shell commands via run_command.");
+    }
+    if has_browser_type {
+        instructions.push("Use {{credential:ID}} in browser_type text parameter for password/login fields.");
+    }
+    instructions.push("Never echo, print, or expose credential values directly.");
 
     Some(format!(
         "[AVAILABLE CREDENTIALS]\n\
-         The following credentials are available as environment variables in run_command:\n\
+         The following credentials are available:\n\
          {}\n\
-         Use them in shell commands. Never echo or print credential values directly.",
-        lines.join("\n")
+         {}",
+        lines.join("\n"),
+        instructions.join(" "),
     ))
 }
 

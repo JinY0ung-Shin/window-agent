@@ -81,11 +81,11 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         },
         NativeToolDef {
             name: "browser_type".into(),
-            description: "Type text into an input field by its reference number".into(),
+            description: "Type text into an input field by its reference number. For password/secret fields, use {{credential:ID}} to securely inject stored credentials.".into(),
             category: "browser".into(),
             default_tier: "confirm".into(),
             default_enabled: true,
-            parameters: serde_json::json!({"type":"object","properties":{"ref":{"type":"number","description":"The reference number of the input field"},"text":{"type":"string","description":"The text to type"}},"required":["ref","text"]}),
+            parameters: serde_json::json!({"type":"object","properties":{"ref":{"type":"number","description":"The reference number of the input field"},"text":{"type":"string","description":"The text to type. Use {{credential:ID}} syntax for password or secret fields — the actual value is injected securely by the backend."}},"required":["ref","text"]}),
         },
         NativeToolDef {
             name: "browser_wait".into(),

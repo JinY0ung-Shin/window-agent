@@ -484,27 +484,38 @@ export async function resolveToolConfig(agent: Agent | null): Promise<AgentToolC
         }
         agentHasCredentials = allowedIds.length > 0;
 
-        // Build credentials section if run_command is enabled and there are credentials
+        // Build credentials section if run_command or browser_type is enabled and there are credentials
         const hasRunCommand = toolDefinitions.some(t => t.name === "run_command");
-        if (agentHasCredentials && hasRunCommand) {
+        const hasBrowserType = toolDefinitions.some(t => t.name === "browser_type");
+        if (agentHasCredentials && (hasRunCommand || hasBrowserType)) {
           try {
             const allMetas = await listCredentials();
             const isWindows = navigator.platform?.startsWith("Win") ?? false;
+            const isValidBrowserId = (id: string) => /^[A-Za-z0-9_-]+$/.test(id);
             const lines = allowedIds
               .map(id => {
                 const meta = allMetas.find(m => m.id === id);
                 const displayName = meta?.name ?? id;
-                const envName = credentialIdToEnvVar(id);
-                return isWindows
-                  ? `- %${envName}% (${displayName})`
-                  : `- $${envName} (${displayName})`;
+                const parts: string[] = [];
+                if (hasRunCommand) {
+                  const envName = credentialIdToEnvVar(id);
+                  parts.push(isWindows ? `%${envName}%` : `$${envName}`);
+                }
+                if (hasBrowserType && isValidBrowserId(id)) {
+                  parts.push(`{{credential:${id}}}`);
+                }
+                return `- ${id} (${displayName}): ${parts.join(", ")}`;
               })
               .sort();
+            const instructions: string[] = [];
+            if (hasRunCommand) instructions.push("Use env vars in shell commands via run_command.");
+            if (hasBrowserType) instructions.push("Use {{credential:ID}} in browser_type text parameter for password/login fields.");
+            instructions.push("Never echo, print, or expose credential values directly.");
             credentialsSection = [
               "[AVAILABLE CREDENTIALS]",
-              "The following credentials are available as environment variables in run_command:",
+              "The following credentials are available:",
               ...lines,
-              "Use them in shell commands. Never echo or print credential values directly.",
+              instructions.join(" "),
             ].join("\n");
           } catch (e) { logger.debug("Failed to load credential metadata", e); }
         }

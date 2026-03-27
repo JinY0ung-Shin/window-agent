@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 describe("isCredentialBearingTool", () => {
-  it("returns false for non-run_command tools", () => {
+  it("returns false for non-credential tools", () => {
     expect(isCredentialBearingTool({ name: "write_file" }, true)).toBe(false);
   });
 
@@ -28,6 +28,34 @@ describe("isCredentialBearingTool", () => {
 
   it("returns false for run_command when agent has no credentials", () => {
     expect(isCredentialBearingTool({ name: "run_command" }, false)).toBe(false);
+  });
+
+  it("returns true for browser_type with credential placeholder", () => {
+    expect(isCredentialBearingTool({
+      name: "browser_type",
+      arguments: JSON.stringify({ ref: 5, text: "{{credential:github-password}}" }),
+    }, true)).toBe(true);
+  });
+
+  it("returns false for browser_type without credential placeholder", () => {
+    expect(isCredentialBearingTool({
+      name: "browser_type",
+      arguments: JSON.stringify({ ref: 5, text: "hello" }),
+    }, true)).toBe(false);
+  });
+
+  it("returns false for browser_type with malformed placeholder", () => {
+    expect(isCredentialBearingTool({
+      name: "browser_type",
+      arguments: JSON.stringify({ ref: 5, text: "{{credential:key@bad}}" }),
+    }, true)).toBe(false);
+  });
+
+  it("returns false for browser_type when agent has no credentials", () => {
+    expect(isCredentialBearingTool({
+      name: "browser_type",
+      arguments: JSON.stringify({ ref: 5, text: "{{credential:my-key}}" }),
+    }, false)).toBe(false);
   });
 });
 

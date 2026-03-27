@@ -96,6 +96,9 @@ pub fn add_credential(
     if id.is_empty() {
         return Err("Credential ID must not be empty".into());
     }
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+        return Err("Credential ID must only contain letters, numbers, hyphens, and underscores".into());
+    }
 
     let mut metas = load_all_meta(app)?;
     if metas.iter().any(|m| m.id == id) {
@@ -384,6 +387,97 @@ pub fn resolve_credential_env_entries(
     Ok(entries)
 }
 
+// ── Browser credential placeholder resolution ──
+
+/// Resolved text with credential pairs for redaction.
+pub struct ResolvedText {
+    pub text: String,
+    pub credential_pairs: Vec<(String, String)>,
+}
+
+/// Strict credential ID pattern: [A-Za-z0-9_-]+
+const CREDENTIAL_ID_CHARS: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
+
+/// Check if text contains any `{{credential:ID}}` placeholder.
+pub fn contains_credential_placeholder(text: &str) -> bool {
+    let prefix = "{{credential:";
+    let suffix = "}}";
+    let mut pos = 0;
+    while let Some(start) = text[pos..].find(prefix) {
+        let id_start = pos + start + prefix.len();
+        if id_start >= text.len() {
+            break;
+        }
+        if let Some(end) = text[id_start..].find(suffix) {
+            let id = &text[id_start..id_start + end];
+            if !id.is_empty() && id.chars().all(|c| CREDENTIAL_ID_CHARS.contains(c)) {
+                return true;
+            }
+            pos = id_start + end + suffix.len();
+        } else {
+            break;
+        }
+    }
+    false
+}
+
+/// Resolve `{{credential:ID}}` placeholders in text.
+/// Returns the resolved text and credential pairs for later redaction.
+/// Errors if a referenced credential is not in the allowed set or secret is missing.
+pub fn resolve_credential_placeholders(
+    app: &tauri::AppHandle,
+    text: &str,
+    allowed_ids: &HashSet<String>,
+) -> Result<ResolvedText, String> {
+    let prefix = "{{credential:";
+    let suffix = "}}";
+    let mut result = String::with_capacity(text.len());
+    let mut pairs = Vec::new();
+    let mut pos = 0;
+
+    while let Some(start) = text[pos..].find(prefix) {
+        let abs_start = pos + start;
+        let id_start = abs_start + prefix.len();
+        if id_start >= text.len() {
+            result.push_str(&text[pos..]);
+            break;
+        }
+        if let Some(end) = text[id_start..].find(suffix) {
+            let id = &text[id_start..id_start + end];
+            if !id.is_empty() && id.chars().all(|c| CREDENTIAL_ID_CHARS.contains(c)) {
+                if !allowed_ids.contains(id) {
+                    return Err(format!(
+                        "Agent does not have access to credential '{}'",
+                        id
+                    ));
+                }
+                let value = get_secret(app, id)?;
+                result.push_str(&text[pos..abs_start]);
+                result.push_str(&value);
+                pairs.push((id.to_string(), value));
+                pos = id_start + end + suffix.len();
+            } else {
+                // Invalid ID chars — not a valid placeholder, keep as-is
+                result.push_str(&text[pos..id_start + end + suffix.len()]);
+                pos = id_start + end + suffix.len();
+            }
+        } else {
+            // No closing }} — keep as-is
+            result.push_str(&text[pos..]);
+            pos = text.len();
+        }
+    }
+
+    if pos < text.len() {
+        result.push_str(&text[pos..]);
+    }
+
+    Ok(ResolvedText {
+        text: result,
+        credential_pairs: pairs,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -461,6 +555,56 @@ mod tests {
         let config = serde_json::json!({ "native": {} });
         let allowed = parse_allowed_credentials(&config);
         assert!(allowed.is_empty());
+    }
+
+    // ── credential ID validation ──
+
+    #[test]
+    fn test_add_credential_rejects_special_chars() {
+        // Can't test add_credential directly without AppHandle, but we can test the regex logic
+        let valid_chars = |id: &str| -> bool {
+            !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        };
+        assert!(valid_chars("github-token"));
+        assert!(valid_chars("api_key_123"));
+        assert!(!valid_chars("key with spaces"));
+        assert!(!valid_chars("key@special"));
+        assert!(!valid_chars("key}brace"));
+        assert!(!valid_chars(""));
+    }
+
+    // ── contains_credential_placeholder ──
+
+    #[test]
+    fn test_contains_placeholder_positive() {
+        assert!(contains_credential_placeholder("{{credential:github-token}}"));
+    }
+
+    #[test]
+    fn test_contains_placeholder_in_text() {
+        assert!(contains_credential_placeholder("Bearer {{credential:api-key}}"));
+    }
+
+    #[test]
+    fn test_contains_placeholder_negative() {
+        assert!(!contains_credential_placeholder("no placeholders here"));
+    }
+
+    #[test]
+    fn test_contains_placeholder_incomplete() {
+        assert!(!contains_credential_placeholder("{{credential:incomplete"));
+    }
+
+    #[test]
+    fn test_contains_placeholder_empty_id() {
+        assert!(!contains_credential_placeholder("{{credential:}}"));
+    }
+
+    #[test]
+    fn test_contains_placeholder_special_chars_in_id() {
+        // IDs with special chars should NOT match the strict pattern
+        assert!(!contains_credential_placeholder("{{credential:key@bad}}"));
+        assert!(!contains_credential_placeholder("{{credential:key with space}}"));
     }
 
     // ── redact_output ──

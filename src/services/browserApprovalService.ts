@@ -4,14 +4,23 @@ import * as cmds from "./tauriCommands";
 
 const browserApprovedDomains = new Map<string, Set<string>>();
 
+/** Strict pattern for credential placeholders: {{credential:ID}} where ID is [A-Za-z0-9_-]+ */
+const CREDENTIAL_PLACEHOLDER_RE = /\{\{credential:[A-Za-z0-9_-]+\}\}/;
+
 /** Returns true if this tool call should NOT be auto-approved because
- *  it will receive credential environment variables at execution time. */
+ *  it uses credentials (env vars for run_command, or placeholders for browser_type). */
 export function isCredentialBearingTool(
-  tc: { name: string },
+  tc: { name: string; arguments?: string },
   agentHasCredentials: boolean,
 ): boolean {
-  if (tc.name !== "run_command") return false;
-  return agentHasCredentials;
+  if (tc.name === "run_command") return agentHasCredentials;
+  if (tc.name === "browser_type" && agentHasCredentials) {
+    try {
+      const args = JSON.parse(tc.arguments ?? "{}");
+      return typeof args.text === "string" && CREDENTIAL_PLACEHOLDER_RE.test(args.text);
+    } catch { /* ignore */ }
+  }
+  return false;
 }
 
 export function extractBrowserDomain(toolName: string, toolArgs: string): string | null {

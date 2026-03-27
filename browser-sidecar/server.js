@@ -248,17 +248,19 @@ function getSession(sessionId) {
   return session;
 }
 
-async function buildResponse(page, extra = {}) {
+async function buildResponse(page, extra = {}, options = {}) {
   const { snapshotText, refMap, elementCount } = await generateSnapshot(page);
 
-  // Capture viewport screenshot as base64 PNG
+  // Capture viewport screenshot as base64 PNG (skip for credential-bearing calls)
   let screenshot = null;
-  try {
-    const buffer = await page.screenshot({ type: 'png' });
-    screenshot = buffer.toString('base64');
-  } catch (err) {
-    // Screenshot failure is non-fatal
-    log(`Screenshot failed: ${err.message}`);
+  if (!options.skipScreenshot) {
+    try {
+      const buffer = await page.screenshot({ type: 'png' });
+      screenshot = buffer.toString('base64');
+    } catch (err) {
+      // Screenshot failure is non-fatal
+      log(`Screenshot failed: ${err.message}`);
+    }
   }
 
   return {
@@ -335,7 +337,7 @@ const handlers = {
   },
 
   async type({ session_id, params }) {
-    const { ref, text } = params || {};
+    const { ref, text, allow_password, skip_screenshot } = params || {};
     if (ref === undefined || ref === null) throw new Error('params.ref is required');
     if (text === undefined || text === null) throw new Error('params.text is required');
 
@@ -343,7 +345,7 @@ const handlers = {
     const entry = session.refMap[String(ref)];
     if (!entry) throw new Error(`Ref ${ref} not found in current snapshot`);
 
-    if (entry.isPassword) {
+    if (entry.isPassword && !allow_password) {
       throw new Error('Cannot type into password fields for security reasons');
     }
 
@@ -351,7 +353,7 @@ const handlers = {
     const locator = page.locator(entry.selector);
     await locator.fill(String(text), { timeout: 5000 });
 
-    const response = await buildResponse(page);
+    const response = await buildResponse(page, {}, { skipScreenshot: !!skip_screenshot });
     session.refMap = response.ref_map;
     return response;
   },
