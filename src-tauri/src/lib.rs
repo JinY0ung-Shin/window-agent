@@ -188,6 +188,8 @@ pub fn run() {
             commands::delete_skill,
             commands::approve_browser_domain,
             commands::get_browser_artifact,
+            commands::get_browser_headless,
+            commands::set_browser_headless,
             commands::get_browser_proxy,
             commands::set_browser_proxy,
             commands::detect_system_proxy,

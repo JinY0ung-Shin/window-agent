@@ -174,6 +174,21 @@ pub async fn get_browser_artifact(
     Ok(operations::get_browser_artifact(&db, &id)?)
 }
 
+/// Get the current browser headless setting.
+#[tauri::command]
+pub async fn get_browser_headless(app: AppHandle) -> Result<bool, AppError> {
+    let browser = app.state::<crate::browser::BrowserManager>();
+    Ok(browser.get_headless().await)
+}
+
+/// Set browser headless mode.
+#[tauri::command]
+pub async fn set_browser_headless(app: AppHandle, headless: bool) -> Result<(), AppError> {
+    let browser = app.state::<crate::browser::BrowserManager>();
+    browser.set_headless(headless).await;
+    Ok(())
+}
+
 /// Get the current browser proxy server URL.
 #[tauri::command]
 pub async fn get_browser_proxy(app: AppHandle) -> Result<String, AppError> {

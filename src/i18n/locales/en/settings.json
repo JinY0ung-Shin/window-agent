@@ -24,6 +24,8 @@
     "baseUrlLabel": "Base URL (optional, vLLM / Local AI, etc.)",
     "baseUrlDefault": "{{url}} (default)",
     "proxyBypass": "Bypass proxy (if proxies like Squid block API requests)",
+    "browserHeadlessLabel": "Browser Headless Mode",
+    "browserHeadlessHint": "When enabled, the browser runs in the background without a visible window. Applies to the next browser session.",
     "browserProxyLabel": "Browser Proxy Server",
     "browserProxyPlaceholder": "e.g., http://proxy:8080 (leave empty for no proxy)",
     "browserProxyHint": "Proxy server for the browser tool. Changes apply to the next browser session.",

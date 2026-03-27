@@ -142,6 +142,33 @@ impl BrowserManager {
         *idle = Some(handle);
     }
 
+    /// Get the current browser headless setting.
+    pub async fn get_headless(&self) -> bool {
+        *self.headless.lock().await
+    }
+
+    /// Set browser headless mode and restart sidecar to apply.
+    pub async fn set_headless(&self, headless: bool) {
+        *self.headless.lock().await = headless;
+
+        // Kill existing sidecar so it restarts with new setting on next use
+        let mut sidecar = self.sidecar.lock().await;
+        if let Some(mut s) = sidecar.take() {
+            let _ = s.child.kill();
+        }
+
+        // Clear all cached sessions
+        {
+            let mut sessions = self.sessions.write().await;
+            sessions.clear();
+        }
+
+        // Persist to Tauri store
+        if let Some(ref handle) = self.app_handle {
+            super::sidecar::save_browser_headless(handle, headless);
+        }
+    }
+
     /// Get the current browser proxy server URL.
     pub async fn get_proxy_server(&self) -> String {
         self.proxy_server.lock().await.clone()

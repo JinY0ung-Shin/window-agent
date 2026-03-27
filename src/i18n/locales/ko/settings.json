@@ -24,6 +24,8 @@
     "baseUrlLabel": "Base URL (선택사항, vLLM / Local AI 등)",
     "baseUrlDefault": "{{url}} (기본값)",
     "proxyBypass": "프록시 우회 (Squid 등 프록시가 API 요청을 차단하는 경우)",
+    "browserHeadlessLabel": "브라우저 Headless 모드",
+    "browserHeadlessHint": "활성화하면 브라우저 창 없이 백그라운드에서 실행됩니다. 다음 브라우저 세션부터 적용됩니다.",
     "browserProxyLabel": "브라우저 프록시 서버",
     "browserProxyPlaceholder": "예: http://proxy:8080 (비워두면 프록시 사용 안 함)",
     "browserProxyHint": "브라우저 도구가 사용할 프록시 서버입니다. 변경 시 다음 브라우저 세션부터 적용됩니다.",

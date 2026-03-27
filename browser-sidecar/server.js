@@ -184,7 +184,8 @@ module.exports = { generateSnapshot, buildResponse, buildSelector, buildTreeFrom
 const LAUNCH_ARGS = ['--no-first-run', '--no-default-browser-check'];
 
 function getLaunchOptions(extra = {}) {
-  const opts = { headless: false, args: LAUNCH_ARGS, ...extra };
+  const headless = process.env.BROWSER_HEADLESS === '1';
+  const opts = { headless, args: LAUNCH_ARGS, ...extra };
   const proxyServer = process.env.BROWSER_PROXY_SERVER;
   if (proxyServer) {
     opts.proxy = { server: proxyServer };

@@ -27,6 +27,8 @@ pub struct BrowserManager {
     idle_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     /// Proxy server URL for browser (e.g. "http://proxy:8080"). Empty = system default.
     proxy_server: Arc<Mutex<String>>,
+    /// Whether to run the browser in headless mode (no visible window).
+    headless: Arc<Mutex<bool>>,
     pub(crate) app_data_dir: PathBuf,
     pub(crate) app_handle: Option<tauri::AppHandle>,
     pub(crate) client: Client,
@@ -85,6 +87,7 @@ impl BrowserManager {
         // Load saved proxy or detect system proxy
         let proxy = sidecar::load_browser_proxy(&app_handle)
             .unwrap_or_else(|| sidecar::detect_system_proxy().unwrap_or_default());
+        let headless = sidecar::load_browser_headless(&app_handle);
 
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),
@@ -92,6 +95,7 @@ impl BrowserManager {
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
             idle_task: Arc::new(Mutex::new(None)),
             proxy_server: Arc::new(Mutex::new(proxy)),
+            headless: Arc::new(Mutex::new(headless)),
             app_data_dir,
             app_handle,
             client: Client::builder()

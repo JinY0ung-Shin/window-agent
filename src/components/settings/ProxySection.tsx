@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { getBrowserProxy, setBrowserProxy, detectSystemProxy } from "../../services/commands/apiCommands";
+import { getBrowserProxy, setBrowserProxy, detectSystemProxy, getBrowserHeadless, setBrowserHeadless } from "../../services/commands/apiCommands";
 import { logger } from "../../services/logger";
 
 interface Props {
@@ -15,6 +15,7 @@ export default function ProxySection({ isOpen }: Props) {
   const [browserProxySaved, setBrowserProxySaved] = useState(false);
   const [browserProxyDetecting, setBrowserProxyDetecting] = useState(false);
   const [browserProxyDetectMsg, setBrowserProxyDetectMsg] = useState("");
+  const [headless, setHeadless] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -23,10 +24,32 @@ export default function ProxySection({ isOpen }: Props) {
         setBrowserProxySaved(false);
         setBrowserProxyDetectMsg("");
       }).catch((e) => logger.debug("Failed to get browser proxy", e));
+      getBrowserHeadless().then(setHeadless).catch((e) => logger.debug("Failed to get headless", e));
     }
   }, [isOpen]);
 
   return (
+    <>
+    <div className="form-group">
+      <label className="toggle-label">
+        <span>{t("general.browserHeadlessLabel")}</span>
+        <input
+          type="checkbox"
+          checked={headless}
+          onChange={async (e) => {
+            const val = e.target.checked;
+            setHeadless(val);
+            try {
+              await setBrowserHeadless(val);
+            } catch (err) {
+              logger.debug("Failed to set headless", err);
+              setHeadless(!val);
+            }
+          }}
+        />
+      </label>
+      <p className="form-text">{t("general.browserHeadlessHint")}</p>
+    </div>
     <div className="form-group">
       <label htmlFor="browserProxy">{t("general.browserProxyLabel")}</label>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -92,5 +115,6 @@ export default function ProxySection({ isOpen }: Props) {
       )}
       <p className="form-text">{t("general.browserProxyHint")}</p>
     </div>
+    </>
   );
 }

@@ -37,7 +37,15 @@ export async function setNoProxy(enabled: boolean): Promise<void> {
   return invoke("set_no_proxy", { enabled });
 }
 
-// ── Browser Proxy ──
+// ── Browser Settings ──
+
+export async function getBrowserHeadless(): Promise<boolean> {
+  return invoke("get_browser_headless");
+}
+
+export async function setBrowserHeadless(headless: boolean): Promise<void> {
+  return invoke("set_browser_headless", { headless });
+}
 
 export async function getBrowserProxy(): Promise<string> {
   return invoke("get_browser_proxy");
