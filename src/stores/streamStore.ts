@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { ActiveRun } from "../services/types";
 import * as cmds from "../services/tauriCommands";
+import { useToolRunStore } from "./toolRunStore";
 
 interface StreamState {
   /**
@@ -39,7 +40,18 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   abortStream: async () => {
     const { activeRun } = get();
     if (!activeRun) return;
+
+    // Always try to abort the backend stream
     await cmds.abortStream(activeRun.requestId);
+
+    // During tool execution the stream is already done, so the backend
+    // abort is a no-op.  Reset tool state (cancels pending approvals)
+    // and clear activeRun so the streaming loop knows to stop.
+    const toolState = useToolRunStore.getState().toolRunState;
+    if (toolState !== "idle") {
+      useToolRunStore.getState().resetToolState();
+      set({ activeRun: null });
+    }
   },
 
   // Team multi-run: add a run to runsById

@@ -404,6 +404,16 @@ export async function runToolLoop(
       iterationCount,
     });
 
+    // Check if generation was cancelled during tool execution
+    if (!useStreamStore.getState().activeRun) {
+      if (savedToolMsgs.length > 0) {
+        useMessageStore.setState({
+          messages: [...msg().messages, ...savedToolMsgs],
+        });
+      }
+      return;
+    }
+
     currentRequestId = `req-${Date.now()}`;
     const { msgId: nextMsgId, msg: nextPending } = createPendingMessage(currentRequestId);
     currentMsgId = nextMsgId;

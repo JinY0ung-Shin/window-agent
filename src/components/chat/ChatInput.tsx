@@ -15,7 +15,7 @@ export default function ChatInput() {
   const messages = useMessageStore((s) => s.messages);
   const toolRunState = useToolRunStore((s) => s.toolRunState);
   const isSending = messages.some((m) => m.status === "pending" || m.status === "streaming");
-  const isToolBusy = toolRunState === "tool_waiting" || toolRunState === "tool_running" || toolRunState === "continuing";
+  const isToolBusy = toolRunState === "tool_pending" || toolRunState === "tool_waiting" || toolRunState === "tool_running" || toolRunState === "continuing";
   const learningMode = useConversationStore((s) => s.getCurrentLearningMode());
   const toggleLearningMode = useConversationStore((s) => s.toggleLearningMode);
   const learningModeWarning = useConversationStore((s) => s.learningModeWarning);
