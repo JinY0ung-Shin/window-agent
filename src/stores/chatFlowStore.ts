@@ -310,7 +310,11 @@ async function sendNormalMessage() {
     handleStreamError(error, firstMsgId);
   }
 
-  await conv().loadConversations();
+  try {
+    await conv().loadConversations();
+  } catch (error) {
+    logger.error("Failed to reload conversations after message:", error);
+  }
 }
 
 // ── Regenerate stream flow ──────────────────────────────
@@ -410,7 +414,11 @@ async function regenerateStream(
     handleStreamError(error, msgId);
   }
 
-  await conv().loadConversations();
+  try {
+    await conv().loadConversations();
+  } catch (error) {
+    logger.error("Failed to reload conversations after regenerate:", error);
+  }
 }
 
 // ── Bootstrap message flow ─────────────────────────────

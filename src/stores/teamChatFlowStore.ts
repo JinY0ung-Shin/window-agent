@@ -85,7 +85,11 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
       return;
     }
 
-    await sendTeamMessageFlow();
+    try {
+      await sendTeamMessageFlow();
+    } catch (error) {
+      logger.error("Unhandled team message flow error:", error);
+    }
   },
 
   abortCurrentRun: async () => {
@@ -333,7 +337,9 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
           logger.debug("Failed to persist team run status", e);
         }
         stream().removeRun(run_id);
-        conv().loadConversations();
+        conv().loadConversations().catch((e) =>
+          logger.error("Failed to reload conversations:", e),
+        );
       }),
     );
 
@@ -752,7 +758,11 @@ async function sendTeamMessageFlow() {
     stream().removeRun(teamRun.id);
   }
 
-  await conv().loadConversations();
+  try {
+    await conv().loadConversations();
+  } catch (error) {
+    logger.error("Failed to reload conversations after team message:", error);
+  }
 }
 
 // streamLeaderTurn was removed: now uses streamOneTurn from chatFlowBase,
