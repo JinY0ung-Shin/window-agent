@@ -324,6 +324,22 @@ pub async fn relay_send_message(
         .map_err(|e| AppError::Relay(e.to_string()))?
         .ok_or_else(|| AppError::NotFound(format!("Contact not found: {}", contact_id)))?;
 
+    // 1b. Auto-approve pending contacts when user explicitly sends a message
+    if contact.status == "pending_approval" {
+        let update = relay_db::ContactUpdate {
+            status: Some("accepted".to_string()),
+            capabilities_json: Some(
+                serde_json::to_string(&CapabilitySet::default_phase1()).unwrap_or_default(),
+            ),
+            ..Default::default()
+        };
+        let _ = relay_db::update_contact(&db, &contact_id, update);
+        if !contact.public_key.is_empty() {
+            let _ = manager.register_peer_key(&contact.peer_id, &contact.public_key);
+        }
+        let _ = manager.add_known_peer(contact.peer_id.clone());
+    }
+
     // 2. Find or create thread
     let threads =
         relay_db::list_threads_for_contact(&db, &contact_id).map_err(|e| AppError::Relay(e.to_string()))?;

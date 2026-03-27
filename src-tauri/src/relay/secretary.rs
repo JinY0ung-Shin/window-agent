@@ -98,10 +98,20 @@ pub async fn handle_incoming_message(
         }),
     );
 
-    // 6. For accepted contacts, auto-respond using the full agent pipeline
-    if contact.status == "accepted" {
+    // 6. Auto-respond for known contacts (accepted or pending_approval).
+    // pending_approval contacts are auto-registered via Introduce from a peer
+    // who accepted our invite — they are trusted enough for auto-response.
+    let should_respond = contact.status == "accepted" || contact.status == "pending_approval";
+    let is_request = matches!(envelope.payload, Payload::MessageRequest { .. });
+    tracing::info!(
+        contact_status = %contact.status,
+        is_request,
+        should_respond,
+        "auto-response decision"
+    );
+    if should_respond {
         // Only auto-respond to MessageRequest (not MessageResponse)
-        if matches!(envelope.payload, Payload::MessageRequest { .. }) {
+        if is_request {
             // Skip if this thread already has an auto-response in progress
             {
                 let mut active = ACTIVE_THREADS.lock().unwrap();
