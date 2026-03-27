@@ -81,6 +81,14 @@ pub(super) async fn tool_run_command(
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
+        // Prevent console window from flashing on Windows
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x08000000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
+
         // Create a new process group so we can kill the entire tree on timeout
         #[cfg(unix)]
         {
