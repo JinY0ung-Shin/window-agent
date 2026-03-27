@@ -97,9 +97,11 @@
     "pendingApprovalHint": "Approve this contact before sending messages"
   },
   "directory": {
+    "title": "Peer Directory",
     "searchTab": "Find Peers",
-    "searchPlaceholder": "Search by name or ID...",
+    "searchPlaceholder": "Search by name...",
     "noResults": "No peers found",
+    "noPeers": "No peers registered yet",
     "sendRequest": "Connect",
     "requestSent": "Request Sent",
     "pendingOutgoing": "Awaiting Approval",

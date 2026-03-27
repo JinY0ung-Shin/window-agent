@@ -97,9 +97,11 @@
     "pendingApprovalHint": "메시지를 보내려면 먼저 연락처를 승인하세요"
   },
   "directory": {
+    "title": "피어 디렉토리",
     "searchTab": "피어 검색",
-    "searchPlaceholder": "이름 또는 ID로 검색...",
+    "searchPlaceholder": "이름으로 검색...",
     "noResults": "검색 결과가 없습니다",
+    "noPeers": "아직 등록된 피어가 없습니다",
     "sendRequest": "연결 요청",
     "requestSent": "요청 보냄",
     "pendingOutgoing": "승인 대기",

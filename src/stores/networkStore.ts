@@ -18,6 +18,7 @@ import {
   relaySearchDirectory,
   relaySendFriendRequest,
   relaySetDirectorySettings,
+  relayUpdateDirectoryProfile,
   type ContactRow,
   type PeerThreadRow,
   type PeerMessageRow,
@@ -147,6 +148,22 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         contacts,
         networkEnabled: true,
       });
+
+      // Register directory profile with company name (respect user's existing settings)
+      try {
+        const companyName = localStorage.getItem("company_name") || "";
+        if (companyName) {
+          const { relayGetDirectorySettings } = await import("../services/commands/relayCommands");
+          const settings = await relayGetDirectorySettings();
+          await relayUpdateDirectoryProfile(
+            companyName,
+            settings.agent_description || "",
+            settings.discoverable,
+          );
+        }
+      } catch {
+        // Non-critical — profile update can fail silently
+      }
     } catch (e) {
       set({ status: "dormant", error: toErrorMessage(e) });
       throw e;

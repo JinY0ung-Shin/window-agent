@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Network, UserPlus, RefreshCw } from "lucide-react";
+import { Network, Users, RefreshCw } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import DraggableHeader from "../layout/DraggableHeader";
 import EmptyState from "../common/EmptyState";
@@ -34,15 +34,6 @@ export default function NetworkPanel() {
         <DraggableHeader className="network-panel-header">
           <Network size={20} />
           <h2>{t("panel.title")}</h2>
-          <div className="network-panel-actions">
-            <button
-              className="icon-btn"
-              onClick={() => setShowInviteDialog(true)}
-              title={t("panel.inviteTitle")}
-            >
-              <UserPlus size={16} />
-            </button>
-          </div>
         </DraggableHeader>
         <EmptyState
           icon={<Network size={40} strokeWidth={1.5} />}
@@ -50,9 +41,6 @@ export default function NetworkPanel() {
           hint={t("panel.inactiveHint")}
           className="network-panel-empty"
         />
-        {showInviteDialog && (
-          <InviteDialog onClose={() => setShowInviteDialog(false)} />
-        )}
       </div>
     );
   }
@@ -75,9 +63,9 @@ export default function NetworkPanel() {
             <button
               className="icon-btn"
               onClick={() => setShowInviteDialog(true)}
-              title={t("panel.inviteTitle")}
+              title={t("directory.title")}
             >
-              <UserPlus size={16} />
+              <Users size={16} />
             </button>
           </div>
         </DraggableHeader>
