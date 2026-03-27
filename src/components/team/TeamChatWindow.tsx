@@ -9,8 +9,9 @@ import { useTeamRunStore } from "../../stores/teamRunStore";
 import { useTeamChatFlowStore } from "../../stores/teamChatFlowStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
-import { buildChatRenderBlocks } from "../chat/chatRenderBlocks";
+import { buildChatRenderBlocks, groupConsecutiveToolRuns } from "../chat/chatRenderBlocks";
 import ToolRunBlock from "../chat/ToolRunBlock";
+import ToolRunGroup from "../chat/ToolRunGroup";
 import ChatMessageComponent from "../chat/ChatMessage";
 import TeamChatInput from "./TeamChatInput";
 import { useDragRegion } from "../../hooks/useDragRegion";
@@ -138,7 +139,7 @@ export default function TeamChatWindow() {
           </div>
         ) : (
           <>
-            {buildChatRenderBlocks(messages, toolRunState, pendingToolCalls).map((block) => {
+            {groupConsecutiveToolRuns(buildChatRenderBlocks(messages, toolRunState, pendingToolCalls)).map((block) => {
               if (block.type === "tool_run") {
                 return (
                   <ToolRunBlock
@@ -151,6 +152,10 @@ export default function TeamChatWindow() {
                     runId={activeTeamRunId}
                   />
                 );
+              }
+              if (block.type === "tool_run_group") {
+                const firstSender = getSenderInfo(block.runs[0].assistantMessage);
+                return <ToolRunGroup key={block.key} runs={block.runs} senderInfo={firstSender} />;
               }
               if (block.type === "orphan_tool_result") {
                 return <ChatMessageComponent key={block.key} message={block.message} senderInfo={getSenderInfo(block.message)} />;

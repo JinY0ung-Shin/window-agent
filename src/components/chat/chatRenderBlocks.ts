@@ -8,6 +8,12 @@ export interface ToolRunStep {
   status: ToolCallStatus;
 }
 
+export interface ToolRunGroupRun {
+  assistantMessage: ChatMessage;
+  leadingContent: string;
+  steps: ToolRunStep[];
+}
+
 export type RenderBlock =
   | { type: "message"; key: string; message: ChatMessage }
   | {
@@ -18,6 +24,7 @@ export type RenderBlock =
       steps: ToolRunStep[];
       isActiveRun: boolean;
     }
+  | { type: "tool_run_group"; key: string; runs: ToolRunGroupRun[] }
   | { type: "orphan_tool_result"; key: string; message: ChatMessage };
 
 function isToolRunMessage(message: ChatMessage): boolean {
@@ -135,4 +142,48 @@ export function buildChatRenderBlocks(
   }
 
   return blocks;
+}
+
+function isFullyCompletedRun(block: RenderBlock & { type: "tool_run" }): boolean {
+  return !block.isActiveRun
+    && block.steps.length > 0
+    && block.steps.every((s) => s.resultMessage !== undefined);
+}
+
+/**
+ * Post-process render blocks to group consecutive fully-completed tool_run
+ * blocks into a single tool_run_group block (saves avatar + bubble overhead).
+ */
+export function groupConsecutiveToolRuns(blocks: RenderBlock[]): RenderBlock[] {
+  const result: RenderBlock[] = [];
+  let group: (RenderBlock & { type: "tool_run" })[] = [];
+
+  const flushGroup = () => {
+    if (group.length >= 2) {
+      result.push({
+        type: "tool_run_group",
+        key: `trg-${group[0].key}`,
+        runs: group.map((b) => ({
+          assistantMessage: b.assistantMessage,
+          leadingContent: b.leadingContent,
+          steps: b.steps,
+        })),
+      });
+    } else if (group.length === 1) {
+      result.push(group[0]);
+    }
+    group = [];
+  };
+
+  for (const block of blocks) {
+    if (block.type === "tool_run" && isFullyCompletedRun(block)) {
+      group.push(block);
+    } else {
+      flushGroup();
+      result.push(block);
+    }
+  }
+  flushGroup();
+
+  return result;
 }

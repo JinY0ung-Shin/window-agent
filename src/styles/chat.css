@@ -999,6 +999,92 @@
   color: var(--text-muted);
 }
 
+/* ── Tool Run Group (consecutive completed runs) ── */
+.tool-run-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tool-run-group-rounds {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-run-group-round {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.tool-run-group-round-content {
+  padding: 8px 12px 0;
+  font-size: 0.82rem;
+  color: var(--text-main);
+  line-height: 1.45;
+}
+
+.tool-run-group-round-content p {
+  margin: 0;
+}
+
+.tool-run-group-round-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.tool-run-group-round-header:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.tool-run-group-round-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: #f3f4f6;
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tool-run-group-round-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.tool-run-group-round-tools {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.tool-run-group-round-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.tool-run-group-round > .tool-run-steps {
+  padding: 0 8px 8px;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .tool-run-message,

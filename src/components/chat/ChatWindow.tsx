@@ -11,13 +11,14 @@ import ChatMessage from "./ChatMessage";
 import ChatInput from "./ChatInput";
 import SkillBar from "../skill/SkillBar";
 import ToolRunBlock from "./ToolRunBlock";
+import ToolRunGroup from "./ToolRunGroup";
 import ConversationSwitcher from "./ConversationSwitcher";
 import OnboardingAnimation from "./OnboardingAnimation";
 
 import { useNavigationStore } from "../../stores/navigationStore";
 import { useDragRegion } from "../../hooks/useDragRegion";
 import { useMessageScroll } from "../../hooks/useMessageScroll";
-import { buildChatRenderBlocks } from "./chatRenderBlocks";
+import { buildChatRenderBlocks, groupConsecutiveToolRuns } from "./chatRenderBlocks";
 
 export default function ChatWindow() {
   const messages = useMessageStore((s) => s.messages);
@@ -67,7 +68,9 @@ export default function ChatWindow() {
     ? agents.find((a) => a.id === currentAgentId) ?? null
     : null;
   const onDrag = useDragRegion();
-  const renderBlocks = buildChatRenderBlocks(messages, toolRunState, pendingToolCalls);
+  const renderBlocks = groupConsecutiveToolRuns(
+    buildChatRenderBlocks(messages, toolRunState, pendingToolCalls),
+  );
 
   return (
     <main className="main-area">
@@ -161,6 +164,10 @@ export default function ChatWindow() {
                     isActiveRun={block.isActiveRun}
                   />
                 );
+              }
+
+              if (block.type === "tool_run_group") {
+                return <ToolRunGroup key={block.key} runs={block.runs} />;
               }
 
               return <ChatMessage key={block.key} message={block.message} />;

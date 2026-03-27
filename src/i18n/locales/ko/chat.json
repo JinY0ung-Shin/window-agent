@@ -19,6 +19,7 @@
     "approve": "승인",
     "reject": "거부",
     "runSummary": "도구 {{count}}개 실행",
+    "groupSummary": "{{rounds}}회 \u00b7 도구 {{count}}개",
     "status": {
       "pending": "승인 대기",
       "approved": "승인됨",

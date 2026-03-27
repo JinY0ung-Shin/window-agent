@@ -19,6 +19,7 @@
     "approve": "Approve",
     "reject": "Deny",
     "runSummary": "{{count}} tool(s) executed",
+    "groupSummary": "{{rounds}} rounds \u00b7 {{count}} tool(s)",
     "status": {
       "pending": "Pending",
       "approved": "Approved",
