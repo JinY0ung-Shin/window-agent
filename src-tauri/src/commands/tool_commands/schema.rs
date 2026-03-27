@@ -17,43 +17,43 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
     let mut defs = vec![
         NativeToolDef {
             name: "read_file".into(),
-            description: "지정 경로의 파일 내용을 읽습니다".into(),
+            description: "Read the contents of a file at the specified path".into(),
             category: "file".into(),
             default_tier: "auto".into(),
             default_enabled: true,
-            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"파일 경로"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"}},"required":["path"]}),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"File path"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"Access scope (default: workspace)","default":"workspace"}},"required":["path"]}),
         },
         NativeToolDef {
             name: "write_file".into(),
-            description: "지정 경로에 파일을 씁니다".into(),
+            description: "Write content to a file at the specified path".into(),
             category: "file".into(),
             default_tier: "confirm".into(),
             default_enabled: true,
-            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"파일 경로"},"content":{"type":"string","description":"파일 내용"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"}},"required":["path","content"]}),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"File path"},"content":{"type":"string","description":"File content"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"Access scope (default: workspace)","default":"workspace"}},"required":["path","content"]}),
         },
         NativeToolDef {
             name: "list_directory".into(),
-            description: "디렉토리 내 파일 목록을 조회합니다".into(),
+            description: "List files in a directory".into(),
             category: "file".into(),
             default_tier: "auto".into(),
             default_enabled: true,
-            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"디렉토리 경로"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"},"recursive":{"type":"boolean","description":"하위 디렉토리 포함 여부 (기본값: false)"}},"required":["path"]}),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"Directory path"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"Access scope (default: workspace)","default":"workspace"},"recursive":{"type":"boolean","description":"Include subdirectories (default: false)"}},"required":["path"]}),
         },
         NativeToolDef {
             name: "delete_file".into(),
-            description: "지정 경로의 파일을 삭제합니다".into(),
+            description: "Delete a file at the specified path".into(),
             category: "file".into(),
             default_tier: "confirm".into(),
             default_enabled: true,
-            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"삭제할 파일 경로"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"접근 범위 (기본값: workspace)","default":"workspace"}},"required":["path"]}),
+            parameters: serde_json::json!({"type":"object","properties":{"path":{"type":"string","description":"File path to delete"},"scope":{"type":"string","enum":["workspace","persona","vault"],"description":"Access scope (default: workspace)","default":"workspace"}},"required":["path"]}),
         },
         NativeToolDef {
             name: "web_search".into(),
-            description: "URL의 웹 페이지 내용을 가져옵니다".into(),
+            description: "Fetch the contents of a web page at the given URL".into(),
             category: "web".into(),
             default_tier: "confirm".into(),
             default_enabled: true,
-            parameters: serde_json::json!({"type":"object","properties":{"url":{"type":"string","description":"가져올 URL"}},"required":["url"]}),
+            parameters: serde_json::json!({"type":"object","properties":{"url":{"type":"string","description":"URL to fetch"}},"required":["url"]}),
         },
         NativeToolDef {
             name: "browser_navigate".into(),
@@ -124,8 +124,12 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
     defs.push(NativeToolDef {
         name: "run_command".into(),
         description: format!(
-            "셸 명령을 실행하고 결과를 반환합니다. 현재 시스템: os={os}, arch={arch}, shell={shell}. \
-             에이전트에 허용된 credential은 환경변수(CRED_* 접두사)로 자동 주입됩니다."
+            "Execute a shell command and return the result. System: os={os}, arch={arch}, shell={shell}. \
+             Allowed credentials are automatically injected as environment variables (CRED_* prefix). \
+             [SSH NOTE] Always specify a remote command when using ssh (e.g. ssh host \"ls -la\"). \
+             Running ssh without a remote command opens an interactive shell that will timeout. \
+             Use -o BatchMode=yes to prevent hangs from interactive prompts (password, host key confirmation). \
+             Interactive programs (vi, top, etc.) cannot be used."
         ),
         category: "system".into(),
         default_tier: "confirm".into(),
@@ -135,15 +139,15 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "실행할 셸 명령어"
+                    "description": "Shell command to execute"
                 },
                 "timeout_secs": {
                     "type": "number",
-                    "description": "타임아웃 (초, 기본 30, 최대 300)"
+                    "description": "Timeout in seconds (default 30, max 300)"
                 },
                 "working_dir": {
                     "type": "string",
-                    "description": "작업 디렉토리 (기본: 에이전트 workspace)"
+                    "description": "Working directory (default: agent workspace)"
                 }
             },
             "required": ["command"]
@@ -153,7 +157,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
     // Self-awareness tools — allow agents to inspect their own state and manage schedules.
     defs.push(NativeToolDef {
         name: "self_inspect".into(),
-        description: "자신의 설정, 활성화된 도구(대화 모드 기준), 예약된 작업 등 에이전트 상태를 조회합니다".into(),
+        description: "Inspect the agent's own state: settings, enabled tools (conversation mode), and scheduled jobs".into(),
         category: "self".into(),
         default_tier: "auto".into(),
         default_enabled: true,
@@ -162,7 +166,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
 
     defs.push(NativeToolDef {
         name: "manage_schedule".into(),
-        description: "자신의 예약 작업(크론 잡)을 관리합니다: 조회, 생성, 수정, 삭제, 활성화/비활성화. 예약된 작업은 에이전트의 도구를 사용할 수 있습니다 (브라우저 제외).".into(),
+        description: "Manage the agent's scheduled jobs (cron): list, create, update, delete, toggle. Scheduled jobs can use the agent's tools (except browser).".into(),
         category: "self".into(),
         default_tier: "confirm".into(),
         default_enabled: true,
@@ -172,36 +176,36 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
                 "action": {
                     "type": "string",
                     "enum": ["list", "create", "update", "delete", "toggle"],
-                    "description": "수행할 작업"
+                    "description": "Action to perform"
                 },
                 "job_id": {
                     "type": "string",
-                    "description": "대상 크론 잡 ID (update/delete/toggle 시 필수)"
+                    "description": "Target cron job ID (required for update/delete/toggle)"
                 },
                 "name": {
                     "type": "string",
-                    "description": "크론 잡 이름 (create 시 필수)"
+                    "description": "Cron job name (required for create)"
                 },
                 "description": {
                     "type": "string",
-                    "description": "크론 잡 설명"
+                    "description": "Cron job description"
                 },
                 "schedule_type": {
                     "type": "string",
                     "enum": ["at", "every", "cron"],
-                    "description": "스케줄 유형 (create 시 필수)"
+                    "description": "Schedule type (required for create)"
                 },
                 "schedule_value": {
                     "type": "string",
-                    "description": "스케줄 값 (create 시 필수). at: RFC3339 타임스탬프 (예: 2026-04-01T09:00:00+09:00), every: 초 단위 정수 (최소 60, 예: 3600), cron: 5필드 cron 표현식 (예: 0 9 * * 1-5)"
+                    "description": "Schedule value (required for create). at: RFC3339 timestamp (e.g. 2026-04-01T09:00:00+09:00), every: interval in seconds (min 60, e.g. 3600), cron: 5-field cron expression (e.g. 0 9 * * 1-5)"
                 },
                 "prompt": {
                     "type": "string",
-                    "description": "실행 시 사용할 프롬프트 (create 시 필수)"
+                    "description": "Prompt to use when executing (required for create)"
                 },
                 "enabled": {
                     "type": "boolean",
-                    "description": "활성화 여부 (toggle 시 필수)"
+                    "description": "Whether to enable or disable (required for toggle)"
                 }
             },
             "required": ["action"]
@@ -212,7 +216,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
     // they are intercepted by the frontend/orchestrator layer.
     defs.push(NativeToolDef {
         name: "delegate".into(),
-        description: "팀 멤버들에게 작업을 위임합니다 (팀 리더 전용)".into(),
+        description: "Delegate tasks to team members (team leader only)".into(),
         category: "orchestration".into(),
         default_tier: "auto".into(),
         default_enabled: false,
@@ -222,15 +226,15 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
                 "agents": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "작업을 위임할 에이전트 ID 목록"
+                    "description": "List of agent IDs to delegate to"
                 },
                 "task": {
                     "type": "string",
-                    "description": "위임할 작업 설명"
+                    "description": "Task description to delegate"
                 },
                 "context": {
                     "type": "string",
-                    "description": "추가 컨텍스트 정보 (선택)"
+                    "description": "Additional context (optional)"
                 }
             },
             "required": ["agents", "task"]
@@ -239,7 +243,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
 
     defs.push(NativeToolDef {
         name: "report".into(),
-        description: "팀 리더에게 작업 결과를 보고합니다 (팀 멤버 전용)".into(),
+        description: "Report task results to the team leader (team member only)".into(),
         category: "orchestration".into(),
         default_tier: "auto".into(),
         default_enabled: false,
@@ -248,11 +252,11 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             "properties": {
                 "summary": {
                     "type": "string",
-                    "description": "작업 결과 요약"
+                    "description": "Summary of task results"
                 },
                 "details": {
                     "type": "string",
-                    "description": "상세 설명 (선택)"
+                    "description": "Detailed description (optional)"
                 }
             },
             "required": ["summary"]
