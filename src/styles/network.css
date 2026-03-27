@@ -741,3 +741,154 @@
 .contact-detail-actions .btn-primary:hover {
   background: var(--primary-hover);
 }
+
+/* ── Directory search ── */
+
+.search-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-wrap .search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search-input-wrap input {
+  width: 100%;
+  padding: 10px 12px 10px 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  outline: none;
+  background: var(--surface);
+  color: var(--text-main);
+  transition: border-color 0.2s;
+}
+
+.search-input-wrap input:focus {
+  border-color: var(--primary);
+}
+
+.directory-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.directory-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  padding: 24px 0;
+}
+
+.directory-peer-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  gap: 10px;
+}
+
+.directory-peer-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.directory-peer-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.directory-peer-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.directory-peer-id {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.directory-peer-action {
+  flex-shrink: 0;
+}
+
+.directory-badge {
+  font-size: 0.6875rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.directory-badge.known {
+  background: var(--success-bg, rgba(52, 199, 89, 0.12));
+  color: var(--success, #34c759);
+}
+
+.directory-badge.sent {
+  background: var(--warning-bg, rgba(255, 159, 10, 0.12));
+  color: var(--warning, #ff9f0a);
+}
+
+.btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: none;
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-sm.btn-primary {
+  background: var(--primary);
+  color: white;
+}
+
+.btn-sm.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-sm.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.contact-item-badge {
+  font-size: 0.6875rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.contact-item-badge.pending-outgoing {
+  background: var(--warning-bg, rgba(255, 159, 10, 0.12));
+  color: var(--warning, #ff9f0a);
+}
+
+.contact-item-badge.pending-approval {
+  background: var(--info-bg, rgba(48, 176, 199, 0.12));
+  color: var(--info, #30b0c7);
+}

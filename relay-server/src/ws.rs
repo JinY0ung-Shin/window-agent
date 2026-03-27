@@ -71,7 +71,10 @@ pub async fn handle_socket(socket: WebSocket, state: AppState) {
         drop(old_tx);
     }
 
-    // ── Step 4: Notify presence subscribers that this peer is online ──
+    // ── Step 4: Update last_seen in directory ──
+    let _ = db::update_last_seen(state.db(), &peer_id).await;
+
+    // ── Step 5: Notify presence subscribers that this peer is online ──
     notify_presence(&state, &peer_id, PresenceStatus::Online).await;
 
     // ── Step 5: Drain offline queue ──
@@ -276,6 +279,26 @@ async fn handle_client_message(
         ClientMessage::SubscribePresence { peer_ids } => {
             handle_subscribe_presence(state, sender_peer_id, sender_tx, peer_ids).await;
         }
+
+        ClientMessage::UpdateProfile {
+            agent_name,
+            agent_description,
+            discoverable,
+        } => {
+            handle_update_profile(state, sender_peer_id, sender_tx, &agent_name, &agent_description, discoverable).await;
+        }
+
+        ClientMessage::SearchDirectory {
+            query,
+            limit,
+            offset,
+        } => {
+            handle_search_directory(state, sender_peer_id, sender_tx, &query, limit, offset).await;
+        }
+
+        ClientMessage::GetPeerProfile { peer_id } => {
+            handle_get_peer_profile(state, sender_peer_id, sender_tx, &peer_id).await;
+        }
     }
 }
 
@@ -415,6 +438,138 @@ async fn notify_presence(state: &AppState, peer_id: &str, status: PresenceStatus
     for sub_id in subscribers {
         if let Some(sub_tx) = state.get_sender(&sub_id).await {
             send_msg(&sub_tx, &msg);
+        }
+    }
+}
+
+/// Handle UpdateProfile: upsert the peer's directory entry.
+async fn handle_update_profile(
+    state: &AppState,
+    peer_id: &str,
+    tx: &WsSender,
+    agent_name: &str,
+    agent_description: &str,
+    discoverable: bool,
+) {
+    // Get the peer's public key (already registered during auth).
+    let public_key = match state.get_known_key(peer_id).await {
+        Some(k) => B64.encode(&k),
+        None => {
+            send_msg(tx, &ServerMessage::Error {
+                code: "internal_error".into(),
+                message: "Public key not found for authenticated peer".into(),
+            });
+            return;
+        }
+    };
+
+    if let Err(e) = db::upsert_profile(
+        state.db(),
+        peer_id,
+        &public_key,
+        agent_name,
+        agent_description,
+        discoverable,
+    ).await {
+        warn!(error = %e, "Failed to upsert profile");
+        send_msg(tx, &ServerMessage::Error {
+            code: "db_error".into(),
+            message: "Failed to update profile".into(),
+        });
+        return;
+    }
+
+    send_msg(tx, &ServerMessage::ProfileUpdated { discoverable });
+}
+
+/// Handle SearchDirectory: search discoverable peers.
+async fn handle_search_directory(
+    state: &AppState,
+    sender_peer_id: &str,
+    tx: &WsSender,
+    query: &str,
+    limit: u32,
+    offset: u32,
+) {
+    // Rate limiting.
+    if state.check_search_rate(sender_peer_id).await {
+        send_msg(tx, &ServerMessage::Error {
+            code: "rate_limited".into(),
+            message: "Too many search requests. Try again later.".into(),
+        });
+        return;
+    }
+
+    let capped_limit = limit.min(50);
+
+    match db::search_directory(state.db(), query, capped_limit, offset).await {
+        Ok(result) => {
+            let peers: Vec<DirectoryPeer> = {
+                let mut v = Vec::with_capacity(result.rows.len());
+                for row in result.rows {
+                    // Skip self from results.
+                    if row.peer_id == sender_peer_id {
+                        continue;
+                    }
+                    let is_online = state.is_online(&row.peer_id).await;
+                    v.push(DirectoryPeer {
+                        peer_id: row.peer_id,
+                        public_key: row.public_key,
+                        agent_name: row.agent_name,
+                        agent_description: row.agent_description,
+                        is_online,
+                        last_seen: Some(row.last_seen),
+                    });
+                }
+                v
+            };
+            send_msg(tx, &ServerMessage::DirectoryResult {
+                query: query.to_string(),
+                peers,
+                total: result.total,
+                offset,
+            });
+        }
+        Err(e) => {
+            warn!(error = %e, "Directory search failed");
+            send_msg(tx, &ServerMessage::Error {
+                code: "db_error".into(),
+                message: "Directory search failed".into(),
+            });
+        }
+    }
+}
+
+/// Handle GetPeerProfile: return a single peer's directory entry.
+async fn handle_get_peer_profile(
+    state: &AppState,
+    _sender_peer_id: &str,
+    tx: &WsSender,
+    peer_id: &str,
+) {
+    match db::get_peer_from_directory(state.db(), peer_id).await {
+        Ok(Some(row)) => {
+            let is_online = state.is_online(&row.peer_id).await;
+            send_msg(tx, &ServerMessage::PeerProfileResult {
+                peer: Some(DirectoryPeer {
+                    peer_id: row.peer_id,
+                    public_key: row.public_key,
+                    agent_name: row.agent_name,
+                    agent_description: row.agent_description,
+                    is_online,
+                    last_seen: Some(row.last_seen),
+                }),
+            });
+        }
+        Ok(None) => {
+            send_msg(tx, &ServerMessage::PeerProfileResult { peer: None });
+        }
+        Err(e) => {
+            warn!(error = %e, "Get peer profile failed");
+            send_msg(tx, &ServerMessage::Error {
+                code: "db_error".into(),
+                message: "Failed to get peer profile".into(),
+            });
         }
     }
 }

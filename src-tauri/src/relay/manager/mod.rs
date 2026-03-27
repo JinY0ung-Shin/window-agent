@@ -302,6 +302,205 @@ impl RelayManager {
         Ok(encrypted)
     }
 
+    // ── Directory ──
+
+    /// Auto-register profile on the relay server directory after connecting.
+    fn auto_register_profile(&self, app_handle: &tauri::AppHandle, handle: &RelayHandle) {
+        use tauri_plugin_store::StoreExt;
+        let store = app_handle.store("relay-settings.json").ok();
+        let discoverable = store.as_ref()
+            .and_then(|s| s.get("discoverable"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+        let agent_name = store.as_ref()
+            .and_then(|s| s.get("directory_agent_name"))
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+        let agent_description = store.as_ref()
+            .and_then(|s| s.get("directory_agent_description"))
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_default();
+
+        let _ = handle.update_profile(agent_name, agent_description, discoverable);
+    }
+
+    /// Update directory profile on the relay server.
+    pub fn update_directory_profile(
+        &self,
+        agent_name: &str,
+        agent_description: &str,
+        discoverable: bool,
+    ) -> Result<(), RelayError> {
+        let handle = self.relay_handle.lock().map_err(|_| lock_err())?
+            .clone().ok_or(RelayError::NotActive)?;
+        handle.update_profile(agent_name.to_string(), agent_description.to_string(), discoverable)
+            .map_err(|e| RelayError::Transport(e.to_string()))
+    }
+
+    /// Search peers in the relay server directory.
+    pub fn search_directory(
+        &self,
+        query: &str,
+        limit: u32,
+        offset: u32,
+    ) -> Result<(), RelayError> {
+        let handle = self.relay_handle.lock().map_err(|_| lock_err())?
+            .clone().ok_or(RelayError::NotActive)?;
+        handle.search_directory(query.to_string(), limit, offset)
+            .map_err(|e| RelayError::Transport(e.to_string()))
+    }
+
+    /// Send a friend request (Introduce) to a peer from the directory.
+    /// Creates a local contact with "pending_outgoing" status.
+    pub async fn send_friend_request(
+        &self,
+        app_handle: &tauri::AppHandle,
+        target_peer_id: &str,
+        target_public_key_b64: &str,
+        target_agent_name: &str,
+        target_agent_description: &str,
+        local_agent_id: Option<&str>,
+    ) -> Result<relay_db::ContactRow, RelayError> {
+        let db = app_handle.state::<crate::db::Database>();
+
+        // Check if contact already exists
+        if let Ok(Some(existing)) = relay_db::get_contact_by_peer_id(&db, target_peer_id) {
+            return Ok(existing);
+        }
+
+        // Register peer key (indexed by peer_id, not contact UUID)
+        let contact_id = uuid::Uuid::new_v4().to_string();
+        self.register_peer_key(target_peer_id, target_public_key_b64)?;
+
+        // Create contact with pending_outgoing status
+        let now = chrono::Utc::now().to_rfc3339();
+        let contact = relay_db::ContactRow {
+            id: contact_id.clone(),
+            peer_id: target_peer_id.to_string(),
+            public_key: target_public_key_b64.to_string(),
+            display_name: if target_agent_name.is_empty() {
+                format!("Peer {}", &target_peer_id[..8.min(target_peer_id.len())])
+            } else {
+                target_agent_name.to_string()
+            },
+            agent_name: target_agent_name.to_string(),
+            agent_description: target_agent_description.to_string(),
+            local_agent_id: local_agent_id.map(String::from),
+            mode: "secretary".to_string(),
+            capabilities_json: serde_json::to_string(
+                &super::capability::CapabilitySet::deny_all(),
+            ).unwrap_or_else(|_| "{}".into()),
+            status: "pending_outgoing".to_string(),
+            invite_card_raw: None,
+            addresses_json: None,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+
+        relay_db::insert_contact(&db, &contact)
+            .map_err(|e| RelayError::Transport(e.to_string()))?;
+
+        // Build and send Introduce envelope
+        let my_public_b64 = B64.encode(self.identity.public_key_bytes());
+        let my_agent_name = {
+            use tauri_plugin_store::StoreExt;
+            app_handle.store("relay-settings.json").ok()
+                .and_then(|s| s.get("directory_agent_name"))
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_else(|| "Agent".to_string())
+        };
+
+        let introduce_envelope = Envelope {
+            version: 1,
+            message_id: uuid::Uuid::new_v4().to_string(),
+            correlation_id: None,
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            sender_agent: my_agent_name.clone(),
+            payload: Payload::Introduce {
+                agent_name: my_agent_name,
+                agent_description: String::new(),
+                public_key: my_public_b64,
+            },
+        };
+
+        // Encrypt and send (use target_peer_id for peer_keys lookup, not contact UUID)
+        let msg_id = uuid::Uuid::new_v4().to_string();
+        let now_msg = chrono::Utc::now().to_rfc3339();
+
+        match self.send_message(target_peer_id, &introduce_envelope).await {
+            Ok(encrypted_json) => {
+                // Save outgoing message
+                let msg = relay_db::PeerMessageRow {
+                    id: msg_id.clone(),
+                    thread_id: String::new(),
+                    message_id_unique: introduce_envelope.message_id.clone(),
+                    correlation_id: None,
+                    direction: "outgoing".to_string(),
+                    sender_agent: introduce_envelope.sender_agent.clone(),
+                    content: "[Introduce]".to_string(),
+                    approval_state: "approved".to_string(),
+                    delivery_state: "sending".to_string(),
+                    retry_count: 0,
+                    raw_envelope: Some(encrypted_json),
+                    created_at: now_msg.clone(),
+                };
+                let _ = relay_db::insert_peer_message(&db, &msg);
+
+                // Create outbox entry for retry on failure
+                let outbox = relay_db::OutboxRow {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    peer_message_id: msg_id,
+                    target_peer_id: target_peer_id.to_string(),
+                    attempts: 0,
+                    next_retry_at: None,
+                    status: "sending".to_string(),
+                    created_at: now_msg,
+                };
+                let _ = relay_db::insert_outbox(&db, &outbox);
+            }
+            Err(e) => {
+                tracing::warn!("failed to send friend request Introduce: {e}");
+                // Save message as queued with outbox for retry
+                let encrypted = self.encrypt_for_peer(target_peer_id, &introduce_envelope).ok();
+                let msg = relay_db::PeerMessageRow {
+                    id: msg_id.clone(),
+                    thread_id: String::new(),
+                    message_id_unique: introduce_envelope.message_id.clone(),
+                    correlation_id: None,
+                    direction: "outgoing".to_string(),
+                    sender_agent: introduce_envelope.sender_agent.clone(),
+                    content: "[Introduce]".to_string(),
+                    approval_state: "approved".to_string(),
+                    delivery_state: "queued".to_string(),
+                    retry_count: 0,
+                    raw_envelope: encrypted,
+                    created_at: now_msg.clone(),
+                };
+                let _ = relay_db::insert_peer_message(&db, &msg);
+                let outbox = relay_db::OutboxRow {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    peer_message_id: msg_id,
+                    target_peer_id: target_peer_id.to_string(),
+                    attempts: 1,
+                    next_retry_at: Some((chrono::Utc::now() + chrono::Duration::seconds(30)).to_rfc3339()),
+                    status: "pending".to_string(),
+                    created_at: now_msg,
+                };
+                let _ = relay_db::insert_outbox(&db, &outbox);
+                tracing::info!("friend request queued for retry: {e}");
+            }
+        }
+
+        // Subscribe to presence (use target_peer_id, not contact UUID)
+        if let Some(h) = self.relay_handle.lock().ok().and_then(|h| h.clone()) {
+            if let Ok(relay_pid) = self.peer_id_to_relay_id(target_peer_id) {
+                let _ = h.subscribe_presence(vec![relay_pid]);
+            }
+        }
+
+        Ok(contact)
+    }
+
     // ── Internal: peer index ──
 
     fn rebuild_peer_index(&self, app_handle: &tauri::AppHandle) -> Result<(), RelayError> {
@@ -458,6 +657,8 @@ impl RelayManager {
                         if !relay_ids.is_empty() {
                             let _ = h.subscribe_presence(relay_ids);
                         }
+                        // Auto-register directory profile
+                        self.auto_register_profile(app_handle, &h);
                     }
                     // Retry pending outbox on reconnect (includes any pending Introduce messages)
                     self.process_pending_outbox_internal(app_handle).await;
@@ -490,8 +691,30 @@ impl RelayManager {
                         break;
                     }
                 }
+                RelayEvent::ProfileUpdated { discoverable } => {
+                    let _ = app_handle.emit("relay:profile-updated", serde_json::json!({
+                        "discoverable": discoverable,
+                    }));
+                }
+                RelayEvent::DirectoryResult { query, peers, total, offset } => {
+                    let _ = app_handle.emit("relay:directory-result", serde_json::json!({
+                        "query": query,
+                        "peers": peers,
+                        "total": total,
+                        "offset": offset,
+                    }));
+                }
+                RelayEvent::PeerProfileResult { peer } => {
+                    let _ = app_handle.emit("relay:peer-profile", serde_json::json!({
+                        "peer": peer,
+                    }));
+                }
                 RelayEvent::Error { code, message } => {
-                    tracing::warn!(code, message, "relay error");
+                    tracing::warn!(code = %code, message = %message, "relay error");
+                    let _ = app_handle.emit("relay:error", serde_json::json!({
+                        "code": code,
+                        "message": message,
+                    }));
                 }
             }
         }
@@ -564,8 +787,26 @@ impl RelayManager {
 
         let contact_peer_id = db_peer_id.unwrap();
 
-        // Gracefully ignore Introduce from already-known peers (idempotent)
+        // Introduce from already-known peer: if we sent a friend request (pending_outgoing),
+        // auto-transition to accepted.
         if matches!(envelope.payload, Payload::Introduce { .. }) {
+            if let Ok(Some(contact)) = relay_db::get_contact_by_peer_id(&db, &contact_peer_id) {
+                if contact.status == "pending_outgoing" {
+                    let _ = relay_db::update_contact(&db, &contact.id, relay_db::ContactUpdate {
+                        status: Some("accepted".to_string()),
+                        capabilities_json: Some(
+                            serde_json::to_string(&super::capability::CapabilitySet::default_phase1())
+                                .unwrap_or_else(|_| "{}".into()),
+                        ),
+                        ..Default::default()
+                    });
+                    let _ = app_handle.emit("relay:contact-accepted", serde_json::json!({
+                        "contact_id": contact.id,
+                        "peer_id": contact_peer_id,
+                    }));
+                    tracing::info!(peer_id = %contact_peer_id, "friend request accepted (pending_outgoing → accepted)");
+                }
+            }
             if let Some(h) = self.relay_handle.lock().ok().and_then(|h| h.clone()) {
                 let _ = h.send_peer_ack(&encrypted.header.message_id, sender_relay_peer_id);
             }

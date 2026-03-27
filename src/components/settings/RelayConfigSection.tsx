@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { relayGetRelayUrl, relaySetRelayUrl } from "../../services/commands/relayCommands";
+import { relayGetRelayUrl, relaySetRelayUrl, relayGetDirectorySettings, relaySetDirectorySettings } from "../../services/commands/relayCommands";
 import { toErrorMessage } from "../../utils/errorUtils";
 
 interface Props {
@@ -15,6 +15,7 @@ export default function RelayConfigSection({ isOpen }: Props) {
   const [relaySaving, setRelaySaving] = useState(false);
   const [relaySaved, setRelaySaved] = useState(false);
   const [relayError, setRelayError] = useState("");
+  const [discoverable, setDiscoverable] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
@@ -22,6 +23,9 @@ export default function RelayConfigSection({ isOpen }: Props) {
         setTempRelayUrl(url);
         setRelaySaved(false);
         setRelayError("");
+      }).catch(() => {});
+      relayGetDirectorySettings().then((settings) => {
+        setDiscoverable(settings.discoverable);
       }).catch(() => {});
     }
   }, [isOpen]);
@@ -77,6 +81,25 @@ export default function RelayConfigSection({ isOpen }: Props) {
       <p className="form-text">
         {tn("relay.hint")}
       </p>
+
+      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="checkbox"
+          id="discoverable"
+          checked={discoverable}
+          onChange={async (e) => {
+            const val = e.target.checked;
+            setDiscoverable(val);
+            try {
+              await relaySetDirectorySettings(val);
+            } catch { /* ignore */ }
+          }}
+        />
+        <label htmlFor="discoverable" style={{ margin: 0 }}>
+          {tn("directory.discoverableLabel")}
+        </label>
+      </div>
+      <p className="form-text">{tn("directory.discoverableHint")}</p>
     </div>
   );
 }

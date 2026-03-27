@@ -119,6 +119,73 @@ export async function relaySetRelayUrl(url: string): Promise<void> {
   return invoke("relay_set_relay_url", { url });
 }
 
+// ── Directory ──
+
+export interface DirectoryPeer {
+  peer_id: string;
+  public_key: string;
+  agent_name: string;
+  agent_description: string;
+  is_online: boolean;
+  last_seen: string | null;
+}
+
+export async function relaySearchDirectory(
+  query: string,
+  limit?: number,
+  offset?: number,
+): Promise<void> {
+  return invoke("relay_search_directory", {
+    query,
+    limit: limit ?? null,
+    offset: offset ?? null,
+  });
+}
+
+export async function relaySendFriendRequest(
+  targetPeerId: string,
+  targetPublicKey: string,
+  targetAgentName: string,
+  targetAgentDescription: string,
+  localAgentId?: string,
+): Promise<ContactRow> {
+  return invoke("relay_send_friend_request", {
+    targetPeerId,
+    targetPublicKey,
+    targetAgentName,
+    targetAgentDescription,
+    localAgentId: localAgentId ?? null,
+  });
+}
+
+export async function relayUpdateDirectoryProfile(
+  agentName: string,
+  agentDescription: string,
+  discoverable: boolean,
+): Promise<void> {
+  return invoke("relay_update_directory_profile", {
+    agentName,
+    agentDescription,
+    discoverable,
+  });
+}
+
+export interface DirectorySettings {
+  discoverable: boolean;
+  agent_name: string;
+  agent_description: string;
+}
+
+export async function relayGetDirectorySettings(): Promise<DirectorySettings> {
+  return invoke("relay_get_directory_settings");
+}
+
+export async function relaySetDirectorySettings(
+  discoverable: boolean,
+): Promise<void> {
+  return invoke("relay_set_directory_settings", { discoverable });
+}
+
 // ── Threads ──
 
 export async function relayListThreads(

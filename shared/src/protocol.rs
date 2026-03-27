@@ -46,6 +46,21 @@ pub enum ServerMessage {
     PresenceSnapshot {
         peers: Vec<PeerPresenceInfo>,
     },
+    /// Profile update acknowledged
+    ProfileUpdated {
+        discoverable: bool,
+    },
+    /// Directory search results
+    DirectoryResult {
+        query: String,
+        peers: Vec<DirectoryPeer>,
+        total: u64,
+        offset: u32,
+    },
+    /// Single peer profile response
+    PeerProfileResult {
+        peer: Option<DirectoryPeer>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +81,18 @@ pub enum PresenceStatus {
 pub struct PeerPresenceInfo {
     pub peer_id: String,
     pub status: PresenceStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_seen: Option<String>,
+}
+
+/// A peer entry from the server directory.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DirectoryPeer {
+    pub peer_id: String,
+    pub public_key: String,
+    pub agent_name: String,
+    pub agent_description: String,
+    pub is_online: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_seen: Option<String>,
 }
@@ -94,5 +121,21 @@ pub enum ClientMessage {
     /// Subscribe to presence updates for specific peers
     SubscribePresence {
         peer_ids: Vec<String>,
+    },
+    /// Register/update profile in the server directory
+    UpdateProfile {
+        agent_name: String,
+        agent_description: String,
+        discoverable: bool,
+    },
+    /// Search peers in the directory
+    SearchDirectory {
+        query: String,
+        limit: u32,
+        offset: u32,
+    },
+    /// Get a specific peer's profile
+    GetPeerProfile {
+        peer_id: String,
     },
 }

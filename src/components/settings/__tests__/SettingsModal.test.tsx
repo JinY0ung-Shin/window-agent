@@ -24,6 +24,8 @@ vi.mock("../../../services/commands/relayCommands", () => ({
   relaySetRelayUrl: vi.fn().mockResolvedValue(undefined),
   relayGetAllowedTools: vi.fn().mockResolvedValue([]),
   relaySetAllowedTools: vi.fn().mockResolvedValue(undefined),
+  relayGetDirectorySettings: vi.fn().mockResolvedValue({ discoverable: true, agent_name: "", agent_description: "" }),
+  relaySetDirectorySettings: vi.fn().mockResolvedValue(undefined),
 }));
 
 const initialSettings = useSettingsStore.getState();

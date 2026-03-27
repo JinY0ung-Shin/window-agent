@@ -53,6 +53,18 @@ pub enum RelayEvent {
         code: String,
         message: String,
     },
+    ProfileUpdated {
+        discoverable: bool,
+    },
+    DirectoryResult {
+        query: String,
+        peers: Vec<DirectoryPeer>,
+        total: u64,
+        offset: u32,
+    },
+    PeerProfileResult {
+        peer: Option<DirectoryPeer>,
+    },
 }
 
 // ── Commands ──
@@ -68,6 +80,19 @@ enum Command {
     },
     SubscribePresence {
         peer_ids: Vec<String>,
+    },
+    UpdateProfile {
+        agent_name: String,
+        agent_description: String,
+        discoverable: bool,
+    },
+    SearchDirectory {
+        query: String,
+        limit: u32,
+        offset: u32,
+    },
+    GetPeerProfile {
+        peer_id: String,
     },
     Shutdown,
 }
@@ -115,6 +140,42 @@ impl RelayHandle {
     pub fn subscribe_presence(&self, peer_ids: Vec<String>) -> Result<(), RelayClientError> {
         self.cmd_tx
             .send(Command::SubscribePresence { peer_ids })
+            .map_err(|_| RelayClientError::Closed)
+    }
+
+    pub fn update_profile(
+        &self,
+        agent_name: String,
+        agent_description: String,
+        discoverable: bool,
+    ) -> Result<(), RelayClientError> {
+        self.cmd_tx
+            .send(Command::UpdateProfile {
+                agent_name,
+                agent_description,
+                discoverable,
+            })
+            .map_err(|_| RelayClientError::Closed)
+    }
+
+    pub fn search_directory(
+        &self,
+        query: String,
+        limit: u32,
+        offset: u32,
+    ) -> Result<(), RelayClientError> {
+        self.cmd_tx
+            .send(Command::SearchDirectory {
+                query,
+                limit,
+                offset,
+            })
+            .map_err(|_| RelayClientError::Closed)
+    }
+
+    pub fn get_peer_profile(&self, peer_id: String) -> Result<(), RelayClientError> {
+        self.cmd_tx
+            .send(Command::GetPeerProfile { peer_id })
             .map_err(|_| RelayClientError::Closed)
     }
 
@@ -399,6 +460,21 @@ fn dispatch_server_message(text: &str, event_tx: &mpsc::UnboundedSender<RelayEve
         },
         ServerMessage::PresenceSnapshot { peers } => RelayEvent::PresenceSnapshot { peers },
         ServerMessage::Error { code, message } => RelayEvent::Error { code, message },
+        ServerMessage::ProfileUpdated { discoverable } => {
+            RelayEvent::ProfileUpdated { discoverable }
+        }
+        ServerMessage::DirectoryResult {
+            query,
+            peers,
+            total,
+            offset,
+        } => RelayEvent::DirectoryResult {
+            query,
+            peers,
+            total,
+            offset,
+        },
+        ServerMessage::PeerProfileResult { peer } => RelayEvent::PeerProfileResult { peer },
         ServerMessage::Challenge { .. } | ServerMessage::AuthOk { .. } => return,
     };
 
@@ -427,6 +503,25 @@ where
             sender_peer_id,
         },
         Command::SubscribePresence { peer_ids } => ClientMessage::SubscribePresence { peer_ids },
+        Command::UpdateProfile {
+            agent_name,
+            agent_description,
+            discoverable,
+        } => ClientMessage::UpdateProfile {
+            agent_name,
+            agent_description,
+            discoverable,
+        },
+        Command::SearchDirectory {
+            query,
+            limit,
+            offset,
+        } => ClientMessage::SearchDirectory {
+            query,
+            limit,
+            offset,
+        },
+        Command::GetPeerProfile { peer_id } => ClientMessage::GetPeerProfile { peer_id },
         Command::Shutdown => unreachable!(),
     };
 

@@ -96,6 +96,16 @@
     "inputPlaceholder": "Type a message...",
     "pendingApprovalHint": "Approve this contact before sending messages"
   },
+  "directory": {
+    "searchTab": "Find Peers",
+    "searchPlaceholder": "Search by name or ID...",
+    "noResults": "No peers found",
+    "sendRequest": "Connect",
+    "requestSent": "Request Sent",
+    "pendingOutgoing": "Awaiting Approval",
+    "discoverableLabel": "Discoverable",
+    "discoverableHint": "Allow other users on this relay server to find you."
+  },
   "contact": {
     "online": "Online",
     "connecting": "Connecting",

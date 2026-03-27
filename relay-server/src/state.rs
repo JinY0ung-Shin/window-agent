@@ -24,6 +24,8 @@ struct Inner {
     presence_subscriptions: RwLock<HashMap<String, HashSet<String>>>,
     /// Recently seen message IDs for deduplication (last 1 hour)
     seen_messages: Mutex<HashMap<String, Instant>>,
+    /// Rate limit for directory searches: peer_id → (count, window_start)
+    search_rate_limits: RwLock<HashMap<String, (u32, Instant)>>,
     /// SQLite connection pool
     db: SqlitePool,
 }
@@ -36,6 +38,7 @@ impl AppState {
                 known_keys: RwLock::new(HashMap::new()),
                 presence_subscriptions: RwLock::new(HashMap::new()),
                 seen_messages: Mutex::new(HashMap::new()),
+                search_rate_limits: RwLock::new(HashMap::new()),
                 db,
             }),
         }
@@ -159,6 +162,32 @@ impl AppState {
             true
         } else {
             seen.insert(message_id.to_string(), now);
+            false
+        }
+    }
+
+    // ── Directory search rate limiting ──
+
+    /// Check and increment search rate. Returns `true` if rate limit exceeded.
+    pub async fn check_search_rate(&self, peer_id: &str) -> bool {
+        let mut limits = self.inner.search_rate_limits.write().await;
+        let now = Instant::now();
+        let window = std::time::Duration::from_secs(60);
+        let max_per_window: u32 = 10;
+
+        if let Some((count, start)) = limits.get_mut(peer_id) {
+            if now.duration_since(*start) > window {
+                *count = 1;
+                *start = now;
+                false
+            } else if *count >= max_per_window {
+                true
+            } else {
+                *count += 1;
+                false
+            }
+        } else {
+            limits.insert(peer_id.to_string(), (1, now));
             false
         }
     }

@@ -561,6 +561,123 @@ pub fn relay_set_relay_url(app: tauri::AppHandle, url: String) -> Result<(), App
     store.save().map_err(|e| AppError::Config(e.to_string()))
 }
 
+// ── Directory commands ──
+
+#[tauri::command]
+pub fn relay_search_directory(
+    manager: State<'_, RelayManager>,
+    query: String,
+    limit: Option<u32>,
+    offset: Option<u32>,
+) -> Result<(), AppError> {
+    manager
+        .search_directory(&query, limit.unwrap_or(20), offset.unwrap_or(0))
+        .map_err(|e| AppError::Relay(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn relay_send_friend_request(
+    app: tauri::AppHandle,
+    manager: State<'_, RelayManager>,
+    target_peer_id: String,
+    target_public_key: String,
+    target_agent_name: String,
+    target_agent_description: String,
+    local_agent_id: Option<String>,
+) -> Result<relay_db::ContactRow, AppError> {
+    manager
+        .send_friend_request(
+            &app,
+            &target_peer_id,
+            &target_public_key,
+            &target_agent_name,
+            &target_agent_description,
+            local_agent_id.as_deref(),
+        )
+        .await
+        .map_err(|e| AppError::Relay(e.to_string()))
+}
+
+#[tauri::command]
+pub fn relay_update_directory_profile(
+    app: tauri::AppHandle,
+    manager: State<'_, RelayManager>,
+    agent_name: String,
+    agent_description: String,
+    discoverable: bool,
+) -> Result<(), AppError> {
+    // Persist settings
+    use tauri_plugin_store::StoreExt;
+    if let Ok(store) = app.store("relay-settings.json") {
+        store.set("discoverable", serde_json::json!(discoverable));
+        store.set("directory_agent_name", serde_json::json!(agent_name));
+        store.set("directory_agent_description", serde_json::json!(agent_description));
+        let _ = store.save();
+    }
+
+    manager
+        .update_directory_profile(&agent_name, &agent_description, discoverable)
+        .map_err(|e| AppError::Relay(e.to_string()))
+}
+
+#[tauri::command]
+pub fn relay_get_directory_settings(app: tauri::AppHandle) -> Result<serde_json::Value, AppError> {
+    use tauri_plugin_store::StoreExt;
+    let store = app.store("relay-settings.json").ok();
+    let discoverable = store.as_ref()
+        .and_then(|s| s.get("discoverable"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let agent_name = store.as_ref()
+        .and_then(|s| s.get("directory_agent_name"))
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default();
+    let agent_description = store.as_ref()
+        .and_then(|s| s.get("directory_agent_description"))
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_default();
+
+    Ok(serde_json::json!({
+        "discoverable": discoverable,
+        "agent_name": agent_name,
+        "agent_description": agent_description,
+    }))
+}
+
+#[tauri::command]
+pub fn relay_set_directory_settings(
+    app: tauri::AppHandle,
+    manager: State<'_, RelayManager>,
+    discoverable: bool,
+) -> Result<(), AppError> {
+    use tauri_plugin_store::StoreExt;
+    if let Ok(store) = app.store("relay-settings.json") {
+        store.set("discoverable", serde_json::json!(discoverable));
+        let _ = store.save();
+    }
+
+    // Update on relay server if connected
+    if manager.status().map(|s| s == crate::relay::manager::NetworkStatus::Active).unwrap_or(false) {
+        let agent_name = {
+            use tauri_plugin_store::StoreExt;
+            app.store("relay-settings.json").ok()
+                .and_then(|s| s.get("directory_agent_name"))
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_default()
+        };
+        let agent_desc = {
+            use tauri_plugin_store::StoreExt;
+            app.store("relay-settings.json").ok()
+                .and_then(|s| s.get("directory_agent_description"))
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_default()
+        };
+        let _ = manager.update_directory_profile(&agent_name, &agent_desc, discoverable);
+    }
+
+    Ok(())
+}
+
 // ── Outbox processor ──
 
 /// Process pending outbox entries — retries queued messages.

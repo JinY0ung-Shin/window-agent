@@ -1,13 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Check, Loader2 } from "lucide-react";
+import { Copy, Check, Loader2, Search, UserPlus } from "lucide-react";
 import Modal from "../common/Modal";
 import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { toErrorMessage } from "../../utils/errorUtils";
+import type { DirectoryPeer } from "../../services/commands/relayCommands";
 
-type Tab = "generate" | "accept";
+type Tab = "search" | "generate" | "accept";
 
 interface Props {
   onClose: () => void;
@@ -15,16 +16,22 @@ interface Props {
 
 export default function InviteDialog({ onClose }: Props) {
   const { t } = useTranslation("network");
-  const [tab, setTab] = useState<Tab>("generate");
+  const [tab, setTab] = useState<Tab>("search");
 
   return (
     <Modal
       onClose={onClose}
-      title={t("invite.title")}
+      title={tab === "search" ? t("directory.searchTab") : t("invite.title")}
       overlayClose="stopPropagation"
       contentClassName="invite-dialog"
     >
       <div className="invite-tabs">
+          <button
+            className={`invite-tab${tab === "search" ? " active" : ""}`}
+            onClick={() => setTab("search")}
+          >
+            {t("directory.searchTab")}
+          </button>
           <button
             className={`invite-tab${tab === "generate" ? " active" : ""}`}
             onClick={() => setTab("generate")}
@@ -39,7 +46,9 @@ export default function InviteDialog({ onClose }: Props) {
           </button>
         </div>
 
-      {tab === "generate" ? (
+      {tab === "search" ? (
+        <PeerSearchTab onClose={onClose} t={t} />
+      ) : tab === "generate" ? (
         <GenerateTab onClose={onClose} t={t} />
       ) : (
         <AcceptTab onClose={onClose} t={t} />
@@ -48,7 +57,120 @@ export default function InviteDialog({ onClose }: Props) {
   );
 }
 
-function GenerateTab({ onClose, t }: { onClose: () => void; t: (key: string, opts?: Record<string, unknown>) => string }) {
+type TFn = (key: string, opts?: Record<string, unknown>) => string;
+
+function PeerSearchTab({ t }: { onClose: () => void; t: TFn }) {
+  const agents = useAgentStore((s) => s.agents);
+  const searchDirectory = useNetworkStore((s) => s.searchDirectory);
+  const sendFriendRequest = useNetworkStore((s) => s.sendFriendRequest);
+  const directoryResults = useNetworkStore((s) => s.directoryResults);
+  const directoryLoading = useNetworkStore((s) => s.directoryLoading);
+  const contacts = useNetworkStore((s) => s.contacts);
+
+  const [query, setQuery] = useState("");
+  const [sentPeers, setSentPeers] = useState<Set<string>>(new Set());
+  const [sendingPeer, setSendingPeer] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  // Known peer_ids from existing contacts
+  const knownPeerIds = useMemo(
+    () => new Set(contacts.map((c) => c.peer_id)),
+    [contacts],
+  );
+
+  // Debounced search
+  useEffect(() => {
+    if (!query.trim()) return;
+    const timer = setTimeout(() => {
+      searchDirectory(query.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query, searchDirectory]);
+
+  const handleSend = useCallback(async (peer: DirectoryPeer) => {
+    setSendingPeer(peer.peer_id);
+    setError("");
+    try {
+      await sendFriendRequest(peer, agents[0]?.id);
+      setSentPeers((prev) => new Set(prev).add(peer.peer_id));
+    } catch (e) {
+      setError(toErrorMessage(e));
+    } finally {
+      setSendingPeer(null);
+    }
+  }, [sendFriendRequest, agents]);
+
+  return (
+    <div className="invite-tab-content">
+      <div className="form-group">
+        <div className="search-input-wrap">
+          <Search size={14} className="search-icon" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("directory.searchPlaceholder")}
+            autoFocus
+          />
+        </div>
+      </div>
+
+      {error && <div className="form-text text-error">{error}</div>}
+
+      <div className="directory-results">
+        {directoryLoading && (
+          <div className="directory-empty">
+            <Loader2 size={20} className="spinning" />
+          </div>
+        )}
+        {!directoryLoading && query.trim() && directoryResults.length === 0 && (
+          <div className="directory-empty">{t("directory.noResults")}</div>
+        )}
+        {!directoryLoading &&
+          directoryResults.map((peer) => {
+            const isKnown = knownPeerIds.has(peer.peer_id);
+            const isSent = sentPeers.has(peer.peer_id);
+            const isSending = sendingPeer === peer.peer_id;
+            return (
+              <div key={peer.peer_id} className="directory-peer-card">
+                <div className="directory-peer-info">
+                  <div className="directory-peer-name">
+                    <span className={`status-dot ${peer.is_online ? "online" : "offline"}`} />
+                    {peer.agent_name || `Peer ${peer.peer_id.slice(0, 8)}`}
+                  </div>
+                  {peer.agent_description && (
+                    <div className="directory-peer-desc">{peer.agent_description}</div>
+                  )}
+                  <div className="directory-peer-id">{peer.peer_id.slice(0, 12)}...</div>
+                </div>
+                <div className="directory-peer-action">
+                  {isKnown ? (
+                    <span className="directory-badge known">{t("peer.approved")}</span>
+                  ) : isSent ? (
+                    <span className="directory-badge sent">{t("directory.requestSent")}</span>
+                  ) : (
+                    <button
+                      className="btn-sm btn-primary"
+                      onClick={() => handleSend(peer)}
+                      disabled={isSending}
+                    >
+                      {isSending ? (
+                        <Loader2 size={14} className="spinning" />
+                      ) : (
+                        <><UserPlus size={14} /> {t("directory.sendRequest")}</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </div>
+  );
+}
+
+function GenerateTab({ onClose, t }: { onClose: () => void; t: TFn }) {
   const agents = useAgentStore((s) => s.agents);
   const generateInvite = useNetworkStore((s) => s.generateInvite);
 
@@ -173,7 +295,7 @@ function tryDecodeInvite(code: string): InvitePreview | null {
   return null;
 }
 
-function AcceptTab({ onClose, t }: { onClose: () => void; t: (key: string, opts?: Record<string, unknown>) => string }) {
+function AcceptTab({ onClose, t }: { onClose: () => void; t: TFn }) {
   const agents = useAgentStore((s) => s.agents);
   const acceptInvite = useNetworkStore((s) => s.acceptInvite);
 

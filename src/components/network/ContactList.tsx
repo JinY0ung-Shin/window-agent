@@ -52,7 +52,13 @@ export default function ContactList() {
                 <span className="contact-item-desc">{contact.agent_description}</span>
               )}
             </div>
-            <span className="contact-item-mode">{contact.mode === "secretary" ? t("contact.modeSecretary") : contact.mode}</span>
+            {contact.status === "pending_outgoing" ? (
+              <span className="contact-item-badge pending-outgoing">{t("directory.pendingOutgoing")}</span>
+            ) : contact.status === "pending_approval" ? (
+              <span className="contact-item-badge pending-approval">{t("contact.pendingApproval")}</span>
+            ) : (
+              <span className="contact-item-mode">{contact.mode === "secretary" ? t("contact.modeSecretary") : contact.mode}</span>
+            )}
           </button>
         ))}
       </div>

@@ -15,9 +15,13 @@ import {
   relaySetNetworkEnabled,
   relayApproveContact,
   relayRejectContact,
+  relaySearchDirectory,
+  relaySendFriendRequest,
+  relaySetDirectorySettings,
   type ContactRow,
   type PeerThreadRow,
   type PeerMessageRow,
+  type DirectoryPeer,
 } from "../services/commands/relayCommands";
 
 type NetworkStatus = "dormant" | "starting" | "active" | "stopping" | "reconnecting";
@@ -57,6 +61,12 @@ interface NetworkState {
   connectedPeers: Set<string>; // live connected peer_ids
   generatingThreads: Set<string>; // thread IDs currently generating auto-response
   error: string | null;
+  // Directory
+  directoryResults: DirectoryPeer[];
+  directoryTotal: number;
+  directoryLoading: boolean;
+  discoverable: boolean;
+  _lastSearchQuery: string;
 
   // ── Actions ──
   initialize: () => Promise<void>;
@@ -73,6 +83,9 @@ interface NetworkState {
   sendMessage: (contactId: string, content: string) => Promise<void>;
   approveContact: (contactId: string) => Promise<void>;
   rejectContact: (contactId: string) => Promise<void>;
+  searchDirectory: (query: string) => Promise<void>;
+  sendFriendRequest: (peer: DirectoryPeer, localAgentId?: string) => Promise<void>;
+  setDiscoverable: (discoverable: boolean) => Promise<void>;
   setupEventListeners: () => Promise<() => void>;
 }
 
@@ -89,6 +102,11 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   connectedPeers: new Set<string>(),
   generatingThreads: new Set<string>(),
   error: null,
+  directoryResults: [],
+  directoryTotal: 0,
+  directoryLoading: false,
+  discoverable: true,
+  _lastSearchQuery: "",
 
   initialize: async () => {
     let enabled: boolean;
@@ -258,6 +276,39 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     set((s) => ({ pendingApprovals: Math.max(0, s.pendingApprovals - 1) }));
   },
 
+  searchDirectory: async (query) => {
+    set({ directoryLoading: true, _lastSearchQuery: query });
+    try {
+      await relaySearchDirectory(query, 20, 0);
+      // Results arrive via relay:directory-result event
+      // Timeout safety: clear loading after 10s if no response
+      setTimeout(() => {
+        const s = get();
+        if (s.directoryLoading && s._lastSearchQuery === query) {
+          set({ directoryLoading: false });
+        }
+      }, 10000);
+    } catch (e) {
+      set({ directoryLoading: false, error: toErrorMessage(e) });
+    }
+  },
+
+  sendFriendRequest: async (peer, localAgentId) => {
+    await relaySendFriendRequest(
+      peer.peer_id,
+      peer.public_key,
+      peer.agent_name,
+      peer.agent_description,
+      localAgentId,
+    );
+    await get().refreshContacts();
+  },
+
+  setDiscoverable: async (discoverable) => {
+    await relaySetDirectorySettings(discoverable);
+    set({ discoverable });
+  },
+
   setupEventListeners: async () => {
     const unlisteners: UnlistenFn[] = [];
 
@@ -354,9 +405,32 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     );
 
     unlisteners.push(
+      await listen<{ query: string; peers: DirectoryPeer[]; total: number; offset: number }>(
+        "relay:directory-result",
+        (event) => {
+          // Only accept results matching the latest search query (prevents race condition)
+          if (event.payload.query === get()._lastSearchQuery) {
+            set({
+              directoryResults: event.payload.peers,
+              directoryTotal: event.payload.total,
+              directoryLoading: false,
+            });
+          }
+        },
+      ),
+    );
+
+    unlisteners.push(
+      await listen("relay:contact-accepted", () => {
+        get().refreshContacts();
+      }),
+    );
+
+    unlisteners.push(
       await listen<ErrorPayload>("relay:error", (event) => {
         const payload = event.payload;
-        set({ error: payload.message });
+        // Clear directoryLoading on relay errors (rate_limited, db_error, etc.)
+        set({ error: payload.message, directoryLoading: false });
       }),
     );
 
