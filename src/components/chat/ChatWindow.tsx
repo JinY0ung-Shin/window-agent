@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { X } from "lucide-react";
+import { X, Plus } from "lucide-react";
 import { useMessageStore } from "../../stores/messageStore";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
@@ -35,6 +35,8 @@ export default function ChatWindow() {
   const toolRunState = useToolRunStore((s) => s.toolRunState);
   const pendingToolCalls = useToolRunStore((s) => s.pendingToolCalls);
   const activeRun = useStreamStore((s) => s.activeRun);
+  const startNewAgentConversation = useConversationStore((s) => s.startNewAgentConversation);
+  const isBusy = activeRun !== null || toolRunState !== "idle";
 
   const { messagesEndRef, messagesContainerRef } = useMessageScroll(
     [currentConversationId, selectedAgentId, isBootstrapping],
@@ -69,16 +71,26 @@ export default function ChatWindow() {
       <header className="chat-header" onMouseDown={onDrag}>
         <ConversationSwitcher />
         {currentAgent && (
-          <button
-            className="header-agent-btn"
-            onClick={() => { setMainView("agent"); openEditor(currentAgent.id); }}
-            title={t("editAgent", { context: uiTheme })}
-          >
-            {currentAgent.avatar ? (
-              <img src={currentAgent.avatar} alt={currentAgent.name} className="header-agent-avatar" />
-            ) : null}
-            <span>{currentAgent.name}</span>
-          </button>
+          <>
+            <button
+              className={`header-new-conv-btn ${isBusy ? "disabled" : ""}`}
+              onClick={() => { if (!isBusy) startNewAgentConversation(currentAgent.id); }}
+              disabled={isBusy}
+              title={t("common:newConversation")}
+            >
+              <Plus size={16} />
+            </button>
+            <button
+              className="header-agent-btn"
+              onClick={() => { setMainView("agent"); openEditor(currentAgent.id); }}
+              title={t("editAgent", { context: uiTheme })}
+            >
+              {currentAgent.avatar ? (
+                <img src={currentAgent.avatar} alt={currentAgent.name} className="header-agent-avatar" />
+              ) : null}
+              <span>{currentAgent.name}</span>
+            </button>
+          </>
         )}
         {isBootstrapping && (
           <button

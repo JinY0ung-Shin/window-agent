@@ -341,6 +341,30 @@
   white-space: nowrap;
 }
 
+.header-new-conv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.header-new-conv-btn:hover:not(.disabled) {
+  background-color: var(--focus-ring);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.header-new-conv-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .header-agent-btn {
   display: inline-flex;
   align-items: center;
