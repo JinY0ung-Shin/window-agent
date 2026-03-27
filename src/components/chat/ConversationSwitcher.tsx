@@ -41,6 +41,7 @@ export default function ConversationSwitcher() {
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
+  const isOnboarding = useBootstrapStore((s) => s.isOnboarding);
   const activeRun = useStreamStore((s) => s.activeRun);
   const toolRunState = useToolRunStore((s) => s.toolRunState);
   const { t, i18n } = useTranslation("glossary");
@@ -99,7 +100,9 @@ export default function ConversationSwitcher() {
 
   const displayTitle = isBootstrapping
     ? t("bootstrapTitle", { context: uiTheme })
-    : currentConversationId
+    : isOnboarding
+      ? t("bootstrapInProgress", { context: uiTheme })
+      : currentConversationId
       ? (conversations.find((c) => c.id === currentConversationId)?.title
           ?? agentConversations.find((c) => c.id === currentConversationId)?.title
           ?? t("chat:conversation.fallbackTitle"))
@@ -108,7 +111,7 @@ export default function ConversationSwitcher() {
         : t("appTitle", { companyName, context: uiTheme });
 
   // Can the dropdown be shown?
-  const canShowDropdown = !isBootstrapping && currentAgentId !== null && agentConversations.length > 0;
+  const canShowDropdown = !isBootstrapping && !isOnboarding && currentAgentId !== null && agentConversations.length > 0;
 
   // Click outside to close
   useEffect(() => {

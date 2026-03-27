@@ -12,6 +12,7 @@ import ChatInput from "./ChatInput";
 import SkillBar from "../skill/SkillBar";
 import ToolRunBlock from "./ToolRunBlock";
 import ConversationSwitcher from "./ConversationSwitcher";
+import OnboardingAnimation from "./OnboardingAnimation";
 
 import { useNavigationStore } from "../../stores/navigationStore";
 import { useDragRegion } from "../../hooks/useDragRegion";
@@ -23,6 +24,7 @@ export default function ChatWindow() {
   const conversations = useConversationStore((s) => s.conversations);
   const currentConversationId = useConversationStore((s) => s.currentConversationId);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
+  const isOnboarding = useBootstrapStore((s) => s.isOnboarding);
   const cancelBootstrap = useBootstrapStore((s) => s.cancelBootstrap);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
@@ -43,12 +45,13 @@ export default function ChatWindow() {
     [messages, toolRunState, activeRun?.status],
   );
 
-  // Show agent selector when no conversation, no agent selected, and not bootstrapping
+  // Show agent selector when no conversation, no agent selected, and not bootstrapping/onboarding
   const showSelector =
     !currentConversationId &&
     messages.length === 0 &&
     !selectedAgentId &&
-    !isBootstrapping;
+    !isBootstrapping &&
+    !isOnboarding;
 
   // Resolve the agent for the current context (conversation or selected).
   // Falls through to selectedAgentId when the conversation is not yet in the list
@@ -104,7 +107,9 @@ export default function ChatWindow() {
       </header>
 
       <div className="chat-container" ref={messagesContainerRef}>
-        {showSelector ? (
+        {isOnboarding ? (
+          <OnboardingAnimation />
+        ) : showSelector ? (
           <div className="agent-selector">
             <div className="agent-selector-header">
               <h2>{t("appTitle", { companyName, context: uiTheme })}</h2>
@@ -165,7 +170,7 @@ export default function ChatWindow() {
         )}
       </div>
 
-      {!showSelector && <ChatInput />}
+      {!showSelector && !isOnboarding && <ChatInput />}
     </main>
   );
 }

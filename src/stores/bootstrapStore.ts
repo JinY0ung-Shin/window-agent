@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
+import { useAgentStore } from "./agentStore";
 import type { OpenAIMessage } from "../services/commands/apiCommands";
 import { logger } from "../services/logger";
 
@@ -9,10 +10,13 @@ interface BootstrapState {
   bootstrapFolderName: string | null;
   bootstrapApiHistory: OpenAIMessage[];
   bootstrapFilesWritten: string[];
+  isOnboarding: boolean;
+  onboardingAgentId: string | null;
 
   startBootstrap: () => Promise<void>;
   cancelBootstrap: () => void;
   resetBootstrap: () => void;
+  finishOnboarding: () => void;
 }
 
 const BOOTSTRAP_INITIAL = {
@@ -20,9 +24,11 @@ const BOOTSTRAP_INITIAL = {
   bootstrapFolderName: null as string | null,
   bootstrapApiHistory: [] as OpenAIMessage[],
   bootstrapFilesWritten: [] as string[],
+  isOnboarding: false,
+  onboardingAgentId: null as string | null,
 };
 
-export const useBootstrapStore = create<BootstrapState>((set, _get) => ({
+export const useBootstrapStore = create<BootstrapState>((set, get) => ({
   ...BOOTSTRAP_INITIAL,
 
   startBootstrap: async () => {
@@ -49,5 +55,13 @@ export const useBootstrapStore = create<BootstrapState>((set, _get) => ({
 
   resetBootstrap: () => {
     set({ ...BOOTSTRAP_INITIAL });
+  },
+
+  finishOnboarding: () => {
+    const { onboardingAgentId } = get();
+    if (onboardingAgentId) {
+      useAgentStore.getState().selectAgent(onboardingAgentId);
+    }
+    set({ isOnboarding: false, onboardingAgentId: null });
   },
 }));

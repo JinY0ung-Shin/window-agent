@@ -478,6 +478,18 @@ async function completeBootstrap() {
   if (!bootstrapFolderName) return;
   const theme = useSettingsStore.getState().uiTheme;
 
+  // Transition to onboarding animation phase
+  useBootstrapStore.setState({
+    isBootstrapping: false,
+    isOnboarding: true,
+    bootstrapApiHistory: [],
+    bootstrapFilesWritten: [],
+    bootstrapFolderName: null,
+  });
+  useMessageStore.setState({ messages: [] });
+  useSummaryStore.setState({ currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
+
+  // Create agent in background while animation plays
   invalidatePersonaCache(bootstrapFolderName);
 
   const fallbackName = i18n.t("glossary:newAgent", { context: theme });
@@ -496,21 +508,20 @@ async function completeBootstrap() {
       name: agentName,
     });
 
-    useBootstrapStore.getState().resetBootstrap();
-    useMessageStore.setState({ messages: [] });
-    useSummaryStore.setState({ currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
-
     const agentStoreRef = useAgentStore.getState();
     await agentStoreRef.loadAgents();
-    agentStoreRef.selectAgent(agentResult.id);
+
+    // Signal animation that backend work is done
+    useBootstrapStore.setState({ onboardingAgentId: agentResult.id });
   } catch (error) {
     logger.error("Failed to complete bootstrap:", error);
+    useBootstrapStore.setState({ isOnboarding: false, onboardingAgentId: null });
     const errorMsg: ChatMessage = {
       id: `error-${Date.now()}`,
       type: "agent",
       content: i18n.t("glossary:bootstrapFailed", { error: String(error), context: theme }),
       status: "failed",
     };
-    useMessageStore.setState({ messages: [...msg().messages, errorMsg] });
+    useMessageStore.setState({ messages: [errorMsg] });
   }
 }

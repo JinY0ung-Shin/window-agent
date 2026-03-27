@@ -341,6 +341,44 @@
   white-space: nowrap;
 }
 
+/* ── Onboarding Animation ── */
+.onboarding-animation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 2rem;
+}
+
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 1.05rem;
+  color: var(--text-main);
+  animation: onboarding-fade-in 0.5s ease-out;
+}
+
+.onboarding-emoji {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.onboarding-text {
+  font-weight: 500;
+}
+
+@keyframes onboarding-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .header-new-conv-btn {
   display: inline-flex;
   align-items: center;
