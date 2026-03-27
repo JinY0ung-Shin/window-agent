@@ -9,7 +9,6 @@ use tokio::time::{timeout, Duration};
 use super::dispatcher::{execute_tool_inner, execute_tool_inner_for_agent};
 
 pub(crate) const TOOL_TIMEOUT: Duration = Duration::from_secs(30);
-const HTTP_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 const BROWSER_TOOL_TIMEOUT: Duration = Duration::from_secs(360); // 6 min: allows for Chromium install on first run
 const COMMAND_TOOL_TIMEOUT: Duration = Duration::from_secs(310); // 300s user max + 10s buffer for cleanup
 
@@ -51,8 +50,6 @@ pub async fn execute_tool(
     // Custom timeouts for specific tools
     let tool_timeout = if tool_name.starts_with("browser_") {
         BROWSER_TOOL_TIMEOUT
-    } else if tool_name == "http_request" {
-        HTTP_REQUEST_TIMEOUT
     } else if tool_name == "run_command" {
         COMMAND_TOOL_TIMEOUT
     } else {
@@ -132,8 +129,8 @@ pub async fn execute_tool_inner_public(
     // so we need to handle scope differently for cron.
     // For now, pass agent_id and handle the "no conversation" case gracefully.
     let timeout_secs = match tool_name {
-        "http_request" => 120,
         t if t.starts_with("browser_") => 360,
+        "run_command" => 310,
         _ => 30,
     };
     let duration = std::time::Duration::from_secs(timeout_secs);

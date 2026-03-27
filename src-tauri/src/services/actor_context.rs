@@ -2,6 +2,7 @@ use crate::db::agent_operations;
 use crate::db::Database;
 use crate::error::AppError;
 use crate::memory::SystemMemoryManager;
+use crate::services::credential_service;
 use serde_json;
 
 // ── Enums ──────────────────────────────────────────────────
@@ -65,6 +66,8 @@ pub struct ResolvedContext {
     pub registered_agents_section: Option<String>,
     /// Preformatted [SYSTEM CONTEXT] section with available tool names.
     pub tools_section: Option<String>,
+    /// Preformatted [AVAILABLE CREDENTIALS] section with env var names.
+    pub credentials_section: Option<String>,
 }
 
 // ── Default LLM settings ──────────────────────────────────
@@ -148,6 +151,13 @@ pub fn resolve_with_relay_tools(
         None
     };
 
+    // 8. Credentials section (only when run_command is enabled and agent has credentials)
+    let credentials_section = if enabled_tool_names.contains(&"run_command".to_string()) {
+        build_credentials_section(&agent_dir, app_data_dir)
+    } else {
+        None
+    };
+
     Ok(ResolvedContext {
         system_prompt,
         enabled_tool_names,
@@ -158,6 +168,7 @@ pub fn resolve_with_relay_tools(
         consolidated_memory,
         registered_agents_section,
         tools_section,
+        credentials_section,
     })
 }
 
@@ -307,7 +318,7 @@ fn resolve_tool_names(
             const RELAY_BLOCKED_TOOLS: &[&str] = &["run_command"];
             const DEFAULT_RELAY_ALLOWED: &[&str] = &[
                 "read_file", "list_directory", "web_search",
-                "http_request", "self_inspect",
+                "self_inspect",
             ];
             let config_tools = read_tool_config(agent_dir);
             let allowed: Vec<&str> = match relay_allowed_tools {
@@ -355,6 +366,53 @@ fn resolve_tool_names(
             }
         },
     }
+}
+
+// ── Credentials section ──────────────────────────────────
+
+/// Build the [AVAILABLE CREDENTIALS] prompt section for agents that have
+/// allowed credentials and run_command enabled.
+/// Reads TOOL_CONFIG.json for credential IDs, and credentials_meta.json for display names.
+fn build_credentials_section(
+    agent_dir: &std::path::Path,
+    app_data_dir: &std::path::Path,
+) -> Option<String> {
+    let allowed = credential_service::read_allowed_credentials_from_dir(agent_dir).ok()?;
+    if allowed.is_empty() {
+        return None;
+    }
+
+    // Load display names from credentials metadata
+    let meta_path = app_data_dir.join("credentials_meta.json");
+    let metas: Vec<credential_service::CredentialMeta> = std::fs::read_to_string(&meta_path)
+        .ok()
+        .and_then(|data| serde_json::from_str(&data).ok())
+        .unwrap_or_default();
+
+    let mut lines = Vec::new();
+    for id in &allowed {
+        let env_name = credential_service::credential_id_to_env_var(id);
+        let display_name = metas
+            .iter()
+            .find(|m| m.id == *id)
+            .map(|m| m.name.as_str())
+            .unwrap_or(id.as_str());
+
+        if cfg!(target_os = "windows") {
+            lines.push(format!("- %{}% ({})", env_name, display_name));
+        } else {
+            lines.push(format!("- ${} ({})", env_name, display_name));
+        }
+    }
+    lines.sort(); // stable ordering
+
+    Some(format!(
+        "[AVAILABLE CREDENTIALS]\n\
+         The following credentials are available as environment variables in run_command:\n\
+         {}\n\
+         Use them in shell commands. Never echo or print credential values directly.",
+        lines.join("\n")
+    ))
 }
 
 // ── Tests ──────────────────────────────────────────────────

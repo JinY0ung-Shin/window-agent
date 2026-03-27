@@ -95,6 +95,9 @@ pub async fn spawn_agent_tasks(
         if let Some(ref tools_sec) = resolved.tools_section {
             system_parts.push(tools_sec.clone());
         }
+        if let Some(ref creds_sec) = resolved.credentials_section {
+            system_parts.push(creds_sec.clone());
+        }
         if let Some(ref mem) = resolved.consolidated_memory {
             system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
         }

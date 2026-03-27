@@ -154,6 +154,7 @@ export function buildConversationContext(params: {
   summary: string | null;
   baseSystemPrompt: string;
   skillsSection?: string;
+  credentialsSection?: string;
   bootContent?: string | null;
   memoryNotes?: MemoryNote[];
   vaultNotes?: VaultNoteSummary[];
@@ -207,6 +208,11 @@ export function buildConversationContext(params: {
   // Workspace section
   if (params.workspacePath) {
     systemPrompt += `\n\n${i18n.t("prompts:workspace.header")}\n${i18n.t("prompts:workspace.body", { path: params.workspacePath })}`;
+  }
+
+  // Credentials section (available env vars for run_command)
+  if (params.credentialsSection) {
+    systemPrompt += `\n\n${params.credentialsSection}`;
   }
 
   if (params.summary) {

@@ -24,8 +24,6 @@ interface FormState {
   id: string;
   name: string;
   value: string;
-  allowedHosts: string[];
-  hostInput: string;
   showValue: boolean;
   idEdited: boolean;
 }
@@ -35,8 +33,6 @@ const EMPTY_FORM: FormState = {
   id: "",
   name: "",
   value: "",
-  allowedHosts: [],
-  hostInput: "",
   showValue: false,
   idEdited: false,
 };
@@ -59,8 +55,6 @@ export default function CredentialManager() {
       id: cred.id,
       name: cred.name,
       value: "",
-      allowedHosts: [...cred.allowed_hosts],
-      hostInput: "",
       showValue: false,
       idEdited: true,
     });
@@ -79,59 +73,24 @@ export default function CredentialManager() {
     setForm({ ...form, id, idEdited: true });
   };
 
-  const handleHostInputChange = useCallback((v: string) => {
-    setForm((prev) => prev ? { ...prev, hostInput: v } : prev);
-  }, []);
-
   const nameComposition = useCompositionInput(handleNameChange);
-  const hostComposition = useCompositionInput(handleHostInputChange);
-
-  const addHost = () => {
-    if (!form || !form.hostInput.trim()) return;
-    const host = form.hostInput.trim();
-    if (!form.allowedHosts.includes(host)) {
-      setForm({
-        ...form,
-        allowedHosts: [...form.allowedHosts, host],
-        hostInput: "",
-      });
-    } else {
-      setForm({ ...form, hostInput: "" });
-    }
-  };
-
-  const removeHost = (host: string) => {
-    if (!form) return;
-    setForm({
-      ...form,
-      allowedHosts: form.allowedHosts.filter((h) => h !== host),
-    });
-  };
-
-  const handleHostKeyDown = (e: React.KeyboardEvent) => {
-    if (hostComposition.isComposing.current) return;
-    if (e.key === "Enter") {
-      e.preventDefault();
-      addHost();
-    }
-  };
 
   const handleSave = async () => {
     if (!form) return;
     const id = form.id.trim();
     const name = form.name.trim();
-    if (!id || !name || form.allowedHosts.length === 0) return;
+    if (!id || !name) return;
 
     try {
       if (form.mode === "add") {
         if (!form.value) return;
-        await addCredential(id, name, form.value, form.allowedHosts);
+        await addCredential(id, name, form.value, []);
       } else {
         await updateCredential(
           id,
           name,
           form.value || undefined,
-          form.allowedHosts,
+          [],
         );
       }
       setForm(null);
@@ -169,13 +128,6 @@ export default function CredentialManager() {
             <span className="cred-item-name">{cred.name}</span>
             <span className="cred-item-id">{cred.id}</span>
             <span className="cred-item-value">{"••••••"}</span>
-            {cred.allowed_hosts.length > 0 && (
-              <div className="cred-item-hosts">
-                {cred.allowed_hosts.map((h) => (
-                  <span key={h} className="cred-host-tag">{h}</span>
-                ))}
-              </div>
-            )}
           </div>
           <div className="cred-item-actions">
             <button
@@ -251,28 +203,6 @@ export default function CredentialManager() {
             />
           </div>
 
-          <div className="cred-form-field">
-            <label>{t("credentials.allowedHosts")}</label>
-            <div className="cred-host-input-row">
-              <input
-                type="text"
-                value={form.hostInput}
-                onKeyDown={handleHostKeyDown}
-                placeholder={t("credentials.hostPlaceholder")}
-                {...hostComposition.compositionProps}
-              />
-            </div>
-            {form.allowedHosts.length > 0 && (
-              <div className="cred-host-tags">
-                {form.allowedHosts.map((h) => (
-                  <span key={h} className="cred-host-tag removable" onClick={() => removeHost(h)}>
-                    {h} <X size={10} />
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-
           {error && <div className="cred-form-error">{error}</div>}
 
           <div className="cred-form-actions">
@@ -280,7 +210,7 @@ export default function CredentialManager() {
             <button
               className="btn-primary"
               onClick={handleSave}
-              disabled={!form.name.trim() || !form.id.trim() || form.allowedHosts.length === 0 || (form.mode === "add" && !form.value)}
+              disabled={!form.name.trim() || !form.id.trim() || (form.mode === "add" && !form.value)}
             >
               {t("common:save")}
             </button>

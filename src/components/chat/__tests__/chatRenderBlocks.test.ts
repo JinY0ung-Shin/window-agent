@@ -23,7 +23,7 @@ function createToolMessage(overrides: Partial<ChatMessage> = {}): ChatMessage {
     content: "ok",
     status: "complete",
     tool_call_id: "call-1",
-    tool_name: "http_request",
+    tool_name: "web_search",
     ...overrides,
   };
 }
@@ -35,14 +35,14 @@ describe("buildChatRenderBlocks", () => {
         id: "assistant-tool-call",
         content: "찾아볼게요",
         tool_calls: [
-          createToolCall("call-1", "http_request", "{\"url\":\"https://example.com\"}"),
+          createToolCall("call-1", "web_search", "{\"url\":\"https://example.com\"}"),
           createToolCall("call-2", "browser_click", "{\"ref\":39}"),
         ],
       }),
       createToolMessage({
         id: "tool-result-1",
         tool_call_id: "call-1",
-        tool_name: "http_request",
+        tool_name: "web_search",
         content: "GET https://example.com",
       }),
       createToolMessage({
@@ -74,7 +74,7 @@ describe("buildChatRenderBlocks", () => {
     const messages: ChatMessage[] = [
       createAgentMessage({
         id: "assistant-tool-call",
-        tool_calls: [createToolCall("call-1", "http_request")],
+        tool_calls: [createToolCall("call-1", "web_search")],
       }),
       createToolMessage({
         id: "tool-orphan",
@@ -85,7 +85,7 @@ describe("buildChatRenderBlocks", () => {
       createToolMessage({
         id: "tool-result-1",
         tool_call_id: "call-1",
-        tool_name: "http_request",
+        tool_name: "web_search",
         content: "ok",
       }),
     ];
@@ -104,7 +104,7 @@ describe("buildChatRenderBlocks", () => {
     const messages: ChatMessage[] = [
       createAgentMessage({
         id: "assistant-old",
-        tool_calls: [createToolCall("call-old", "http_request")],
+        tool_calls: [createToolCall("call-old", "web_search")],
       }),
       createToolMessage({
         id: "tool-old",
@@ -114,13 +114,13 @@ describe("buildChatRenderBlocks", () => {
       createAgentMessage({
         id: "assistant-live",
         tool_calls: [
-          createToolCall("call-pending", "http_request"),
+          createToolCall("call-pending", "web_search"),
           createToolCall("call-running", "browser_click"),
         ],
       }),
     ];
 
-    const pendingToolCalls = [createToolCall("call-pending", "http_request")];
+    const pendingToolCalls = [createToolCall("call-pending", "web_search")];
     const pendingBlocks = buildChatRenderBlocks(messages, "tool_waiting", pendingToolCalls);
     const runningBlocks = buildChatRenderBlocks(messages, "tool_running", pendingToolCalls);
 

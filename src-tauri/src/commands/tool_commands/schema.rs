@@ -111,40 +111,6 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
             default_enabled: true,
             parameters: serde_json::json!({"type":"object","properties":{}}),
         },
-        NativeToolDef {
-            name: "http_request".into(),
-            description: "Make HTTP requests. Use {{credential:ID}} in headers/body for authentication.".into(),
-            category: "web".into(),
-            default_tier: "confirm".into(),
-            default_enabled: true,
-            parameters: serde_json::json!({
-                "type": "object",
-                "properties": {
-                    "method": {
-                        "type": "string",
-                        "description": "HTTP method: GET, POST, PUT, DELETE, PATCH",
-                        "enum": ["GET", "POST", "PUT", "DELETE", "PATCH"]
-                    },
-                    "url": {
-                        "type": "string",
-                        "description": "Request URL"
-                    },
-                    "headers": {
-                        "type": "object",
-                        "description": "Request headers as key-value pairs"
-                    },
-                    "body": {
-                        "type": "string",
-                        "description": "Request body"
-                    },
-                    "timeout_secs": {
-                        "type": "number",
-                        "description": "Request timeout in seconds (default 30, max 120)"
-                    }
-                },
-                "required": ["url"]
-            }),
-        },
     ];
 
     // System tools — allow agents to execute shell commands on the host.
@@ -158,7 +124,8 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
     defs.push(NativeToolDef {
         name: "run_command".into(),
         description: format!(
-            "셸 명령을 실행하고 결과를 반환합니다. 현재 시스템: os={os}, arch={arch}, shell={shell}"
+            "셸 명령을 실행하고 결과를 반환합니다. 현재 시스템: os={os}, arch={arch}, shell={shell}. \
+             에이전트에 허용된 credential은 환경변수(CRED_* 접두사)로 자동 주입됩니다."
         ),
         category: "system".into(),
         default_tier: "confirm".into(),

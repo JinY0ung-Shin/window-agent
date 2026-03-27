@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
-  hasCredentialRefs,
+  isCredentialBearingTool,
   extractBrowserDomain,
   isBrowserDomainApproved,
   approveBrowserDomain,
@@ -17,27 +17,17 @@ beforeEach(() => {
   clearBrowserApprovals("conv-2");
 });
 
-describe("hasCredentialRefs", () => {
-  it("returns false for non-http_request tools", () => {
-    expect(hasCredentialRefs({ name: "write_file", arguments: "{{credential:api_key}}" })).toBe(false);
+describe("isCredentialBearingTool", () => {
+  it("returns false for non-run_command tools", () => {
+    expect(isCredentialBearingTool({ name: "write_file" }, true)).toBe(false);
   });
 
-  it("returns true when http_request arguments contain credential refs", () => {
-    expect(
-      hasCredentialRefs({
-        name: "http_request",
-        arguments: JSON.stringify({ headers: { Authorization: "{{credential:my_key}}" } }),
-      }),
-    ).toBe(true);
+  it("returns true for run_command when agent has credentials", () => {
+    expect(isCredentialBearingTool({ name: "run_command" }, true)).toBe(true);
   });
 
-  it("returns false when http_request arguments have no credential refs", () => {
-    expect(
-      hasCredentialRefs({
-        name: "http_request",
-        arguments: JSON.stringify({ url: "https://example.com" }),
-      }),
-    ).toBe(false);
+  it("returns false for run_command when agent has no credentials", () => {
+    expect(isCredentialBearingTool({ name: "run_command" }, false)).toBe(false);
   });
 });
 

@@ -1,6 +1,8 @@
-use crate::utils::config_helpers::app_data_dir;
+use crate::db::{agent_operations, operations, Database};
+use crate::utils::config_helpers::{agents_dir, app_data_dir};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use tauri_plugin_store::StoreExt;
 
 const CREDENTIALS_META_FILE: &str = "credentials_meta.json";
@@ -12,6 +14,7 @@ const CREDENTIALS_SECRETS_STORE: &str = "credentials-secrets.json";
 pub struct CredentialMeta {
     pub id: String,
     pub name: String,
+    #[serde(default)]
     pub allowed_hosts: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -83,17 +86,6 @@ pub fn list_credentials(app: &tauri::AppHandle) -> Result<Vec<CredentialMeta>, S
     load_all_meta(app)
 }
 
-pub fn get_credential_meta(
-    app: &tauri::AppHandle,
-    id: &str,
-) -> Result<CredentialMeta, String> {
-    let metas = load_all_meta(app)?;
-    metas
-        .into_iter()
-        .find(|m| m.id == id)
-        .ok_or_else(|| format!("Credential '{}' not found", id))
-}
-
 pub fn add_credential(
     app: &tauri::AppHandle,
     id: &str,
@@ -103,9 +95,6 @@ pub fn add_credential(
 ) -> Result<CredentialMeta, String> {
     if id.is_empty() {
         return Err("Credential ID must not be empty".into());
-    }
-    if allowed_hosts.is_empty() {
-        return Err("allowed_hosts must not be empty".into());
     }
 
     let mut metas = load_all_meta(app)?;
@@ -147,9 +136,6 @@ pub fn update_credential(
         meta.name = n.to_string();
     }
     if let Some(hosts) = allowed_hosts {
-        if hosts.is_empty() {
-            return Err("allowed_hosts must not be empty".into());
-        }
         meta.allowed_hosts = hosts;
     }
     meta.updated_at = chrono::Utc::now().to_rfc3339();
@@ -190,124 +176,6 @@ pub fn get_all_secret_values(
         }
     }
     Ok(pairs)
-}
-
-// ── Host matching ──
-
-/// Normalize a hostname: lowercase, strip trailing dot, strip port, IDNA via url crate.
-fn normalize_host(host: &str) -> String {
-    let h = host.to_lowercase();
-    // Strip trailing dot
-    let h = h.strip_suffix('.').unwrap_or(&h);
-    // Strip port — careful not to mistake IPv6 colons for port separators
-    let h = if let Some(bracket_end) = h.find(']') {
-        // IPv6 with brackets: [::1]:port
-        if let Some(colon_pos) = h[bracket_end..].find(':') {
-            &h[..bracket_end + colon_pos]
-        } else {
-            h
-        }
-    } else if h.matches(':').count() == 1 {
-        // Exactly one colon → host:port (not IPv6)
-        if let Some(colon_pos) = h.rfind(':') {
-            if h[colon_pos + 1..].parse::<u16>().is_ok() {
-                &h[..colon_pos]
-            } else {
-                h
-            }
-        } else {
-            h
-        }
-    } else {
-        // Multiple colons → IPv6 address, don't strip
-        h
-    };
-    // Strip brackets from IPv6
-    let h = h
-        .strip_prefix('[')
-        .and_then(|s| s.strip_suffix(']'))
-        .unwrap_or(h);
-    // IDNA normalization via url crate — wrap IPv6 in brackets for URL parsing
-    let url_host = if h.contains(':') {
-        format!("[{}]", h)
-    } else {
-        h.to_string()
-    };
-    if let Ok(url) = url::Url::parse(&format!("https://{}/", url_host)) {
-        let result = url.host_str().unwrap_or(h).to_lowercase();
-        // Strip brackets that url crate adds for IPv6
-        result
-            .strip_prefix('[')
-            .and_then(|s| s.strip_suffix(']'))
-            .unwrap_or(&result)
-            .to_string()
-    } else {
-        h.to_lowercase()
-    }
-}
-
-/// Check if request_host matches any of the allowed host patterns.
-/// - Exact match by default
-/// - Wildcard: "*.github.com" matches "sub.github.com" but NOT "github.com"
-/// - IDNA normalization applied to both sides
-/// - Rejects suffix tricks: "api.github.com.evil.com" does NOT match "api.github.com"
-pub fn host_matches(request_host: &str, allowed: &[String]) -> bool {
-    let normalized_request = normalize_host(request_host);
-    if normalized_request.is_empty() {
-        return false;
-    }
-
-    for pattern in allowed {
-        let normalized_pattern = normalize_host(pattern);
-        if let Some(suffix) = normalized_pattern.strip_prefix('*') {
-            // Wildcard: *.example.com → suffix = ".example.com"
-            // Must match a subdomain, not the base domain itself
-            if normalized_request.ends_with(suffix)
-                && normalized_request.len() > suffix.len()
-            {
-                // Verify no extra dots that could be a suffix trick
-                // The part before the suffix must not contain the suffix's base domain
-                return true;
-            }
-        } else {
-            // Exact match
-            if normalized_request == normalized_pattern {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Hard deny: check if host is private or loopback.
-/// No override allowed — these are always blocked for http_request.
-pub fn is_private_or_loopback(host: &str) -> bool {
-    let h = normalize_host(host);
-
-    // Well-known private/loopback hostnames
-    if h == "localhost" || h.ends_with(".local") || h.ends_with(".internal") {
-        return true;
-    }
-
-    // IPv6 loopback
-    if h == "::1" {
-        return true;
-    }
-
-    // Parse as IP and check ranges
-    if let Ok(ip) = h.parse::<std::net::IpAddr>() {
-        match ip {
-            std::net::IpAddr::V4(v4) => {
-                v4.is_loopback()       // 127.0.0.0/8
-                    || v4.is_private()  // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
-                    || v4.is_link_local() // 169.254.0.0/16
-                    || v4.octets()[0] == 0 // 0.0.0.0/8
-            }
-            std::net::IpAddr::V6(v6) => v6.is_loopback(),
-        }
-    } else {
-        false
-    }
 }
 
 // ── Multi-encoding redaction ──
@@ -392,184 +260,207 @@ fn scrub_value(value: &mut serde_json::Value, credentials: &[(String, String)]) 
     }
 }
 
-// ── Credential reference parsing ──
+// ── Agent credential access control ──
 
-/// Extract credential IDs from `{{credential:ID}}` patterns in text.
-pub fn extract_credential_refs(text: &str) -> Vec<String> {
-    let mut refs = Vec::new();
-    let mut search_from = 0;
-    let prefix = "{{credential:";
-    let suffix = "}}";
-
-    while let Some(start) = text[search_from..].find(prefix) {
-        let abs_start = search_from + start;
-        let after_prefix = abs_start + prefix.len();
-        if after_prefix >= text.len() {
-            break;
-        }
-        if let Some(end) = text[after_prefix..].find(suffix) {
-            let id = &text[after_prefix..after_prefix + end];
-            if !id.is_empty() && !id.contains('{') && !id.contains('}') {
-                refs.push(id.to_string());
-            }
-            search_from = after_prefix + end + suffix.len();
-        } else {
-            break;
-        }
-    }
-    refs.sort();
-    refs.dedup();
-    refs
+/// Resolved credential entry for environment variable injection.
+#[derive(Debug, Clone)]
+pub struct CredentialEnvEntry {
+    /// Original credential ID (used in redaction messages)
+    pub id: String,
+    /// Environment variable name (e.g., CRED_GITHUB_TOKEN)
+    pub env_name: String,
+    /// Actual secret value
+    pub value: String,
 }
 
-/// Check if any unresolved `{{credential:*}}` references remain in text.
-pub fn has_unresolved_refs(text: &str) -> bool {
-    text.contains("{{credential:")
+/// Convert a credential ID to an environment variable name.
+/// Rules: `CRED_` prefix + uppercase + hyphens/spaces become underscores + strip non-alphanumeric.
+///
+/// Examples:
+/// - `"github-token"` → `"CRED_GITHUB_TOKEN"`
+/// - `"openai_api_key"` → `"CRED_OPENAI_API_KEY"`
+pub fn credential_id_to_env_var(id: &str) -> String {
+    let normalized: String = id
+        .to_uppercase()
+        .replace('-', "_")
+        .replace(' ', "_")
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect();
+    format!("CRED_{}", normalized)
+}
+
+/// Parse the `credentials` section of a TOOL_CONFIG.json value
+/// and return the set of allowed credential IDs.
+pub fn parse_allowed_credentials(config: &serde_json::Value) -> HashSet<String> {
+    let mut allowed = HashSet::new();
+    if let Some(creds) = config["credentials"].as_object() {
+        for (id, val) in creds {
+            // Support both { "allowed": true } (v2 object) and bare true (legacy)
+            let is_allowed = val
+                .as_object()
+                .and_then(|o| o.get("allowed"))
+                .and_then(|v| v.as_bool())
+                .or_else(|| val.as_bool())
+                .unwrap_or(false);
+            if is_allowed {
+                allowed.insert(id.clone());
+            }
+        }
+    }
+    allowed
+}
+
+/// Read TOOL_CONFIG.json for an agent directory and return allowed credential IDs.
+pub fn read_allowed_credentials_from_dir(agent_dir: &Path) -> Result<HashSet<String>, String> {
+    let config_path = agent_dir.join("TOOL_CONFIG.json");
+    let config_str = match std::fs::read_to_string(&config_path) {
+        Ok(s) => s,
+        Err(_) => return Ok(HashSet::new()),
+    };
+    let config: serde_json::Value = serde_json::from_str(&config_str)
+        .map_err(|e| format!("Invalid TOOL_CONFIG.json: {}", e))?;
+    Ok(parse_allowed_credentials(&config))
+}
+
+/// Get the set of credential IDs this agent is allowed to use, resolved from conversation.
+pub fn get_agent_allowed_credentials(
+    app: &tauri::AppHandle,
+    db: &Database,
+    conversation_id: &str,
+) -> Result<HashSet<String>, String> {
+    let conv = operations::get_conversation_detail_impl(db, conversation_id.to_string())
+        .map_err(|e| format!("Failed to get conversation: {}", e))?;
+    let agent = agent_operations::get_agent_impl(db, conv.agent_id)
+        .map_err(|e| format!("Failed to get agent: {}", e))?;
+    let agents_dir = agents_dir(app)?;
+    let agent_dir = agents_dir.join(&agent.folder_name);
+    read_allowed_credentials_from_dir(&agent_dir)
+}
+
+/// Get the set of credential IDs this agent is allowed to use, resolved from agent_id directly.
+/// Used by cron jobs and other backend-triggered tool calls.
+pub fn get_agent_allowed_credentials_by_agent_id(
+    app: &tauri::AppHandle,
+    db: &Database,
+    agent_id: &str,
+) -> Result<HashSet<String>, String> {
+    let agent = agent_operations::get_agent_impl(db, agent_id.to_string())
+        .map_err(|e| format!("Failed to get agent: {}", e))?;
+    let agents_dir = agents_dir(app)?;
+    let agent_dir = agents_dir.join(&agent.folder_name);
+    read_allowed_credentials_from_dir(&agent_dir)
+}
+
+/// Resolve allowed credential IDs into `CredentialEnvEntry` items.
+/// Returns an error if any two credential IDs map to the same environment variable name.
+pub fn resolve_credential_env_entries(
+    app: &tauri::AppHandle,
+    allowed_ids: &HashSet<String>,
+) -> Result<Vec<CredentialEnvEntry>, String> {
+    let mut entries = Vec::new();
+    let mut env_name_to_id: HashMap<String, String> = HashMap::new();
+
+    for id in allowed_ids {
+        let env_name = credential_id_to_env_var(id);
+
+        // Collision detection
+        if let Some(existing_id) = env_name_to_id.get(&env_name) {
+            return Err(format!(
+                "Credential env var collision: '{}' and '{}' both map to '{}'",
+                existing_id, id, env_name
+            ));
+        }
+        env_name_to_id.insert(env_name.clone(), id.clone());
+
+        let value = get_secret(app, id)?;
+        entries.push(CredentialEnvEntry {
+            id: id.clone(),
+            env_name,
+            value,
+        });
+    }
+
+    Ok(entries)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // ── normalize_host ──
+    // ── credential_id_to_env_var ──
 
     #[test]
-    fn test_normalize_host_lowercase() {
-        assert_eq!(normalize_host("Example.COM"), "example.com");
+    fn test_env_var_basic() {
+        assert_eq!(credential_id_to_env_var("github-token"), "CRED_GITHUB_TOKEN");
     }
 
     #[test]
-    fn test_normalize_host_trailing_dot() {
-        assert_eq!(normalize_host("example.com."), "example.com");
+    fn test_env_var_underscores() {
+        assert_eq!(credential_id_to_env_var("openai_api_key"), "CRED_OPENAI_API_KEY");
     }
 
     #[test]
-    fn test_normalize_host_strip_port() {
-        assert_eq!(normalize_host("example.com:443"), "example.com");
+    fn test_env_var_spaces() {
+        assert_eq!(credential_id_to_env_var("my api key"), "CRED_MY_API_KEY");
     }
 
     #[test]
-    fn test_normalize_host_ipv6() {
-        assert_eq!(normalize_host("[::1]:8080"), "::1");
-    }
-
-    // ── host_matches ──
-
-    #[test]
-    fn test_host_matches_exact() {
-        assert!(host_matches("api.github.com", &["api.github.com".into()]));
+    fn test_env_var_mixed() {
+        assert_eq!(credential_id_to_env_var("slack-webhook_url"), "CRED_SLACK_WEBHOOK_URL");
     }
 
     #[test]
-    fn test_host_matches_exact_case_insensitive() {
-        assert!(host_matches("API.GitHub.COM", &["api.github.com".into()]));
+    fn test_env_var_strips_special() {
+        assert_eq!(credential_id_to_env_var("key@123!"), "CRED_KEY123");
     }
 
     #[test]
-    fn test_host_matches_exact_no_match() {
-        assert!(!host_matches("evil.com", &["api.github.com".into()]));
+    fn test_env_var_collision_detection() {
+        // foo-bar and foo_bar both map to CRED_FOO_BAR
+        assert_eq!(credential_id_to_env_var("foo-bar"), credential_id_to_env_var("foo_bar"));
+    }
+
+    // ── parse_allowed_credentials ──
+
+    #[test]
+    fn test_parse_allowed_credentials_v2() {
+        let config = serde_json::json!({
+            "credentials": {
+                "github-token": { "allowed": true },
+                "disabled-key": { "allowed": false }
+            }
+        });
+        let allowed = parse_allowed_credentials(&config);
+        assert!(allowed.contains("github-token"));
+        assert!(!allowed.contains("disabled-key"));
     }
 
     #[test]
-    fn test_host_matches_wildcard() {
-        assert!(host_matches(
-            "sub.github.com",
-            &["*.github.com".into()]
-        ));
+    fn test_parse_allowed_credentials_legacy() {
+        let config = serde_json::json!({
+            "credentials": {
+                "github-token": true,
+                "disabled-key": false
+            }
+        });
+        let allowed = parse_allowed_credentials(&config);
+        assert!(allowed.contains("github-token"));
+        assert!(!allowed.contains("disabled-key"));
     }
 
     #[test]
-    fn test_host_matches_wildcard_no_base() {
-        // *.github.com should NOT match github.com itself
-        assert!(!host_matches("github.com", &["*.github.com".into()]));
+    fn test_parse_allowed_credentials_empty() {
+        let config = serde_json::json!({ "credentials": {} });
+        let allowed = parse_allowed_credentials(&config);
+        assert!(allowed.is_empty());
     }
 
     #[test]
-    fn test_host_matches_wildcard_deep_subdomain() {
-        assert!(host_matches(
-            "deep.sub.github.com",
-            &["*.github.com".into()]
-        ));
-    }
-
-    #[test]
-    fn test_host_matches_suffix_trick_rejected() {
-        // api.github.com.evil.com must NOT match api.github.com
-        assert!(!host_matches(
-            "api.github.com.evil.com",
-            &["api.github.com".into()]
-        ));
-    }
-
-    #[test]
-    fn test_host_matches_with_port() {
-        assert!(host_matches(
-            "api.github.com:443",
-            &["api.github.com".into()]
-        ));
-    }
-
-    #[test]
-    fn test_host_matches_empty_host() {
-        assert!(!host_matches("", &["example.com".into()]));
-    }
-
-    // ── is_private_or_loopback ──
-
-    #[test]
-    fn test_private_loopback_127() {
-        assert!(is_private_or_loopback("127.0.0.1"));
-        assert!(is_private_or_loopback("127.0.0.2"));
-    }
-
-    #[test]
-    fn test_private_loopback_ipv6() {
-        assert!(is_private_or_loopback("::1"));
-    }
-
-    #[test]
-    fn test_private_loopback_localhost() {
-        assert!(is_private_or_loopback("localhost"));
-    }
-
-    #[test]
-    fn test_private_10_range() {
-        assert!(is_private_or_loopback("10.0.0.1"));
-        assert!(is_private_or_loopback("10.255.255.255"));
-    }
-
-    #[test]
-    fn test_private_172_range() {
-        assert!(is_private_or_loopback("172.16.0.1"));
-        assert!(is_private_or_loopback("172.31.255.255"));
-    }
-
-    #[test]
-    fn test_private_192_range() {
-        assert!(is_private_or_loopback("192.168.0.1"));
-        assert!(is_private_or_loopback("192.168.255.255"));
-    }
-
-    #[test]
-    fn test_private_link_local() {
-        assert!(is_private_or_loopback("169.254.1.1"));
-    }
-
-    #[test]
-    fn test_private_dot_local() {
-        assert!(is_private_or_loopback("myhost.local"));
-    }
-
-    #[test]
-    fn test_private_dot_internal() {
-        assert!(is_private_or_loopback("service.internal"));
-    }
-
-    #[test]
-    fn test_public_not_private() {
-        assert!(!is_private_or_loopback("8.8.8.8"));
-        assert!(!is_private_or_loopback("api.github.com"));
-        assert!(!is_private_or_loopback("172.15.0.1")); // outside 16-31
+    fn test_parse_allowed_credentials_missing_section() {
+        let config = serde_json::json!({ "native": {} });
+        let allowed = parse_allowed_credentials(&config);
+        assert!(allowed.is_empty());
     }
 
     // ── redact_output ──
@@ -656,43 +547,4 @@ mod tests {
         assert_eq!(messages[0], original);
     }
 
-    // ── extract_credential_refs ──
-
-    #[test]
-    fn test_extract_refs_single() {
-        let refs = extract_credential_refs("Bearer {{credential:naver_api}}");
-        assert_eq!(refs, vec!["naver_api"]);
-    }
-
-    #[test]
-    fn test_extract_refs_multiple() {
-        let refs = extract_credential_refs(
-            "{{credential:a}} and {{credential:b}} and {{credential:a}}",
-        );
-        assert_eq!(refs, vec!["a", "b"]); // deduped and sorted
-    }
-
-    #[test]
-    fn test_extract_refs_none() {
-        let refs = extract_credential_refs("no credentials here");
-        assert!(refs.is_empty());
-    }
-
-    #[test]
-    fn test_extract_refs_incomplete() {
-        let refs = extract_credential_refs("{{credential:incomplete");
-        assert!(refs.is_empty());
-    }
-
-    // ── has_unresolved_refs ──
-
-    #[test]
-    fn test_has_unresolved_true() {
-        assert!(has_unresolved_refs("Bearer {{credential:unknown}}"));
-    }
-
-    #[test]
-    fn test_has_unresolved_false() {
-        assert!(!has_unresolved_refs("Bearer sk-123456"));
-    }
 }

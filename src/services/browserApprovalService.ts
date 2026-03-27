@@ -4,9 +4,14 @@ import * as cmds from "./tauriCommands";
 
 const browserApprovedDomains = new Map<string, Set<string>>();
 
-export function hasCredentialRefs(tc: { name: string; arguments: string }): boolean {
-  if (tc.name !== "http_request") return false;
-  return /\{\{credential:[^}]+\}\}/.test(tc.arguments);
+/** Returns true if this tool call should NOT be auto-approved because
+ *  it will receive credential environment variables at execution time. */
+export function isCredentialBearingTool(
+  tc: { name: string },
+  agentHasCredentials: boolean,
+): boolean {
+  if (tc.name !== "run_command") return false;
+  return agentHasCredentials;
 }
 
 export function extractBrowserDomain(toolName: string, toolArgs: string): string | null {

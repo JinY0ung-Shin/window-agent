@@ -291,7 +291,7 @@ async function sendNormalMessage() {
 
   try {
     const effective = resolveEffectiveSettings(agent);
-    const { toolDefinitions, autoApproveEnabled, openAITools } = await resolveToolConfig(agent);
+    const { toolDefinitions, autoApproveEnabled, agentHasCredentials, credentialsSection, openAITools } = await resolveToolConfig(agent);
 
     const enabledToolNames = toolDefinitions.map((t) => t.name);
     const baseSystemPrompt = await resolveSystemPrompt(agent, enabledToolNames, settings.companyName);
@@ -302,7 +302,7 @@ async function sendNormalMessage() {
     await runToolLoop(
       {
         convId, baseSystemPrompt, effective, toolDefinitions,
-        autoApproveEnabled, openAITools, skillsSection, workspacePath, bootContent,
+        autoApproveEnabled, agentHasCredentials, credentialsSection, openAITools, skillsSection, workspacePath, bootContent,
       },
       { currentRequestId, currentMsgId: firstMsgId },
     );

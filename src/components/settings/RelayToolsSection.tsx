@@ -9,12 +9,11 @@ const ALL_RELAY_TOOLS = [
   { name: "write_file", label: "Write File" },
   { name: "delete_file", label: "Delete File" },
   { name: "web_search", label: "Web Search" },
-  { name: "http_request", label: "HTTP Request" },
   { name: "self_inspect", label: "Self Inspect" },
   { name: "manage_schedule", label: "Manage Schedule" },
 ];
 
-const DEFAULT_RELAY_TOOLS = ["read_file", "list_directory", "web_search", "http_request", "self_inspect"];
+const DEFAULT_RELAY_TOOLS = ["read_file", "list_directory", "web_search", "self_inspect"];
 
 interface Props {
   isOpen: boolean;

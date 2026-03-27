@@ -12,10 +12,10 @@ use super::file_tools::{
     tool_list_directory, tool_list_directory_recursive, tool_read_file, tool_vault_write_file,
     tool_web_search, tool_write_file,
 };
-use super::http::tool_http_request;
 use super::scope::{resolve_scope, ScopeResolution};
 use super::self_tools::{tool_manage_schedule, tool_self_inspect};
 use super::shell_tools::tool_run_command;
+use crate::services::credential_service;
 
 /// Inner dispatch — routes to the correct tool implementation.
 /// Runs inside the timeout wrapper.
@@ -293,13 +293,18 @@ pub(crate) async fn execute_tool_inner(
             Ok(serde_json::json!({ "success": true }))
         }
 
-        "http_request" => tool_http_request(app, input, conversation_id, db).await,
-
         // ── System tools ──
         "run_command" => {
             let workspace = super::scope::resolve_workspace_path(app, db, conversation_id)?;
             let default_dir = workspace.to_string_lossy().to_string();
-            tool_run_command(input, &default_dir).await
+            let allowed_ids = credential_service::get_agent_allowed_credentials(app, db, conversation_id)
+                .unwrap_or_default();
+            let cred_entries = if allowed_ids.is_empty() {
+                Vec::new()
+            } else {
+                credential_service::resolve_credential_env_entries(app, &allowed_ids)?
+            };
+            tool_run_command(input, &default_dir, &cred_entries).await
         }
 
         // ── Self-awareness tools ──
@@ -340,14 +345,6 @@ pub(crate) async fn execute_tool_inner_for_agent(
                 .and_then(|v| v.as_str())
                 .ok_or("web_search: missing 'url' parameter")?;
             tool_web_search(url).await
-        }
-        "http_request" => {
-            // Check if request uses credential placeholders — those require conversation context
-            let input_str = serde_json::to_string(input).unwrap_or_default();
-            if input_str.contains("{{credential:") {
-                return Err("Credential-based HTTP requests are not supported in scheduled task execution. Use plain headers instead.".to_string());
-            }
-            tool_http_request(app, input, agent_id, db).await
         }
         "read_file" | "write_file" | "delete_file" | "list_directory" => {
             let scope = input
@@ -407,7 +404,14 @@ pub(crate) async fn execute_tool_inner_for_agent(
             let default_dir = std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
                 .unwrap_or_else(|_| "/tmp".to_string());
-            tool_run_command(input, &default_dir).await
+            let allowed_ids = credential_service::get_agent_allowed_credentials_by_agent_id(app, db, agent_id)
+                .unwrap_or_default();
+            let cred_entries = if allowed_ids.is_empty() {
+                Vec::new()
+            } else {
+                credential_service::resolve_credential_env_entries(app, &allowed_ids)?
+            };
+            tool_run_command(input, &default_dir, &cred_entries).await
         }
         t if t.starts_with("browser_") => {
             Err("Browser tools are not available in scheduled task execution.".to_string())

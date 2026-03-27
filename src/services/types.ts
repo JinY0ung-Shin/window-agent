@@ -134,7 +134,7 @@ export interface ToolConfig {
 export interface CredentialMeta {
   id: string;
   name: string;
-  allowed_hosts: string[];
+  allowed_hosts?: string[];
   created_at: string;
   updated_at: string;
 }

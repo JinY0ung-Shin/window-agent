@@ -13,7 +13,7 @@ import { i18n } from "../i18n";
 import {
   extractBrowserDomain,
   isBrowserDomainApproved,
-  hasCredentialRefs,
+  isCredentialBearingTool,
   clearBrowserApprovals,
 } from "./browserApprovalService";
 
@@ -201,6 +201,7 @@ export function classifyToolCalls(
     workspacePath?: string;
     convId?: string;
     autoApproveEnabled?: boolean;
+    agentHasCredentials?: boolean;
   },
 ): ToolClassification {
   const autoTools: ToolCall[] = [];
@@ -222,7 +223,7 @@ export function classifyToolCalls(
         isBrowserDomainApproved(options.convId, extractBrowserDomain(tc.name, tc.arguments))
       ) {
         autoTools.push(tc);
-      } else if (options?.autoApproveEnabled && !hasCredentialRefs(tc)) {
+      } else if (options?.autoApproveEnabled && !isCredentialBearingTool(tc, options?.agentHasCredentials ?? false)) {
         autoTools.push(tc);
       } else {
         confirmTools.push(tc);

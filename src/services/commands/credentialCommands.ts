@@ -11,7 +11,7 @@ export async function addCredential(
   id: string,
   name: string,
   value: string,
-  allowedHosts: string[],
+  allowedHosts: string[] = [],
 ): Promise<void> {
   return invoke("add_credential", {
     request: { id, name, value, allowed_hosts: allowedHosts },

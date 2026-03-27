@@ -457,7 +457,7 @@ async function sendTeamMessageFlow() {
 
   try {
     const effective = resolveEffectiveSettings(leaderAgent);
-    const { toolDefinitions, autoApproveEnabled } = await resolveToolConfig(leaderAgent);
+    const { toolDefinitions, autoApproveEnabled, agentHasCredentials, credentialsSection } = await resolveToolConfig(leaderAgent);
     const enabledToolNames = [...toolDefinitions.map((t) => t.name), "delegate"];
     const baseSystemPrompt = await resolveManagerPrompt(leaderAgent, enabledToolNames, settings.companyName);
 
@@ -504,6 +504,7 @@ async function sendTeamMessageFlow() {
         requestId: currentRequestId,
         msgId: currentMsgId,
         tools: leaderTools,
+        credentialsSection,
         overrideSummary: null,
         skipPreCompaction: true,
       });
@@ -679,6 +680,7 @@ async function sendTeamMessageFlow() {
           convId,
           toolDefinitions,
           autoApproveEnabled,
+          agentHasCredentials,
           runId: teamRun.id,
         });
 

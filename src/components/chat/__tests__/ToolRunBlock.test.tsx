@@ -33,7 +33,7 @@ function createStep(overrides: Partial<ToolRunStep> = {}): ToolRunStep {
   return {
     toolCall: {
       id: "call-1",
-      name: "http_request",
+      name: "web_search",
       arguments: "{\"url\":\"https://example.com\"}",
     },
     status: "executed",
@@ -43,7 +43,7 @@ function createStep(overrides: Partial<ToolRunStep> = {}): ToolRunStep {
       content: "GET https://example.com",
       status: "complete",
       tool_call_id: "call-1",
-      tool_name: "http_request",
+      tool_name: "web_search",
     },
     ...overrides,
   };
@@ -59,7 +59,7 @@ describe("ToolRunBlock", () => {
       <ToolRunBlock
         assistantMessage={createAssistantMessage()}
         steps={[
-          createStep({ toolCall: { id: "call-1", name: "http_request", arguments: "{}" } }),
+          createStep({ toolCall: { id: "call-1", name: "web_search", arguments: "{}" } }),
           createStep({
             toolCall: { id: "call-2", name: "browser_click", arguments: "{}" },
             resultMessage: {
@@ -77,10 +77,10 @@ describe("ToolRunBlock", () => {
     );
 
     expect(screen.getByText("도구 2개 실행")).toBeInTheDocument();
-    expect(screen.queryByText("http_request")).not.toBeInTheDocument();
+    expect(screen.queryByText("web_search")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /도구 2개 실행/i }));
-    expect(screen.getByText("http_request")).toBeInTheDocument();
+    expect(screen.getByText("web_search")).toBeInTheDocument();
     expect(screen.getByText("browser_click")).toBeInTheDocument();
   });
 
@@ -97,7 +97,7 @@ describe("ToolRunBlock", () => {
               content: "Error: request failed",
               status: "complete",
               tool_call_id: "call-1",
-              tool_name: "http_request",
+              tool_name: "web_search",
             },
           }),
         ]}
@@ -112,7 +112,7 @@ describe("ToolRunBlock", () => {
   it("shows approval actions for waiting active runs", () => {
     useToolRunStore.setState({
       toolRunState: "tool_waiting",
-      pendingToolCalls: [{ id: "call-1", name: "http_request", arguments: "{}" }],
+      pendingToolCalls: [{ id: "call-1", name: "web_search", arguments: "{}" }],
     });
 
     render(

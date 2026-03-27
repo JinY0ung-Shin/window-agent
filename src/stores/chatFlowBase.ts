@@ -20,6 +20,7 @@ import {
 } from "../services/personaService";
 import { getEffectiveTools, toOpenAITools, type ToolDefinition } from "../services/toolRegistry";
 import { readToolConfig } from "../services/nativeToolRegistry";
+import { listCredentials } from "../services/commands/credentialCommands";
 import { CONVERSATION_TITLE_MAX_LENGTH, DEFAULT_SYSTEM_PROMPT, parseErrorMessage } from "../constants";
 import { toErrorMessage } from "../utils/errorUtils";
 import { i18n } from "../i18n";
@@ -219,6 +220,7 @@ export interface StreamOneTurnParams {
   /** 기존 tools에 추가할 도구 목록 (예: delegate) */
   extraTools?: object[];
   skillsSection?: string;
+  credentialsSection?: string;
   workspacePath?: string;
   bootContent?: string | null;
   /** 명시적으로 summary를 override (예: 팀 리더는 null 사용) */
@@ -234,7 +236,7 @@ export interface StreamOneTurnParams {
 export async function streamOneTurn(params: StreamOneTurnParams): Promise<StreamDoneEvent> {
   const {
     baseSystemPrompt, effective, requestId, msgId,
-    tools, extraTools, skillsSection, workspacePath, bootContent,
+    tools, extraTools, skillsSection, credentialsSection, workspacePath, bootContent,
     overrideSummary, skipPreCompaction,
   } = params;
 
@@ -261,6 +263,7 @@ export async function streamOneTurn(params: StreamOneTurnParams): Promise<Stream
     summary: useSummary,
     baseSystemPrompt,
     skillsSection,
+    credentialsSection,
     bootContent,
     memoryNotes: useMemoryStore.getState().notes,
     vaultNotes: useVaultStore.getState().notes,
@@ -299,6 +302,8 @@ export interface ToolLoopParams {
   effective: EffectiveSettings;
   toolDefinitions: ToolDefinition[];
   autoApproveEnabled: boolean;
+  agentHasCredentials?: boolean;
+  credentialsSection?: string;
   openAITools?: object[];
   skillsSection?: string;
   workspacePath?: string;
@@ -322,7 +327,8 @@ export async function runToolLoop(
 ): Promise<void> {
   const {
     convId, baseSystemPrompt, effective, toolDefinitions,
-    autoApproveEnabled, openAITools, skillsSection, workspacePath, bootContent,
+    autoApproveEnabled, agentHasCredentials, credentialsSection,
+    openAITools, skillsSection, workspacePath, bootContent,
     saveExtras,
   } = params;
   let { currentRequestId, currentMsgId } = state;
@@ -337,6 +343,7 @@ export async function runToolLoop(
       msgId: currentMsgId,
       tools: openAITools,
       skillsSection,
+      credentialsSection,
       workspacePath,
       bootContent,
     });
@@ -392,6 +399,7 @@ export async function runToolLoop(
       convId,
       toolDefinitions,
       autoApproveEnabled,
+      agentHasCredentials,
       workspacePath,
       iterationCount,
     });
@@ -441,13 +449,22 @@ export function resolveEffectiveSettings(agent: Agent | null): EffectiveSettings
 export interface AgentToolConfig {
   toolDefinitions: ToolDefinition[];
   autoApproveEnabled: boolean;
+  agentHasCredentials: boolean;
+  credentialsSection?: string;
   openAITools: object[] | undefined;
+}
+
+/** Convert a credential ID to an environment variable name (mirrors Rust credential_id_to_env_var). */
+export function credentialIdToEnvVar(id: string): string {
+  return "CRED_" + id.toUpperCase().replace(/[-\s]/g, "_").replace(/[^A-Z0-9_]/g, "");
 }
 
 /** 에이전트의 도구 정의 및 자동 승인 설정 로드 */
 export async function resolveToolConfig(agent: Agent | null): Promise<AgentToolConfig> {
   let toolDefinitions: ToolDefinition[] = [];
   let autoApproveEnabled = false;
+  let agentHasCredentials = false;
+  let credentialsSection: string | undefined;
 
   if (agent) {
     try {
@@ -456,11 +473,47 @@ export async function resolveToolConfig(agent: Agent | null): Promise<AgentToolC
     try {
       const tc = await readToolConfig(agent.folder_name);
       autoApproveEnabled = tc?.auto_approve ?? false;
+      // Check if agent has any allowed credentials and build credentials section
+      if (tc?.credentials) {
+        const allowedIds: string[] = [];
+        for (const [id, v] of Object.entries(tc.credentials)) {
+          const isAllowed = typeof v === "boolean" ? v
+            : (typeof v === "object" && v !== null && "allowed" in v) ? (v as { allowed: boolean }).allowed
+            : false;
+          if (isAllowed) allowedIds.push(id);
+        }
+        agentHasCredentials = allowedIds.length > 0;
+
+        // Build credentials section if run_command is enabled and there are credentials
+        const hasRunCommand = toolDefinitions.some(t => t.name === "run_command");
+        if (agentHasCredentials && hasRunCommand) {
+          try {
+            const allMetas = await listCredentials();
+            const isWindows = navigator.platform?.startsWith("Win") ?? false;
+            const lines = allowedIds
+              .map(id => {
+                const meta = allMetas.find(m => m.id === id);
+                const displayName = meta?.name ?? id;
+                const envName = credentialIdToEnvVar(id);
+                return isWindows
+                  ? `- %${envName}% (${displayName})`
+                  : `- $${envName} (${displayName})`;
+              })
+              .sort();
+            credentialsSection = [
+              "[AVAILABLE CREDENTIALS]",
+              "The following credentials are available as environment variables in run_command:",
+              ...lines,
+              "Use them in shell commands. Never echo or print credential values directly.",
+            ].join("\n");
+          } catch (e) { logger.debug("Failed to load credential metadata", e); }
+        }
+      }
     } catch (e) { logger.debug("No tool config, using defaults", e); }
   }
 
   const openAITools = toolDefinitions.length > 0 ? toOpenAITools(toolDefinitions) : undefined;
-  return { toolDefinitions, autoApproveEnabled, openAITools };
+  return { toolDefinitions, autoApproveEnabled, agentHasCredentials, credentialsSection, openAITools };
 }
 
 // ── 시스템 프롬프트 조립 ────────────────────────────
@@ -555,6 +608,7 @@ export interface ProcessToolCallsOptions {
   convId: string;
   toolDefinitions: ToolDefinition[];
   autoApproveEnabled: boolean;
+  agentHasCredentials?: boolean;
   workspacePath?: string;
   iterationCount?: number;
   /** 팀 실행 시 run별 상태 분리를 위한 runId */
@@ -571,12 +625,13 @@ export async function processToolCalls(
   parsedToolCalls: ToolCall[],
   options: ProcessToolCallsOptions,
 ): Promise<ChatMessage[]> {
-  const { convId, toolDefinitions, autoApproveEnabled, workspacePath, iterationCount, runId, onConfirmApproved } = options;
+  const { convId, toolDefinitions, autoApproveEnabled, agentHasCredentials, workspacePath, iterationCount, runId, onConfirmApproved } = options;
 
   const classification = classifyToolCalls(parsedToolCalls, toolDefinitions, {
     workspacePath,
     convId,
     autoApproveEnabled,
+    agentHasCredentials,
   });
 
   const savedToolMsgs = await executeToolPipeline(classification, convId, {

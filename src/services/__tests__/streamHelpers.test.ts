@@ -16,7 +16,7 @@ vi.mock("../toolService");
 vi.mock("../browserApprovalService", () => ({
   extractBrowserDomain: vi.fn().mockReturnValue(null),
   isBrowserDomainApproved: vi.fn().mockReturnValue(false),
-  hasCredentialRefs: vi.fn().mockReturnValue(false),
+  isCredentialBearingTool: vi.fn().mockReturnValue(false),
   clearBrowserApprovals: vi.fn(),
 }));
 

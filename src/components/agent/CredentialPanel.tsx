@@ -62,11 +62,7 @@ export default function CredentialPanel({ toolConfig, onChange }: Props) {
                 onChange={(e) => toggleCredential(cred.id, e.target.checked)}
               />
               <span className="native-tool-name">{cred.name}</span>
-              <span className="native-tool-desc">
-                {cred.allowed_hosts.length > 0
-                  ? cred.allowed_hosts.join(", ")
-                  : "—"}
-              </span>
+              <span className="native-tool-desc">{cred.id}</span>
             </div>
           );
         })}

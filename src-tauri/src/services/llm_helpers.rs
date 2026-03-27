@@ -19,6 +19,9 @@ pub fn build_system_prompt(resolved: &ResolvedContext, scope: &ExecutionScope) -
     if let Some(ref tools_sec) = resolved.tools_section {
         parts.push(tools_sec.clone());
     }
+    if let Some(ref creds_sec) = resolved.credentials_section {
+        parts.push(creds_sec.clone());
+    }
     parts.push(
         actor_context::role_instruction(&scope.role)
             .unwrap_or("Complete the task below.")
@@ -76,6 +79,7 @@ mod tests {
             consolidated_memory: memory.map(|s| s.into()),
             registered_agents_section: agents_section.map(|s| s.into()),
             tools_section: tools_section.map(|s| s.into()),
+            credentials_section: None,
         }
     }
 

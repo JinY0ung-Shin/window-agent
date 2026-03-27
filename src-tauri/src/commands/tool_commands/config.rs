@@ -137,6 +137,21 @@ pub fn normalize_tool_config(config_str: &str) -> Result<(String, bool), String>
         }
     }
 
+    // Remove stale/unknown tool entries that are not in native_tool_definitions
+    if let Some(native) = config["native"].as_object_mut() {
+        let known_names: std::collections::HashSet<String> =
+            defs.iter().map(|d| d.name.clone()).collect();
+        let stale_keys: Vec<String> = native
+            .keys()
+            .filter(|k| !known_names.contains(*k))
+            .cloned()
+            .collect();
+        for key in stale_keys {
+            native.remove(&key);
+            changed = true;
+        }
+    }
+
     // Ensure auto_approve field exists (default: false)
     if config.get("auto_approve").is_none() {
         config["auto_approve"] = serde_json::json!(false);
