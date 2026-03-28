@@ -7,9 +7,9 @@ function makeMsg(id: string, content: string, type: "user" | "agent" = "user"): 
 }
 
 describe("buildConversationContext with skillsSection", () => {
-  it("injects skillsSection between persona and memory", () => {
+  it("injects skillsSection between persona and memory", async () => {
     const messages = [makeMsg("1", "hello", "user")];
-    const result = buildConversationContext({
+    const result = await buildConversationContext({
       messages,
       summary: null,
       baseSystemPrompt: "You are helpful.",
@@ -27,9 +27,9 @@ describe("buildConversationContext with skillsSection", () => {
     expect(skillsIdx).toBeLessThan(memoryIdx);
   });
 
-  it("works without skillsSection (backward compat)", () => {
+  it("works without skillsSection (backward compat)", async () => {
     const messages = [makeMsg("1", "hello", "user")];
-    const result = buildConversationContext({
+    const result = await buildConversationContext({
       messages,
       summary: null,
       baseSystemPrompt: "You are helpful.",
@@ -38,10 +38,10 @@ describe("buildConversationContext with skillsSection", () => {
     expect(result.apiMessages.length).toBe(1);
   });
 
-  it("includes skillsSection content in system prompt", () => {
+  it("includes skillsSection content in system prompt", async () => {
     const messages = [makeMsg("1", "hello", "user")];
     const skillsSection = "[AVAILABLE SKILLS]\n- calc: Calculator\n\n[ACTIVE SKILLS]\n--- calc ---\nDo math.\n--- end ---";
-    const result = buildConversationContext({
+    const result = await buildConversationContext({
       messages,
       summary: null,
       baseSystemPrompt: "Base prompt.",
@@ -52,9 +52,9 @@ describe("buildConversationContext with skillsSection", () => {
     expect(result.systemPrompt).toContain("Do math.");
   });
 
-  it("skillsSection comes before summary", () => {
+  it("skillsSection comes before summary", async () => {
     const messages = [makeMsg("1", "hello", "user")];
-    const result = buildConversationContext({
+    const result = await buildConversationContext({
       messages,
       summary: "Previously discussed weather.",
       baseSystemPrompt: "Base.",

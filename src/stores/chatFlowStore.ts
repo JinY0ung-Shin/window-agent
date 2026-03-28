@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Agent, ChatMessage, Conversation, SkillMetadata } from "../services/types";
+import type { Agent, Attachment, ChatMessage, Conversation, SkillMetadata } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
@@ -260,10 +260,25 @@ async function sendNormalMessage() {
     }
   }
 
+  // Save pending image attachments to disk
+  const rawPending = useMessageStore.getState().pendingAttachments;
+  let savedAttachments: Attachment[] | undefined;
+  if (rawPending.length > 0) {
+    savedAttachments = [];
+    for (const att of rawPending) {
+      // Extract base64 data from data URL (strip "data:image/...;base64," prefix)
+      const base64 = att.dataUrl.replace(/^data:image\/[^;]+;base64,/, "");
+      const path = await cmds.saveChatImage(base64);
+      savedAttachments.push({ type: "image", path });
+    }
+    useMessageStore.getState().clearPendingAttachments();
+  }
+
   const savedUser = await cmds.saveMessage({
     conversation_id: convId,
     role: "user",
     content: inputValue,
+    attachments: savedAttachments ? JSON.stringify(savedAttachments) : undefined,
   });
 
   const userMsg: ChatMessage = {
@@ -272,6 +287,7 @@ async function sendNormalMessage() {
     type: "user",
     content: inputValue,
     status: "complete",
+    attachments: savedAttachments,
   };
 
   const currentRequestId = `req-${Date.now()}`;

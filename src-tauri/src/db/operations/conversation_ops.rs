@@ -308,6 +308,7 @@ mod tests {
                 sender_agent_id: None,
                 team_run_id: None,
                 team_task_id: None,
+                attachments: None,
             },
         )
         .unwrap();
@@ -340,6 +341,7 @@ mod tests {
                 sender_agent_id: None,
                 team_run_id: None,
                 team_task_id: None,
+                attachments: None,
             },
         )
         .unwrap();
@@ -375,6 +377,7 @@ mod tests {
                 sender_agent_id: None,
                 team_run_id: None,
                 team_task_id: None,
+                attachments: None,
             },
         )
         .unwrap();
@@ -408,6 +411,7 @@ mod tests {
                 sender_agent_id: None,
                 team_run_id: None,
                 team_task_id: None,
+                attachments: None,
             },
         );
         assert!(result.is_err());
@@ -437,6 +441,7 @@ mod tests {
                 sender_agent_id: None,
                 team_run_id: None,
                 team_task_id: None,
+                attachments: None,
             },
         )
         .unwrap();
@@ -452,6 +457,7 @@ mod tests {
                 sender_agent_id: None,
                 team_run_id: None,
                 team_task_id: None,
+                attachments: None,
             },
         )
         .unwrap();
@@ -528,6 +534,7 @@ mod tests {
                 sender_agent_id: None,
                 team_run_id: None,
                 team_task_id: None,
+                attachments: None,
             },
         );
         assert!(result.is_err(), "FK constraint should reject nonexistent conversation_id");
@@ -563,6 +570,7 @@ mod tests {
             sender_agent_id: None,
             team_run_id: None,
             team_task_id: None,
+            attachments: None,
         }).unwrap();
 
         let affected = update_conversation_summary_impl(
@@ -641,6 +649,7 @@ mod tests {
             sender_agent_id: None,
             team_run_id: None,
             team_task_id: None,
+            attachments: None,
         }).unwrap();
 
         // First update: expected_previous is None (NULL)
@@ -915,6 +924,7 @@ mod tests {
                     sender_agent_id: None,
                     team_run_id: None,
                     team_task_id: None,
+                attachments: None,
                 },
             )
             .unwrap();

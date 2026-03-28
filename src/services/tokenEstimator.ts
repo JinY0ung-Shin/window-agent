@@ -23,3 +23,7 @@ export function estimateMessageTokens(msg: {
 }): number {
   return 4 + estimateTokens(msg.content); // 4 tokens overhead per message
 }
+
+/** Estimate additional tokens for image attachments. */
+export const IMAGE_TOKENS_LOW = 85;
+export const IMAGE_TOKENS_AUTO = 765; // Approximation for medium-sized images

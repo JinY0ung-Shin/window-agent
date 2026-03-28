@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+use base64::Engine;
 use crate::api::ApiState;
 use crate::db::Database;
 use crate::memory::SystemMemoryManager;
@@ -347,10 +348,28 @@ async fn generate_and_send_response(
             };
 
             if let Some(msgs) = body["messages"].as_array_mut() {
+                // Check if the tool result contains a browser screenshot
+                let content_value = if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&output) {
+                    if let Some(path) = parsed.get("screenshot_path").and_then(|v| v.as_str()) {
+                        if let Ok(bytes) = std::fs::read(path) {
+                            let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                            serde_json::json!([
+                                { "type": "text", "text": output },
+                                { "type": "image_url", "image_url": { "url": format!("data:image/png;base64,{b64}"), "detail": "low" } }
+                            ])
+                        } else {
+                            serde_json::Value::String(output.clone())
+                        }
+                    } else {
+                        serde_json::Value::String(output.clone())
+                    }
+                } else {
+                    serde_json::Value::String(output.clone())
+                };
                 msgs.push(serde_json::json!({
                     "role": "tool",
                     "tool_call_id": tc.id,
-                    "content": output,
+                    "content": content_value,
                 }));
             }
         }

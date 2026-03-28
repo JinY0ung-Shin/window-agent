@@ -122,6 +122,10 @@ export function mapDbMessages(
           } catch { /* ignore parse errors */ }
         }
       }
+      // Parse attachments JSON
+      if (m.attachments) {
+        try { chatMsg.attachments = JSON.parse(m.attachments); } catch { /* ignore */ }
+      }
       // Map team sender metadata
       if (m.sender_agent_id) {
         chatMsg.senderAgentId = m.sender_agent_id;

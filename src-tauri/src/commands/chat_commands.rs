@@ -5,6 +5,7 @@ use crate::db::Database;
 use crate::error::AppError;
 use crate::memory::SystemMemoryManager;
 use crate::vault::strip_title_heading;
+use base64::Engine;
 use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
@@ -69,11 +70,19 @@ pub async fn delete_conversation(
     let screenshot_paths = operations::get_browser_artifact_screenshot_paths(&db, &conversation_id)
         .unwrap_or_default();
 
+    // Collect chat image attachment paths before DB cascade
+    let chat_image_paths = operations::get_message_attachment_paths(&db, &conversation_id)
+        .unwrap_or_default();
+
     // Delete conversation (cascades browser_artifacts rows via FK)
     operations::delete_conversation_impl(&db, conversation_id)?;
 
     // Clean up screenshot files after DB deletion
     for path in screenshot_paths {
+        let _ = std::fs::remove_file(&path);
+    }
+    // Clean up chat image files
+    for path in chat_image_paths {
         let _ = std::fs::remove_file(&path);
     }
 
@@ -330,4 +339,65 @@ pub fn archive_conversation_notes(
         }
     }
     Ok(archived)
+}
+
+// ── Image I/O ──
+
+/// Read a file from the app data directory as base64.
+/// Only allows reading from browser_screenshots and chat_images subdirectories.
+#[tauri::command]
+pub fn read_file_base64(app: AppHandle, path: String) -> Result<String, AppError> {
+    let app_data = app.path().app_data_dir()
+        .map_err(|e| AppError::Io(format!("app_data_dir: {e}")))?;
+    let canonical = std::fs::canonicalize(&path)
+        .map_err(|e| AppError::Io(format!("canonicalize: {e}")))?;
+    let allowed_dirs = [
+        app_data.join("browser_screenshots"),
+        app_data.join("chat_images"),
+    ];
+    if !allowed_dirs.iter().any(|d| canonical.starts_with(d)) {
+        return Err(AppError::Validation("Path not in allowed directory".into()));
+    }
+    let bytes = std::fs::read(&canonical)
+        .map_err(|e| AppError::Io(format!("read file: {e}")))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(&bytes))
+}
+
+/// Save a user-uploaded image to disk. Returns the absolute path.
+/// Resizes to max 1024px on the longest side to keep file sizes reasonable.
+#[tauri::command]
+pub fn save_chat_image(app: AppHandle, image_base64: String) -> Result<String, AppError> {
+    use std::io::Cursor;
+
+    let app_data = app.path().app_data_dir()
+        .map_err(|e| AppError::Io(format!("app_data_dir: {e}")))?;
+    let images_dir = app_data.join("chat_images");
+    std::fs::create_dir_all(&images_dir)
+        .map_err(|e| AppError::Io(format!("mkdir: {e}")))?;
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&image_base64)
+        .map_err(|e| AppError::Validation(format!("base64 decode: {e}")))?;
+
+    let img = image::load_from_memory(&bytes)
+        .map_err(|e| AppError::Validation(format!("load image: {e}")))?;
+
+    // Resize if larger than 1024px on any side
+    let max_dim = 1024;
+    let resized = if img.width() > max_dim || img.height() > max_dim {
+        img.resize(max_dim, max_dim, image::imageops::FilterType::Lanczos3)
+    } else {
+        img
+    };
+
+    let id = uuid::Uuid::new_v4().to_string();
+    let path = images_dir.join(format!("{id}.png"));
+
+    let mut buf = Cursor::new(Vec::new());
+    resized.write_to(&mut buf, image::ImageFormat::Png)
+        .map_err(|e| AppError::Io(format!("encode png: {e}")))?;
+    std::fs::write(&path, buf.into_inner())
+        .map_err(|e| AppError::Io(format!("write file: {e}")))?;
+
+    Ok(path.to_string_lossy().to_string())
 }

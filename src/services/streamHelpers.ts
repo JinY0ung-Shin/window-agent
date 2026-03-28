@@ -300,6 +300,7 @@ export async function executeToolPipeline(
         content: toolMsg.content,
         tool_call_id: toolMsg.tool_call_id,
         tool_name: toolMsg.tool_name,
+        attachments: toolMsg.attachments ? JSON.stringify(toolMsg.attachments) : undefined,
       });
       savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
       // Clear frontend approval cache when browser session is closed
@@ -326,6 +327,7 @@ export async function executeToolPipeline(
           content: toolMsg.content,
           tool_call_id: toolMsg.tool_call_id,
           tool_name: toolMsg.tool_name,
+          attachments: toolMsg.attachments ? JSON.stringify(toolMsg.attachments) : undefined,
         });
         savedToolMsgs.push({ ...toolMsg, id: saved.id, dbMessageId: saved.id });
         if (toolMsg.tool_name === "browser_close") clearBrowserApprovals(convId);

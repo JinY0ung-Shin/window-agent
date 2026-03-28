@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useMessageStore } from "../stores/messageStore";
+import { readImage } from "@tauri-apps/plugin-clipboard-manager";
+import { useMessageStore, type PendingAttachment } from "../stores/messageStore";
 
 interface UseChatInputLogicOptions {
   /** Function to call when user sends a message (after flushing local value to store) */
@@ -16,6 +17,7 @@ interface UseChatInputLogicOptions {
 export function useChatInputLogic({ sendFn, disabled = false }: UseChatInputLogicOptions) {
   const inputValue = useMessageStore((s) => s.inputValue);
   const setInputValue = useMessageStore((s) => s.setInputValue);
+  const addPendingAttachment = useMessageStore((s) => s.addPendingAttachment);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isComposing = useRef(false);
@@ -87,6 +89,51 @@ export function useChatInputLogic({ sendFn, disabled = false }: UseChatInputLogi
     [flushAndSend],
   );
 
+  const handlePaste = useCallback(
+    (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      // First try web API (works in some cases)
+      const items = e.clipboardData?.items;
+      if (items) {
+        for (const item of items) {
+          if (item.type.startsWith("image/")) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (!file) continue;
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result as string;
+              const att: PendingAttachment = { type: "image", path: "", dataUrl };
+              addPendingAttachment(att);
+            };
+            reader.readAsDataURL(file);
+            return; // Handled via web API
+          }
+        }
+      }
+      // Fallback: Tauri native clipboard (works on Linux/WebKitGTK)
+      readImage()
+        .then(async (img) => {
+          const [rgba, { width, height }] = await Promise.all([img.rgba(), img.size()]);
+          if (!rgba || rgba.length === 0) return;
+          // Convert RGBA bytes to PNG via canvas
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          const imageData = new ImageData(new Uint8ClampedArray(rgba), width, height);
+          ctx.putImageData(imageData, 0, 0);
+          const dataUrl = canvas.toDataURL("image/png");
+          const att: PendingAttachment = { type: "image", path: "", dataUrl };
+          addPendingAttachment(att);
+        })
+        .catch(() => {
+          // No image in clipboard — let default paste (text) proceed
+        });
+    },
+    [addPendingAttachment],
+  );
+
   return {
     textareaRef,
     localValue,
@@ -94,6 +141,7 @@ export function useChatInputLogic({ sendFn, disabled = false }: UseChatInputLogi
     handleKeyDown,
     handleCompositionStart,
     handleCompositionEnd,
+    handlePaste,
     flushAndSend,
     /** Props to spread onto <textarea> */
     textareaProps: {
@@ -104,6 +152,7 @@ export function useChatInputLogic({ sendFn, disabled = false }: UseChatInputLogi
       onKeyDown: handleKeyDown,
       onCompositionStart: handleCompositionStart,
       onCompositionEnd: handleCompositionEnd,
+      onPaste: handlePaste,
       disabled,
     },
   };

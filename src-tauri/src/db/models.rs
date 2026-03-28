@@ -256,6 +256,8 @@ pub struct Message {
     pub team_run_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team_task_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachments: Option<String>,
     pub created_at: String,
 }
 
@@ -273,6 +275,8 @@ pub struct SaveMessageRequest {
     pub team_run_id: Option<String>,
     #[serde(default)]
     pub team_task_id: Option<String>,
+    #[serde(default)]
+    pub attachments: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

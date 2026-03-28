@@ -43,6 +43,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             let app_dir = app
                 .path()
@@ -252,6 +253,8 @@ pub fn run() {
             commands::update_conversation_digest,
             commands::update_conversation_consolidated,
             commands::archive_conversation_notes,
+            commands::read_file_base64,
+            commands::save_chat_image,
             // Team commands
             commands::create_team,
             commands::get_team_detail,

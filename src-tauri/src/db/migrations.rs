@@ -313,6 +313,11 @@ fn run_incremental_migrations(conn: &Connection) -> Result<(), rusqlite::Error> 
             "ALTER TABLE messages ADD COLUMN team_task_id TEXT;"
         )?;
     }
+    if !msg_columns.contains(&"attachments".to_string()) {
+        conn.execute_batch(
+            "ALTER TABLE messages ADD COLUMN attachments TEXT;"
+        )?;
+    }
 
     // ── Add agent_id to tool_call_logs ──
     let tcl_columns: Vec<String> = conn

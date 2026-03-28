@@ -35,6 +35,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"] }
 tokio = { version = "1", features = ["sync", "rt", "time", "io-util", "io-std", "macros", "rt-multi-thread"] }
 futures = "0.3"
 tauri-plugin-store = "2"
+tauri-plugin-clipboard-manager = "2"
 zip = "2"
 serde_yaml = "0.9"
 url = "2"

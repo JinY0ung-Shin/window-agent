@@ -74,7 +74,7 @@ export async function streamOneTurn(params: StreamOneTurnParams): Promise<Stream
 
   const useSummary = overrideSummary !== undefined ? overrideSummary : summary().currentSummary;
 
-  const { systemPrompt, apiMessages: chatMessages } = buildConversationContext({
+  const { systemPrompt, apiMessages: chatMessages } = await buildConversationContext({
     messages: msg().messages,
     summary: useSummary,
     baseSystemPrompt,

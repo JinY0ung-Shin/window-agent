@@ -108,9 +108,9 @@ describe("buildChatMessages (token-based)", () => {
 });
 
 describe("buildConversationContext", () => {
-  it("returns base system prompt when no summary", () => {
+  it("returns base system prompt when no summary", async () => {
     const messages = [makeMsg("1", "hello", "user")];
-    const result = buildConversationContext({
+    const result = await buildConversationContext({
       messages,
       summary: null,
       baseSystemPrompt: "You are helpful.",
@@ -119,9 +119,9 @@ describe("buildConversationContext", () => {
     expect(result.apiMessages.length).toBe(1);
   });
 
-  it("includes summary section in system prompt when summary exists", () => {
+  it("includes summary section in system prompt when summary exists", async () => {
     const messages = [makeMsg("1", "hello", "user")];
-    const result = buildConversationContext({
+    const result = await buildConversationContext({
       messages,
       summary: "이전에 날씨에 대해 이야기했습니다.",
       baseSystemPrompt: "You are helpful.",
@@ -132,7 +132,7 @@ describe("buildConversationContext", () => {
     expect(result.systemPrompt.startsWith("You are helpful.")).toBe(true);
   });
 
-  it("adjusts token budget based on actual system prompt size", () => {
+  it("adjusts token budget based on actual system prompt size", async () => {
     // Verify that a larger system prompt (with summary) reduces the number of
     // messages that fit. Use a huge base prompt to leave very little budget.
     // Budget without summary: 1000000 - 999000 = 1000 tokens → ~45 msgs
@@ -141,12 +141,12 @@ describe("buildConversationContext", () => {
     const messages = Array.from({ length: 200 }, (_, i) =>
       makeMsg(String(i), "안녕하세요 반갑습니다 오늘 날씨가 좋습니다"),
     );
-    const withSummary = buildConversationContext({
+    const withSummary = await buildConversationContext({
       messages,
       summary: "요약입니다 ".repeat(50), // ~462 tokens
       baseSystemPrompt: hugeBasePrompt,
     });
-    const withoutSummary = buildConversationContext({
+    const withoutSummary = await buildConversationContext({
       messages,
       summary: null,
       baseSystemPrompt: hugeBasePrompt,

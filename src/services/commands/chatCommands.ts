@@ -130,6 +130,16 @@ export async function archiveConversationNotes(conversationId: string, agentId: 
   return invoke("archive_conversation_notes", { conversationId, agentId });
 }
 
+// ── Image I/O ──
+
+export async function readFileBase64(path: string): Promise<string> {
+  return invoke("read_file_base64", { path });
+}
+
+export async function saveChatImage(imageBase64: string): Promise<string> {
+  return invoke("save_chat_image", { imageBase64 });
+}
+
 // ── Team Run ──
 
 export async function abortTeamRun(runId: string): Promise<void> {

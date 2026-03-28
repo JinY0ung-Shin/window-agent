@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Bot, User, Wrench, Copy, Check, RefreshCw, Crown } from "lucide-react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 import type { SenderInfo } from "./ToolRunBlock";
@@ -108,7 +109,18 @@ export default function ChatMessage({ message, senderInfo }: Props) {
               <span></span>
             </span>
           ) : (
-            <MessageBody content={message.content} />
+            <>
+              {message.attachments && message.attachments.length > 0 && (
+                <div className="message-attachments">
+                  {message.attachments.map((att, i) =>
+                    att.type === "image" && att.path ? (
+                      <img key={i} src={convertFileSrc(att.path)} alt="Attached" className="message-attachment-img" />
+                    ) : null,
+                  )}
+                </div>
+              )}
+              <MessageBody content={message.content} />
+            </>
           )}
         </div>
       </div>

@@ -1,15 +1,32 @@
-import type { ChatMessage, MemoryNote } from "./types";
+import type { Attachment, ChatMessage, MemoryNote } from "./types";
 import type { VaultNoteSummary } from "./vaultTypes";
 import { MAX_HISTORY_MESSAGES, MAX_CONTEXT_TOKENS } from "../constants";
 import { i18n } from "../i18n";
 import { estimateTokens, estimateMessageTokens } from "./tokenEstimator";
 import { buildPromptReadySlice } from "./memoryAdapter";
+import { readFileBase64 } from "./commands/chatCommands";
 
 const MAX_MEMORY_TOKENS = 500;
+/** Maximum number of images to include in API context (most recent first) */
+const MAX_IMAGES_IN_CONTEXT = 5;
+
+// ── Multimodal content types ──
+
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } };
+
+export type OpenAIMessage = {
+  role: string;
+  content: string | null | ContentPart[];
+  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
+  tool_call_id?: string;
+};
 
 /**
  * Map a ChatMessage to the OpenAI message format.
  * Handles user, agent (with optional tool_calls), and tool result messages.
+ * Note: Image enrichment happens separately in enrichMessagesWithImages().
  */
 function mapToOpenAIMessage(m: ChatMessage): OpenAIMessage {
   if (m.type === "tool") {
@@ -36,12 +53,80 @@ function mapToOpenAIMessage(m: ChatMessage): OpenAIMessage {
   };
 }
 
-export type OpenAIMessage = {
-  role: string;
-  content: string | null;
-  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[];
-  tool_call_id?: string;
-};
+/**
+ * Determine the vision detail level for an attachment.
+ * Browser screenshots use "low" (85 tokens), user images use "auto".
+ */
+function detailForAttachment(_att: Attachment, toolName?: string): "low" | "auto" {
+  return toolName?.startsWith("browser_") ? "low" : "auto";
+}
+
+/**
+ * Enrich OpenAI messages with image content by reading files from disk.
+ * Only the most recent MAX_IMAGES_IN_CONTEXT images are included.
+ * Must be called after buildChatMessages() and before sending to API.
+ */
+export async function enrichMessagesWithImages(
+  apiMessages: OpenAIMessage[],
+  sourceMessages: ChatMessage[],
+): Promise<OpenAIMessage[]> {
+  // Collect indices of messages that have image attachments
+  const imageIndices: number[] = [];
+  for (let i = 0; i < sourceMessages.length; i++) {
+    if (sourceMessages[i].attachments?.some((a) => a.type === "image")) {
+      imageIndices.push(i);
+    }
+  }
+  if (imageIndices.length === 0) return apiMessages;
+
+  // Only include the N most recent images
+  const recentIndices = new Set(imageIndices.slice(-MAX_IMAGES_IN_CONTEXT));
+
+  const enriched = [...apiMessages];
+
+  for (let ai = 0; ai < enriched.length; ai++) {
+    const apiMsg = enriched[ai];
+
+    // Find the corresponding source message by matching tool_call_id or content
+    const source = sourceMessages.find((m) => {
+      if (apiMsg.tool_call_id && m.tool_call_id) return m.tool_call_id === apiMsg.tool_call_id;
+      if (apiMsg.role === "user" && m.type === "user") return m.content === apiMsg.content;
+      return false;
+    });
+
+    if (!source?.attachments?.length) continue;
+    const sourceIdx = sourceMessages.indexOf(source);
+    if (!recentIndices.has(sourceIdx)) continue;
+
+    // Load images from disk
+    const parts: ContentPart[] = [];
+    const textContent = typeof apiMsg.content === "string" ? apiMsg.content : "";
+    if (textContent) parts.push({ type: "text", text: textContent });
+
+    for (const att of source.attachments) {
+      if (att.type !== "image") continue;
+      try {
+        const base64 = await readFileBase64(att.path);
+        const mime = att.mime || "image/png";
+        parts.push({
+          type: "image_url",
+          image_url: {
+            url: `data:${mime};base64,${base64}`,
+            detail: detailForAttachment(att, source.tool_name),
+          },
+        });
+      } catch {
+        // File missing or unreadable — skip silently
+      }
+    }
+
+    if (parts.length > 1 || (parts.length === 1 && parts[0].type === "image_url")) {
+      enriched[ai] = { ...enriched[ai], content: parts };
+    }
+  }
+
+  return enriched;
+}
 
 /**
  * Build the message array for the API.
@@ -68,7 +153,9 @@ export function buildChatMessages(
   let remaining = budget;
   const selected: OpenAIMessage[] = [];
   for (let i = apiMessages.length - 1; i >= 0; i--) {
-    const tokens = estimateMessageTokens({ role: apiMessages[i].role, content: apiMessages[i].content ?? "" });
+    const rawContent = apiMessages[i].content;
+    const contentStr = typeof rawContent === "string" ? rawContent : "";
+    const tokens = estimateMessageTokens({ role: apiMessages[i].role, content: contentStr });
     if (remaining - tokens < 0) break;
     remaining -= tokens;
     selected.unshift(apiMessages[i]);
@@ -148,8 +235,9 @@ export function buildVaultMemorySection(notes: VaultNoteSummary[], maxTokens?: n
 /**
  * Build the full conversation context: system prompt (with optional summary
  * and memory notes) and token-budgeted message list.
+ * Returns enriched messages with vision images when attachments are present.
  */
-export function buildConversationContext(params: {
+export async function buildConversationContext(params: {
   messages: ChatMessage[];
   summary: string | null;
   baseSystemPrompt: string;
@@ -161,7 +249,7 @@ export function buildConversationContext(params: {
   workspacePath?: string;
   learningMode?: boolean;
   consolidatedMemory?: string | null;
-}): { systemPrompt: string; apiMessages: OpenAIMessage[] } {
+}): Promise<{ systemPrompt: string; apiMessages: OpenAIMessage[] }> {
   let systemPrompt = params.baseSystemPrompt;
 
   // Boot content goes right after the base system prompt
@@ -222,5 +310,8 @@ export function buildConversationContext(params: {
   const systemTokens = estimateTokens(systemPrompt);
   const apiMessages = buildChatMessages(params.messages, systemTokens, 0);
 
-  return { systemPrompt, apiMessages };
+  // Enrich messages with vision images from attachments
+  const enrichedMessages = await enrichMessagesWithImages(apiMessages, params.messages);
+
+  return { systemPrompt, apiMessages: enrichedMessages };
 }

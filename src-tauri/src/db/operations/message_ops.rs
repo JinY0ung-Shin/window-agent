@@ -10,7 +10,7 @@ pub fn get_messages_impl(
 ) -> Result<Vec<Message>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, conversation_id, role, content, tool_call_id, tool_name, tool_input, sender_agent_id, team_run_id, team_task_id, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
+            "SELECT id, conversation_id, role, content, tool_call_id, tool_name, tool_input, sender_agent_id, team_run_id, team_task_id, attachments, created_at FROM messages WHERE conversation_id = ?1 ORDER BY created_at ASC, id ASC",
         )?;
 
         let rows = stmt.query_map(rusqlite::params![conversation_id], |row| {
@@ -25,7 +25,8 @@ pub fn get_messages_impl(
                 sender_agent_id: row.get(7)?,
                 team_run_id: row.get(8)?,
                 team_task_id: row.get(9)?,
-                created_at: row.get(10)?,
+                attachments: row.get(10)?,
+                created_at: row.get(11)?,
             })
         })?;
 
@@ -50,12 +51,13 @@ pub fn save_message_impl(
             sender_agent_id: request.sender_agent_id,
             team_run_id: request.team_run_id,
             team_task_id: request.team_task_id,
+            attachments: request.attachments,
             created_at: now.clone(),
         };
 
         conn.execute(
-            "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, sender_agent_id, team_run_id, team_task_id, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            rusqlite::params![msg.id, msg.conversation_id, msg.role, msg.content, msg.tool_call_id, msg.tool_name, msg.tool_input, msg.sender_agent_id, msg.team_run_id, msg.team_task_id, msg.created_at],
+            "INSERT INTO messages (id, conversation_id, role, content, tool_call_id, tool_name, tool_input, sender_agent_id, team_run_id, team_task_id, attachments, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            rusqlite::params![msg.id, msg.conversation_id, msg.role, msg.content, msg.tool_call_id, msg.tool_name, msg.tool_input, msg.sender_agent_id, msg.team_run_id, msg.team_task_id, msg.attachments, msg.created_at],
         )?;
 
         conn.execute(
@@ -195,6 +197,35 @@ pub fn get_browser_artifact(
             },
         )?;
         Ok(artifact)
+    })
+}
+
+/// Get image file paths from message attachments (for file cleanup before DB cascade).
+pub fn get_message_attachment_paths(
+    db: &Database,
+    conversation_id: &str,
+) -> Result<Vec<String>, DbError> {
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT attachments FROM messages WHERE conversation_id = ?1 AND attachments IS NOT NULL",
+        )?;
+        let mut paths = Vec::new();
+        let rows: Vec<String> = stmt
+            .query_map(rusqlite::params![conversation_id], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        for json_str in rows {
+            if let Ok(arr) = serde_json::from_str::<Vec<serde_json::Value>>(&json_str) {
+                for item in arr {
+                    if let Some(path) = item.get("path").and_then(|v| v.as_str()) {
+                        if !path.is_empty() {
+                            paths.push(path.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(paths)
     })
 }
 
@@ -377,7 +408,7 @@ mod tests {
             role: "user".into(),
             content: "hello".into(),
             tool_call_id: None, tool_name: None, tool_input: None,
-            sender_agent_id: None, team_run_id: None, team_task_id: None,
+            sender_agent_id: None, team_run_id: None, team_task_id: None, attachments: None,
         }).unwrap();
 
         let log = create_tool_call_log_impl(
@@ -518,7 +549,7 @@ mod tests {
             role: "user".into(),
             content: "test".into(),
             tool_call_id: None, tool_name: None, tool_input: None,
-            sender_agent_id: None, team_run_id: None, team_task_id: None,
+            sender_agent_id: None, team_run_id: None, team_task_id: None, attachments: None,
         }).unwrap();
 
         let log = create_tool_call_log_impl(

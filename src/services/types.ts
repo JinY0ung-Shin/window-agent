@@ -24,6 +24,12 @@ export interface ConversationDetail extends ConversationListItem {
 // Backward-compatible alias
 export type Conversation = ConversationListItem;
 
+export interface Attachment {
+  type: "image";
+  path: string;
+  mime?: string;
+}
+
 export interface DbMessage {
   id: string;
   conversation_id: string;
@@ -35,6 +41,7 @@ export interface DbMessage {
   sender_agent_id?: string | null;
   team_run_id?: string | null;
   team_task_id?: string | null;
+  attachments?: string | null;
   created_at: string;
 }
 
@@ -48,6 +55,7 @@ export interface SaveMessageRequest {
   sender_agent_id?: string | null;
   team_run_id?: string | null;
   team_task_id?: string | null;
+  attachments?: string | null;
 }
 
 export interface MemoryNote {
@@ -177,6 +185,7 @@ export interface ChatMessage {
   senderAgentAvatar?: string | null;
   teamRunId?: string;
   teamTaskId?: string;
+  attachments?: Attachment[];
 }
 
 export interface ActiveRun {
