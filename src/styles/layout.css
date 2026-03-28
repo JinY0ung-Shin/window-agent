@@ -205,7 +205,6 @@
 /* ── Conversation Switcher ── */
 .conversation-switcher {
   position: relative;
-  flex: 1;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -226,7 +225,6 @@
   border-radius: 8px;
   transition: background 0.15s;
   min-width: 0;
-  flex: 1;
 }
 
 .conversation-switcher-new {

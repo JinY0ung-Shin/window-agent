@@ -14,7 +14,6 @@ import ToolRunBlock from "./ToolRunBlock";
 import ToolRunGroup from "./ToolRunGroup";
 import ConversationSwitcher from "./ConversationSwitcher";
 
-import { useNavigationStore } from "../../stores/navigationStore";
 import { useDragRegion } from "../../hooks/useDragRegion";
 import { useMessageScroll } from "../../hooks/useMessageScroll";
 import { buildChatRenderBlocks, groupConsecutiveToolRuns } from "./chatRenderBlocks";
@@ -27,9 +26,6 @@ export default function ChatWindow() {
   const isOnboarding = useBootstrapStore((s) => s.isOnboarding);
   const cancelBootstrap = useBootstrapStore((s) => s.cancelBootstrap);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
-  const agents = useAgentStore((s) => s.agents);
-  const openEditor = useAgentStore((s) => s.openEditor);
-  const setMainView = useNavigationStore((s) => s.setMainView);
   const { t } = useTranslation("glossary");
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const companyName = useSettingsStore((s) => s.companyName);
@@ -51,19 +47,6 @@ export default function ChatWindow() {
     !isBootstrapping &&
     !isOnboarding;
 
-  // Resolve the agent for the current context (conversation or selected).
-  // Falls through to selectedAgentId when the conversation is not yet in the list
-  // (e.g. optimistic new conversation before loadConversations()).
-  const currentAgentId = (() => {
-    if (currentConversationId) {
-      const conv = conversations.find((c) => c.id === currentConversationId);
-      if (conv) return conv.agent_id;
-    }
-    return selectedAgentId;
-  })();
-  const currentAgent = currentAgentId
-    ? agents.find((a) => a.id === currentAgentId) ?? null
-    : null;
   const { onMouseDown: onDrag, onDoubleClick: onDragDblClick } = useDragRegion();
   const renderBlocks = groupConsecutiveToolRuns(
     buildChatRenderBlocks(messages, toolRunState, pendingToolCalls),
@@ -73,18 +56,6 @@ export default function ChatWindow() {
     <main className="main-area">
       <header className="chat-header" onMouseDown={onDrag} onDoubleClick={onDragDblClick}>
         <ConversationSwitcher />
-        {currentAgent && (
-          <button
-            className="header-agent-btn"
-            onClick={() => { setMainView("agent"); openEditor(currentAgent.id); }}
-            title={t("editAgent", { context: uiTheme })}
-          >
-            {currentAgent.avatar ? (
-              <img src={currentAgent.avatar} alt={currentAgent.name} className="header-agent-avatar" />
-            ) : null}
-            <span>{currentAgent.name}</span>
-          </button>
-        )}
         {isBootstrapping && (
           <button
             className="bootstrap-cancel-btn"
