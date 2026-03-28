@@ -19,6 +19,8 @@ import { useMessageScroll } from "../../hooks/useMessageScroll";
 import { emitLifecycleEvent } from "../../services/lifecycleEvents";
 import { resetTransientChatState, resetTeamRunState } from "../../stores/resetHelper";
 
+const EMPTY_TOOL_CALLS: import("../../services/types").ToolCall[] = [];
+
 export default function TeamChatWindow() {
   const { t } = useTranslation("team");
   const messages = useMessageStore((s) => s.messages);
@@ -38,7 +40,7 @@ export default function TeamChatWindow() {
     activeTeamRunId ? (s.toolRunStates[activeTeamRunId] ?? "idle") : s.toolRunState,
   );
   const pendingToolCalls = useToolRunStore((s) =>
-    activeTeamRunId ? (s.pendingToolCallsByRun[activeTeamRunId] ?? []) : s.pendingToolCalls,
+    activeTeamRunId ? (s.pendingToolCallsByRun[activeTeamRunId] ?? EMPTY_TOOL_CALLS) : s.pendingToolCalls,
   );
 
   const onDrag = useDragRegion();
@@ -54,8 +56,8 @@ export default function TeamChatWindow() {
     return team?.leader_agent_id ?? null;
   })();
 
-  const getSenderInfo = (msg: ChatMessageType) => {
-    if (!msg.senderAgentId) return undefined;
+  const getSenderInfo = (msg: ChatMessageType | undefined) => {
+    if (!msg?.senderAgentId) return undefined;
     return {
       agentName: msg.senderAgentName,
       agentAvatar: msg.senderAgentAvatar,
@@ -154,7 +156,8 @@ export default function TeamChatWindow() {
                 );
               }
               if (block.type === "tool_run_group") {
-                const firstSender = getSenderInfo(block.runs[0].assistantMessage);
+                const firstRun = block.runs[0];
+                const firstSender = firstRun ? getSenderInfo(firstRun.assistantMessage) : undefined;
                 return <ToolRunGroup key={block.key} runs={block.runs} senderInfo={firstSender} />;
               }
               if (block.type === "orphan_tool_result") {

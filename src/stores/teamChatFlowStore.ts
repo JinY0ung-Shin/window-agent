@@ -113,30 +113,34 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
     // ── team-agent-stream-chunk: route to per-agent message bubbles ──
     unlisteners.push(
       await listen<StreamChunkEvent>("chat-stream-chunk", (event) => {
-        const { request_id, delta } = event.payload;
-        const mapping = agentStreamMap.get(request_id);
-        if (!mapping) return; // Not a team stream event
+        try {
+          const { request_id, delta } = event.payload;
+          const mapping = agentStreamMap.get(request_id);
+          if (!mapping) return; // Not a team stream event
 
-        const { msgId } = mapping;
-        useMessageStore.setState({
-          messages: msg().messages.map((m) =>
-            m.id === msgId
-              ? {
-                  ...m,
-                  content:
-                    m.content === i18n.t("common:loadingMessage")
-                      ? delta
-                      : m.content + delta,
-                  status: "streaming" as const,
-                }
-              : m,
-          ),
-        });
+          const { msgId } = mapping;
+          useMessageStore.setState({
+            messages: msg().messages.map((m) =>
+              m.id === msgId
+                ? {
+                    ...m,
+                    content:
+                      m.content === i18n.t("common:loadingMessage")
+                        ? delta
+                        : m.content + delta,
+                    status: "streaming" as const,
+                  }
+                : m,
+            ),
+          });
 
-        // Update run status in streamStore
-        const run = stream().runsById[mapping.runId];
-        if (run && run.status !== "streaming") {
-          useStreamStore.getState().addRun(mapping.runId, { ...run, status: "streaming" });
+          // Update run status in streamStore
+          const run = stream().runsById[mapping.runId];
+          if (run && run.status !== "streaming") {
+            useStreamStore.getState().addRun(mapping.runId, { ...run, status: "streaming" });
+          }
+        } catch (e) {
+          logger.error("team chat-stream-chunk handler error:", e);
         }
       }),
     );
@@ -144,14 +148,40 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
     // ── chat-stream-done for team agent streams ──
     unlisteners.push(
       await listen<StreamDoneEvent>("chat-stream-done", async (event) => {
-        const { request_id, full_content, tool_calls, error } = event.payload;
-        const mapping = agentStreamMap.get(request_id);
-        if (!mapping) return; // Not a team stream event
+        try {
+          const { request_id, full_content, tool_calls, error } = event.payload;
+          const mapping = agentStreamMap.get(request_id);
+          if (!mapping) return; // Not a team stream event
 
-        const { msgId, agentId, taskId, runId } = mapping;
+          const { msgId, agentId, taskId, runId } = mapping;
 
-        // Synthesis streams — finalize content only; team-leader-synthesis-done handles cleanup
-        if (taskId === "__synthesis__") {
+          // Synthesis streams — finalize content only; team-leader-synthesis-done handles cleanup
+          if (taskId === "__synthesis__") {
+            if (error) {
+              useMessageStore.setState({
+                messages: updateMessageInList(msg().messages, msgId, {
+                  content: error === "aborted" ? i18n.t("common:aborted") : error,
+                  status: error === "aborted" ? "aborted" : "failed",
+                }),
+              });
+            } else {
+              const synthContent = full_content || i18n.t("common:noResponse");
+              useMessageStore.setState({
+                messages: updateMessageInList(msg().messages, msgId, {
+                  content: synthContent,
+                  status: "complete",
+                }),
+              });
+              // Cache finalContent so synthesis-done handler can read it
+              // without a race against message store update
+              const currentMapping = agentStreamMap.get(request_id);
+              if (currentMapping) {
+                agentStreamMap.set(request_id, { ...currentMapping, finalContent: synthContent });
+              }
+            }
+            return;
+          }
+
           if (error) {
             useMessageStore.setState({
               messages: updateMessageInList(msg().messages, msgId, {
@@ -159,207 +189,197 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
                 status: error === "aborted" ? "aborted" : "failed",
               }),
             });
-          } else {
-            const synthContent = full_content || i18n.t("common:noResponse");
+            agentStreamMap.delete(request_id);
+            return;
+          }
+
+          // Check if agent called the `report` tool
+          const reportCall = tool_calls?.find((tc) => tc.function.name === "report");
+          let finalContent: string;
+          if (reportCall) {
+            let reportArgs: { summary?: string; details?: string } = {};
+            try {
+              reportArgs = JSON.parse(reportCall.function.arguments);
+            } catch (e) {
+              logger.debug("Failed to parse report arguments", e);
+            }
+            const summaryText = reportArgs.summary ?? full_content;
+            finalContent = full_content || summaryText;
+
             useMessageStore.setState({
               messages: updateMessageInList(msg().messages, msgId, {
-                content: synthContent,
+                content: finalContent,
                 status: "complete",
               }),
             });
-            // Cache finalContent so synthesis-done handler can read it
-            // without a race against message store update
-            const currentMapping = agentStreamMap.get(request_id);
-            if (currentMapping) {
-              agentStreamMap.set(request_id, { ...currentMapping, finalContent: synthContent });
+
+            try {
+              await teamCmds.handleTeamReport(runId, taskId, summaryText, reportArgs.details);
+            } catch (e) {
+              logger.error("Failed to submit report:", e);
             }
-          }
-          return;
-        }
-
-        if (error) {
-          useMessageStore.setState({
-            messages: updateMessageInList(msg().messages, msgId, {
-              content: error === "aborted" ? i18n.t("common:aborted") : error,
-              status: error === "aborted" ? "aborted" : "failed",
-            }),
-          });
-          agentStreamMap.delete(request_id);
-          return;
-        }
-
-        // Check if agent called the `report` tool
-        const reportCall = tool_calls?.find((tc) => tc.function.name === "report");
-        let finalContent: string;
-        if (reportCall) {
-          let reportArgs: { summary?: string; details?: string } = {};
-          try {
-            reportArgs = JSON.parse(reportCall.function.arguments);
-          } catch (e) {
-            logger.debug("Failed to parse report arguments", e);
-          }
-          const summaryText = reportArgs.summary ?? full_content;
-          finalContent = full_content || summaryText;
-
-          useMessageStore.setState({
-            messages: updateMessageInList(msg().messages, msgId, {
-              content: finalContent,
-              status: "complete",
-            }),
-          });
-
-          try {
-            await teamCmds.handleTeamReport(runId, taskId, summaryText, reportArgs.details);
-          } catch (e) {
-            logger.error("Failed to submit report:", e);
-          }
-        } else {
-          // Normal completion (no report tool) — treat content as implicit report
-          finalContent = full_content || i18n.t("common:noResponse");
-          useMessageStore.setState({
-            messages: updateMessageInList(msg().messages, msgId, {
-              content: finalContent,
-              status: "complete",
-            }),
-          });
-
-          try {
-            await teamCmds.handleTeamReport(runId, taskId, finalContent);
-          } catch (e) {
-            logger.error("Failed to submit implicit report:", e);
-          }
-        }
-
-        // Save agent message to DB — use same finalContent as UI
-        const currentConvId = conv().currentConversationId;
-        if (currentConvId) {
-          const agentInfo = resolveAgentInfo(agentId);
-          try {
-            const saved = await cmds.saveMessage({
-              conversation_id: currentConvId,
-              role: "assistant",
-              content: finalContent,
-              sender_agent_id: agentId,
-              team_run_id: runId,
-              team_task_id: taskId,
-            });
+          } else {
+            // Normal completion (no report tool) — treat content as implicit report
+            finalContent = full_content || i18n.t("common:noResponse");
             useMessageStore.setState({
               messages: updateMessageInList(msg().messages, msgId, {
-                dbMessageId: saved.id,
-                senderAgentId: agentId,
-                senderAgentName: agentInfo.name,
-                senderAgentAvatar: agentInfo.avatar,
+                content: finalContent,
+                status: "complete",
               }),
             });
-          } catch (e) {
-            logger.error("Failed to save agent message:", e);
-          }
-        }
 
-        agentStreamMap.delete(request_id);
+            try {
+              await teamCmds.handleTeamReport(runId, taskId, finalContent);
+            } catch (e) {
+              logger.error("Failed to submit implicit report:", e);
+            }
+          }
+
+          // Save agent message to DB — use same finalContent as UI
+          const currentConvId = conv().currentConversationId;
+          if (currentConvId) {
+            const agentInfo = resolveAgentInfo(agentId);
+            try {
+              const saved = await cmds.saveMessage({
+                conversation_id: currentConvId,
+                role: "assistant",
+                content: finalContent,
+                sender_agent_id: agentId,
+                team_run_id: runId,
+                team_task_id: taskId,
+              });
+              useMessageStore.setState({
+                messages: updateMessageInList(msg().messages, msgId, {
+                  dbMessageId: saved.id,
+                  senderAgentId: agentId,
+                  senderAgentName: agentInfo.name,
+                  senderAgentAvatar: agentInfo.avatar,
+                }),
+              });
+            } catch (e) {
+              logger.error("Failed to save agent message:", e);
+            }
+          }
+
+          agentStreamMap.delete(request_id);
+        } catch (e) {
+          logger.error("team chat-stream-done handler error:", e);
+        }
       }),
     );
 
     // ── team-all-reports-in: create pending leader synthesis bubble ──
     unlisteners.push(
       await listen<TeamAllReportsPayload>("team-all-reports-in", (event) => {
-        const { run_id } = event.payload;
+        try {
+          const { run_id } = event.payload;
 
-        const synthesisRequestId = `synthesis-${run_id}`;
-        const { msgId: synthMsgId, msg: synthPending } = createPendingMessage(synthesisRequestId);
+          const synthesisRequestId = `synthesis-${run_id}`;
+          const { msgId: synthMsgId, msg: synthPending } = createPendingMessage(synthesisRequestId);
 
-        const run = useTeamRunStore.getState().activeRuns[run_id];
-        if (run) {
-          const leaderInfo = resolveAgentInfo(run.leader_agent_id);
-          synthPending.senderAgentId = run.leader_agent_id;
-          synthPending.senderAgentName = leaderInfo.name;
-          synthPending.senderAgentAvatar = leaderInfo.avatar;
+          const run = useTeamRunStore.getState().activeRuns[run_id];
+          if (run) {
+            const leaderInfo = resolveAgentInfo(run.leader_agent_id);
+            synthPending.senderAgentId = run.leader_agent_id;
+            synthPending.senderAgentName = leaderInfo.name;
+            synthPending.senderAgentAvatar = leaderInfo.avatar;
+          }
+          synthPending.teamRunId = run_id;
+
+          useMessageStore.setState({
+            messages: [...msg().messages, synthPending],
+          });
+
+          agentStreamMap.set(synthesisRequestId, {
+            agentId: run?.leader_agent_id ?? "",
+            taskId: "__synthesis__",
+            msgId: synthMsgId,
+            runId: run_id,
+          });
+        } catch (e) {
+          logger.error("team-all-reports-in handler error:", e);
         }
-        synthPending.teamRunId = run_id;
-
-        useMessageStore.setState({
-          messages: [...msg().messages, synthPending],
-        });
-
-        agentStreamMap.set(synthesisRequestId, {
-          agentId: run?.leader_agent_id ?? "",
-          taskId: "__synthesis__",
-          msgId: synthMsgId,
-          runId: run_id,
-        });
       }),
     );
 
     // ── team-leader-synthesis-done: finalize synthesis bubble ──
     unlisteners.push(
       await listen<TeamSynthesisDonePayload>("team-leader-synthesis-done", async (event) => {
-        const { run_id, request_id, error: synthError } = event.payload;
-        const mapping = agentStreamMap.get(request_id);
-        if (!mapping) return;
+        try {
+          const { run_id, request_id, error: synthError } = event.payload;
+          const mapping = agentStreamMap.get(request_id);
+          if (!mapping) return;
 
-        if (!synthError) {
-          // Prefer cached finalContent (set during stream-done) to avoid race with message store
-          const finalContent = mapping.finalContent
-            || msg().messages.find((m) => m.id === mapping.msgId)?.content
-            || i18n.t("common:noResponse");
-          const currentConvId = conv().currentConversationId;
+          if (!synthError) {
+            // Prefer cached finalContent (set during stream-done) to avoid race with message store
+            const finalContent = mapping.finalContent
+              || msg().messages.find((m) => m.id === mapping.msgId)?.content
+              || i18n.t("common:noResponse");
+            const currentConvId = conv().currentConversationId;
 
-          if (currentConvId) {
-            const agentInfo = resolveAgentInfo(mapping.agentId);
-            try {
-              const saved = await cmds.saveMessage({
-                conversation_id: currentConvId,
-                role: "assistant",
-                content: finalContent,
-                sender_agent_id: mapping.agentId,
-                team_run_id: run_id,
-              });
-              useMessageStore.setState({
-                messages: updateMessageInList(msg().messages, mapping.msgId, {
-                  dbMessageId: saved.id,
-                  senderAgentId: mapping.agentId,
-                  senderAgentName: agentInfo.name,
-                  senderAgentAvatar: agentInfo.avatar,
-                }),
-              });
-            } catch (e) {
-              logger.error("Failed to save synthesis message:", e);
+            if (currentConvId) {
+              const agentInfo = resolveAgentInfo(mapping.agentId);
+              try {
+                const saved = await cmds.saveMessage({
+                  conversation_id: currentConvId,
+                  role: "assistant",
+                  content: finalContent,
+                  sender_agent_id: mapping.agentId,
+                  team_run_id: run_id,
+                });
+                useMessageStore.setState({
+                  messages: updateMessageInList(msg().messages, mapping.msgId, {
+                    dbMessageId: saved.id,
+                    senderAgentId: mapping.agentId,
+                    senderAgentName: agentInfo.name,
+                    senderAgentAvatar: agentInfo.avatar,
+                  }),
+                });
+              } catch (e) {
+                logger.error("Failed to save synthesis message:", e);
+              }
             }
           }
-        }
 
-        agentStreamMap.delete(request_id);
+          agentStreamMap.delete(request_id);
 
-        useTeamRunStore.getState().updateRunStatus(run_id, "completed");
-        try {
-          await teamCmds.updateTeamRunStatus(run_id, "completed", new Date().toISOString());
+          useTeamRunStore.getState().updateRunStatus(run_id, "completed");
+          try {
+            await teamCmds.updateTeamRunStatus(run_id, "completed", new Date().toISOString());
+          } catch (e) {
+            logger.debug("Failed to persist team run status", e);
+          }
+          stream().removeRun(run_id);
+          conv().loadConversations().catch((e) =>
+            logger.error("Failed to reload conversations:", e),
+          );
         } catch (e) {
-          logger.debug("Failed to persist team run status", e);
+          logger.error("team-leader-synthesis-done handler error:", e);
         }
-        stream().removeRun(run_id);
-        conv().loadConversations().catch((e) =>
-          logger.error("Failed to reload conversations:", e),
-        );
       }),
     );
 
     // ── team-run-cancelled: mark streaming messages as aborted ──
     unlisteners.push(
       await listen<TeamRunCancelledPayload>("team-run-cancelled", (event) => {
-        const { run_id } = event.payload;
+        try {
+          const { run_id } = event.payload;
 
-        for (const [reqId, mapping] of agentStreamMap.entries()) {
-          if (mapping.runId === run_id) {
-            useMessageStore.setState({
-              messages: updateMessageInList(msg().messages, mapping.msgId, {
-                status: "aborted",
-              }),
-            });
-            agentStreamMap.delete(reqId);
+          for (const [reqId, mapping] of agentStreamMap.entries()) {
+            if (mapping.runId === run_id) {
+              useMessageStore.setState({
+                messages: updateMessageInList(msg().messages, mapping.msgId, {
+                  status: "aborted",
+                }),
+              });
+              agentStreamMap.delete(reqId);
+            }
           }
-        }
 
-        stream().removeRun(run_id);
+          stream().removeRun(run_id);
+        } catch (e) {
+          logger.error("team-run-cancelled handler error:", e);
+        }
       }),
     );
 
@@ -376,7 +396,6 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
 async function sendTeamMessageFlow() {
   const inputValue = msg().inputValue;
   const currentConversationId = conv().currentConversationId;
-  const messages = msg().messages;
   const settings = useSettingsStore.getState();
 
   const teamStore = useTeamStore.getState();
@@ -435,7 +454,7 @@ async function sendTeamMessageFlow() {
   }
 
   useMessageStore.setState({
-    messages: [...messages, userMsg, leaderPending],
+    messages: [...msg().messages, userMsg, leaderPending],
     inputValue: "",
   });
 

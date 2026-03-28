@@ -13,6 +13,7 @@ import TeamChatWindow from "../team/TeamChatWindow";
 import CronPanel from "../cron/CronPanel";
 import AgentPanel from "../agent/AgentPanel";
 import TourOverlay from "../tour/TourOverlay";
+import ErrorBoundary from "../common/ErrorBoundary";
 
 import { useDebugStore } from "../../stores/debugStore";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -86,7 +87,9 @@ export default function MainLayout() {
         <SettingsPage />
       ) : mainView === "team" ? (
         selectedTeamId ? (
-          <TeamChatWindow />
+          <ErrorBoundary fallbackClassName="main-area">
+            <TeamChatWindow />
+          </ErrorBoundary>
         ) : (
           <TeamPanel />
         )

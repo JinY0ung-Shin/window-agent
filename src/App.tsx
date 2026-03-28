@@ -3,6 +3,7 @@ import { initializeApp } from "./services/initService";
 import { useSettingsStore } from "./stores/settingsStore";
 import MainLayout from "./components/layout/MainLayout";
 import OnboardingScreen from "./components/onboarding/OnboardingScreen";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 import "./App.css";
 
 function App() {
@@ -23,7 +24,11 @@ function App() {
     return <OnboardingScreen />;
   }
 
-  return <MainLayout />;
+  return (
+    <ErrorBoundary>
+      <MainLayout />
+    </ErrorBoundary>
+  );
 }
 
 export default App;
