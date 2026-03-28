@@ -3,7 +3,7 @@ import * as cmds from "./tauriCommands";
 import { useSettingsStore } from "../stores/settingsStore";
 import { i18n } from "../i18n";
 
-export const PERSONA_FILE_NAMES: Array<keyof PersonaFiles> = [
+const PERSONA_FILE_NAMES: Array<keyof PersonaFiles> = [
   "identity",
   "soul",
   "user",

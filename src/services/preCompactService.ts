@@ -34,7 +34,7 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 const DEFAULT_CONTEXT_LIMIT = 128000;
 const COMPACTION_THRESHOLD = 0.80;
 
-export function getContextLimit(modelName: string): number {
+function getContextLimit(modelName: string): number {
   if (MODEL_CONTEXT_WINDOWS[modelName]) return MODEL_CONTEXT_WINDOWS[modelName];
   const prefix = Object.keys(MODEL_CONTEXT_WINDOWS).find((k) => modelName.startsWith(k));
   return prefix ? MODEL_CONTEXT_WINDOWS[prefix] : DEFAULT_CONTEXT_LIMIT;
