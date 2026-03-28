@@ -210,7 +210,7 @@ export function buildConversationContext(params: {
     systemPrompt += `\n\n${i18n.t("prompts:workspace.header")}\n${i18n.t("prompts:workspace.body", { path: params.workspacePath })}`;
   }
 
-  // Credentials section (available env vars for run_command)
+  // Credentials section (available env vars for run_shell)
   if (params.credentialsSection) {
     systemPrompt += `\n\n${params.credentialsSection}`;
   }

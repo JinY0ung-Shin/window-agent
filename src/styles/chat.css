@@ -705,7 +705,7 @@
   background-color: var(--surface);
 }
 
-/* ── run_command result ── */
+/* ── run_shell result ── */
 .command-result {
   margin-top: 8px;
 }

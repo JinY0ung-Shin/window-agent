@@ -14,7 +14,7 @@
     "browser_wait": { "enabled": true, "tier": "auto" },
     "browser_back": { "enabled": true, "tier": "confirm" },
     "browser_close": { "enabled": true, "tier": "confirm" },
-    "run_command": { "enabled": true, "tier": "confirm" }
+    "run_shell": { "enabled": true, "tier": "confirm" }
   },
   "credentials": {}
 }

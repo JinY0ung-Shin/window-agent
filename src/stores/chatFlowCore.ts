@@ -253,8 +253,8 @@ export async function resolveToolConfig(agent: Agent | null): Promise<AgentToolC
         }
         agentHasCredentials = allowedIds.length > 0;
 
-        // Build credentials section if run_command or browser_type is enabled and there are credentials
-        const hasRunCommand = toolDefinitions.some(t => t.name === "run_command");
+        // Build credentials section if run_shell or browser_type is enabled and there are credentials
+        const hasRunCommand = toolDefinitions.some(t => t.name === "run_shell");
         const hasBrowserType = toolDefinitions.some(t => t.name === "browser_type");
         if (agentHasCredentials && (hasRunCommand || hasBrowserType)) {
           try {
@@ -277,7 +277,7 @@ export async function resolveToolConfig(agent: Agent | null): Promise<AgentToolC
               })
               .sort();
             const instructions: string[] = [];
-            if (hasRunCommand) instructions.push("Use env vars in shell commands via run_command.");
+            if (hasRunCommand) instructions.push("Use env vars in shell commands via run_shell.");
             if (hasBrowserType) instructions.push("Use {{credential:ID}} in browser_type text parameter for password/login fields.");
             instructions.push("Never echo, print, or expose credential values directly.");
             credentialsSection = [

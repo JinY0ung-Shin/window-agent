@@ -14,7 +14,7 @@ use super::file_tools::{
 };
 use super::scope::{resolve_scope, ScopeResolution};
 use super::self_tools::{tool_manage_schedule, tool_self_inspect};
-use super::shell_tools::tool_run_command;
+use super::shell_tools::tool_run_shell;
 use crate::services::credential_service;
 
 /// Inner dispatch — routes to the correct tool implementation.
@@ -323,7 +323,7 @@ pub(crate) async fn execute_tool_inner(
         }
 
         // ── System tools ──
-        "run_command" => {
+        "run_shell" => {
             let workspace = super::scope::resolve_workspace_path(app, db, conversation_id)?;
             let default_dir = workspace.to_string_lossy().to_string();
             let allowed_ids = credential_service::get_agent_allowed_credentials(app, db, conversation_id)
@@ -333,7 +333,7 @@ pub(crate) async fn execute_tool_inner(
             } else {
                 credential_service::resolve_credential_env_entries(app, &allowed_ids)?
             };
-            tool_run_command(input, &default_dir, &cred_entries).await
+            tool_run_shell(input, &default_dir, &cred_entries).await
         }
 
         // ── Self-awareness tools ──
@@ -429,7 +429,7 @@ pub(crate) async fn execute_tool_inner_for_agent(
                 execute_file_tool_with_scope(app, tool_name, input, &resolution)
             }
         }
-        "run_command" => {
+        "run_shell" => {
             let default_dir = std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
                 .unwrap_or_else(|_| "/tmp".to_string());
@@ -440,7 +440,7 @@ pub(crate) async fn execute_tool_inner_for_agent(
             } else {
                 credential_service::resolve_credential_env_entries(app, &allowed_ids)?
             };
-            tool_run_command(input, &default_dir, &cred_entries).await
+            tool_run_shell(input, &default_dir, &cred_entries).await
         }
         t if t.starts_with("browser_") => {
             Err("Browser tools are not available in scheduled task execution.".to_string())

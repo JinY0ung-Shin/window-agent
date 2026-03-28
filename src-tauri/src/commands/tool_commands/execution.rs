@@ -50,7 +50,7 @@ pub async fn execute_tool(
     // Custom timeouts for specific tools
     let tool_timeout = if tool_name.starts_with("browser_") {
         BROWSER_TOOL_TIMEOUT
-    } else if tool_name == "run_command" {
+    } else if tool_name == "run_shell" {
         COMMAND_TOOL_TIMEOUT
     } else {
         TOOL_TIMEOUT
@@ -130,7 +130,7 @@ pub async fn execute_tool_inner_public(
     // For now, pass agent_id and handle the "no conversation" case gracefully.
     let timeout_secs = match tool_name {
         t if t.starts_with("browser_") => 360,
-        "run_command" => 310,
+        "run_shell" => 310,
         _ => 30,
     };
     let duration = std::time::Duration::from_secs(timeout_secs);

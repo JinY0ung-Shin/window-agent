@@ -22,12 +22,12 @@ describe("isCredentialBearingTool", () => {
     expect(isCredentialBearingTool({ name: "write_file" }, true)).toBe(false);
   });
 
-  it("returns true for run_command when agent has credentials", () => {
-    expect(isCredentialBearingTool({ name: "run_command" }, true)).toBe(true);
+  it("returns true for run_shell when agent has credentials", () => {
+    expect(isCredentialBearingTool({ name: "run_shell" }, true)).toBe(true);
   });
 
-  it("returns false for run_command when agent has no credentials", () => {
-    expect(isCredentialBearingTool({ name: "run_command" }, false)).toBe(false);
+  it("returns false for run_shell when agent has no credentials", () => {
+    expect(isCredentialBearingTool({ name: "run_shell" }, false)).toBe(false);
   });
 
   it("returns true for browser_type with credential placeholder", () => {

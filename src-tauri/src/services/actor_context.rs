@@ -151,11 +151,11 @@ pub fn resolve_with_relay_tools(
         None
     };
 
-    // 8. Credentials section (only when run_command is enabled and agent has credentials)
-    let has_run_command = enabled_tool_names.contains(&"run_command".to_string());
+    // 8. Credentials section (only when run_shell is enabled and agent has credentials)
+    let has_run_shell = enabled_tool_names.contains(&"run_shell".to_string());
     let has_browser_type = enabled_tool_names.contains(&"browser_type".to_string());
-    let credentials_section = if has_run_command || has_browser_type {
-        build_credentials_section(&agent_dir, app_data_dir, has_run_command, has_browser_type)
+    let credentials_section = if has_run_shell || has_browser_type {
+        build_credentials_section(&agent_dir, app_data_dir, has_run_shell, has_browser_type)
     } else {
         None
     };
@@ -304,7 +304,7 @@ fn resolve_tool_names(
         // Browser requires UI, orchestration requires team context,
         // and shell commands are blocked to prevent unattended persistent execution.
         ExecutionRole::CronExecution => {
-            const CRON_BLOCKED_TOOLS: &[&str] = &["run_command", "manage_schedule"];
+            const CRON_BLOCKED_TOOLS: &[&str] = &["run_shell", "manage_schedule"];
             let config_tools = read_tool_config(agent_dir);
             config_tools
                 .into_iter()
@@ -322,7 +322,7 @@ fn resolve_tool_names(
         // If no custom list is set, defaults to read-only tools.
         ExecutionRole::RelayResponse => {
             // Tools that must NEVER be available in relay context regardless of user config
-            const RELAY_BLOCKED_TOOLS: &[&str] = &["run_command"];
+            const RELAY_BLOCKED_TOOLS: &[&str] = &["run_shell"];
             const DEFAULT_RELAY_ALLOWED: &[&str] = &[
                 "read_file", "list_directory", "web_search",
                 "self_inspect",
@@ -382,7 +382,7 @@ fn resolve_tool_names(
 fn build_credentials_section(
     agent_dir: &std::path::Path,
     app_data_dir: &std::path::Path,
-    has_run_command: bool,
+    has_run_shell: bool,
     has_browser_type: bool,
 ) -> Option<String> {
     let allowed = credential_service::read_allowed_credentials_from_dir(agent_dir).ok()?;
@@ -410,7 +410,7 @@ fn build_credentials_section(
             .map(|m| m.name.as_str())
             .unwrap_or(id.as_str());
 
-        let env_var = if has_run_command {
+        let env_var = if has_run_shell {
             let env_name = credential_service::credential_id_to_env_var(id);
             if cfg!(target_os = "windows") {
                 Some(format!("%{}%", env_name))
@@ -439,8 +439,8 @@ fn build_credentials_section(
     lines.sort();
 
     let mut instructions = Vec::new();
-    if has_run_command {
-        instructions.push("Use env vars in shell commands via run_command.");
+    if has_run_shell {
+        instructions.push("Use env vars in shell commands via run_shell.");
     }
     if has_browser_type {
         instructions.push("Use {{credential:ID}} in browser_type text parameter for password/login fields.");
@@ -651,7 +651,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_cron_blocks_run_command_and_manage_schedule() {
+    fn test_resolve_cron_blocks_run_shell_and_manage_schedule() {
         let db = Database::new_in_memory().expect("in-memory db");
         let tmp = TempDir::new().expect("tempdir");
 
@@ -681,7 +681,7 @@ mod tests {
             "native": {
                 "read_file": { "enabled": true, "tier": "auto" },
                 "write_file": { "enabled": true, "tier": "confirm" },
-                "run_command": { "enabled": true, "tier": "confirm" },
+                "run_shell": { "enabled": true, "tier": "confirm" },
                 "manage_schedule": { "enabled": true, "tier": "confirm" },
                 "browser_navigate": { "enabled": true, "tier": "confirm" },
                 "self_inspect": { "enabled": true, "tier": "auto" },
@@ -708,8 +708,8 @@ mod tests {
         assert!(ctx.enabled_tool_names.contains(&"read_file".to_string()));
         assert!(ctx.enabled_tool_names.contains(&"write_file".to_string()));
         assert!(ctx.enabled_tool_names.contains(&"self_inspect".to_string()));
-        // Cron should block run_command and manage_schedule
-        assert!(!ctx.enabled_tool_names.contains(&"run_command".to_string()));
+        // Cron should block run_shell and manage_schedule
+        assert!(!ctx.enabled_tool_names.contains(&"run_shell".to_string()));
         assert!(!ctx.enabled_tool_names.contains(&"manage_schedule".to_string()));
         // Cron should also block browser and orchestration tools
         assert!(!ctx.enabled_tool_names.contains(&"browser_navigate".to_string()));

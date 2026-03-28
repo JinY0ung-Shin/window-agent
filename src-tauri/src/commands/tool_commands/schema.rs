@@ -122,7 +122,7 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".to_string())
     };
     defs.push(NativeToolDef {
-        name: "run_command".into(),
+        name: "run_shell".into(),
         description: format!(
             "Execute a shell command and return the result. System: os={os}, arch={arch}, shell={shell}. \
              Allowed credentials are automatically injected as environment variables (CRED_* prefix). \

@@ -8,7 +8,7 @@ interface ToolResultDetailProps {
 }
 
 export default function ToolResultDetail({ toolName, result, isError = false }: ToolResultDetailProps) {
-  if (toolName === "run_command") {
+  if (toolName === "run_shell") {
     try {
       const parsed = JSON.parse(result);
       if (parsed && typeof parsed.exit_code === "number") {

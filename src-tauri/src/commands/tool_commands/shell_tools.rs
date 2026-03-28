@@ -19,14 +19,14 @@ const MAX_TIMEOUT_SECS: u64 = 300;
 /// Credentials are injected as environment variables (CRED_* prefix).
 /// Stdout and stderr are redacted to prevent credential leaks.
 /// On timeout, the child process is explicitly killed.
-pub(super) async fn tool_run_command(
+pub(super) async fn tool_run_shell(
     input: &serde_json::Value,
     default_working_dir: &str,
     credentials: &[CredentialEnvEntry],
 ) -> Result<serde_json::Value, String> {
     let command = input["command"]
         .as_str()
-        .ok_or("run_command: missing 'command' parameter")?
+        .ok_or("run_shell: missing 'command' parameter")?
         .to_string();
 
     let timeout_secs = input
@@ -44,7 +44,7 @@ pub(super) async fn tool_run_command(
     // Validate working directory exists
     if !Path::new(&working_dir).is_dir() {
         return Err(format!(
-            "run_command: working_dir '{}' does not exist or is not a directory",
+            "run_shell: working_dir '{}' does not exist or is not a directory",
             working_dir
         ));
     }
@@ -103,7 +103,7 @@ pub(super) async fn tool_run_command(
 
         let mut process = cmd
             .spawn()
-            .map_err(|e| format!("run_command: failed to spawn process: {e}"))?;
+            .map_err(|e| format!("run_shell: failed to spawn process: {e}"))?;
 
         // Store PID for kill-on-timeout
         if let Ok(mut guard) = process_handle_inner.lock() {
@@ -115,23 +115,23 @@ pub(super) async fn tool_run_command(
         // MAX_OUTPUT_BYTES, the reader continues draining (discarding) so the
         // child process never blocks on a full pipe.
         let stdout_pipe = process.stdout.take()
-            .ok_or("run_command: failed to take stdout pipe")?;
+            .ok_or("run_shell: failed to take stdout pipe")?;
         let stderr_pipe = process.stderr.take()
-            .ok_or("run_command: failed to take stderr pipe")?;
+            .ok_or("run_shell: failed to take stderr pipe")?;
 
         let stdout_handle = std::thread::spawn(move || read_bounded(stdout_pipe));
         let stderr_handle = std::thread::spawn(move || read_bounded(stderr_pipe));
 
         let (stdout_bytes, stdout_truncated) = stdout_handle
             .join()
-            .map_err(|_| "run_command: stdout reader thread panicked".to_string())?;
+            .map_err(|_| "run_shell: stdout reader thread panicked".to_string())?;
         let (stderr_bytes, stderr_truncated) = stderr_handle
             .join()
-            .map_err(|_| "run_command: stderr reader thread panicked".to_string())?;
+            .map_err(|_| "run_shell: stderr reader thread panicked".to_string())?;
 
         let status = process
             .wait()
-            .map_err(|e| format!("run_command: failed to wait for process: {e}"))?;
+            .map_err(|e| format!("run_shell: failed to wait for process: {e}"))?;
 
         let exit_code = status.code().unwrap_or(-1);
         let truncated = stdout_truncated || stderr_truncated;
@@ -165,12 +165,12 @@ pub(super) async fn tool_run_command(
             }))
         }
         Ok(Ok(Err(e))) => Err(e),
-        Ok(Err(e)) => Err(format!("run_command: task panicked: {e}")),
+        Ok(Err(e)) => Err(format!("run_shell: task panicked: {e}")),
         Err(_) => {
             // Timeout: kill the child process to prevent secret-bearing background processes
             kill_process_group(&process_handle);
             Err(format!(
-                "run_command: timed out after {} seconds (process killed)",
+                "run_shell: timed out after {} seconds (process killed)",
                 timeout_secs
             ))
         }

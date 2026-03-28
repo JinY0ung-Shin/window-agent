@@ -12,14 +12,14 @@ const CREDENTIAL_PLACEHOLDER_RE = /\{\{credential:[A-Za-z0-9_-]+\}\}/;
 const NEVER_AUTO_APPROVE_TOOLS = new Set(["manage_schedule"]);
 
 /** Returns true if this tool call should NOT be auto-approved because
- *  it uses credentials (env vars for run_command, or placeholders for browser_type)
+ *  it uses credentials (env vars for run_shell, or placeholders for browser_type)
  *  or is inherently sensitive (manage_schedule). */
 export function isCredentialBearingTool(
   tc: { name: string; arguments?: string },
   agentHasCredentials: boolean,
 ): boolean {
   if (NEVER_AUTO_APPROVE_TOOLS.has(tc.name)) return true;
-  if (tc.name === "run_command") return agentHasCredentials;
+  if (tc.name === "run_shell") return agentHasCredentials;
   if (tc.name === "browser_type" && agentHasCredentials) {
     try {
       const args = JSON.parse(tc.arguments ?? "{}");
