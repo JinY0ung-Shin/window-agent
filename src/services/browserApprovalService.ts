@@ -7,12 +7,18 @@ const browserApprovedDomains = new Map<string, Set<string>>();
 /** Strict pattern for credential placeholders: {{credential:ID}} where ID is [A-Za-z0-9_-]+ */
 const CREDENTIAL_PLACEHOLDER_RE = /\{\{credential:[A-Za-z0-9_-]+\}\}/;
 
+/** Tools that must never be auto-approved regardless of credentials or auto_approve setting.
+ *  manage_schedule: creates persistent unattended execution — user must always review the prompt. */
+const NEVER_AUTO_APPROVE_TOOLS = new Set(["manage_schedule"]);
+
 /** Returns true if this tool call should NOT be auto-approved because
- *  it uses credentials (env vars for run_command, or placeholders for browser_type). */
+ *  it uses credentials (env vars for run_command, or placeholders for browser_type)
+ *  or is inherently sensitive (manage_schedule). */
 export function isCredentialBearingTool(
   tc: { name: string; arguments?: string },
   agentHasCredentials: boolean,
 ): boolean {
+  if (NEVER_AUTO_APPROVE_TOOLS.has(tc.name)) return true;
   if (tc.name === "run_command") return agentHasCredentials;
   if (tc.name === "browser_type" && agentHasCredentials) {
     try {

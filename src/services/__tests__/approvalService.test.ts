@@ -57,6 +57,11 @@ describe("isCredentialBearingTool", () => {
       arguments: JSON.stringify({ ref: 5, text: "{{credential:my-key}}" }),
     }, false)).toBe(false);
   });
+
+  it("returns true for manage_schedule regardless of credentials", () => {
+    expect(isCredentialBearingTool({ name: "manage_schedule" }, false)).toBe(true);
+    expect(isCredentialBearingTool({ name: "manage_schedule" }, true)).toBe(true);
+  });
 });
 
 describe("extractBrowserDomain", () => {

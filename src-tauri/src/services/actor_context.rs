@@ -300,14 +300,19 @@ fn resolve_tool_names(
         // DM — full tool access; empty vec signals "use default frontend config"
         ExecutionRole::Dm => Vec::new(),
 
-        // Cron execution — all enabled tools except browser/orchestration
-        // (browser requires UI, orchestration requires team context)
+        // Cron execution — all enabled tools except browser/orchestration/shell.
+        // Browser requires UI, orchestration requires team context,
+        // and shell commands are blocked to prevent unattended persistent execution.
         ExecutionRole::CronExecution => {
+            const CRON_BLOCKED_TOOLS: &[&str] = &["run_command", "manage_schedule"];
             let config_tools = read_tool_config(agent_dir);
             config_tools
                 .into_iter()
                 .filter(|(name, _)| {
-                    !name.starts_with("browser_") && name != "delegate" && name != "report"
+                    !name.starts_with("browser_")
+                        && name != "delegate"
+                        && name != "report"
+                        && !CRON_BLOCKED_TOOLS.contains(&name.as_str())
                 })
                 .map(|(name, _)| name)
                 .collect()
@@ -643,5 +648,72 @@ mod tests {
 
         let result = resolve(&scope, &db, tmp.path(), None);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_cron_blocks_run_command_and_manage_schedule() {
+        let db = Database::new_in_memory().expect("in-memory db");
+        let tmp = TempDir::new().expect("tempdir");
+
+        let agent = create_agent_impl(
+            &db,
+            CreateAgentRequest {
+                folder_name: "cron-agent".into(),
+                name: "Cron Agent".into(),
+                avatar: None,
+                description: None,
+                model: None,
+                temperature: None,
+                thinking_enabled: None,
+                thinking_budget: None,
+                is_default: None,
+                sort_order: None,
+            },
+        )
+        .expect("create agent");
+
+        let agent_dir = tmp.path().join("agents").join("cron-agent");
+        fs::create_dir_all(&agent_dir).unwrap();
+
+        let tool_config = serde_json::json!({
+            "version": 2,
+            "auto_approve": false,
+            "native": {
+                "read_file": { "enabled": true, "tier": "auto" },
+                "write_file": { "enabled": true, "tier": "confirm" },
+                "run_command": { "enabled": true, "tier": "confirm" },
+                "manage_schedule": { "enabled": true, "tier": "confirm" },
+                "browser_navigate": { "enabled": true, "tier": "confirm" },
+                "self_inspect": { "enabled": true, "tier": "auto" },
+                "delegate": { "enabled": true, "tier": "auto" },
+                "report": { "enabled": true, "tier": "auto" }
+            },
+            "credentials": {}
+        });
+        fs::write(
+            agent_dir.join("TOOL_CONFIG.json"),
+            serde_json::to_string_pretty(&tool_config).unwrap(),
+        )
+        .unwrap();
+
+        let scope = ExecutionScope {
+            actor_agent_id: agent.id,
+            role: ExecutionRole::CronExecution,
+            trigger: ExecutionTrigger::BackendTriggered,
+        };
+
+        let ctx = resolve(&scope, &db, tmp.path(), None).unwrap();
+
+        // Cron should include safe tools
+        assert!(ctx.enabled_tool_names.contains(&"read_file".to_string()));
+        assert!(ctx.enabled_tool_names.contains(&"write_file".to_string()));
+        assert!(ctx.enabled_tool_names.contains(&"self_inspect".to_string()));
+        // Cron should block run_command and manage_schedule
+        assert!(!ctx.enabled_tool_names.contains(&"run_command".to_string()));
+        assert!(!ctx.enabled_tool_names.contains(&"manage_schedule".to_string()));
+        // Cron should also block browser and orchestration tools
+        assert!(!ctx.enabled_tool_names.contains(&"browser_navigate".to_string()));
+        assert!(!ctx.enabled_tool_names.contains(&"delegate".to_string()));
+        assert!(!ctx.enabled_tool_names.contains(&"report".to_string()));
     }
 }

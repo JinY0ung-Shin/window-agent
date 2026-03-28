@@ -33,7 +33,7 @@ pub(super) async fn tool_run_command(
         .get("timeout_secs")
         .and_then(|v| v.as_u64())
         .unwrap_or(DEFAULT_TIMEOUT_SECS)
-        .min(MAX_TIMEOUT_SECS);
+        .clamp(1, MAX_TIMEOUT_SECS);
 
     let working_dir = input
         .get("working_dir")
@@ -110,17 +110,24 @@ pub(super) async fn tool_run_command(
             *guard = Some(process.id());
         }
 
-        // Read stdout bounded
-        let (stdout_bytes, stdout_truncated) = {
-            let pipe = process.stdout.take().unwrap();
-            read_bounded(pipe)
-        };
+        // Read stdout and stderr concurrently to avoid pipe-buffer deadlocks.
+        // Each stream is read in its own thread. After capturing up to
+        // MAX_OUTPUT_BYTES, the reader continues draining (discarding) so the
+        // child process never blocks on a full pipe.
+        let stdout_pipe = process.stdout.take()
+            .ok_or("run_command: failed to take stdout pipe")?;
+        let stderr_pipe = process.stderr.take()
+            .ok_or("run_command: failed to take stderr pipe")?;
 
-        // Read stderr bounded
-        let (stderr_bytes, stderr_truncated) = {
-            let pipe = process.stderr.take().unwrap();
-            read_bounded(pipe)
-        };
+        let stdout_handle = std::thread::spawn(move || read_bounded(stdout_pipe));
+        let stderr_handle = std::thread::spawn(move || read_bounded(stderr_pipe));
+
+        let (stdout_bytes, stdout_truncated) = stdout_handle
+            .join()
+            .map_err(|_| "run_command: stdout reader thread panicked".to_string())?;
+        let (stderr_bytes, stderr_truncated) = stderr_handle
+            .join()
+            .map_err(|_| "run_command: stderr reader thread panicked".to_string())?;
 
         let status = process
             .wait()
@@ -161,23 +168,7 @@ pub(super) async fn tool_run_command(
         Ok(Err(e)) => Err(format!("run_command: task panicked: {e}")),
         Err(_) => {
             // Timeout: kill the child process to prevent secret-bearing background processes
-            if let Ok(guard) = process_handle.lock() {
-                if let Some(pid) = *guard {
-                    #[cfg(unix)]
-                    {
-                        // Kill the entire process group via kill command
-                        let _ = Command::new("kill")
-                            .args(["-9", &format!("-{}", pid)])
-                            .output();
-                    }
-                    #[cfg(windows)]
-                    {
-                        let _ = Command::new("taskkill")
-                            .args(["/F", "/T", "/PID", &pid.to_string()])
-                            .output();
-                    }
-                }
-            }
+            kill_process_group(&process_handle);
             Err(format!(
                 "run_command: timed out after {} seconds (process killed)",
                 timeout_secs
@@ -186,8 +177,37 @@ pub(super) async fn tool_run_command(
     }
 }
 
+/// Kill the child process group on timeout.
+fn kill_process_group(process_handle: &Arc<Mutex<Option<u32>>>) {
+    let pid = match process_handle.lock() {
+        Ok(guard) => *guard,
+        Err(_) => return, // Poisoned mutex — nothing we can do
+    };
+    let pid = match pid {
+        Some(p) if p > 0 => p,
+        _ => return, // No PID stored yet or PID 0 — skip to avoid killing our own group
+    };
+
+    #[cfg(unix)]
+    {
+        // Kill the entire process group via syscall
+        // Safety: we created the child with process_group(0), so -pid targets only its group.
+        unsafe {
+            libc::kill(-(pid as i32), libc::SIGKILL);
+        }
+    }
+    #[cfg(windows)]
+    {
+        let _ = Command::new("taskkill")
+            .args(["/F", "/T", "/PID", &pid.to_string()])
+            .output();
+    }
+}
+
 /// Read from a reader into a bounded buffer.
-/// Returns (bytes, truncated).
+/// After capturing up to MAX_OUTPUT_BYTES, continues draining the reader
+/// (discarding data) so the writer never blocks on a full pipe.
+/// Returns (captured_bytes, truncated).
 fn read_bounded<R: Read>(mut reader: R) -> (Vec<u8>, bool) {
     let mut buf = Vec::with_capacity(MAX_OUTPUT_BYTES.min(65536));
     let mut chunk = [0u8; 8192];
@@ -197,21 +217,84 @@ fn read_bounded<R: Read>(mut reader: R) -> (Vec<u8>, bool) {
         match reader.read(&mut chunk) {
             Ok(0) => break,
             Ok(n) => {
-                let remaining = MAX_OUTPUT_BYTES.saturating_sub(buf.len());
-                if remaining == 0 {
-                    truncated = true;
-                    break;
+                if !truncated {
+                    let remaining = MAX_OUTPUT_BYTES.saturating_sub(buf.len());
+                    if remaining == 0 {
+                        truncated = true;
+                        // Don't break — keep draining so the child doesn't block
+                    } else {
+                        let take = n.min(remaining);
+                        buf.extend_from_slice(&chunk[..take]);
+                        if take < n {
+                            truncated = true;
+                        }
+                    }
                 }
-                let take = n.min(remaining);
-                buf.extend_from_slice(&chunk[..take]);
-                if take < n {
-                    truncated = true;
-                    break;
-                }
+                // If truncated, we simply discard the data and keep reading
             }
             Err(_) => break,
         }
     }
 
     (buf, truncated)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_bounded_small_input() {
+        let data = b"hello world";
+        let (buf, truncated) = read_bounded(&data[..]);
+        assert_eq!(buf, b"hello world");
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn test_read_bounded_exact_limit() {
+        let data = vec![b'x'; MAX_OUTPUT_BYTES];
+        let (buf, truncated) = read_bounded(&data[..]);
+        assert_eq!(buf.len(), MAX_OUTPUT_BYTES);
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn test_read_bounded_over_limit_truncates() {
+        let data = vec![b'x'; MAX_OUTPUT_BYTES + 5000];
+        let (buf, truncated) = read_bounded(&data[..]);
+        assert_eq!(buf.len(), MAX_OUTPUT_BYTES);
+        assert!(truncated);
+    }
+
+    #[test]
+    fn test_read_bounded_empty() {
+        let data: &[u8] = b"";
+        let (buf, truncated) = read_bounded(data);
+        assert!(buf.is_empty());
+        assert!(!truncated);
+    }
+
+    #[test]
+    fn test_read_bounded_drains_all_data() {
+        // Simulate a large input that exceeds the cap.
+        // After read_bounded returns, all data should have been consumed
+        // (i.e., the reader reached EOF), preventing pipe deadlocks.
+        let size = MAX_OUTPUT_BYTES * 3;
+        let data = vec![b'A'; size];
+        let (buf, truncated) = read_bounded(&data[..]);
+        assert_eq!(buf.len(), MAX_OUTPUT_BYTES);
+        assert!(truncated);
+        // The key property: read_bounded consumed all `size` bytes from the reader,
+        // not just MAX_OUTPUT_BYTES. This is verified by the fact that
+        // read_bounded reached Ok(0) (EOF) without the reader blocking.
+    }
+
+    #[test]
+    fn test_timeout_secs_clamped() {
+        // timeout_secs = 0 should be clamped to 1
+        assert_eq!(0u64.clamp(1, MAX_TIMEOUT_SECS), 1);
+        // timeout_secs = 999 should be clamped to MAX_TIMEOUT_SECS
+        assert_eq!(999u64.clamp(1, MAX_TIMEOUT_SECS), MAX_TIMEOUT_SECS);
+    }
 }

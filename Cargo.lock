@@ -5299,6 +5299,7 @@ dependencies = [
  "futures-util",
  "hkdf",
  "image",
+ "libc",
  "notify",
  "rand 0.8.5",
  "regex",
