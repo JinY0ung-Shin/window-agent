@@ -28,6 +28,8 @@ export interface Attachment {
   type: "image";
   path: string;
   mime?: string;
+  /** In-memory data URL for rendering (not persisted to DB) */
+  dataUrl?: string;
 }
 
 export interface DbMessage {

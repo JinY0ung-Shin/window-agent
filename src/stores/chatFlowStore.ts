@@ -269,7 +269,7 @@ async function sendNormalMessage() {
       // Extract base64 data from data URL (strip "data:image/...;base64," prefix)
       const base64 = att.dataUrl.replace(/^data:image\/[^;]+;base64,/, "");
       const path = await cmds.saveChatImage(base64);
-      savedAttachments.push({ type: "image", path });
+      savedAttachments.push({ type: "image", path, dataUrl: att.dataUrl });
     }
     useMessageStore.getState().clearPendingAttachments();
   }

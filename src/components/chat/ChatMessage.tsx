@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { AlertCircle, Bot, User, Wrench, Copy, Check, RefreshCw, Crown } from "lucide-react";
-import { convertFileSrc } from "@tauri-apps/api/core";
 import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
+import { useAttachmentSrc } from "../../hooks/useAttachmentSrc";
 import type { ChatMessage as ChatMessageType } from "../../services/types";
 import type { SenderInfo } from "./ToolRunBlock";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
@@ -113,8 +113,8 @@ export default function ChatMessage({ message, senderInfo }: Props) {
               {message.attachments && message.attachments.length > 0 && (
                 <div className="message-attachments">
                   {message.attachments.map((att, i) =>
-                    att.type === "image" && att.path ? (
-                      <img key={i} src={convertFileSrc(att.path)} alt="Attached" className="message-attachment-img" />
+                    att.type === "image" ? (
+                      <AttachmentImage key={i} attachment={att} />
                     ) : null,
                   )}
                 </div>
@@ -212,4 +212,11 @@ export default function ChatMessage({ message, senderInfo }: Props) {
       </div>
     </div>
   );
+}
+
+/** Renders a single image attachment, loading from disk if needed. */
+function AttachmentImage({ attachment }: { attachment: import("../../services/types").Attachment }) {
+  const src = useAttachmentSrc(attachment);
+  if (!src) return null;
+  return <img src={src} alt="Attached" className="message-attachment-img" />;
 }
