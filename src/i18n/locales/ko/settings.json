@@ -10,7 +10,7 @@
   },
   "sections": {
     "apiServer": "API 서버",
-    "agentNetwork": "에이전트 네트워크"
+    "agentNetwork": "{{term_agent}} 네트워크"
   },
   "general": {
     "apiKeyLabel": "API Key (OpenAI 또는 Custom)",

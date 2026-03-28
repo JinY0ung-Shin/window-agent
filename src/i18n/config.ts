@@ -1,5 +1,7 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
+import { syncThemeVars } from "./themeVars";
+import type { UITheme } from "../stores/settingsStore";
 
 // ── Eagerly import all namespace resources ──
 import koCommon from "./locales/ko/common.json";
@@ -78,7 +80,28 @@ i18n.use(initReactI18next).init({
     "cron",
   ],
   defaultNS: "common",
-  interpolation: { escapeValue: false },
+  interpolation: {
+    escapeValue: false,
+    format: (value: string, format?: string, lng?: string) => {
+      if (!format || !lng?.startsWith("ko")) return value;
+      const particles: Record<string, [string, string]> = {
+        "이/가": ["이", "가"],
+        "을/를": ["을", "를"],
+        "은/는": ["은", "는"],
+        "과/와": ["과", "와"],
+        "으로/로": ["으로", "로"],
+      };
+      const pair = particles[format.trim()];
+      if (!pair) return value;
+      const code = value.charCodeAt(value.length - 1);
+      // Korean syllable block: U+AC00 – U+D7A3
+      if (code >= 0xac00 && code <= 0xd7a3) {
+        return value + ((code - 0xac00) % 28 !== 0 ? pair[0] : pair[1]);
+      }
+      // Non-Korean character — default to vowel-ending form
+      return value + pair[1];
+    },
+  },
   returnNull: false,
   initImmediate: false,
   missingKeyHandler: import.meta.env.DEV
@@ -87,5 +110,9 @@ i18n.use(initReactI18next).init({
       }
     : undefined,
 });
+
+// Seed theme-dependent interpolation variables from stored preference
+const storedTheme = (localStorage.getItem("ui_theme") || "org") as UITheme;
+syncThemeVars(i18n, storedTheme);
 
 export default i18n;

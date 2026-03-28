@@ -56,7 +56,7 @@
     "titlePlaceholder": "노트 제목",
     "categoryLabel": "분류",
     "scopeLabel": "범위",
-    "agentOnly": "에이전트 전용",
+    "agentOnly": "{{term_agent}} 전용",
     "shared": "공유",
     "tagsLabel": "태그",
     "tagsSeparator": "쉼표로 구분",

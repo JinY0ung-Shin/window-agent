@@ -24,10 +24,10 @@
   },
   "boot": {
     "header": "[BOOT]",
-    "description": "Per-session startup instructions for this agent"
+    "description": "Per-session startup instructions for this {{term_agent}}"
   },
   "consolidation": {
-    "system": "You are a memory consolidation expert who manages the long-term memory of an AI agent.",
-    "instruction": "Below is the agent's current consolidated memory and new digests.\n\nMerge the current memory with the new digests to produce updated consolidated memory.\n\nRules:\n- Retain information from existing memory that is still valid\n- Add new digest information to the appropriate sections\n- Update conflicting information with the latest version (do not remove previous references, update them)\n- Remove information that is no longer valid\n- Maintain source conversation references [cN] for each item\n- Keep total output within 800 tokens\n\nOutput format (you must follow this section structure):\n\n## Profile\n- Basic information about the user/environment\n\n## Preferences\n- Work style, tools, and style preferences\n\n## Active Projects\n- Currently ongoing work\n\n## Rules\n- Rules and constraints to follow\n\n## Recent\n- Recent context (1-2 items only)"
+    "system": "You are a memory consolidation expert who manages the long-term memory of an AI {{term_agent}}.",
+    "instruction": "Below is the {{term_agent}}'s current consolidated memory and new digests.\n\nMerge the current memory with the new digests to produce updated consolidated memory.\n\nRules:\n- Retain information from existing memory that is still valid\n- Add new digest information to the appropriate sections\n- Update conflicting information with the latest version (do not remove previous references, update them)\n- Remove information that is no longer valid\n- Maintain source conversation references [cN] for each item\n- Keep total output within 800 tokens\n\nOutput format (you must follow this section structure):\n\n## Profile\n- Basic information about the user/environment\n\n## Preferences\n- Work style, tools, and style preferences\n\n## Active Projects\n- Currently ongoing work\n\n## Rules\n- Rules and constraints to follow\n\n## Recent\n- Recent context (1-2 items only)"
   }
 }

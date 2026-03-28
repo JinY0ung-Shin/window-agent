@@ -56,7 +56,7 @@
     "titlePlaceholder": "Note title",
     "categoryLabel": "Category",
     "scopeLabel": "Scope",
-    "agentOnly": "Agent only",
+    "agentOnly": "{{term_agent_cap}} only",
     "shared": "Shared",
     "tagsLabel": "Tags",
     "tagsSeparator": "Comma-separated",

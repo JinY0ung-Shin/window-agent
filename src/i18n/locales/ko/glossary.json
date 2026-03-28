@@ -134,5 +134,11 @@
   "learningMode_org": "배움모드",
   "noAgents": "아직 직원이 없습니다",
   "noAgents_classic": "에이전트가 없습니다",
-  "noAgents_org": "아직 직원이 없습니다"
+  "noAgents_org": "아직 직원이 없습니다",
+  "term_agent": "직원",
+  "term_agent_classic": "에이전트",
+  "term_agent_org": "직원",
+  "term_agents": "직원",
+  "term_agents_classic": "에이전트",
+  "term_agents_org": "직원"
 }

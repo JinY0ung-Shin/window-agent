@@ -1,13 +1,13 @@
 {
   "consent": {
-    "title": "에이전트 네트워크 안내",
-    "description": "네트워크를 활성화하면 이 에이전트가 다른 에이전트와 직접 메시지를 주고받을 수 있습니다. 모든 통신은 암호화되며, 초대 코드를 교환한 상대만 연결됩니다. 수신된 메시지는 사용자 승인 후에만 처리됩니다.",
+    "title": "{{term_agent}} 네트워크 안내",
+    "description": "네트워크를 활성화하면 이 {{term_agent, 이/가}} 다른 {{term_agent, 과/와}} 직접 메시지를 주고받을 수 있습니다. 모든 통신은 암호화되며, 초대 코드를 교환한 상대만 연결됩니다. 수신된 메시지는 사용자 승인 후에만 처리됩니다.",
     "cancel": "취소",
     "agreeAndEnable": "동의 및 활성화"
   },
   "toggle": {
-    "label": "에이전트 네트워크",
-    "hint": "릴레이 서버를 통해 다른 에이전트와 통신을 활성화합니다."
+    "label": "{{term_agent}} 네트워크",
+    "hint": "릴레이 서버를 통해 다른 {{term_agent, 과/와}} 통신을 활성화합니다."
   },
   "relay": {
     "label": "릴레이 서버 URL",
@@ -18,7 +18,7 @@
   },
   "tools": {
     "label": "릴레이 허용 도구",
-    "hint": "외부 피어와 대화할 때 에이전트가 사용할 수 있는 도구를 설정합니다.",
+    "hint": "외부 피어와 대화할 때 {{term_agent, 이/가}} 사용할 수 있는 도구를 설정합니다.",
     "saved": "저장됨",
     "reset": "기본값"
   },
@@ -40,7 +40,7 @@
     "title": "초대 코드",
     "generate": "생성",
     "accept": "수락",
-    "representativeAgent": "대표 에이전트",
+    "representativeAgent": "대표 {{term_agent}}",
     "descriptionOptional": "설명 (선택)",
     "descriptionPlaceholder": "상대방에게 보여줄 설명",
     "expiry": "유효 기간",
@@ -61,12 +61,12 @@
     "pasteLabel": "초대 코드 붙여넣기",
     "pastePlaceholder": "상대방에게서 받은 초대 코드를 입력하세요",
     "unverified": "미검증",
-    "agentPrefix": "에이전트: {{name}}",
+    "agentPrefix": "{{term_agent}}: {{name}}",
     "addressCount": "연결 주소 {{count}}개 포함",
     "noAddressHint": "주소 없음 — 같은 네트워크에서만 연결 가능",
-    "bindingAgent": "바인딩할 에이전트",
+    "bindingAgent": "담당 {{term_agent}}",
     "noSelection": "선택 안 함",
-    "bindingHint": "이 연락처에 응답할 로컬 에이전트를 선택합니다.",
+    "bindingHint": "이 연락처에 응답할 {{term_agent, 을/를}} 선택합니다.",
     "acceptButton": "수락"
   },
   "delivery": {
@@ -78,10 +78,10 @@
     "queued": "대기 중"
   },
   "panel": {
-    "title": "에이전트 네트워크",
+    "title": "{{term_agent}} 네트워크",
     "inviteTitle": "초대",
     "inactive": "네트워크가 비활성 상태입니다.",
-    "inactiveHint": "설정에서 에이전트 네트워크를 활성화하세요.",
+    "inactiveHint": "설정에서 {{term_agent}} 네트워크를 활성화하세요.",
     "refreshTitle": "새로고침"
   },
   "peer": {
@@ -124,10 +124,10 @@
     "timeout": "아직 연결되지 않았습니다",
     "reconnect": "재연결",
     "displayNameLabel": "표시 이름",
-    "agentNameLabel": "에이전트 이름",
+    "agentNameLabel": "{{term_agent}} 이름",
     "descriptionLabel": "설명",
-    "boundAgentLabel": "바인딩된 에이전트",
-    "boundAgentHint": "이 연락처의 메시지에 응답할 에이전트",
+    "boundAgentLabel": "담당 {{term_agent}}",
+    "boundAgentHint": "이 연락처의 메시지에 응답할 {{term_agent}}",
     "modeLabel": "모드",
     "secretaryMode": "비서 (Secretary)",
     "delegateHint": "대리인 모드는 Phase 2에서 지원 예정",

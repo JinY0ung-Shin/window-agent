@@ -90,7 +90,7 @@ export default function AgentPanel() {
                           className="btn-danger-sm"
                           onClick={() => handleDelete(agent.id)}
                         >
-                          {t("common:delete")}
+                          {t("deleteAgent", { context: uiTheme })}
                         </button>
                         <button
                           className="btn-secondary-sm"

@@ -20,15 +20,15 @@
     "selectTeam": "팀을 선택하여 대화를 시작하세요.",
     "emptyConversation": "메시지를 보내 팀 대화를 시작하세요.",
     "backToTeams": "팀 목록으로",
-    "unknownAgent": "에이전트",
+    "unknownAgent": "{{term_agent}}",
     "leader": "리더",
     "member": "멤버",
     "streaming": "입력 중...",
     "failed": "실패",
     "aborted": "중단됨",
     "inputPlaceholder": "팀에 메시지 보내기...",
-    "inputBusy": "에이전트가 작업 중...",
-    "abortTitle": "모든 에이전트 중지",
+    "inputBusy": "{{term_agent, 이/가}} 업무 중...",
+    "abortTitle": "모든 {{term_agent}} 중지",
     "taskProgress": "{{done}}/{{total}} 작업 완료"
   }
 }

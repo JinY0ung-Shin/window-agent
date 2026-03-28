@@ -10,7 +10,7 @@
   },
   "sections": {
     "apiServer": "API Server",
-    "agentNetwork": "Agent Network"
+    "agentNetwork": "{{term_agent_cap}} Network"
   },
   "general": {
     "apiKeyLabel": "API Key (OpenAI or Custom)",

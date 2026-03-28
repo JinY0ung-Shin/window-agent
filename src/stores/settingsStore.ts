@@ -7,7 +7,7 @@ import {
 import { getEnvConfig, hasApiKey as checkApiKey, hasStoredKey as checkStoredKey, setApiConfig } from "../services/tauriCommands";
 import { refreshDefaultManagerPersona } from "../services/commands/agentCommands";
 import { useNavigationStore } from "./navigationStore";
-import { i18n, type Locale } from "../i18n";
+import { i18n, syncThemeVars, type Locale } from "../i18n";
 import { logger } from "../services/logger";
 import { toErrorMessage } from "../utils/errorUtils";
 
@@ -169,6 +169,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   // ── Branding actions ──
   setUITheme: (theme) => {
     localStorage.setItem(LS_UI_THEME, theme);
+    syncThemeVars(i18n, theme);
     set({ uiTheme: theme });
   },
 
@@ -180,6 +181,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setLocale: (locale) => {
     localStorage.setItem(LS_LOCALE, locale);
     i18n.changeLanguage(locale);
+    syncThemeVars(i18n, get().uiTheme);
     set({ locale });
     // Refresh default manager persona files asynchronously (don't block UI)
     refreshDefaultManagerPersona(locale).catch((e) =>
@@ -193,6 +195,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     localStorage.setItem(LS_LOCALE, locale);
     localStorage.setItem(LS_BRANDING_INITIALIZED, "true");
     i18n.changeLanguage(locale);
+    syncThemeVars(i18n, theme);
     set({ companyName, uiTheme: theme, locale, brandingInitialized: true });
   },
 

@@ -20,15 +20,15 @@
     "selectTeam": "Select a team to start chatting.",
     "emptyConversation": "Send a message to start the team conversation.",
     "backToTeams": "Back to teams",
-    "unknownAgent": "Agent",
+    "unknownAgent": "{{term_agent_cap}}",
     "leader": "Leader",
     "member": "Member",
     "streaming": "typing...",
     "failed": "Failed",
     "aborted": "Aborted",
     "inputPlaceholder": "Message the team...",
-    "inputBusy": "Agents are working...",
-    "abortTitle": "Stop all agents",
+    "inputBusy": "{{term_agents_cap}} are working...",
+    "abortTitle": "Stop all {{term_agents}}",
     "taskProgress": "{{done}}/{{total}} tasks done"
   }
 }

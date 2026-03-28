@@ -49,8 +49,8 @@ describe("CreateNoteDialog", () => {
     render(
       <CreateNoteDialog isOpen={true} onClose={onClose} defaultAgentId="agent-1" />,
     );
-    // create.agentOnly => "에이전트 전용", create.shared => "공유"
-    expect(screen.getByText("에이전트 전용")).toBeInTheDocument();
+    // create.agentOnly => "{{term_agent}} 전용" — default theme is org → "직원 전용"
+    expect(screen.getByText("직원 전용")).toBeInTheDocument();
     expect(screen.getByText("공유")).toBeInTheDocument();
   });
 

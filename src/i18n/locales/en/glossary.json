@@ -134,5 +134,11 @@
   "learningMode_org": "Learning Mode",
   "noAgents": "No employees yet",
   "noAgents_classic": "No agents yet",
-  "noAgents_org": "No employees yet"
+  "noAgents_org": "No employees yet",
+  "term_agent": "employee",
+  "term_agent_classic": "agent",
+  "term_agent_org": "employee",
+  "term_agents": "employees",
+  "term_agents_classic": "agents",
+  "term_agents_org": "employees"
 }
