@@ -1,4 +1,5 @@
 use crate::db::agent_operations;
+use crate::db::operations as conversation_ops;
 use crate::db::Database;
 use crate::error::AppError;
 use crate::memory::SystemMemoryManager;
@@ -68,6 +69,8 @@ pub struct ResolvedContext {
     pub tools_section: Option<String>,
     /// Preformatted [AVAILABLE CREDENTIALS] section with env var names.
     pub credentials_section: Option<String>,
+    /// Whether the originating conversation has learning mode enabled.
+    pub learning_mode: bool,
 }
 
 // ── Default LLM settings ──────────────────────────────────
@@ -94,7 +97,18 @@ pub fn resolve(
     app_data_dir: &std::path::Path,
     memory_mgr: Option<&SystemMemoryManager>,
 ) -> Result<ResolvedContext, AppError> {
-    resolve_with_relay_tools(scope, db, app_data_dir, memory_mgr, None)
+    resolve_full(scope, db, app_data_dir, memory_mgr, None, None)
+}
+
+/// Resolve with an explicit conversation_id to inherit learning_mode.
+pub fn resolve_for_conversation(
+    scope: &ExecutionScope,
+    db: &Database,
+    app_data_dir: &std::path::Path,
+    memory_mgr: Option<&SystemMemoryManager>,
+    conversation_id: Option<&str>,
+) -> Result<ResolvedContext, AppError> {
+    resolve_full(scope, db, app_data_dir, memory_mgr, None, conversation_id)
 }
 
 pub fn resolve_with_relay_tools(
@@ -103,6 +117,17 @@ pub fn resolve_with_relay_tools(
     app_data_dir: &std::path::Path,
     memory_mgr: Option<&SystemMemoryManager>,
     relay_allowed_tools: Option<&[String]>,
+) -> Result<ResolvedContext, AppError> {
+    resolve_full(scope, db, app_data_dir, memory_mgr, relay_allowed_tools, None)
+}
+
+fn resolve_full(
+    scope: &ExecutionScope,
+    db: &Database,
+    app_data_dir: &std::path::Path,
+    memory_mgr: Option<&SystemMemoryManager>,
+    relay_allowed_tools: Option<&[String]>,
+    conversation_id: Option<&str>,
 ) -> Result<ResolvedContext, AppError> {
     // 1. Load agent record
     let agent = agent_operations::get_agent_impl(db, scope.actor_agent_id.clone())?;
@@ -160,6 +185,12 @@ pub fn resolve_with_relay_tools(
         None
     };
 
+    // 9. Learning mode — look up from the originating conversation (if provided)
+    let learning_mode = conversation_id
+        .and_then(|cid| conversation_ops::get_conversation_detail_impl(db, cid.to_string()).ok())
+        .map(|detail| detail.learning_mode)
+        .unwrap_or(false);
+
     Ok(ResolvedContext {
         system_prompt,
         enabled_tool_names,
@@ -171,6 +202,7 @@ pub fn resolve_with_relay_tools(
         registered_agents_section,
         tools_section,
         credentials_section,
+        learning_mode,
     })
 }
 

@@ -26,6 +26,7 @@ export default function ChatInput() {
   const dismissWarning = useConversationStore((s) => s.dismissLearningModeWarning);
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const isBusy = isSending || isToolBusy;
+  const hasMessages = messages.length > 0;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { textareaProps, localValue, flushAndSend } = useChatInputLogic({
@@ -42,6 +43,7 @@ export default function ChatInput() {
         : t("input.placeholder.idle");
 
   const learningModeLabel = t("glossary:learningMode", { context: uiTheme });
+  const learningModeDescription = t("chat:learningMode.description", { context: uiTheme });
   const learningModeTooltip = t("chat:learningMode.tooltip", { context: uiTheme });
   const learningModeWarningText = t("chat:learningMode.warning", { context: uiTheme });
 
@@ -70,8 +72,8 @@ export default function ChatInput() {
         <button
           className={`learning-mode-toggle${learningMode ? " active" : ""}`}
           onClick={toggleLearningMode}
-          disabled={isBusy}
-          title={learningMode ? learningModeTooltip : learningModeLabel}
+          disabled={isBusy || hasMessages}
+          title={learningMode ? learningModeTooltip : learningModeDescription}
         >
           <GraduationCap size={16} />
           {learningMode && <span className="learning-mode-label">{learningModeLabel}</span>}

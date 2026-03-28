@@ -47,6 +47,11 @@ pub async fn spawn_agent_tasks(
         .app_data_dir()
         .map_err(|e| format!("Failed to resolve app data dir: {e}"))?;
 
+    // Look up conversation_id from the run to inherit learning_mode
+    let conversation_id = team_operations::get_team_run_impl(db, run_id)
+        .ok()
+        .map(|run| run.conversation_id);
+
     let mut task_ids = Vec::new();
 
     for agent_id in agent_ids {
@@ -69,10 +74,12 @@ pub async fn spawn_agent_tasks(
             trigger: ExecutionTrigger::BackendTriggered,
         };
 
-        // 3. Resolve context via ActorExecutionContext
+        // 3. Resolve context via ActorExecutionContext (with learning_mode from conversation)
         let memory_mgr = app.state::<SystemMemoryManager>();
-        let resolved = actor_context::resolve(&scope, db, &app_data_dir, Some(&*memory_mgr))
-            .map_err(|e| format!("Failed to resolve context for agent {agent_id}: {e}"))?;
+        let resolved = actor_context::resolve_for_conversation(
+            &scope, db, &app_data_dir, Some(&*memory_mgr), conversation_id.as_deref(),
+        )
+        .map_err(|e| format!("Failed to resolve context for agent {agent_id}: {e}"))?;
 
         // 4. Update task status to running
         let _ = team_operations::update_team_task_impl(
@@ -91,6 +98,9 @@ pub async fn spawn_agent_tasks(
         }
         if let Some(ref agents_sec) = resolved.registered_agents_section {
             system_parts.push(agents_sec.clone());
+        }
+        if resolved.learning_mode {
+            system_parts.push(super::llm_helpers::LEARNING_MODE_PROMPT.to_string());
         }
         if let Some(ref tools_sec) = resolved.tools_section {
             system_parts.push(tools_sec.clone());

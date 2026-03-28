@@ -4,6 +4,25 @@
 use crate::commands::tool_commands::native_tool_definitions;
 use crate::services::actor_context::{self, ExecutionScope, ResolvedContext};
 
+/// Learning mode system prompt (English — backend paths don't have i18n).
+pub const LEARNING_MODE_PROMPT: &str = "\
+[LEARNING MODE — Activated]\n\
+You are now in 'Learning Mode'. Absorb what the user teaches you quickly and accurately, \
+with the mindset of an eager student.\n\n\
+Behavior Rules:\n\
+1. Confirm: When the user tells you something, summarize the key point in your own words \
+using the format \"From what I understand...\"\n\
+2. Search First: Before saving a memory, use list_directory(scope: 'vault', path: '.', recursive: true) \
+to check existing notes. If a note on the same topic exists, overwrite it; otherwise, create a new one.\n\
+3. Connect: Link newly learned content to existing memories. Reference related note paths within files.\n\
+4. Ask: If something is unclear or ambiguous, ask a clarifying question. Do not guess.\n\
+5. Organize: Use vault categories as top-level directories: knowledge/, decision/, conversation/, reflection/. \
+Create at most 3 memories per turn.\n\
+6. Reference Existing Memories: When responding, cite relevant existing memories to show that \
+learning is accumulating.\n\n\
+How to save memories: write_file(scope: 'vault', path: '<category>/<filename>.md', content: '...')\n\
+Categories: knowledge (facts/info), decision (choices made), conversation (key exchanges), reflection (insights)";
+
 /// Build the system prompt string from a resolved context and execution scope.
 pub fn build_system_prompt(resolved: &ResolvedContext, scope: &ExecutionScope) -> String {
     let mut parts = Vec::new();
@@ -12,6 +31,9 @@ pub fn build_system_prompt(resolved: &ResolvedContext, scope: &ExecutionScope) -
     }
     if let Some(ref agents_sec) = resolved.registered_agents_section {
         parts.push(agents_sec.clone());
+    }
+    if resolved.learning_mode {
+        parts.push(LEARNING_MODE_PROMPT.to_string());
     }
     if let Some(ref mem) = resolved.consolidated_memory {
         parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));
@@ -80,6 +102,7 @@ mod tests {
             registered_agents_section: agents_section.map(|s| s.into()),
             tools_section: tools_section.map(|s| s.into()),
             credentials_section: None,
+            learning_mode: false,
         }
     }
 

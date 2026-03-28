@@ -97,8 +97,10 @@ pub async fn check_and_synthesize(
     };
 
     let memory_mgr = app.state::<SystemMemoryManager>();
-    let leader_ctx = actor_context::resolve(&leader_scope, db, &app_data_dir, Some(&*memory_mgr))
-        .map_err(|e| format!("Failed to resolve leader context: {e}"))?;
+    let leader_ctx = actor_context::resolve_for_conversation(
+        &leader_scope, db, &app_data_dir, Some(&*memory_mgr), Some(&run.conversation_id),
+    )
+    .map_err(|e| format!("Failed to resolve leader context: {e}"))?;
 
     // Build reports text for synthesis prompt (before moving reports into emit)
     let mut reports_text = String::from("## Team Member Reports\n\n");
@@ -125,6 +127,9 @@ pub async fn check_and_synthesize(
     }
     if let Some(ref agents_sec) = leader_ctx.registered_agents_section {
         system_parts.push(agents_sec.clone());
+    }
+    if leader_ctx.learning_mode {
+        system_parts.push(super::llm_helpers::LEARNING_MODE_PROMPT.to_string());
     }
     if let Some(ref mem) = leader_ctx.consolidated_memory {
         system_parts.push(format!("[CONSOLIDATED MEMORY]\n{mem}"));

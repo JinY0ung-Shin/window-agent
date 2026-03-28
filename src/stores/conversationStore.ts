@@ -152,6 +152,12 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
 
   toggleLearningMode: async () => {
     const { currentConversationId, currentLearningMode, draftLearningMode } = get();
+
+    // Block toggle once messages exist — learning mode is locked after first message
+    if (currentConversationId && useMessageStore.getState().messages.length > 0) {
+      return;
+    }
+
     const wantEnable = currentConversationId ? !currentLearningMode : !draftLearningMode;
 
     // Check if write_file is available for the selected agent before enabling
