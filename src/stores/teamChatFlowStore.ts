@@ -31,12 +31,16 @@ import {
   resolveEffectiveSettings,
   resolveToolConfig,
   resolveManagerPrompt,
+} from "./chatFlowCore";
+import {
   streamOneTurn,
-  processToolCalls,
   saveAssistantToolCallMessage,
   saveFinalResponse,
+} from "./streamResponses";
+import {
+  processToolCalls,
   parseRawToolCalls,
-} from "./chatFlowBase";
+} from "./toolExecution";
 
 // ── Team-specific event types ─────────────────────────
 type TeamAllReportsPayload = {

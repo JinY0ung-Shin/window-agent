@@ -33,16 +33,18 @@ import { logger } from "../services/logger";
 import {
   resolveAgentForConversation,
   ensureConversation,
-  streamOneTurn,
-  runToolLoop,
   resolveEffectiveSettings,
   resolveToolConfig,
   resolveSystemPrompt,
   resolveWorkspacePath,
+} from "./chatFlowCore";
+import {
+  streamOneTurn,
   saveFinalResponse,
   handleStreamError,
   handleStreamAbort,
-} from "./chatFlowBase";
+} from "./streamResponses";
+import { runToolLoop } from "./toolExecution";
 
 // ── Per-conversation BOOT.md cache (for regenerate) ──
 const bootContentCache = new Map<string, string>();
