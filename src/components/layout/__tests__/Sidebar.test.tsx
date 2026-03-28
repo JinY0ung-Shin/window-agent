@@ -134,41 +134,6 @@ describe("Sidebar (DM-style)", () => {
     expect(item?.classList.contains("active")).toBe(true);
   });
 
-  it("shows clear-chat button only for agents with conversations", () => {
-    useAgentStore.setState({
-      agents: [
-        makeAgent({ id: "a1", name: "Has Conv" }),
-        makeAgent({ id: "a2", name: "No Conv" }),
-      ],
-    });
-    useConversationStore.setState({
-      conversations: [
-        { id: "c1", title: "Conv", agent_id: "a1", created_at: "", updated_at: "" },
-      ],
-    });
-    render(<Sidebar />);
-    const deleteButtons = screen.getAllByTitle("대화 초기화");
-    expect(deleteButtons).toHaveLength(1);
-  });
-
-  it("clear-chat requires confirmation and then calls clearAgentChat", () => {
-    const spy = vi.fn();
-    useAgentStore.setState({
-      agents: [makeAgent({ id: "a1", name: "Test Agent" })],
-    });
-    useConversationStore.setState({
-      conversations: [
-        { id: "c1", title: "Conv", agent_id: "a1", created_at: "", updated_at: "" },
-      ],
-      clearAgentChat: spy,
-    });
-    render(<Sidebar />);
-    fireEvent.click(screen.getByTitle("대화 초기화"));
-    expect(spy).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByTitle("대화 초기화"));
-    expect(spy).toHaveBeenCalledWith("a1");
-  });
-
   it("clicking settings navigates to settings view", () => {
     render(<Sidebar />);
     fireEvent.click(screen.getByText("환경 설정"));

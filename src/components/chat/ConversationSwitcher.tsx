@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useStreamStore } from "../../stores/streamStore";
@@ -37,7 +37,9 @@ export default function ConversationSwitcher() {
   const conversations = useConversationStore((s) => s.conversations);
   const currentConversationId = useConversationStore((s) => s.currentConversationId);
   const selectConversation = useConversationStore((s) => s.selectConversation);
+  const deleteConversation = useConversationStore((s) => s.deleteConversation);
   const startNewAgentConversation = useConversationStore((s) => s.startNewAgentConversation);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const agents = useAgentStore((s) => s.agents);
   const isBootstrapping = useBootstrapStore((s) => s.isBootstrapping);
@@ -113,6 +115,11 @@ export default function ConversationSwitcher() {
   // Can the dropdown be shown?
   const canShowDropdown = !isBootstrapping && !isOnboarding && currentAgentId !== null && agentConversations.length > 0;
 
+  // Reset confirm state when dropdown closes
+  useEffect(() => {
+    if (!isOpen) setConfirmDeleteId(null);
+  }, [isOpen]);
+
   // Click outside to close
   useEffect(() => {
     if (!isOpen) return;
@@ -153,6 +160,21 @@ export default function ConversationSwitcher() {
     setIsOpen(false);
   }, [isBusy, currentAgentId, startNewAgentConversation]);
 
+  const handleDelete = useCallback(
+    async (e: React.MouseEvent, convId: string) => {
+      e.stopPropagation();
+      if (confirmDeleteId === convId) {
+        await deleteConversation(convId);
+        setConfirmDeleteId(null);
+        // If we deleted the last conversation, close the dropdown
+        if (agentConversations.length <= 1) setIsOpen(false);
+      } else {
+        setConfirmDeleteId(convId);
+      }
+    },
+    [confirmDeleteId, deleteConversation, agentConversations.length],
+  );
+
   const handleToggle = useCallback(() => {
     if (canShowDropdown) setIsOpen((prev) => !prev);
   }, [canShowDropdown]);
@@ -190,14 +212,22 @@ export default function ConversationSwitcher() {
               <div key={group.key} className="conv-date-group">
                 <div className="conv-date-header">{group.label}</div>
                 {group.convs.map((conv) => (
-                  <button
+                  <div
                     key={conv.id}
                     className={`conv-item ${conv.id === currentConversationId ? "active" : ""} ${isBusy ? "disabled" : ""}`}
                     onClick={() => handleSelect(conv.id)}
-                    disabled={isBusy}
                   >
                     <span className="conv-item-title">{conv.title}</span>
-                  </button>
+                    {!isBusy && (
+                      <button
+                        className={`conv-item-delete ${confirmDeleteId === conv.id ? "confirm" : ""}`}
+                        onClick={(e) => handleDelete(e, conv.id)}
+                        title={confirmDeleteId === conv.id ? t("common:confirm") : t("common:delete")}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             ))}

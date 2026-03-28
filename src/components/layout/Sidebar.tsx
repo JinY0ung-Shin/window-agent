@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Bot, Check, Clock, Eraser, Network, Plus, Settings, Users, X } from "lucide-react";
+import { BookOpen, Bot, Clock, Network, Plus, Settings, Users } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useTeamStore } from "../../stores/teamStore";
@@ -15,7 +15,6 @@ export default function Sidebar() {
   const conversations = useConversationStore((s) => s.conversations);
   const currentConversationId = useConversationStore((s) => s.currentConversationId);
   const openAgentChat = useConversationStore((s) => s.openAgentChat);
-  const clearAgentChat = useConversationStore((s) => s.clearAgentChat);
   const agents = useAgentStore((s) => s.agents);
   const selectedAgentId = useAgentStore((s) => s.selectedAgentId);
   const startBootstrap = useBootstrapStore((s) => s.startBootstrap);
@@ -29,7 +28,6 @@ export default function Sidebar() {
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const companyName = useSettingsStore((s) => s.companyName);
   const { onMouseDown: onDrag, onDoubleClick: onDragDblClick } = useDragRegion();
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Build a map: agentId → most recent conversation's updated_at (DM only)
   const agentLastActivity = useMemo(() => {
@@ -41,15 +39,6 @@ export default function Sidebar() {
       }
     }
     return map;
-  }, [conversations]);
-
-  // Build a map: agentId → has DM conversation
-  const agentHasConv = useMemo(() => {
-    const set = new Set<string>();
-    for (const conv of conversations) {
-      if (!conv.team_id) set.add(conv.agent_id);
-    }
-    return set;
   }, [conversations]);
 
   // Sort agents: those with recent conversations first, then by sort_order
@@ -121,39 +110,6 @@ export default function Sidebar() {
                   <span className="conversation-agent-name">{agent.description}</span>
                 )}
               </div>
-              {agentHasConv.has(agent.id) && (
-                confirmDeleteId === agent.id ? (
-                  <div className="delete-confirm-inline" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="delete-confirm-yes"
-                      onClick={() => {
-                        clearAgentChat(agent.id);
-                        setConfirmDeleteId(null);
-                      }}
-                      title={t("common:clearChat")}
-                    >
-                      <Check size={14} />
-                    </button>
-                    <button
-                      className="delete-confirm-no"
-                      onClick={() => setConfirmDeleteId(null)}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    className="icon-btn icon-btn-sm delete-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmDeleteId(agent.id);
-                    }}
-                    title={t("common:clearChat")}
-                  >
-                    <Eraser size={14} />
-                  </button>
-                )
-              )}
             </div>
           ))}
         </div>
