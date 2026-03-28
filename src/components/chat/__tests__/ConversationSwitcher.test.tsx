@@ -88,7 +88,6 @@ describe("ConversationSwitcher", () => {
 
     expect(document.querySelector(".conversation-switcher-dropdown")).toBeInTheDocument();
     expect(screen.getByText("두번째 대화")).toBeInTheDocument();
-    expect(screen.getByText("새 대화")).toBeInTheDocument();
   });
 
   it("marks current conversation as active in dropdown", async () => {
@@ -137,17 +136,13 @@ describe("ConversationSwitcher", () => {
     expect(items.length).toBeGreaterThan(0);
   });
 
-  it("disables items when busy (tool running)", async () => {
+  it("disables new-conversation button when busy (tool running)", () => {
     useAgentStore.setState({ selectedAgentId: "a1", agents: [AGENT] });
     useConversationStore.setState({ currentConversationId: "c1", conversations: [CONV1, CONV2] });
     useToolRunStore.setState({ toolRunState: "tool_running" });
     render(<ConversationSwitcher />);
 
-    await act(async () => {
-      fireEvent.click(screen.getByText("첫 대화"));
-    });
-
-    const newBtn = document.querySelector(".conv-new-btn.disabled");
+    const newBtn = document.querySelector(".conversation-switcher-new:disabled");
     expect(newBtn).toBeInTheDocument();
   });
 

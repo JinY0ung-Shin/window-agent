@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, SquarePen, Trash2 } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useStreamStore } from "../../stores/streamStore";
@@ -202,21 +202,12 @@ export default function ConversationSwitcher() {
           disabled={isBusy}
           title={t("common:newConversation")}
         >
-          <Plus size={16} />
+          <SquarePen size={16} />
         </button>
       )}
 
       {isOpen && (
         <div className="conversation-switcher-dropdown">
-          <button
-            className={`conv-new-btn ${isBusy ? "disabled" : ""}`}
-            onClick={handleNewConversation}
-            disabled={isBusy}
-          >
-            <Plus size={14} />
-            <span>{t("common:newConversation")}</span>
-          </button>
-
           <div className="conv-list">
             {dateGroups.map((group) => (
               <div key={group.key} className="conv-date-group">
