@@ -67,14 +67,14 @@ export default function ChatWindow() {
   const currentAgent = currentAgentId
     ? agents.find((a) => a.id === currentAgentId) ?? null
     : null;
-  const onDrag = useDragRegion();
+  const { onMouseDown: onDrag, onDoubleClick: onDragDblClick } = useDragRegion();
   const renderBlocks = groupConsecutiveToolRuns(
     buildChatRenderBlocks(messages, toolRunState, pendingToolCalls),
   );
 
   return (
     <main className="main-area">
-      <header className="chat-header" onMouseDown={onDrag}>
+      <header className="chat-header" onMouseDown={onDrag} onDoubleClick={onDragDblClick}>
         <ConversationSwitcher />
         {currentAgent && (
           <>

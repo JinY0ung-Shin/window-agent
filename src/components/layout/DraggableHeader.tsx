@@ -12,9 +12,9 @@ interface Props {
  * automatically excluded by useDragRegion.
  */
 export default function DraggableHeader({ className, children }: Props) {
-  const onDrag = useDragRegion();
+  const { onMouseDown, onDoubleClick } = useDragRegion();
   return (
-    <div className={className} onMouseDown={onDrag}>
+    <div className={className} onMouseDown={onMouseDown} onDoubleClick={onDoubleClick}>
       {children}
     </div>
   );

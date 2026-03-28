@@ -43,7 +43,7 @@ export default function TeamChatWindow() {
     activeTeamRunId ? (s.pendingToolCallsByRun[activeTeamRunId] ?? EMPTY_TOOL_CALLS) : s.pendingToolCalls,
   );
 
-  const onDrag = useDragRegion();
+  const { onMouseDown: onDrag, onDoubleClick: onDragDblClick } = useDragRegion();
 
   const team = teams.find((t) => t.id === selectedTeamId) ?? null;
 
@@ -102,7 +102,7 @@ export default function TeamChatWindow() {
 
   return (
     <main className="main-area">
-      <header className="chat-header team-chat-header" onMouseDown={onDrag}>
+      <header className="chat-header team-chat-header" onMouseDown={onDrag} onDoubleClick={onDragDblClick}>
         <button
           className="icon-btn team-back-btn"
           onClick={() => {

@@ -28,7 +28,7 @@ export default function Sidebar() {
   const tc = useTranslation("cron").t;
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const companyName = useSettingsStore((s) => s.companyName);
-  const onDrag = useDragRegion();
+  const { onMouseDown: onDrag, onDoubleClick: onDragDblClick } = useDragRegion();
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Build a map: agentId → most recent conversation's updated_at (DM only)
@@ -83,7 +83,7 @@ export default function Sidebar() {
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-header" onMouseDown={onDrag}>
+      <div className="sidebar-header" onMouseDown={onDrag} onDoubleClick={onDragDblClick}>
         <div className="logo-icon">
           <Bot size={24} />
         </div>

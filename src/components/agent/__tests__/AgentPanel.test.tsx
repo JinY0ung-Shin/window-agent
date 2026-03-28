@@ -32,7 +32,7 @@ vi.mock("../AvatarUploader", () => ({
   default: () => <div data-testid="avatar-uploader" />,
 }));
 vi.mock("../../../hooks/useDragRegion", () => ({
-  useDragRegion: () => vi.fn(),
+  useDragRegion: () => ({ onMouseDown: vi.fn(), onDoubleClick: vi.fn() }),
 }));
 
 const agentInitial = useAgentStore.getState();
