@@ -193,6 +193,7 @@ pub fn run() {
             commands::get_browser_proxy,
             commands::set_browser_proxy,
             commands::detect_system_proxy,
+            commands::get_shell_info,
             commands::get_workspace_path,
             commands::get_native_tools,
             commands::get_default_tool_config,

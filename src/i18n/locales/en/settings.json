@@ -55,6 +55,14 @@
     "ko": "한국어",
     "en": "English"
   },
+  "shell": {
+    "label": "Shell Environment",
+    "program": "Shell Program",
+    "type": "Shell Type",
+    "sshHardening": "SSH Hardening",
+    "enabled": "Enabled",
+    "disabled": "Disabled"
+  },
   "branding": {
     "companyNameLabel": "Company/Workspace Name",
     "companyNamePlaceholder": "e.g., My Company",

@@ -126,9 +126,12 @@ pub fn native_tool_definitions() -> Vec<NativeToolDef> {
         description: format!(
             "Execute a shell command and return the result. System: os={os}, arch={arch}, shell={shell}. \
              Allowed credentials are automatically injected as environment variables (CRED_* prefix). \
-             [SSH NOTE] Always specify a remote command when using ssh (e.g. ssh host \"ls -la\"). \
-             Running ssh without a remote command opens an interactive shell that will timeout. \
-             Use -o BatchMode=yes to prevent hangs from interactive prompts (password, host key confirmation). \
+             [SSH SECURITY] SSH commands (ssh/scp/sftp) are automatically hardened: \
+             BatchMode, ConnectTimeout, StrictHostKeyChecking, ServerAliveInterval are auto-injected. \
+             Blocked SSH options: port forwarding (-L/-R/-D), agent forwarding (-A), \
+             ProxyCommand, custom config (-F), background/multiplex (-f/-M/-S). \
+             Complex SSH expressions (subshells, heredocs, multiple SSH calls) are rejected. \
+             Always specify a remote command (e.g. ssh host \"ls -la\"). \
              Interactive programs (vi, top, etc.) cannot be used."
         ),
         category: "system".into(),

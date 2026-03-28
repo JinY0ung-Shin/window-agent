@@ -55,6 +55,14 @@
     "ko": "한국어",
     "en": "English"
   },
+  "shell": {
+    "label": "셸 환경",
+    "program": "셸 프로그램",
+    "type": "셸 유형",
+    "sshHardening": "SSH 보안 강화",
+    "enabled": "활성화",
+    "disabled": "비활성화"
+  },
   "branding": {
     "companyNameLabel": "회사/워크스페이스 이름",
     "companyNamePlaceholder": "예: 우리 회사",

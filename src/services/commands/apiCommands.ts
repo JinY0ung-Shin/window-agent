@@ -59,6 +59,19 @@ export async function detectSystemProxy(): Promise<string> {
   return invoke("detect_system_proxy");
 }
 
+// ── Shell Info ──
+
+export interface ShellInfo {
+  program: string;
+  is_posix: boolean;
+  shell_type: string;
+  ssh_hardening: boolean;
+}
+
+export async function getShellInfo(): Promise<ShellInfo> {
+  return invoke("get_shell_info");
+}
+
 export interface ApiHealthCheckRequest {
   api_key?: string | null;
   base_url?: string | null;

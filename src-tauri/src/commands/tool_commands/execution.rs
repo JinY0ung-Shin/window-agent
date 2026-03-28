@@ -209,3 +209,15 @@ pub async fn set_browser_proxy(app: AppHandle, proxy: String) -> Result<(), AppE
 pub fn detect_system_proxy() -> Result<String, AppError> {
     Ok(crate::browser::detect_system_proxy().unwrap_or_default())
 }
+
+/// Get the resolved shell configuration for display in settings UI.
+#[tauri::command]
+pub fn get_shell_info() -> Result<serde_json::Value, AppError> {
+    let info = super::shell_tools::get_shell_info();
+    Ok(serde_json::json!({
+        "program": info.program,
+        "is_posix": info.is_posix,
+        "shell_type": if info.is_posix { "posix (bash/sh)" } else { "cmd.exe" },
+        "ssh_hardening": true,
+    }))
+}
