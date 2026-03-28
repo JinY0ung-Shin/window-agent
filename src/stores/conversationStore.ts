@@ -18,6 +18,7 @@ import { useSkillStore } from "./skillStore";
 import { useSummaryStore } from "./summaryStore";
 import { useMessageStore } from "./messageStore";
 import { resetTransientChatState, resetChatContext } from "./resetHelper";
+import { useStreamStore, unshelveStream, getCachedStreamContent } from "./streamStore";
 import { useTeamStore } from "./teamStore";
 import { logger } from "../services/logger";
 
@@ -210,7 +211,34 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
     resetTransientChatState();
 
     // Delegate the full side-effect chain to the lifecycle helper
-    return onConversationSelected(id, buildSelectionDeps(get, set));
+    const result = await onConversationSelected(id, buildSelectionDeps(get, set));
+
+    // Restore in-flight stream: if a background stream was running for this
+    // conversation, re-inject the pending message so flushDelta can resume
+    // updating it with streaming deltas.
+    const shelved = unshelveStream(id);
+    if (shelved) {
+      const pending: ChatMessage = {
+        id: shelved.msgId,
+        type: "agent",
+        content: getCachedStreamContent(shelved.msgId),
+        status: "streaming",
+        requestId: shelved.requestId,
+      };
+      useMessageStore.setState((state) => ({
+        messages: [...state.messages, pending],
+      }));
+      useStreamStore.setState({
+        activeRun: {
+          requestId: shelved.requestId,
+          conversationId: id,
+          targetMessageId: shelved.msgId,
+          status: "streaming",
+        },
+      });
+    }
+
+    return result;
   },
 
   createNewConversation: () => {
@@ -234,7 +262,26 @@ export const useConversationStore = create<ConversationState>((set, get) => ({
   },
 
   openAgentChat: async (agentId) => {
-    const { conversations } = get();
+    const { conversations, currentConversationId } = get();
+
+    // Guard: if the current conversation already belongs to this agent, skip
+    // re-selection to preserve in-flight streaming state (messages, activeRun)
+    // that would be lost by resetTransientChatState() inside selectConversation().
+    if (currentConversationId) {
+      const currentConv = conversations.find((c) => c.id === currentConversationId);
+      if (currentConv) {
+        // Conversation is in the list — check agent match
+        if (currentConv.agent_id === agentId && !currentConv.team_id) return;
+      } else if (!useTeamStore.getState().selectedTeamId) {
+        // Optimistic new DM conversation not yet in the list (loadConversations
+        // hasn't run). Fall back to selectedAgentId which is set when the
+        // conversation was created. Only apply this for DMs — if a team is
+        // selected, the current conversation is a team chat and clicking the
+        // leader agent should open their DM instead.
+        if (useAgentStore.getState().selectedAgentId === agentId) return;
+      }
+    }
+
     // Find the most recent conversation for this agent (conversations are sorted by updated_at DESC)
     const agentConv = conversations.find((c) => c.agent_id === agentId && !c.team_id);
 

@@ -3,7 +3,7 @@ import type { ChatMessage, ToolCall } from "./types";
 import * as cmds from "./tauriCommands";
 import { useMessageStore } from "../stores/messageStore";
 import { useConversationStore } from "../stores/conversationStore";
-import { useStreamStore } from "../stores/streamStore";
+import { useStreamStore, cacheStreamContent, getCachedStreamContent } from "../stores/streamStore";
 import { useBootstrapStore } from "../stores/bootstrapStore";
 import { useSummaryStore } from "../stores/summaryStore";
 import { useToolRunStore } from "../stores/toolRunStore";
@@ -118,17 +118,27 @@ export async function executeStreamCall(params: {
     pendingDelta = "";
     pendingReasoning = "";
 
-    useMessageStore.setState({
-      messages: msg().messages.map((m: ChatMessage) =>
-        m.id === msgId
-          ? {
-              ...m,
-              content: m.content === i18n.t("common:loadingMessage") ? delta : m.content + delta,
-              status: "streaming" as const,
-            }
-          : m,
-      ),
-    });
+    const current = msg().messages;
+    const idx = current.findIndex((m: ChatMessage) => m.id === msgId);
+    if (idx < 0) {
+      // Message not in store (user navigated away). Accumulate content in
+      // cache so it can be restored when the user navigates back.
+      cacheStreamContent(msgId, getCachedStreamContent(msgId) + delta);
+      return;
+    }
+
+    const target = current[idx];
+    const newContent = target.content === i18n.t("common:loadingMessage") ? delta : target.content + delta;
+    const updated = [...current];
+    updated[idx] = {
+      ...target,
+      content: newContent,
+      status: "streaming" as const,
+    };
+    useMessageStore.setState({ messages: updated });
+    // Keep cache in sync for potential future navigation
+    cacheStreamContent(msgId, newContent);
+
     const activeRun = stream().activeRun;
     if (activeRun) {
       useStreamStore.setState({ activeRun: { ...activeRun, status: "streaming" } });

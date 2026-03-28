@@ -37,6 +37,8 @@ import {
   executeStreamCall,
 } from "../services/streamHelpers";
 import { buildConversationContext } from "../services/chatHelpers";
+import { mapDbMessages } from "../services/conversationLifecycle";
+import { clearShelvedStream, clearStreamContentCache } from "./streamStore";
 import {
   extractBrowserDomain,
   approveBrowserDomain,
@@ -188,7 +190,13 @@ export async function ensureConversation(
     i18n.t("common:defaultConversationTitle");
   const newConv = await cmds.createConversation(agentId, initialTitle);
   const convId = newConv.id;
-  useConversationStore.setState({ currentConversationId: convId });
+  // Add the new conversation to the list immediately so that navigation
+  // (openAgentChat) can find it before loadConversations() runs after the
+  // stream completes.
+  useConversationStore.setState((state) => ({
+    currentConversationId: convId,
+    conversations: [newConv, ...state.conversations],
+  }));
 
   emitLifecycleEvent({ type: "session:start", conversationId: convId, agentId });
   if (agent) {
@@ -734,16 +742,40 @@ export async function saveFinalResponse(options: SaveFinalResponseOptions): Prom
     ...saveExtras,
   });
 
-  useMessageStore.setState({
-    messages: updateMessageInList(msg().messages, msgId, {
-      dbMessageId: savedAssistant.id,
-      content: finalContent,
-      reasoningContent,
-      status: "complete",
-      ...uiExtras,
-    }),
+  const updated = updateMessageInList(msg().messages, msgId, {
+    dbMessageId: savedAssistant.id,
+    content: finalContent,
+    reasoningContent,
+    status: "complete",
+    ...uiExtras,
   });
+  useMessageStore.setState({ messages: updated });
 
+  // If the pending message was not found (user navigated away and messages
+  // were reloaded from DB while streaming), reload messages from DB so
+  // the just-saved response becomes visible.
+  const wasApplied = updated.some((m) => m.dbMessageId === savedAssistant.id);
+  if (!wasApplied && conv().currentConversationId === convId) {
+    try {
+      const findAgent = (id: string) => useAgentStore.getState().agents.find((a) => a.id === id);
+      const dbMessages = await cmds.getMessages(convId);
+      const recovered = mapDbMessages(dbMessages, findAgent);
+      // Patch the just-saved message with reasoningContent which is not
+      // persisted in DB but still available in memory from the stream.
+      if (reasoningContent) {
+        const idx = recovered.findIndex((m) => m.dbMessageId === savedAssistant.id);
+        if (idx >= 0) {
+          recovered[idx] = { ...recovered[idx], reasoningContent };
+        }
+      }
+      useMessageStore.setState({ messages: recovered });
+    } catch (e) {
+      logger.debug("Failed to reload messages after deferred save", e);
+    }
+  }
+
+  clearShelvedStream(convId);
+  clearStreamContentCache(msgId);
   return savedAssistant.id;
 }
 

@@ -3,6 +3,47 @@ import type { ActiveRun } from "../services/types";
 import * as cmds from "../services/tauriCommands";
 import { useToolRunStore } from "./toolRunStore";
 
+// ── Background stream tracking ────────────────────────
+// Preserves in-flight stream info (msgId) across conversation switches so
+// flushDelta can resume updating the correct pending message when the user
+// navigates back.  Key = conversationId.
+const backgroundStreams = new Map<string, { requestId: string; msgId: string }>();
+// Accumulated streaming content per msgId — survives navigation so the
+// restored pending message shows all previously received tokens.
+const streamContentCache = new Map<string, string>();
+
+export function cacheStreamContent(msgId: string, content: string): void {
+  streamContentCache.set(msgId, content);
+}
+
+export function getCachedStreamContent(msgId: string): string {
+  return streamContentCache.get(msgId) ?? "";
+}
+
+export function clearStreamContentCache(msgId: string): void {
+  streamContentCache.delete(msgId);
+}
+
+export function shelveActiveRun(): void {
+  const run = useStreamStore.getState().activeRun;
+  if (run?.conversationId) {
+    backgroundStreams.set(run.conversationId, {
+      requestId: run.requestId,
+      msgId: run.targetMessageId,
+    });
+  }
+}
+
+export function unshelveStream(conversationId: string): { requestId: string; msgId: string } | undefined {
+  const entry = backgroundStreams.get(conversationId);
+  if (entry) backgroundStreams.delete(conversationId);
+  return entry;
+}
+
+export function clearShelvedStream(conversationId: string): void {
+  backgroundStreams.delete(conversationId);
+}
+
 interface StreamState {
   /**
    * Default/DM run — backward compatible.

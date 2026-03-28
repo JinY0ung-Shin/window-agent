@@ -7,7 +7,7 @@ import { useSkillStore } from "./skillStore";
 import { useBootstrapStore } from "./bootstrapStore";
 import { useNavigationStore } from "./navigationStore";
 import { useMessageStore } from "./messageStore";
-import { useStreamStore } from "./streamStore";
+import { useStreamStore, clearShelvedStream, clearStreamContentCache } from "./streamStore";
 import { useToolRunStore } from "./toolRunStore";
 import { useSummaryStore } from "./summaryStore";
 import { resetChatContext } from "./resetHelper";
@@ -229,7 +229,6 @@ async function handleSkillCommand(command: string) {
 async function sendNormalMessage() {
   const inputValue = msg().inputValue;
   const currentConversationId = conv().currentConversationId;
-  const messages = msg().messages;
   const conversations = conv().conversations;
   const settings = useSettingsStore.getState();
 
@@ -276,10 +275,13 @@ async function sendNormalMessage() {
   const currentRequestId = `req-${Date.now()}`;
   const { msgId: firstMsgId, msg: pendingMsg } = createPendingMessage(currentRequestId);
 
-  useMessageStore.setState({
-    messages: [...messages, userMsg, pendingMsg],
+  // Use fresh store state (not the stale `messages` captured at function start)
+  // to avoid overwriting messages added by concurrent processes (e.g. a previous
+  // stream's saveFinalResponse completing during our async setup).
+  useMessageStore.setState((state) => ({
+    messages: [...state.messages, userMsg, pendingMsg],
     inputValue: "",
-  });
+  }));
   useStreamStore.setState({
     activeRun: {
       requestId: currentRequestId,
@@ -308,6 +310,8 @@ async function sendNormalMessage() {
     );
   } catch (error) {
     handleStreamError(error, firstMsgId);
+    clearShelvedStream(convId);
+    clearStreamContentCache(firstMsgId);
   }
 
   try {

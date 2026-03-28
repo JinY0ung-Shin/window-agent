@@ -299,6 +299,47 @@ describe("chat stores (integrated)", () => {
     expect(useAgentStore.getState().selectedAgentId).toBe("a1");
   });
 
+  it("openAgentChat skips re-selection when current conversation belongs to the same agent", async () => {
+    const spySelect = vi.spyOn(useConversationStore.getState(), "selectConversation");
+
+    useConversationStore.setState({
+      currentConversationId: "c1",
+      conversations: [
+        { id: "c1", title: "Conv 1", agent_id: "a1", created_at: "", updated_at: "2024-01-02" },
+      ],
+    });
+    // Simulate in-flight streaming state
+    useMessageStore.setState({ messages: [{ id: "pending-1", type: "agent", content: "streaming...", status: "streaming" }] });
+    useStreamStore.setState({ activeRun: { requestId: "r1", conversationId: "c1", targetMessageId: "pending-1", status: "streaming" } });
+
+    await useConversationStore.getState().openAgentChat("a1");
+
+    // selectConversation should NOT have been called — streaming state preserved
+    expect(spySelect).not.toHaveBeenCalled();
+    expect(useMessageStore.getState().messages).toHaveLength(1);
+    expect(useStreamStore.getState().activeRun).not.toBeNull();
+
+    spySelect.mockRestore();
+  });
+
+  it("openAgentChat skips re-selection for optimistic new conversations not yet in list", async () => {
+    // currentConversationId is set but the conversation is NOT in the conversations
+    // list yet (loadConversations hasn't run after ensureConversation). Guard should
+    // still match via selectedAgentId fallback.
+    const spySelect = vi.spyOn(useConversationStore.getState(), "selectConversation");
+
+    useAgentStore.setState({ selectedAgentId: "a1" });
+    useConversationStore.setState({
+      currentConversationId: "optimistic-c1",
+      conversations: [], // empty — optimistic conversation not yet loaded
+    });
+
+    await useConversationStore.getState().openAgentChat("a1");
+
+    expect(spySelect).not.toHaveBeenCalled();
+    spySelect.mockRestore();
+  });
+
   it("clearAgentChat deletes all conversations for agent and keeps agent selected", async () => {
     vi.mocked(cmds.deleteConversation).mockResolvedValue(undefined);
     vi.mocked(cmds.getConversations).mockResolvedValue([]);

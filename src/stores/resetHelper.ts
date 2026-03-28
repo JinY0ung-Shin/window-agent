@@ -1,5 +1,5 @@
 import { useMessageStore } from "./messageStore";
-import { useStreamStore } from "./streamStore";
+import { useStreamStore, shelveActiveRun } from "./streamStore";
 import { useToolRunStore } from "./toolRunStore";
 import { useBootstrapStore } from "./bootstrapStore";
 import { useSummaryStore } from "./summaryStore";
@@ -16,6 +16,9 @@ import { useTeamRunStore } from "./teamRunStore";
  * Keeps agent selection and conversation selection intact.
  */
 export function resetTransientChatState() {
+  // Preserve in-flight stream info so it can be restored when the user
+  // navigates back to the conversation.
+  shelveActiveRun();
   useMessageStore.setState({ messages: [], inputValue: "" });
   useStreamStore.setState({ activeRun: null });
   useToolRunStore.getState().resetToolState();
