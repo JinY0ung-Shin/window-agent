@@ -195,6 +195,16 @@ export default function ConversationSwitcher() {
           />
         )}
       </button>
+      {currentAgentId && !isBootstrapping && !isOnboarding && (
+        <button
+          className="conversation-switcher-new"
+          onClick={handleNewConversation}
+          disabled={isBusy}
+          title={t("common:newConversation")}
+        >
+          <Plus size={16} />
+        </button>
+      )}
 
       {isOpen && (
         <div className="conversation-switcher-dropdown">

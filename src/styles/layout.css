@@ -207,6 +207,9 @@
   position: relative;
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .conversation-switcher-trigger {
@@ -223,7 +226,32 @@
   border-radius: 8px;
   transition: background 0.15s;
   min-width: 0;
-  max-width: 100%;
+  flex: 1;
+}
+
+.conversation-switcher-new {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.conversation-switcher-new:hover:not(:disabled) {
+  background: var(--hover-bg);
+  color: var(--text-main);
+}
+
+.conversation-switcher-new:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .conversation-switcher-trigger.clickable {
