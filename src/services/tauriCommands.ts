@@ -11,3 +11,4 @@ export * from "./commands/toolCommands";
 export * from "./commands/vaultCommands";
 export * from "./commands/teamCommands";
 export * from "./commands/cronCommands";
+export * from "./commands/marketplaceCommands";

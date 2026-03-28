@@ -187,6 +187,10 @@ pub fn run() {
             commands::create_skill,
             commands::update_skill,
             commands::delete_skill,
+            // Marketplace commands
+            commands::marketplace_fetch_plugins,
+            commands::marketplace_fetch_plugin_skills,
+            commands::marketplace_install_skills,
             commands::approve_browser_domain,
             commands::get_browser_artifact,
             commands::get_browser_headless,

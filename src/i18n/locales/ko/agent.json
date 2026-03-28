@@ -28,6 +28,25 @@
     "deleteFailed": "삭제 실패: {{error}}",
     "availableSkillsHint": "(사용자가 활성화하면 상세 지침이 제공됩니다)"
   },
+  "marketplace": {
+    "button": "마켓플레이스",
+    "title": "스킬 마켓플레이스",
+    "hint": "GitHub 마켓플레이스 레포 URL을 입력하여 스킬을 검색하고 설치하세요.",
+    "fetch": "검색",
+    "presets": "빠른 접근:",
+    "pluginList": "플러그인",
+    "searchPlaceholder": "플러그인 검색...",
+    "loading": "로딩 중...",
+    "loadingSkills": "스킬 로딩 중...",
+    "noPlugins": "플러그인을 찾을 수 없습니다",
+    "noSkills": "이 플러그인에 스킬이 없습니다",
+    "homepage": "홈페이지",
+    "install": "스킬 {{count}}개 설치",
+    "installed": "스킬 {{count}}개 설치 완료",
+    "skipped": "스킬 {{count}}개 건너뜀 (이미 존재)",
+    "installErrors": "일부 스킬 설치 실패:",
+    "close": "닫기"
+  },
   "credentials": {
     "title": "보안 키",
     "name": "이름",

@@ -643,6 +643,405 @@
   padding: 4px 8px;
 }
 
+/* ── Skill Header Actions ── */
+.skill-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+/* ── Marketplace Panel ── */
+.marketplace-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.marketplace-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px;
+}
+
+.marketplace-header .btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.marketplace-header .btn-icon:hover {
+  color: var(--text-main);
+  background: var(--hover-bg);
+}
+
+.marketplace-title {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketplace-close-btn {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  flex-shrink: 0;
+}
+
+.marketplace-error {
+  color: var(--danger);
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-radius: 6px;
+}
+
+/* Input view */
+.marketplace-input-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+.marketplace-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.marketplace-url-row {
+  display: flex;
+  gap: 6px;
+}
+
+.marketplace-url-row input {
+  flex: 1;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-color);
+  color: var(--text-main);
+  min-width: 0;
+}
+
+.marketplace-url-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.marketplace-presets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.marketplace-presets-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.marketplace-preset-btn {
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-main);
+  cursor: pointer;
+}
+
+.marketplace-preset-btn:hover {
+  background: var(--hover-bg);
+}
+
+/* Plugin view */
+.marketplace-plugin-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.marketplace-search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-color);
+  color: var(--text-muted);
+}
+
+.marketplace-search-row input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.8rem;
+  outline: none;
+  min-width: 0;
+}
+
+.marketplace-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.marketplace-plugin-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marketplace-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  justify-content: center;
+}
+
+.marketplace-empty {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 16px;
+  text-align: center;
+}
+
+.marketplace-plugin-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+
+.marketplace-plugin-row:hover {
+  border-color: var(--border);
+  background: var(--bg-color);
+}
+
+.marketplace-plugin-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.marketplace-plugin-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.marketplace-plugin-version {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.marketplace-plugin-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.marketplace-plugin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.marketplace-tag {
+  font-size: 0.68rem;
+  padding: 1px 6px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-radius: 8px;
+}
+
+.marketplace-author {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+/* Skill view */
+.marketplace-skill-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.marketplace-plugin-detail {
+  padding: 0 2px;
+}
+
+.marketplace-plugin-detail-desc {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0 0 4px;
+  line-height: 1.4;
+}
+
+.marketplace-link {
+  font-size: 0.72rem;
+  color: var(--accent);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.marketplace-link:hover {
+  text-decoration: underline;
+}
+
+.marketplace-skill-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.marketplace-skill-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.marketplace-skill-row:hover {
+  background: var(--bg-color);
+}
+
+.marketplace-skill-row input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.marketplace-skill-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.marketplace-skill-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.marketplace-skill-desc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.marketplace-install-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+/* Install result */
+.marketplace-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 2px;
+}
+
+.marketplace-result-success,
+.marketplace-result-skip,
+.marketplace-result-error {
+  font-size: 0.78rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+.marketplace-result-success {
+  color: var(--success, #22c55e);
+  background: color-mix(in srgb, var(--success, #22c55e) 8%, transparent);
+}
+
+.marketplace-result-skip {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+
+.marketplace-result-error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.marketplace-result ul {
+  margin: 2px 0 0 20px;
+  padding: 0;
+  font-size: 0.75rem;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ── Native Tool Panel ── */
 .native-tool-panel {
   flex: 1;

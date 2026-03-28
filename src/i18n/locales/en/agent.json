@@ -28,6 +28,25 @@
     "deleteFailed": "Delete failed: {{error}}",
     "availableSkillsHint": "(Detailed instructions provided when user activates)"
   },
+  "marketplace": {
+    "button": "Marketplace",
+    "title": "Skill Marketplace",
+    "hint": "Enter a GitHub marketplace repo URL to browse and install skills.",
+    "fetch": "Fetch",
+    "presets": "Quick access:",
+    "pluginList": "Plugins",
+    "searchPlaceholder": "Search plugins...",
+    "loading": "Loading...",
+    "loadingSkills": "Loading skills...",
+    "noPlugins": "No plugins found",
+    "noSkills": "No skills found in this plugin",
+    "homepage": "Homepage",
+    "install": "Install {{count}} skill(s)",
+    "installed": "{{count}} skill(s) installed",
+    "skipped": "{{count}} skill(s) skipped (already exist)",
+    "installErrors": "Some skills failed to install:",
+    "close": "Close"
+  },
   "credentials": {
     "title": "Credentials",
     "name": "Name",

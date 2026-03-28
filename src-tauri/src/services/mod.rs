@@ -3,6 +3,7 @@ pub mod api_service;
 pub mod credential_service;
 pub mod cron_scheduler;
 pub mod llm_helpers;
+pub mod marketplace_service;
 pub mod skill_service;
 pub mod team_orchestrator;
 pub mod team_synthesis;

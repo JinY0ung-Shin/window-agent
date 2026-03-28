@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
-import { X, Trash2, Plus, AlertTriangle, Pencil, Check } from "lucide-react";
+import { X, Trash2, Plus, AlertTriangle, Pencil, Check, Store } from "lucide-react";
 import { listSkills, createSkill, readSkill, updateSkill, deleteSkill } from "../../services/tauriCommands";
 import type { SkillMetadata } from "../../services/types";
 import type { Agent } from "../../services/types";
 import { toErrorMessage } from "../../utils/errorUtils";
+import MarketplacePanel from "./MarketplacePanel";
 
 interface Props {
   agent: Agent | null;
@@ -23,6 +24,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
   const [newSkillName, setNewSkillName] = useState("");
   const [showNewSkill, setShowNewSkill] = useState(false);
   const [skillError, setSkillError] = useState("");
+  const [showMarketplace, setShowMarketplace] = useState(false);
   const skillContentComposition = useCompositionInput(setEditingSkillContent);
   const skillNameComposition = useCompositionInput(setNewSkillName);
 
@@ -101,6 +103,18 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
     }
   };
 
+  if (showMarketplace && agent) {
+    return (
+      <div className="skills-panel">
+        <MarketplacePanel
+          folderName={agent.folder_name}
+          onClose={() => setShowMarketplace(false)}
+          onInstalled={loadAgentSkills}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="skills-panel">
       {skillsLoading ? (
@@ -134,12 +148,20 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                 <div className="skills-section-header">
                   <span>{t("skills.skills")}</span>
                   {!isDefault && (
-                    <button
-                      className="btn-secondary skill-add-btn"
-                      onClick={() => setShowNewSkill(true)}
-                    >
-                      <Plus size={14} /> {t("skills.newSkill")}
-                    </button>
+                    <div className="skill-header-actions">
+                      <button
+                        className="btn-secondary skill-add-btn"
+                        onClick={() => setShowMarketplace(true)}
+                      >
+                        <Store size={14} /> {t("marketplace.button")}
+                      </button>
+                      <button
+                        className="btn-secondary skill-add-btn"
+                        onClick={() => setShowNewSkill(true)}
+                      >
+                        <Plus size={14} /> {t("skills.newSkill")}
+                      </button>
+                    </div>
                   )}
                 </div>
 
