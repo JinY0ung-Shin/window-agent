@@ -44,3 +44,6 @@ coverage/
 .ccb/
 .claude
 
+# ETC
+.claude-octopus
+
