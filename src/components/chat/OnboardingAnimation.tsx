@@ -108,11 +108,9 @@ export default function OnboardingAnimation() {
   const current = phase === "final" ? finalStep : steps[currentIndex];
 
   return (
-    <div className="onboarding-animation">
-      <div className="onboarding-step" key={phase === "final" ? "final" : currentIndex}>
-        <span className="onboarding-emoji">{current.emoji}</span>
-        <span className="onboarding-text">{current.text}</span>
-      </div>
+    <div className="onboarding-step" key={phase === "final" ? "final" : currentIndex}>
+      <span className="onboarding-emoji">{current.emoji}</span>
+      <span className="onboarding-text">{current.text}</span>
     </div>
   );
 }

@@ -5,8 +5,10 @@ import type { ChatMessage as ChatMessageType } from "../../services/types";
 import type { SenderInfo } from "./ToolRunBlock";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
+import { useBootstrapStore } from "../../stores/bootstrapStore";
 import ToolCallBubble from "./ToolCallBubble";
 import MessageBody from "./MessageBody";
+import OnboardingAnimation from "./OnboardingAnimation";
 import { classifyToolResultStatus } from "./toolCallUtils";
 
 interface Props {
@@ -18,6 +20,7 @@ export default function ChatMessage({ message, senderInfo }: Props) {
   const { t } = useTranslation("chat");
   const { t: tTeam } = useTranslation("team");
   const isPending = message.status === "pending";
+  const isOnboarding = useBootstrapStore((s) => s.isOnboarding);
   const { copied, copy } = useClipboardFeedback(1500);
   const regenerateMessage = useChatFlowStore((s) => s.regenerateMessage);
   const toolRunState = useToolRunStore((s) => s.toolRunState);
@@ -116,7 +119,7 @@ export default function ChatMessage({ message, senderInfo }: Props) {
   const isTeam = !!senderInfo;
 
   return (
-    <div className={`message agent ${isPending ? "loading" : ""} ${message.status === "failed" ? "failed" : ""} ${message.status === "streaming" ? "streaming" : ""} ${message.status === "aborted" ? "aborted" : ""}${isTeam ? " team-message team-message-agent" : ""}`}>
+    <div className={`message agent ${isPending && !isOnboarding ? "loading" : ""} ${message.status === "failed" ? "failed" : ""} ${message.status === "streaming" ? "streaming" : ""} ${message.status === "aborted" ? "aborted" : ""}${isTeam ? " team-message team-message-agent" : ""}`}>
       <div className={isTeam ? "team-msg-avatar team-msg-avatar-agent" : "avatar"}>
         {senderInfo?.agentAvatar ? (
           <img src={senderInfo.agentAvatar} alt={senderInfo.agentName || tTeam("chat.unknownAgent")} className="team-msg-avatar-img" />
@@ -144,11 +147,15 @@ export default function ChatMessage({ message, senderInfo }: Props) {
         )}
         <div className={isTeam ? "team-msg-bubble team-msg-bubble-agent" : "bubble"}>
           {isPending ? (
-            <span className="loading-dots">
-              <span></span>
-              <span></span>
-              <span></span>
-            </span>
+            isOnboarding ? (
+              <OnboardingAnimation />
+            ) : (
+              <span className="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+            )
           ) : (
             <>
               <MessageBody

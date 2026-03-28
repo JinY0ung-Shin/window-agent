@@ -500,7 +500,14 @@ async function completeBootstrap() {
     bootstrapFilesWritten: [],
     bootstrapFolderName: null,
   });
-  useMessageStore.setState({ messages: [] });
+  useMessageStore.setState({
+    messages: [...useMessageStore.getState().messages, {
+      id: `onboarding-${Date.now()}`,
+      type: "agent",
+      content: "",
+      status: "pending",
+    }],
+  });
   useSummaryStore.setState({ currentSummary: null, summaryUpToMessageId: null, summaryJobId: null });
 
   // Create agent in background while animation plays

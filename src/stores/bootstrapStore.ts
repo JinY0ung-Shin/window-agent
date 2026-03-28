@@ -2,6 +2,7 @@ import { create } from "zustand";
 import * as cmds from "../services/tauriCommands";
 import { useSettingsStore } from "./settingsStore";
 import { useAgentStore } from "./agentStore";
+import { useMessageStore } from "./messageStore";
 import type { OpenAIMessage } from "../services/commands/apiCommands";
 import { logger } from "../services/logger";
 
@@ -63,5 +64,6 @@ export const useBootstrapStore = create<BootstrapState>((set, get) => ({
       useAgentStore.getState().selectAgent(onboardingAgentId);
     }
     set({ isOnboarding: false, onboardingAgentId: null });
+    useMessageStore.setState({ messages: [] });
   },
 }));

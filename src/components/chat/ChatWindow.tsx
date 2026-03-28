@@ -13,7 +13,6 @@ import SkillBar from "../skill/SkillBar";
 import ToolRunBlock from "./ToolRunBlock";
 import ToolRunGroup from "./ToolRunGroup";
 import ConversationSwitcher from "./ConversationSwitcher";
-import OnboardingAnimation from "./OnboardingAnimation";
 
 import { useNavigationStore } from "../../stores/navigationStore";
 import { useDragRegion } from "../../hooks/useDragRegion";
@@ -110,9 +109,7 @@ export default function ChatWindow() {
       </header>
 
       <div className="chat-container" ref={messagesContainerRef}>
-        {isOnboarding ? (
-          <OnboardingAnimation />
-        ) : showSelector ? (
+        {showSelector ? (
           <div className="agent-selector">
             <div className="agent-selector-header">
               <h2>{t("appTitle", { companyName, context: uiTheme })}</h2>
