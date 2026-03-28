@@ -549,7 +549,7 @@ pub(super) async fn tool_run_shell(
     // Clone shell config for the blocking thread
     let shell_program = shell.program.clone();
     let shell_args = shell.args.clone();
-    let shell_is_posix = shell.is_posix;
+    let _shell_is_posix = shell.is_posix;
 
     // Run blocking process in a dedicated thread
     let handle = tokio::task::spawn_blocking(move || {
@@ -565,7 +565,7 @@ pub(super) async fn tool_run_shell(
 
         // Git Bash on Windows: prevent MSYS path conversion
         #[cfg(target_os = "windows")]
-        if shell_is_posix {
+        if _shell_is_posix {
             cmd.env("MSYS_NO_PATHCONV", "1");
             cmd.env("MSYS2_ARG_CONV_EXCL", "*");
         }
