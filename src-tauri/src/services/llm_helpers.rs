@@ -4,6 +4,28 @@
 use crate::commands::tool_commands::native_tool_definitions;
 use crate::services::actor_context::{self, ExecutionScope, ResolvedContext};
 
+/// Vault guide system prompt (English — backend paths don't have i18n).
+pub const VAULT_GUIDE_PROMPT: &str = "\
+[VAULT — Long-term Memory System]\n\
+You use an Obsidian-compatible markdown vault as your long-term memory. \
+The user can browse, search, and edit your notes directly in the UI, \
+and view a relationship graph between notes.\n\n\
+Note format:\n\
+- YAML frontmatter (id, type, tags, confidence) + markdown body\n\
+- Start with `# Title` as the first line\n\
+- Use [[Note Title]] wikilinks to connect notes — they appear in the graph\n\
+- Categories: knowledge/ (facts/info), decision/ (choices), conversation/ (chat summaries), reflection/ (insights)\n\n\
+Writing guidelines:\n\
+- write_file(scope: 'vault', path: '<category>/<filename>.md', content: '...')\n\
+- Frontmatter is auto-generated — just write the body\n\
+- Add `## Related\\n- [[Related Note]]` at the end to link related notes\n\
+- Before saving, check existing notes with list_directory(scope: 'vault', path: '.', recursive: true)\n\
+- Overwrite if the same topic exists; create new otherwise\n\
+- Write in a human-readable format (the user sees it directly in the UI)\n\n\
+Confidence & freshness:\n\
+- Note confidence decays automatically over time\n\
+- Most recent notes are prioritized in conversation context";
+
 /// Learning mode system prompt (English — backend paths don't have i18n).
 pub const LEARNING_MODE_PROMPT: &str = "\
 [LEARNING MODE — Activated]\n\
@@ -12,16 +34,11 @@ with the mindset of an eager student.\n\n\
 Behavior Rules:\n\
 1. Confirm: When the user tells you something, summarize the key point in your own words \
 using the format \"From what I understand...\"\n\
-2. Search First: Before saving a memory, use list_directory(scope: 'vault', path: '.', recursive: true) \
-to check existing notes. If a note on the same topic exists, overwrite it; otherwise, create a new one.\n\
-3. Connect: Link newly learned content to existing memories. Reference related note paths within files.\n\
-4. Ask: If something is unclear or ambiguous, ask a clarifying question. Do not guess.\n\
-5. Organize: Use vault categories as top-level directories: knowledge/, decision/, conversation/, reflection/. \
-Create at most 3 memories per turn.\n\
-6. Reference Existing Memories: When responding, cite relevant existing memories to show that \
-learning is accumulating.\n\n\
-How to save memories: write_file(scope: 'vault', path: '<category>/<filename>.md', content: '...')\n\
-Categories: knowledge (facts/info), decision (choices made), conversation (key exchanges), reflection (insights)";
+2. Connect: Link newly learned content to existing memories using [[wikilinks]].\n\
+3. Ask: If something is unclear or ambiguous, ask a clarifying question. Do not guess.\n\
+4. Create at most 3 memories per turn.\n\
+5. Reference Existing Memories: When responding, cite relevant existing memories to show that \
+learning is accumulating.";
 
 /// Build the system prompt string from a resolved context and execution scope.
 pub fn build_system_prompt(resolved: &ResolvedContext, scope: &ExecutionScope) -> String {
@@ -31,6 +48,11 @@ pub fn build_system_prompt(resolved: &ResolvedContext, scope: &ExecutionScope) -
     }
     if let Some(ref agents_sec) = resolved.registered_agents_section {
         parts.push(agents_sec.clone());
+    }
+    // Include vault guide only when the agent can actually write to the vault AND has memory context
+    let has_vault_write = resolved.enabled_tool_names.iter().any(|n| n == "write_file");
+    if has_vault_write && (resolved.consolidated_memory.is_some() || resolved.learning_mode) {
+        parts.push(VAULT_GUIDE_PROMPT.to_string());
     }
     if resolved.learning_mode {
         parts.push(LEARNING_MODE_PROMPT.to_string());

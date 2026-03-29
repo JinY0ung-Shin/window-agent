@@ -85,10 +85,14 @@ export function estimateContextTokens(params: TokenEstimationParams): number {
         isLearning ? 1500 : 500,
       );
 
+  // Vault guide is injected when any of these are present (~200 tokens)
+  const hasVaultGuide = vaultNotes.length > 0 || isLearning || !!consolidatedMemory;
+
   const systemOverhead =
     estimateTokens(baseSystemPrompt) +
     (skillsSection ? estimateTokens(skillsSection) : 0) +
     (bootContent ? estimateTokens(bootContent) : 0) +
+    (hasVaultGuide ? 200 : 0) +
     (consolidatedMemory ? estimateTokens(consolidatedMemory) : 0) +
     (consolidatedMemory && isLearning ? Math.min(notesTokens, 700) :
      !consolidatedMemory ? notesTokens : 0) +

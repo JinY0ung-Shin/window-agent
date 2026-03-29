@@ -262,6 +262,13 @@ export async function buildConversationContext(params: {
     systemPrompt += `\n\n${params.skillsSection}`;
   }
 
+  // Vault guide: tell the agent about its memory system
+  if (params.vaultNotes?.length || params.learningMode || params.consolidatedMemory) {
+    const header = i18n.t("prompts:vaultGuide.header");
+    const body = i18n.t("prompts:vaultGuide.body");
+    systemPrompt += `\n\n${header}\n${body}`;
+  }
+
   // Learning mode prompt injection (between skills and memory)
   if (params.learningMode) {
     const header = i18n.t("prompts:learningMode.header");
