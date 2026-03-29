@@ -337,6 +337,18 @@
   color: var(--text-muted);
 }
 
+.cred-item-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.cred-form-hint {
+  font-size: 0.7rem;
+  color: var(--text-light);
+  margin-top: 2px;
+}
+
 .cred-item-value {
   font-size: 0.75rem;
   color: var(--text-muted);

@@ -11,10 +11,11 @@ export async function addCredential(
   id: string,
   name: string,
   value: string,
+  description: string = "",
   allowedHosts: string[] = [],
 ): Promise<void> {
   return invoke("add_credential", {
-    request: { id, name, value, allowed_hosts: allowedHosts },
+    request: { id, name, value, description, allowed_hosts: allowedHosts },
   });
 }
 
@@ -22,6 +23,7 @@ export async function updateCredential(
   id: string,
   name?: string,
   value?: string,
+  description?: string,
   allowedHosts?: string[],
 ): Promise<void> {
   return invoke("update_credential", {
@@ -29,6 +31,7 @@ export async function updateCredential(
       id,
       name: name ?? null,
       value: value ?? null,
+      description: description ?? null,
       allowed_hosts: allowedHosts ?? null,
     },
   });

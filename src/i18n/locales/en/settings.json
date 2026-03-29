@@ -4,7 +4,7 @@
     "general": "General",
     "thinking": "Thinking",
     "branding": "Branding",
-    "credentials": "Credentials",
+    "credentials": "Environment Variables",
     "backup": "Backup/Restore",
     "network": "Network"
   },

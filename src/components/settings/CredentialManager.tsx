@@ -23,6 +23,7 @@ interface FormState {
   mode: "add" | "edit";
   id: string;
   name: string;
+  description: string;
   value: string;
   showValue: boolean;
   idEdited: boolean;
@@ -32,6 +33,7 @@ const EMPTY_FORM: FormState = {
   mode: "add",
   id: "",
   name: "",
+  description: "",
   value: "",
   showValue: false,
   idEdited: false,
@@ -54,6 +56,7 @@ export default function CredentialManager() {
       mode: "edit",
       id: cred.id,
       name: cred.name,
+      description: cred.description ?? "",
       value: "",
       showValue: false,
       idEdited: true,
@@ -84,12 +87,13 @@ export default function CredentialManager() {
     try {
       if (form.mode === "add") {
         if (!form.value) return;
-        await addCredential(id, name, form.value, []);
+        await addCredential(id, name, form.value, form.description.trim(), []);
       } else {
         await updateCredential(
           id,
           name,
           form.value || undefined,
+          form.description.trim(),
           [],
         );
       }
@@ -127,6 +131,7 @@ export default function CredentialManager() {
           <div className="cred-item-info">
             <span className="cred-item-name">{cred.name}</span>
             <span className="cred-item-id">{cred.id}</span>
+            {cred.description && <span className="cred-item-desc">{cred.description}</span>}
             <span className="cred-item-value">{"••••••"}</span>
           </div>
           <div className="cred-item-actions">
@@ -189,6 +194,17 @@ export default function CredentialManager() {
               disabled={form.mode === "edit"}
               placeholder="github-token"
             />
+          </div>
+
+          <div className="cred-form-field">
+            <label>{t("credentials.description")}</label>
+            <input
+              type="text"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder={t("credentials.descriptionPlaceholder")}
+            />
+            <span className="cred-form-hint">{t("credentials.descriptionHint")}</span>
           </div>
 
           <div className="cred-form-field">

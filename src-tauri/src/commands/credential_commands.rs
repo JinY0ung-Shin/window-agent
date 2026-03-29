@@ -8,6 +8,8 @@ pub struct AddCredentialRequest {
     pub id: String,
     pub name: String,
     pub value: String,
+    #[serde(default)]
+    pub description: String,
     pub allowed_hosts: Vec<String>,
 }
 
@@ -16,6 +18,7 @@ pub struct UpdateCredentialRequest {
     pub id: String,
     pub name: Option<String>,
     pub value: Option<String>,
+    pub description: Option<String>,
     pub allowed_hosts: Option<Vec<String>>,
 }
 
@@ -36,6 +39,7 @@ pub fn add_credential(
         &request.id,
         &request.name,
         &request.value,
+        &request.description,
         request.allowed_hosts,
     ).map_err(AppError::Config)
 }
@@ -51,6 +55,7 @@ pub fn update_credential(
         &request.id,
         request.name.as_deref(),
         request.value.as_deref(),
+        request.description.as_deref(),
         request.allowed_hosts,
     ).map_err(AppError::Config)
 }

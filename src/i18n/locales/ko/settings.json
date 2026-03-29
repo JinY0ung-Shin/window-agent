@@ -4,7 +4,7 @@
     "general": "일반",
     "thinking": "추론 (Thinking)",
     "branding": "브랜딩",
-    "credentials": "보안 키",
+    "credentials": "환경 변수",
     "backup": "백업/복원",
     "network": "네트워크"
   },

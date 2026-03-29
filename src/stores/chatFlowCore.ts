@@ -277,7 +277,8 @@ export async function resolveToolConfig(agent: Agent | null): Promise<AgentToolC
                 if (hasBrowserType && isValidBrowserId(id)) {
                   parts.push(`{{credential:${id}}}`);
                 }
-                return `- ${id} (${displayName}): ${parts.join(", ")}`;
+                const desc = meta?.description ? ` — ${meta.description}` : "";
+                return `- ${id} (${displayName}): ${parts.join(", ")}${desc}`;
               })
               .sort();
             const instructions: string[] = [];

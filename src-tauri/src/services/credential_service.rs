@@ -14,6 +14,9 @@ const CREDENTIALS_SECRETS_STORE: &str = "credentials-secrets.json";
 pub struct CredentialMeta {
     pub id: String,
     pub name: String,
+    /// User-provided description explaining the credential's purpose (e.g., "GitHub API access for repo management")
+    #[serde(default)]
+    pub description: String,
     #[serde(default)]
     pub allowed_hosts: Vec<String>,
     pub created_at: String,
@@ -91,6 +94,7 @@ pub fn add_credential(
     id: &str,
     name: &str,
     value: &str,
+    description: &str,
     allowed_hosts: Vec<String>,
 ) -> Result<CredentialMeta, String> {
     if id.is_empty() {
@@ -109,6 +113,7 @@ pub fn add_credential(
     let meta = CredentialMeta {
         id: id.to_string(),
         name: name.to_string(),
+        description: description.to_string(),
         allowed_hosts,
         created_at: now.clone(),
         updated_at: now,
@@ -127,6 +132,7 @@ pub fn update_credential(
     id: &str,
     name: Option<&str>,
     value: Option<&str>,
+    description: Option<&str>,
     allowed_hosts: Option<Vec<String>>,
 ) -> Result<CredentialMeta, String> {
     let mut metas = load_all_meta(app)?;
@@ -137,6 +143,9 @@ pub fn update_credential(
 
     if let Some(n) = name {
         meta.name = n.to_string();
+    }
+    if let Some(d) = description {
+        meta.description = d.to_string();
     }
     if let Some(hosts) = allowed_hosts {
         meta.allowed_hosts = hosts;

@@ -470,7 +470,11 @@ fn build_credentials_section(
             .collect();
 
         if !usage.is_empty() {
-            lines.push(format!("- {} ({}): {}", id, display_name, usage.join(", ")));
+            let desc = metas.iter().find(|m| m.id == *id)
+                .filter(|m| !m.description.is_empty())
+                .map(|m| format!(" — {}", m.description))
+                .unwrap_or_default();
+            lines.push(format!("- {} ({}): {}{}", id, display_name, usage.join(", "), desc));
         }
     }
     lines.sort();
