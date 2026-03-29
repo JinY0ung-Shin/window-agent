@@ -5425,7 +5425,7 @@ dependencies = [
 
 [[package]]
 name = "tauri-app"
-version = "0.14.1"
+version = "0.14.2"
 dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
