@@ -95,11 +95,14 @@
     "noMessages": "아직 메시지가 없습니다. 대화를 시작하세요.",
     "inputPlaceholder": "메시지를 입력하세요...",
     "defaultAgent": "기본 에이전트",
-    "showMyChats": "내 대화만 보기",
-    "showAllChats": "전체 대화 보기",
+    "tabMyChat": "내 대화",
+    "tabIncoming": "수신 대화",
     "clearHistory": "대화 기록 삭제",
     "noMyMessages": "아직 보낸 메시지가 없습니다.",
-    "pendingApprovalHint": "메시지를 보내려면 먼저 연락처를 승인하세요"
+    "noIncomingMessages": "상대방이 보낸 메시지가 없습니다.",
+    "incomingReadOnly": "상대방과 에이전트 간의 대화입니다 (읽기 전용)",
+    "pendingApprovalHint": "메시지를 보내려면 먼저 연락처를 승인하세요",
+    "selectAgent": "대화할 에이전트 선택"
   },
   "directory": {
     "title": "피어 디렉토리",

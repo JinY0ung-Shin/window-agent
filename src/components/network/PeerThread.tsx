@@ -1,55 +1,66 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Settings, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useMessageScroll } from "../../hooks/useMessageScroll";
 import PeerMessageBubble from "./PeerMessageBubble";
 import PeerChatInput from "./PeerChatInput";
-import ContactDetail from "./ContactDetail";
 import DraggableHeader from "../layout/DraggableHeader";
 
-interface PeerThreadProps {
-  settingsOpen: boolean;
-  onToggleSettings: () => void;
-}
+type TabKey = "my" | "incoming";
 
-export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThreadProps) {
+export default function PeerThread() {
   const { t } = useTranslation("network");
   const messages = useNetworkStore((s) => s.messages);
   const selectedThreadId = useNetworkStore((s) => s.selectedThreadId);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const contacts = useNetworkStore((s) => s.contacts);
   const connectedPeers = useNetworkStore((s) => s.connectedPeers);
-  const showAllMessages = useNetworkStore((s) => s.showAllMessages);
-  const toggleShowAllMessages = useNetworkStore((s) => s.toggleShowAllMessages);
   const clearThreadMessages = useNetworkStore((s) => s.clearThreadMessages);
 
+  const [activeTab, setActiveTab] = useState<TabKey>("my");
   const [confirmClear, setConfirmClear] = useState(false);
 
   const contact = contacts.find((c) => c.id === selectedContactId);
   const isOnline = contact ? connectedPeers.has(contact.peer_id) : false;
 
-  // Filter: "내 대화" = 내가 보낸 메시지 + 그에 대한 상대방 응답만
-  const filteredMessages = useMemo(() => {
-    if (showAllMessages) return messages;
-    // Collect message_id_unique of messages I sent manually (outgoing + no responding_agent_id)
+  // "My chat" = messages I sent manually + responses to those messages
+  const myMessages = useMemo(() => {
     const mySentIds = new Set(
       messages
         .filter((m) => m.direction === "outgoing" && !m.responding_agent_id)
         .map((m) => m.message_id_unique),
     );
     return messages.filter((msg) => {
-      // My manually sent messages
       if (msg.direction === "outgoing" && !msg.responding_agent_id) return true;
-      // Responses to my messages (incoming with correlation to my sent)
       if (msg.direction === "incoming" && msg.correlation_id && mySentIds.has(msg.correlation_id)) return true;
       return false;
     });
-  }, [messages, showAllMessages]);
+  }, [messages]);
+
+  // "Incoming" = messages the peer sent + my agent's auto-responses
+  const incomingMessages = useMemo(() => {
+    const peerSentIds = new Set(
+      messages
+        .filter((m) => m.direction === "incoming" && !m.correlation_id)
+        .map((m) => m.message_id_unique),
+    );
+    return messages.filter((msg) => {
+      // Peer's incoming messages (not responses to my messages)
+      if (msg.direction === "incoming" && !msg.correlation_id) return true;
+      // My agent's auto-responses (outgoing with responding_agent_id, correlated to peer messages)
+      if (msg.direction === "outgoing" && msg.responding_agent_id) return true;
+      // Also include outgoing responses that correlate to peer-sent messages
+      if (msg.direction === "outgoing" && msg.correlation_id && peerSentIds.has(msg.correlation_id)) return true;
+      return false;
+    });
+  }, [messages]);
+
+  const displayMessages = activeTab === "my" ? myMessages : incomingMessages;
 
   const { messagesEndRef, messagesContainerRef } = useMessageScroll(
-    [selectedThreadId],
-    [filteredMessages],
+    [selectedThreadId, activeTab],
+    [displayMessages],
   );
 
   return (
@@ -64,13 +75,6 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
           </span>
         </div>
         <div className="peer-thread-actions">
-          <button
-            className={`icon-btn${showAllMessages ? " active" : ""}`}
-            onClick={toggleShowAllMessages}
-            title={showAllMessages ? t("peer.showMyChats") : t("peer.showAllChats")}
-          >
-            {showAllMessages ? <Eye size={16} /> : <EyeOff size={16} />}
-          </button>
           {selectedThreadId && (
             <button
               className={`icon-btn${confirmClear ? " confirm" : ""}`}
@@ -88,34 +92,48 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
               <Trash2 size={16} />
             </button>
           )}
-          <button
-            className={`icon-btn${settingsOpen ? " active" : ""}`}
-            onClick={onToggleSettings}
-            title={t("contact.detailTitle")}
-          >
-            <Settings size={16} />
-          </button>
         </div>
       </DraggableHeader>
 
-      {settingsOpen && (
-        <div className="peer-thread-settings">
-          <ContactDetail />
+      {/* Tab bar */}
+      <div className="peer-thread-tabs">
+        <button
+          className={`peer-thread-tab${activeTab === "my" ? " active" : ""}`}
+          onClick={() => setActiveTab("my")}
+        >
+          {t("peer.tabMyChat")}
+        </button>
+        <button
+          className={`peer-thread-tab${activeTab === "incoming" ? " active" : ""}`}
+          onClick={() => setActiveTab("incoming")}
+        >
+          {t("peer.tabIncoming")}
+          {incomingMessages.length > 0 && (
+            <span className="peer-thread-tab-count">{incomingMessages.length}</span>
+          )}
+        </button>
+      </div>
+
+      {/* Read-only banner for incoming tab */}
+      {activeTab === "incoming" && (
+        <div className="peer-thread-readonly-banner">
+          {t("peer.incomingReadOnly")}
         </div>
       )}
 
       <div className="peer-thread-messages" ref={messagesContainerRef}>
-        {filteredMessages.length === 0 ? (
+        {displayMessages.length === 0 ? (
           <div className="peer-thread-no-messages">
-            {showAllMessages ? t("peer.noMessages") : t("peer.noMyMessages")}
+            {activeTab === "my" ? t("peer.noMyMessages") : t("peer.noIncomingMessages")}
           </div>
         ) : (
-          filteredMessages.map((msg) => <PeerMessageBubble key={msg.id} msg={msg} />)
+          displayMessages.map((msg) => <PeerMessageBubble key={msg.id} msg={msg} />)
         )}
         <div ref={messagesEndRef} />
       </div>
 
-      <PeerChatInput />
+      {/* Only show input on "my chat" tab */}
+      {activeTab === "my" && <PeerChatInput />}
     </div>
   );
 }

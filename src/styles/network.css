@@ -38,6 +38,64 @@
   color: var(--success-hover);
 }
 
+/* ── Peer Thread Tabs ── */
+.peer-thread-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.peer-thread-tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  border-bottom: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.peer-thread-tab:hover {
+  color: var(--text-main);
+  background: var(--hover-bg);
+}
+
+.peer-thread-tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+.peer-thread-tab-count {
+  font-size: 0.6875rem;
+  background: var(--primary);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 8px;
+  min-width: 18px;
+  text-align: center;
+}
+
+/* ── Read-only banner ── */
+.peer-thread-readonly-banner {
+  padding: 8px 24px;
+  background: var(--hover-bg);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
 .peer-thread-messages {
   flex: 1;
   padding: 20px 24px;
@@ -402,13 +460,7 @@
   border-bottom: 1px solid var(--danger-border);
 }
 
-.peer-thread-settings {
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  max-height: 50%;
-  overflow-y: auto;
-}
+/* peer-thread-settings removed — now using ContactDetailModal */
 
 /* ── Contact List ── */
 .contact-list {
@@ -444,17 +496,59 @@
 .contact-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 20px;
+  gap: 0;
+  padding: 0;
   border: none;
   background: none;
   width: 100%;
   text-align: left;
-  cursor: pointer;
   transition: background-color 0.15s;
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+  position: relative;
+}
+
+.contact-item-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px 10px 20px;
+  flex: 1;
+  min-width: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.contact-item-settings {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  color: var(--text-light);
+  cursor: pointer;
+  border-radius: 6px;
+  opacity: 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.contact-item:hover .contact-item-settings {
+  opacity: 1;
+}
+
+.contact-item-settings:hover {
+  background: var(--hover-bg);
+  color: var(--text-main);
 }
 
 .contact-item:hover {
@@ -891,4 +985,171 @@
 .contact-item-badge.pending-approval {
   background: var(--info-bg, rgba(48, 176, 199, 0.12));
   color: var(--info, #30b0c7);
+}
+
+/* ── Agent Picker (custom dropdown) ── */
+.peer-agent-picker-wrap {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.peer-agent-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.peer-agent-picker-trigger:hover {
+  border-color: var(--primary);
+  background: var(--hover-bg);
+}
+
+.peer-agent-picker-trigger .rotated {
+  transform: rotate(180deg);
+}
+
+.peer-agent-picker-label {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peer-agent-picker-dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.15));
+  z-index: 100;
+  overflow: hidden;
+  animation: fadeInUp 0.12s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.peer-agent-picker-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background-color 0.1s;
+  color: var(--text-main);
+}
+
+.peer-agent-picker-option:hover {
+  background: var(--hover-bg);
+}
+
+.peer-agent-picker-option.active {
+  background: var(--focus-ring);
+}
+
+.peer-agent-picker-option + .peer-agent-picker-option {
+  border-top: 1px solid var(--border);
+}
+
+.peer-agent-picker-option-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.peer-agent-picker-option-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Contact Detail Modal ── */
+.contact-detail-modal {
+  max-width: 440px;
+}
+
+.contact-detail-status-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.published-agents-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.published-agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  background: var(--bg-color);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.published-agent-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.published-agent-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.confirm-delete-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+}
+
+.confirm-delete-row .btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.confirm-delete-row .btn-secondary:hover {
+  background: var(--hover-bg);
 }

@@ -82,17 +82,23 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     const { activeRun } = get();
     if (!activeRun) return;
 
-    // Always try to abort the backend stream
-    await cmds.abortStream(activeRun.requestId);
+    // Always try to abort the backend stream (may be no-op if stream already done)
+    try {
+      await cmds.abortStream(activeRun.requestId);
+    } catch {
+      // Backend abort failed (e.g., requestId already removed) — proceed with cleanup
+    }
 
-    // During tool execution the stream is already done, so the backend
-    // abort is a no-op.  Reset tool state (cancels pending approvals)
-    // and clear activeRun so the streaming loop knows to stop.
+    // Reset tool state if active (cancels pending approvals)
     const toolState = useToolRunStore.getState().toolRunState;
     if (toolState !== "idle") {
       useToolRunStore.getState().resetToolState();
-      set({ activeRun: null });
     }
+
+    // Always clear activeRun — either the backend abort succeeded and the
+    // stream will end, or it was a no-op (stream already completed) and
+    // this is stale state that needs cleanup.
+    set({ activeRun: null });
   },
 
   // Team multi-run: add a run to runsById

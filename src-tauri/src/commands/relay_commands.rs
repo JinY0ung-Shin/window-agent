@@ -259,7 +259,8 @@ pub fn relay_bind_agent(
 // ── Contact approval commands ──
 
 #[tauri::command]
-pub fn relay_approve_contact(
+pub async fn relay_approve_contact(
+    app: tauri::AppHandle,
     db: State<'_, Database>,
     manager: State<'_, RelayManager>,
     contact_id: String,
@@ -296,6 +297,34 @@ pub fn relay_approve_contact(
         if let Some(handle) = manager.get_relay_handle() {
             let _ = handle.subscribe_presence(vec![relay_pid]);
         }
+    }
+
+    // Send Introduce back so the requester knows we approved and gets our published_agents
+    let identity = app.state::<NodeIdentity>();
+    let public_key_b64 = base64::Engine::encode(
+        &base64::engine::general_purpose::STANDARD,
+        identity.public_key_bytes(),
+    );
+    let settings = app.state::<crate::settings::AppSettings>();
+    let s = settings.get();
+    let local_name = if s.directory_agent_name.is_empty() { "Agent".to_string() } else { s.directory_agent_name.clone() };
+    let local_desc = s.directory_agent_description.clone();
+    let published_agents = crate::db::agent_operations::list_network_visible_agents_impl(&db)
+        .ok()
+        .map(|agents| agents.into_iter().map(|a| wa_shared::protocol::PublishedAgent {
+            agent_id: a.id, name: a.name, description: a.description,
+        }).collect::<Vec<_>>());
+    let introduce_envelope = Envelope::new(
+        local_name.clone(),
+        Payload::Introduce {
+            agent_name: local_name,
+            agent_description: local_desc,
+            public_key: public_key_b64,
+            published_agents,
+        },
+    );
+    if let Err(e) = manager.send_message(&contact.peer_id, &introduce_envelope).await {
+        tracing::warn!("Failed to send Introduce after approval: {e}");
     }
 
     Ok(())

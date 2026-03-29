@@ -2,7 +2,7 @@
 import type { Agent, ChatMessage, ToolCall } from "../services/types";
 import { useAgentStore } from "./agentStore";
 import { useMessageStore } from "./messageStore";
-import { useStreamStore } from "./streamStore";
+import { useStreamStore, clearShelvedStream, clearStreamContentCache } from "./streamStore";
 import { useToolRunStore } from "./toolRunStore";
 import { useVaultStore } from "./vaultStore";
 import { invalidatePersonaCache } from "../services/personaService";
@@ -137,8 +137,12 @@ export async function runToolLoop(
       iterationCount,
     });
 
-    // Check if generation was cancelled during tool execution
+    // Check if generation was cancelled during tool execution (user navigated away)
     if (!useStreamStore.getState().activeRun) {
+      // Clear shelved stream — this run completed, so restoring it would
+      // leave the UI stuck with a stale "streaming" message.
+      clearShelvedStream(convId);
+      clearStreamContentCache(currentMsgId);
       if (savedToolMsgs.length > 0) {
         useMessageStore.setState({
           messages: [...msg().messages, ...savedToolMsgs],

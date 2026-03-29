@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Send } from "lucide-react";
+import { Send, ChevronDown, Bot } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useChatInputLogic } from "../../hooks/useChatInputLogic";
 import type { PublishedAgent } from "../../services/types";
@@ -18,6 +18,10 @@ export default function PeerChatInput() {
   }, [contact?.published_agents_json]);
 
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  const selectedAgent = publishedAgents.find((a) => a.agent_id === selectedAgentId);
 
   const localValueRef = useRef("");
 
@@ -35,19 +39,55 @@ export default function PeerChatInput() {
 
   localValueRef.current = localValue;
 
+  // Close picker on click outside
+  useEffect(() => {
+    if (!showAgentPicker) return;
+    const handleClick = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowAgentPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showAgentPicker]);
+
   return (
     <div className="peer-thread-input-area">
       {publishedAgents.length > 0 && (
-        <div className="peer-agent-selector">
-          <select
-            value={selectedAgentId}
-            onChange={(e) => setSelectedAgentId(e.target.value)}
+        <div className="peer-agent-picker-wrap" ref={pickerRef}>
+          <button
+            className="peer-agent-picker-trigger"
+            onClick={() => setShowAgentPicker(!showAgentPicker)}
+            title={t("peer.selectAgent")}
           >
-            <option value="">{t("peer.defaultAgent")}</option>
-            {publishedAgents.map((a) => (
-              <option key={a.agent_id} value={a.agent_id}>{a.name}</option>
-            ))}
-          </select>
+            <Bot size={14} />
+            <span className="peer-agent-picker-label">
+              {selectedAgent ? selectedAgent.name : t("peer.defaultAgent")}
+            </span>
+            <ChevronDown size={12} className={showAgentPicker ? "rotated" : ""} />
+          </button>
+          {showAgentPicker && (
+            <div className="peer-agent-picker-dropdown">
+              <button
+                className={`peer-agent-picker-option${!selectedAgentId ? " active" : ""}`}
+                onClick={() => { setSelectedAgentId(""); setShowAgentPicker(false); }}
+              >
+                <span className="peer-agent-picker-option-name">{t("peer.defaultAgent")}</span>
+              </button>
+              {publishedAgents.map((a) => (
+                <button
+                  key={a.agent_id}
+                  className={`peer-agent-picker-option${selectedAgentId === a.agent_id ? " active" : ""}`}
+                  onClick={() => { setSelectedAgentId(a.agent_id); setShowAgentPicker(false); }}
+                >
+                  <span className="peer-agent-picker-option-name">{a.name}</span>
+                  {a.description && (
+                    <span className="peer-agent-picker-option-desc">{a.description}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
       <div className="peer-thread-input-container">

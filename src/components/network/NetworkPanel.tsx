@@ -7,11 +7,12 @@ import EmptyState from "../common/EmptyState";
 import ContactList from "./ContactList";
 import PeerThread from "./PeerThread";
 import InviteDialog from "./InviteDialog";
+import ContactDetailModal from "./ContactDetailModal";
 
 export default function NetworkPanel() {
   const { t } = useTranslation("network");
   const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [detailContactId, setDetailContactId] = useState<string | null>(null);
   const status = useNetworkStore((s) => s.status);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const refreshContacts = useNetworkStore((s) => s.refreshContacts);
@@ -22,11 +23,6 @@ export default function NetworkPanel() {
       refreshContacts();
     }
   }, [status, refreshContacts]);
-
-  // Reset settings view when contact changes
-  useEffect(() => {
-    setShowSettings(false);
-  }, [selectedContactId]);
 
   if (status !== "active") {
     return (
@@ -70,16 +66,13 @@ export default function NetworkPanel() {
           </div>
         </DraggableHeader>
         {error && <div className="network-error">{error}</div>}
-        <ContactList />
+        <ContactList onOpenDetail={setDetailContactId} />
       </div>
 
       {/* Right main area: chat or empty */}
       <div className="network-panel-main">
         {selectedContactId ? (
-          <PeerThread
-            settingsOpen={showSettings}
-            onToggleSettings={() => setShowSettings((open) => !open)}
-          />
+          <PeerThread />
         ) : (
           <div className="network-panel-empty-chat">
             <Network size={48} strokeWidth={1} />
@@ -90,6 +83,13 @@ export default function NetworkPanel() {
 
       {showInviteDialog && (
         <InviteDialog onClose={() => setShowInviteDialog(false)} />
+      )}
+
+      {detailContactId && (
+        <ContactDetailModal
+          contactId={detailContactId}
+          onClose={() => setDetailContactId(null)}
+        />
       )}
     </div>
   );

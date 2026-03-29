@@ -67,7 +67,6 @@ interface NetworkState {
   directoryTotal: number;
   directoryLoading: boolean;
   discoverable: boolean;
-  showAllMessages: boolean;
   _lastSearchQuery: string;
 
   // ── Actions ──
@@ -88,7 +87,6 @@ interface NetworkState {
   searchDirectory: (query: string) => Promise<void>;
   sendFriendRequest: (peer: DirectoryPeer, localAgentId?: string) => Promise<void>;
   setDiscoverable: (discoverable: boolean) => Promise<void>;
-  toggleShowAllMessages: () => void;
   clearThreadMessages: (threadId: string) => Promise<void>;
   setupEventListeners: () => Promise<() => void>;
 }
@@ -110,7 +108,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   directoryTotal: 0,
   directoryLoading: false,
   discoverable: true,
-  showAllMessages: false,
   _lastSearchQuery: "",
 
   initialize: async () => {
@@ -326,10 +323,6 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   setDiscoverable: async (discoverable) => {
     await relaySetDirectorySettings(discoverable);
     set({ discoverable });
-  },
-
-  toggleShowAllMessages: () => {
-    set((s) => ({ showAllMessages: !s.showAllMessages }));
   },
 
   clearThreadMessages: async (threadId) => {

@@ -328,6 +328,10 @@ async function sendNormalMessage() {
     );
   } catch (error) {
     handleStreamError(error, firstMsgId);
+  } finally {
+    // Always clean up shelved stream after the run completes — if the user
+    // navigated away during execution, the shelved entry is now stale and
+    // restoring it would leave the UI stuck in a "streaming" state.
     clearShelvedStream(convId);
     clearStreamContentCache(firstMsgId);
   }
@@ -434,6 +438,9 @@ async function regenerateStream(
     }
   } catch (error) {
     handleStreamError(error, msgId);
+  } finally {
+    clearShelvedStream(convId);
+    clearStreamContentCache(msgId);
   }
 
   try {

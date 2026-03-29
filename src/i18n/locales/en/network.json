@@ -95,11 +95,14 @@
     "noMessages": "No messages yet. Start a conversation.",
     "inputPlaceholder": "Type a message...",
     "defaultAgent": "Default Agent",
-    "showMyChats": "Show my chats only",
-    "showAllChats": "Show all chats",
+    "tabMyChat": "My Chat",
+    "tabIncoming": "Incoming",
     "clearHistory": "Clear chat history",
     "noMyMessages": "No messages sent yet.",
-    "pendingApprovalHint": "Approve this contact before sending messages"
+    "noIncomingMessages": "No incoming messages yet.",
+    "incomingReadOnly": "Conversation between the peer and your agent (read-only)",
+    "pendingApprovalHint": "Approve this contact before sending messages",
+    "selectAgent": "Select an agent to chat with"
   },
   "directory": {
     "title": "Peer Directory",
