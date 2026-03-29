@@ -29,6 +29,62 @@ export async function setApiConfig(request: SetApiConfigRequest): Promise<void> 
   return invoke("set_api_config", { request });
 }
 
+// ── Unified App Settings ──
+
+export interface AppSettingsInner {
+  model_name: string;
+  thinking_enabled: boolean;
+  thinking_budget: number;
+  ui_theme: string;
+  company_name: string;
+  branding_initialized: boolean;
+  locale: string;
+  // Relay
+  network_enabled: boolean;
+  relay_url: string;
+  allowed_tools: string[];
+  discoverable: boolean;
+  directory_agent_name: string;
+  directory_agent_description: string;
+  // Browser
+  browser_headless: boolean;
+  browser_proxy: string;
+}
+
+export interface AppSettingsPatch {
+  model_name?: string | null;
+  thinking_enabled?: boolean | null;
+  thinking_budget?: number | null;
+  ui_theme?: string | null;
+  company_name?: string | null;
+  branding_initialized?: boolean | null;
+  locale?: string | null;
+  // Relay
+  network_enabled?: boolean | null;
+  relay_url?: string | null;
+  allowed_tools?: string[] | null;
+  discoverable?: boolean | null;
+  directory_agent_name?: string | null;
+  directory_agent_description?: string | null;
+  // Browser
+  browser_headless?: boolean | null;
+  browser_proxy?: string | null;
+}
+
+export async function getAppSettings(): Promise<AppSettingsInner> {
+  return invoke("get_app_settings");
+}
+
+export async function setAppSettings(patch: AppSettingsPatch): Promise<void> {
+  return invoke("set_app_settings", { patch });
+}
+
+export async function migrateFrontendSettings(
+  values: Record<string, string | null>,
+): Promise<void> {
+  return invoke("migrate_frontend_settings", { values });
+}
+
 export async function getNoProxy(): Promise<boolean> {
   return invoke("get_no_proxy");
 }

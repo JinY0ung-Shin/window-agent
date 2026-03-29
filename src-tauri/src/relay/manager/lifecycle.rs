@@ -19,13 +19,10 @@ impl RelayManager {
             status: "starting".into(), peer_count: 0,
         });
 
-        // Read relay URL from settings
+        // Read relay URL from unified settings
         let relay_url = {
-            use tauri_plugin_store::StoreExt;
-            app_handle.store("relay-settings.json").ok()
-                .and_then(|s| s.get("relay_url"))
-                .and_then(|v| v.as_str().map(String::from))
-                .unwrap_or_else(|| "wss://relay.windowagent.io/ws".to_string())
+            use tauri::Manager;
+            app_handle.state::<crate::settings::AppSettings>().get().relay_url
         };
 
         // Build peer indexes from contacts DB

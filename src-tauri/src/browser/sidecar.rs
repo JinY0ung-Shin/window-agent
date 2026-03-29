@@ -262,45 +262,6 @@ pub(super) fn resolve_sidecar_script(app_handle: Option<&tauri::AppHandle>) -> O
     None
 }
 
-// ── Proxy persistence ────────────────────────────────────
-
-const BROWSER_STORE_FILE: &str = "browser-config.json";
-const STORE_KEY_PROXY: &str = "proxy_server";
-const STORE_KEY_HEADLESS: &str = "headless";
-
-/// Load saved browser proxy from Tauri store.
-pub(super) fn load_browser_proxy(app_handle: &Option<tauri::AppHandle>) -> Option<String> {
-    let handle = app_handle.as_ref()?;
-    let store = tauri_plugin_store::StoreExt::store(handle, BROWSER_STORE_FILE).ok()?;
-    store.get(STORE_KEY_PROXY)?.as_str().map(|s| s.to_string())
-}
-
-/// Load saved browser headless setting from Tauri store. Defaults to false (visible).
-pub(super) fn load_browser_headless(app_handle: &Option<tauri::AppHandle>) -> bool {
-    (|| -> Option<bool> {
-        let handle = app_handle.as_ref()?;
-        let store = tauri_plugin_store::StoreExt::store(handle, BROWSER_STORE_FILE).ok()?;
-        store.get(STORE_KEY_HEADLESS)?.as_bool()
-    })()
-    .unwrap_or(false)
-}
-
-/// Persist browser headless setting to Tauri store.
-pub(super) fn save_browser_headless(app_handle: &tauri::AppHandle, headless: bool) {
-    if let Ok(store) = tauri_plugin_store::StoreExt::store(app_handle, BROWSER_STORE_FILE) {
-        store.set(STORE_KEY_HEADLESS, serde_json::json!(headless));
-        let _ = store.save();
-    }
-}
-
-/// Persist browser proxy to Tauri store.
-pub(super) fn save_browser_proxy(app_handle: &tauri::AppHandle, proxy: &str) {
-    if let Ok(store) = tauri_plugin_store::StoreExt::store(app_handle, BROWSER_STORE_FILE) {
-        store.set(STORE_KEY_PROXY, serde_json::json!(proxy));
-        let _ = store.save();
-    }
-}
-
 /// Detect system proxy settings.
 /// Windows: reads from environment variables (HTTP_PROXY / HTTPS_PROXY).
 /// These are also set by many corporate proxy tools.

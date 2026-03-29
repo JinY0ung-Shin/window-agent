@@ -16,22 +16,13 @@ use crate::relay::relay_client::{derive_relay_peer_id, RelayEvent, RelayHandle};
 impl RelayManager {
     /// Auto-register profile on the relay server directory after connecting.
     fn auto_register_profile(&self, app_handle: &tauri::AppHandle, handle: &RelayHandle) {
-        use tauri_plugin_store::StoreExt;
-        let store = app_handle.store("relay-settings.json").ok();
-        let discoverable = store.as_ref()
-            .and_then(|s| s.get("discoverable"))
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true);
-        let agent_name = store.as_ref()
-            .and_then(|s| s.get("directory_agent_name"))
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_default();
-        let agent_description = store.as_ref()
-            .and_then(|s| s.get("directory_agent_description"))
-            .and_then(|v| v.as_str().map(String::from))
-            .unwrap_or_default();
-
-        let _ = handle.update_profile(agent_name, agent_description, discoverable);
+        use tauri::Manager;
+        let s = app_handle.state::<crate::settings::AppSettings>().get();
+        let _ = handle.update_profile(
+            s.directory_agent_name.clone(),
+            s.directory_agent_description.clone(),
+            s.discoverable,
+        );
     }
 
     pub(crate) async fn run_event_loop(

@@ -43,11 +43,6 @@ export default function SettingsPage() {
 
   const handleSave = () => {
     const branding = brandingRef.current?.getValues();
-    if (branding) {
-      store.setCompanyName(branding.companyName.trim());
-      store.setUITheme(branding.uiTheme);
-    }
-
     const networkValues = networkRef.current?.getValues();
     const thinking = thinkingRef.current?.getValues();
     saveSettings({
@@ -57,6 +52,8 @@ export default function SettingsPage() {
       modelName: networkValues?.modelName ?? "",
       thinkingEnabled: thinking?.thinkingEnabled ?? true,
       thinkingBudget: thinking?.thinkingBudget ?? 4096,
+      companyName: branding?.companyName.trim(),
+      uiTheme: branding?.uiTheme,
     });
   };
 

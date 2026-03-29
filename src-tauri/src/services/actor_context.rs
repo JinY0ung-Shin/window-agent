@@ -97,7 +97,7 @@ pub fn resolve(
     app_data_dir: &std::path::Path,
     memory_mgr: Option<&SystemMemoryManager>,
 ) -> Result<ResolvedContext, AppError> {
-    resolve_full(scope, db, app_data_dir, memory_mgr, None, None)
+    resolve_full(scope, db, app_data_dir, memory_mgr, None, None, None, None)
 }
 
 /// Resolve with an explicit conversation_id to inherit learning_mode.
@@ -108,17 +108,20 @@ pub fn resolve_for_conversation(
     memory_mgr: Option<&SystemMemoryManager>,
     conversation_id: Option<&str>,
 ) -> Result<ResolvedContext, AppError> {
-    resolve_full(scope, db, app_data_dir, memory_mgr, None, conversation_id)
+    resolve_full(scope, db, app_data_dir, memory_mgr, None, conversation_id, None, None)
 }
 
-pub fn resolve_with_relay_tools(
+/// Resolve with relay tools, global model fallback, and company name for template substitution.
+pub fn resolve_with_settings(
     scope: &ExecutionScope,
     db: &Database,
     app_data_dir: &std::path::Path,
     memory_mgr: Option<&SystemMemoryManager>,
     relay_allowed_tools: Option<&[String]>,
+    global_model: Option<&str>,
+    company_name: Option<&str>,
 ) -> Result<ResolvedContext, AppError> {
-    resolve_full(scope, db, app_data_dir, memory_mgr, relay_allowed_tools, None)
+    resolve_full(scope, db, app_data_dir, memory_mgr, relay_allowed_tools, None, global_model, company_name)
 }
 
 fn resolve_full(
@@ -128,6 +131,8 @@ fn resolve_full(
     memory_mgr: Option<&SystemMemoryManager>,
     relay_allowed_tools: Option<&[String]>,
     conversation_id: Option<&str>,
+    global_model: Option<&str>,
+    company_name: Option<&str>,
 ) -> Result<ResolvedContext, AppError> {
     // 1. Load agent record
     let agent = agent_operations::get_agent_impl(db, scope.actor_agent_id.clone())?;
@@ -136,20 +141,20 @@ fn resolve_full(
     let agent_dir = app_data_dir.join("agents").join(&agent.folder_name);
     let mut system_prompt = assemble_system_prompt(&agent_dir);
 
-    // Strip {{company_name}} placeholders — the backend doesn't have access to
-    // the frontend settings store. Removing the placeholder is safer than leaking
-    // raw template syntax into the LLM prompt.
+    // Replace {{company_name}} with the actual value from AppSettings.
+    // Falls back to empty string if not provided (tests, or unset).
     if system_prompt.contains("{{company_name}}") {
-        system_prompt = system_prompt.replace("{{company_name}}", "");
+        system_prompt = system_prompt.replace("{{company_name}}", company_name.unwrap_or(""));
     }
 
     // 3. Determine enabled tools based on role + trigger + TOOL_CONFIG.json
     let enabled_tool_names = resolve_tool_names(&scope.role, &scope.trigger, &agent_dir, relay_allowed_tools);
 
-    // 4. LLM settings — agent-level with global fallback
+    // 4. LLM settings — agent-level → user global → hardcoded default
     let model = agent
         .model
         .clone()
+        .or_else(|| global_model.map(String::from))
         .unwrap_or_else(|| DEFAULT_MODEL.to_string());
     let temperature = agent.temperature;
     let thinking_enabled = agent.thinking_enabled.unwrap_or(false);

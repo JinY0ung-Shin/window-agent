@@ -139,11 +139,9 @@ impl RelayManager {
         // Build and send Introduce envelope
         let my_public_b64 = B64.encode(self.identity.public_key_bytes());
         let my_agent_name = {
-            use tauri_plugin_store::StoreExt;
-            app_handle.store("relay-settings.json").ok()
-                .and_then(|s| s.get("directory_agent_name"))
-                .and_then(|v| v.as_str().map(String::from))
-                .unwrap_or_else(|| "Agent".to_string())
+            use tauri::Manager;
+            let name = app_handle.state::<crate::settings::AppSettings>().get().directory_agent_name;
+            if name.is_empty() { "Agent".to_string() } else { name }
         };
 
         let introduce_envelope = Envelope {

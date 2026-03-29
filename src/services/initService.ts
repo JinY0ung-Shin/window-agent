@@ -17,27 +17,31 @@ export async function initializeApp(): Promise<void> {
   const loadAgents = useAgentStore.getState().loadAgents;
   const loadConversations = useConversationStore.getState().loadConversations;
 
-  // Step 1: Load settings (best-effort)
+  // Step 1: Load settings from localStorage cache (best-effort, synchronous)
   try {
     loadSettings();
   } catch (e) {
     logger.warn("loadSettings:", e);
   }
 
-  // Step 2: Load env defaults (best-effort)
+  // Step 2: Snapshot fresh-install signals BEFORE loadEnvDefaults, which writes to localStorage.
+  // After loadEnvDefaults, localStorage keys will exist even on fresh installs (from backend defaults).
+  const preHydrateSettings = useSettingsStore.getState();
+  const hasExistingLocalSettings = [
+    "openai_base_url", "openai_model_name",
+    "thinking_enabled", "thinking_budget",
+  ].some((key) => localStorage.getItem(key) !== null);
+
+  // Step 3: Hydrate from backend (includes localStorage migration + caching)
   try {
-    loadEnvDefaults();
+    await loadEnvDefaults();
   } catch (e) {
     logger.warn("loadEnvDefaults:", e);
   }
 
-  // Step 3: Determine if this is a fresh install or existing install.
-  // Fresh installs skip seeding here — it happens after onboarding completes.
+  // Step 4: Determine fresh vs existing install using pre-hydration snapshot.
   const settings = useSettingsStore.getState();
-  const isFreshInstall = !settings.brandingInitialized && !([
-    "openai_base_url", "openai_model_name",
-    "thinking_enabled", "thinking_budget",
-  ].some((key) => localStorage.getItem(key) !== null));
+  const isFreshInstall = !preHydrateSettings.brandingInitialized && !hasExistingLocalSettings;
 
   if (!isFreshInstall) {
     // Existing install: seed with current locale (existing agents are untouched)
@@ -92,8 +96,8 @@ export async function initializeApp(): Promise<void> {
   }
 
   // Step 7: Auto-initialize branding for upgraded users.
-  // Fresh installs have 0 conversations and no localStorage settings.
-  // Existing installs have conversations or any previously saved settings.
+  // After migration, if brandingInitialized is still false but the user has data,
+  // they are a legacy user who upgraded — auto-initialize with existing values.
   if (!settings.brandingInitialized) {
     const conversations = useConversationStore.getState().conversations;
     const hasExistingSettings = [

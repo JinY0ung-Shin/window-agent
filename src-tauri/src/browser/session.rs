@@ -163,9 +163,16 @@ impl BrowserManager {
             sessions.clear();
         }
 
-        // Persist to Tauri store
+        // Persist via AppSettings
         if let Some(ref handle) = self.app_handle {
-            super::sidecar::save_browser_headless(handle, headless);
+            use tauri::Manager;
+            let _ = handle.state::<crate::settings::AppSettings>().set(
+                &crate::settings::AppSettingsPatch {
+                    browser_headless: Some(headless),
+                    ..Default::default()
+                },
+                handle,
+            );
         }
     }
 
@@ -191,9 +198,16 @@ impl BrowserManager {
             sessions.clear();
         }
 
-        // Persist to Tauri store
+        // Persist via AppSettings
         if let Some(ref handle) = self.app_handle {
-            super::sidecar::save_browser_proxy(handle, &proxy);
+            use tauri::Manager;
+            let _ = handle.state::<crate::settings::AppSettings>().set(
+                &crate::settings::AppSettingsPatch {
+                    browser_proxy: Some(proxy),
+                    ..Default::default()
+                },
+                handle,
+            );
         }
     }
 }

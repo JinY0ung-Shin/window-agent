@@ -12,6 +12,67 @@ const mockedInvoke = vi.mocked(invoke);
 const initialState = useSettingsStore.getState();
 const initialNav = useNavigationStore.getState();
 
+/** Default AppSettings response from the backend. */
+const defaultAppSettings = {
+  model_name: DEFAULT_MODEL,
+  thinking_enabled: false,
+  thinking_budget: DEFAULT_THINKING_BUDGET,
+  ui_theme: "org",
+  company_name: "",
+  branding_initialized: false,
+  locale: "ko",
+};
+
+/**
+ * Helper to mock invoke calls for loadEnvDefaults.
+ * Order: migrate_frontend_settings, get_app_settings, get_env_config, has_api_key, has_stored_key
+ */
+function mockLoadEnvDefaults(opts: {
+  appSettings?: Record<string, unknown>;
+  envConfig?: { base_url: string | null; model: string | null };
+  hasApiKey?: boolean;
+  hasStoredKey?: boolean;
+} = {}) {
+  const {
+    appSettings = defaultAppSettings,
+    envConfig = { base_url: null, model: null },
+    hasApiKey = false,
+    hasStoredKey = false,
+  } = opts;
+
+  mockedInvoke.mockImplementation(async (cmd: string) => {
+    switch (cmd) {
+      case "migrate_frontend_settings": return undefined;
+      case "get_app_settings": return appSettings;
+      case "get_env_config": return envConfig;
+      case "has_api_key": return hasApiKey;
+      case "has_stored_key": return hasStoredKey;
+      default: return undefined;
+    }
+  });
+}
+
+/**
+ * Helper to mock invoke calls for saveSettings.
+ * Order: set_api_config, has_api_key, has_stored_key, set_app_settings
+ */
+function mockSaveSettings(opts: {
+  hasApiKey?: boolean;
+  hasStoredKey?: boolean;
+} = {}) {
+  const { hasApiKey = true, hasStoredKey = false } = opts;
+
+  mockedInvoke.mockImplementation(async (cmd: string) => {
+    switch (cmd) {
+      case "set_api_config": return undefined;
+      case "has_api_key": return hasApiKey;
+      case "has_stored_key": return hasStoredKey;
+      case "set_app_settings": return undefined;
+      default: return undefined;
+    }
+  });
+}
+
 beforeEach(() => {
   useSettingsStore.setState(initialState, true);
   useNavigationStore.setState(initialNav, true);
@@ -52,10 +113,7 @@ describe("settingsStore", () => {
   });
 
   it("saveSettings writes non-secret settings to localStorage", async () => {
-    // Mock: set_api_config then has_api_key
-    mockedInvoke
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(true);
+    mockSaveSettings({ hasApiKey: true });
 
     await useSettingsStore.getState().saveSettings({
       apiKey: "new-key",
@@ -70,8 +128,6 @@ describe("settingsStore", () => {
 
     // Non-secret settings should be in localStorage
     expect(localStorage.getItem("openai_base_url")).toBe("http://new-url");
-    expect(localStorage.getItem("thinking_enabled")).toBe("false");
-    expect(localStorage.getItem("thinking_budget")).toBe("8192");
 
     const s = useSettingsStore.getState();
     expect(s.baseUrl).toBe("http://new-url");
@@ -81,9 +137,7 @@ describe("settingsStore", () => {
   });
 
   it("saveSettings uses default model when modelName is empty", async () => {
-    mockedInvoke
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(false);
+    mockSaveSettings({ hasApiKey: false });
 
     await useSettingsStore.getState().saveSettings({
       apiKey: "",
@@ -97,9 +151,7 @@ describe("settingsStore", () => {
   });
 
   it("saveSettings keeps existing key when apiKey is blank", async () => {
-    mockedInvoke
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(true);
+    mockSaveSettings({ hasApiKey: true });
 
     await useSettingsStore.getState().saveSettings({
       apiKey: "",
@@ -109,15 +161,13 @@ describe("settingsStore", () => {
       thinkingBudget: DEFAULT_THINKING_BUDGET,
     });
 
-    expect(mockedInvoke).toHaveBeenNthCalledWith(1, "set_api_config", {
+    expect(mockedInvoke).toHaveBeenCalledWith("set_api_config", {
       request: { base_url: "http://proxy.local/v1" },
     });
   });
 
   it("saveSettings clears the stored key when requested", async () => {
-    mockedInvoke
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(true);
+    mockSaveSettings({ hasApiKey: true });
 
     await useSettingsStore.getState().saveSettings({
       apiKey: "",
@@ -128,7 +178,7 @@ describe("settingsStore", () => {
       thinkingBudget: DEFAULT_THINKING_BUDGET,
     });
 
-    expect(mockedInvoke).toHaveBeenNthCalledWith(1, "set_api_config", {
+    expect(mockedInvoke).toHaveBeenCalledWith("set_api_config", {
       request: { api_key: "", base_url: "http://proxy.local/v1" },
     });
   });
@@ -145,9 +195,7 @@ describe("settingsStore", () => {
   });
 
   it("saveSettings persists all non-secret fields correctly", async () => {
-    mockedInvoke
-      .mockResolvedValueOnce(undefined)
-      .mockResolvedValueOnce(true);
+    mockSaveSettings({ hasApiKey: true });
 
     await useSettingsStore.getState().saveSettings({
       apiKey: "my-api-key",
@@ -158,9 +206,6 @@ describe("settingsStore", () => {
     });
 
     expect(localStorage.getItem("openai_base_url")).toBe("http://example.com/v1");
-    expect(localStorage.getItem("openai_model_name")).toBe("claude-3");
-    expect(localStorage.getItem("thinking_enabled")).toBe("true");
-    expect(localStorage.getItem("thinking_budget")).toBe("16384");
 
     const s = useSettingsStore.getState();
     expect(s.baseUrl).toBe("http://example.com/v1");
@@ -171,11 +216,15 @@ describe("settingsStore", () => {
   });
 
   describe("loadEnvDefaults", () => {
-    it("applies env values when localStorage is absent and checks API key", async () => {
-      // First call: get_env_config, second call: has_api_key
-      mockedInvoke
-        .mockResolvedValueOnce({ base_url: "http://env-url/v1", model: "env-model" })
-        .mockResolvedValueOnce(true);
+    it("hydrates from backend AppSettings and applies env base_url override", async () => {
+      mockLoadEnvDefaults({
+        appSettings: {
+          ...defaultAppSettings,
+          model_name: "env-model",
+        },
+        envConfig: { base_url: "http://env-url/v1", model: "env-model" },
+        hasApiKey: true,
+      });
 
       await useSettingsStore.getState().loadEnvDefaults();
       const s = useSettingsStore.getState();
@@ -186,26 +235,29 @@ describe("settingsStore", () => {
       expect(s.envLoaded).toBe(true);
     });
 
-    it("does NOT override when localStorage has values", async () => {
+    it("does NOT override base_url when localStorage has a value", async () => {
       localStorage.setItem("openai_base_url", "http://local-url");
-      localStorage.setItem("openai_model_name", "local-model");
 
-      mockedInvoke
-        .mockResolvedValueOnce({ base_url: "http://env-url/v1", model: "env-model" })
-        .mockResolvedValueOnce(false);
+      mockLoadEnvDefaults({
+        envConfig: { base_url: "http://env-url/v1", model: "env-model" },
+        hasApiKey: false,
+      });
 
       useSettingsStore.getState().loadSettings();
       await useSettingsStore.getState().loadEnvDefaults();
       const s = useSettingsStore.getState();
 
+      // base_url kept from localStorage (env override skipped)
       expect(s.baseUrl).toBe("http://local-url");
-      expect(s.modelName).toBe("local-model");
+      // model_name comes from backend AppSettings (source of truth)
+      expect(s.modelName).toBe(DEFAULT_MODEL);
     });
 
     it("sets envLoaded even when env has no values", async () => {
-      mockedInvoke
-        .mockResolvedValueOnce({ base_url: null, model: null })
-        .mockResolvedValueOnce(false);
+      mockLoadEnvDefaults({
+        envConfig: { base_url: null, model: null },
+        hasApiKey: false,
+      });
 
       await useSettingsStore.getState().loadEnvDefaults();
       const s = useSettingsStore.getState();

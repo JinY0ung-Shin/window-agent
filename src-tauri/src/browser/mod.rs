@@ -84,10 +84,19 @@ impl BrowserManager {
         let screenshots_dir = app_data_dir.join("browser_screenshots");
         std::fs::create_dir_all(&screenshots_dir).ok();
 
-        // Load saved proxy or detect system proxy
-        let proxy = sidecar::load_browser_proxy(&app_handle)
-            .unwrap_or_else(|| sidecar::detect_system_proxy().unwrap_or_default());
-        let headless = sidecar::load_browser_headless(&app_handle);
+        // Load saved settings from AppSettings (unified) or detect system proxy
+        let (proxy, headless) = if let Some(ref handle) = app_handle {
+            use tauri::Manager;
+            let s = handle.state::<crate::settings::AppSettings>().get();
+            let p = if s.browser_proxy.is_empty() {
+                sidecar::detect_system_proxy().unwrap_or_default()
+            } else {
+                s.browser_proxy
+            };
+            (p, s.browser_headless)
+        } else {
+            (sidecar::detect_system_proxy().unwrap_or_default(), false)
+        };
 
         Self {
             sessions: Arc::new(RwLock::new(HashMap::new())),

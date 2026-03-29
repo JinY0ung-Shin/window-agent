@@ -9,6 +9,7 @@ use crate::relay::db as relay_db;
 use crate::relay::envelope::{Envelope, Payload};
 use crate::relay::manager::RelayManager;
 use crate::services::{actor_context, api_service, credential_service, llm_helpers};
+use crate::settings::AppSettings;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
@@ -205,26 +206,15 @@ async fn generate_and_send_response(
         trigger: actor_context::ExecutionTrigger::BackendTriggered,
     };
 
-    // Read relay allowed tools from settings
-    let relay_allowed_tools: Vec<String> = {
-        use tauri_plugin_store::StoreExt;
-        app.store("relay-settings.json")
-            .ok()
-            .and_then(|s| s.get("allowed_tools"))
-            .and_then(|v| {
-                v.as_array().map(|arr| {
-                    arr.iter()
-                        .filter_map(|item| item.as_str().map(String::from))
-                        .collect()
-                })
-            })
-            .unwrap_or_default()
-    };
+    // Read all settings from unified AppSettings
+    let app_settings = app.state::<AppSettings>().get();
 
     let memory_mgr = app.state::<SystemMemoryManager>();
-    let resolved = actor_context::resolve_with_relay_tools(
+    let resolved = actor_context::resolve_with_settings(
         &scope, &db, &app_data_dir, Some(&*memory_mgr),
-        if relay_allowed_tools.is_empty() { None } else { Some(&relay_allowed_tools) },
+        if app_settings.allowed_tools.is_empty() { None } else { Some(&app_settings.allowed_tools) },
+        Some(&app_settings.model_name),
+        Some(&app_settings.company_name),
     ).map_err(|e| format!("Failed to resolve agent context: {e}"))?;
 
     // 3. Build system prompt

@@ -7,12 +7,14 @@ pub mod memory;
 mod models;
 pub mod relay;
 mod services;
+pub mod settings;
 mod utils;
 pub mod vault;
 
 use api::{ApiState, RunRegistry};
 use commands::vault_commands::VaultState;
 use db::Database;
+use settings::AppSettings;
 use memory::SystemMemoryManager;
 use services::cron_scheduler::CronScheduler;
 use services::team_orchestrator::TeamOrchestrator;
@@ -59,22 +61,9 @@ pub fn run() {
 
             app.manage(database);
             app.manage(ApiState::load(app.handle()));
-            app.manage(RunRegistry::new());
 
-            // Initialize VaultManager
-            let vault_path = app_dir.join("vault");
-            let vault_manager = VaultManager::new(vault_path.clone())
-                .expect("failed to initialize vault manager");
-            app.manage(std::sync::Mutex::new(vault_manager) as VaultState);
-
-            // Start VaultWatcher for external edit sync (Obsidian etc.)
-            let watcher = vault::watcher::VaultWatcher::new(vault_path, 300);
-            match watcher.start(app.handle().clone()) {
-                Ok(w) => { app.manage(w); } // keep watcher alive via managed state
-                Err(e) => { tracing::warn!("Vault watcher failed to start: {e}"); }
-            }
-
-            // Migrate legacy p2p store files → relay (one-time, idempotent)
+            // Migrate legacy p2p store files → relay BEFORE loading AppSettings
+            // (so that relay settings from p2p-settings.json are visible to AppSettings).
             {
                 use tauri_plugin_store::StoreExt;
                 for (old, new_name) in [
@@ -98,6 +87,22 @@ pub fn run() {
                         }
                     }
                 }
+            }
+
+            app.manage(AppSettings::load(app.handle()));
+            app.manage(RunRegistry::new());
+
+            // Initialize VaultManager
+            let vault_path = app_dir.join("vault");
+            let vault_manager = VaultManager::new(vault_path.clone())
+                .expect("failed to initialize vault manager");
+            app.manage(std::sync::Mutex::new(vault_manager) as VaultState);
+
+            // Start VaultWatcher for external edit sync (Obsidian etc.)
+            let watcher = vault::watcher::VaultWatcher::new(vault_path, 300);
+            match watcher.start(app.handle().clone()) {
+                Ok(w) => { app.manage(w); } // keep watcher alive via managed state
+                Err(e) => { tracing::warn!("Vault watcher failed to start: {e}"); }
             }
 
             // Initialize relay identity and manager (dormant until user opts in)
@@ -158,6 +163,9 @@ pub fn run() {
             commands::resize_avatar,
             commands::get_bootstrap_prompt,
             commands::get_env_config,
+            commands::get_app_settings,
+            commands::set_app_settings,
+            commands::migrate_frontend_settings,
             commands::has_api_key,
             commands::has_stored_key,
             commands::get_no_proxy,

@@ -46,7 +46,6 @@ interface ErrorPayload {
   message: string;
 }
 
-const STORAGE_KEY = "network_enabled";
 
 interface NetworkState {
   // ── State ──
@@ -93,7 +92,7 @@ interface NetworkState {
 export const useNetworkStore = create<NetworkState>((set, get) => ({
   status: "dormant",
   peerId: null,
-  networkEnabled: localStorage.getItem(STORAGE_KEY) === "true",
+  networkEnabled: false,
   contacts: [],
   selectedContactId: null,
   selectedThreadId: null,
@@ -114,8 +113,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     try {
       enabled = await relayGetNetworkEnabled();
     } catch (e) {
-      logger.debug("Network enabled check failed, using localStorage", e);
-      enabled = localStorage.getItem(STORAGE_KEY) === "true";
+      logger.debug("Network enabled check failed", e);
+      enabled = false;
     }
     set({ networkEnabled: enabled });
     if (enabled) {
@@ -136,12 +135,10 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         relayGetPeerId(),
         relayListContacts(),
       ]);
-      try {
-        await relaySetNetworkEnabled(true);
-      } catch (e) {
-        logger.debug("Persist network enabled failed, using localStorage", e);
-        localStorage.setItem(STORAGE_KEY, "true");
-      }
+      // Persist enabled state (non-fatal — runtime state already updated)
+      relaySetNetworkEnabled(true).catch((e) =>
+        logger.debug("Persist network enabled failed:", e),
+      );
       set({
         status: statusStr as NetworkStatus,
         peerId,
@@ -151,7 +148,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
       // Register directory profile with company name (respect user's existing settings)
       try {
-        const companyName = localStorage.getItem("company_name") || "";
+        const { useSettingsStore } = await import("./settingsStore");
+        const companyName = useSettingsStore.getState().companyName;
         if (companyName) {
           const { relayGetDirectorySettings } = await import("../services/commands/relayCommands");
           const settings = await relayGetDirectorySettings();
@@ -174,12 +172,10 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     set({ status: "stopping", error: null });
     try {
       await relayStop();
-      try {
-        await relaySetNetworkEnabled(false);
-      } catch (e) {
-        logger.debug("Persist network disabled failed, using localStorage", e);
-        localStorage.setItem(STORAGE_KEY, "false");
-      }
+      // Persist disabled state (non-fatal — runtime state already updated)
+      relaySetNetworkEnabled(false).catch((e) =>
+        logger.debug("Persist network disabled failed:", e),
+      );
       set({
         status: "dormant",
         peerId: null,

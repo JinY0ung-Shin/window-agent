@@ -6,6 +6,7 @@ use crate::relay::envelope::{Envelope, Payload};
 use crate::relay::identity::NodeIdentity;
 use crate::relay::invite;
 use crate::relay::manager::RelayManager;
+use crate::settings::{AppSettings, AppSettingsPatch};
 use tauri::{Manager, State};
 
 // ── Lifecycle commands ──
@@ -52,14 +53,14 @@ pub fn relay_get_peer_id(manager: State<'_, RelayManager>) -> Result<String, App
 
 #[tauri::command]
 pub fn relay_generate_invite(
-    app: tauri::AppHandle,
     identity: State<'_, NodeIdentity>,
+    settings: State<'_, AppSettings>,
     agent_name: String,
     agent_description: String,
     addresses: Vec<String>,
     expiry_hours: Option<u64>,
 ) -> Result<String, AppError> {
-    let relay_url = relay_get_relay_url(app);
+    let relay_url = settings.get().relay_url;
     invite::generate_invite_with_relay(&identity, addresses, agent_name, agent_description, expiry_hours, Some(relay_url))
         .map_err(|e| AppError::Relay(e.to_string()))
 }
@@ -78,11 +79,11 @@ pub async fn relay_accept_invite(
     // (multi-relay reconnect is out of scope — single relay assumption)
     if let Some(ref invite_relay_url) = card.relay_url {
         if !invite_relay_url.is_empty() {
-            use tauri_plugin_store::StoreExt;
-            if let Ok(store) = app.store("relay-settings.json") {
-                store.set("relay_url", serde_json::json!(invite_relay_url));
-                let _ = store.save();
-            }
+            let settings = app.state::<AppSettings>();
+            let _ = settings.set(
+                &AppSettingsPatch { relay_url: Some(invite_relay_url.clone()), ..Default::default() },
+                &app,
+            );
         }
     }
 
@@ -465,23 +466,17 @@ pub fn relay_get_thread_messages(
 // ── Network settings commands ──
 
 #[tauri::command]
-pub fn relay_get_network_enabled(app: tauri::AppHandle) -> bool {
-    use tauri_plugin_store::StoreExt;
-    app.store("relay-settings.json")
-        .ok()
-        .and_then(|s| s.get("network_enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+pub fn relay_get_network_enabled(settings: State<'_, AppSettings>) -> bool {
+    settings.get().network_enabled
 }
 
 #[tauri::command]
-pub fn relay_set_network_enabled(app: tauri::AppHandle, enabled: bool) -> Result<(), AppError> {
-    use tauri_plugin_store::StoreExt;
-    let store = app
-        .store("relay-settings.json")
-        .map_err(|e| AppError::Config(e.to_string()))?;
-    store.set("network_enabled", serde_json::json!(enabled));
-    store.save().map_err(|e| AppError::Config(e.to_string()))
+pub fn relay_set_network_enabled(
+    app: tauri::AppHandle,
+    settings: State<'_, AppSettings>,
+    enabled: bool,
+) -> Result<(), AppError> {
+    settings.set(&AppSettingsPatch { network_enabled: Some(enabled), ..Default::default() }, &app)
 }
 
 // ── Connection info ──
@@ -495,12 +490,12 @@ pub struct ConnectionInfo {
 
 #[tauri::command]
 pub fn relay_get_connection_info(
-    app: tauri::AppHandle,
+    settings: State<'_, AppSettings>,
     manager: State<'_, RelayManager>,
 ) -> Result<ConnectionInfo, AppError> {
     Ok(ConnectionInfo {
         peer_id: manager.peer_id().map_err(|e| AppError::Relay(e.to_string()))?.to_string(),
-        relay_url: relay_get_relay_url(app),
+        relay_url: settings.get().relay_url,
         status: format!("{:?}", manager.status().map_err(|e| AppError::Relay(e.to_string()))?).to_lowercase(),
     })
 }
@@ -510,55 +505,37 @@ pub fn relay_get_connection_info(
 /// Get the list of tools allowed for relay auto-response.
 /// Returns tool names that are explicitly allowed. Empty = use default (read-only).
 #[tauri::command]
-pub fn relay_get_allowed_tools(app: tauri::AppHandle) -> Vec<String> {
-    use tauri_plugin_store::StoreExt;
-    app.store("relay-settings.json")
-        .ok()
-        .and_then(|s| s.get("allowed_tools"))
-        .and_then(|v| {
-            v.as_array().map(|arr| {
-                arr.iter()
-                    .filter_map(|item| item.as_str().map(String::from))
-                    .collect()
-            })
-        })
-        .unwrap_or_default()
+pub fn relay_get_allowed_tools(settings: State<'_, AppSettings>) -> Vec<String> {
+    settings.get().allowed_tools
 }
 
 /// Set the list of tools allowed for relay auto-response.
 #[tauri::command]
-pub fn relay_set_allowed_tools(app: tauri::AppHandle, tools: Vec<String>) -> Result<(), AppError> {
-    use tauri_plugin_store::StoreExt;
-    let store = app
-        .store("relay-settings.json")
-        .map_err(|e| AppError::Config(e.to_string()))?;
-    store.set("allowed_tools", serde_json::json!(tools));
-    store.save().map_err(|e| AppError::Config(e.to_string()))
+pub fn relay_set_allowed_tools(
+    app: tauri::AppHandle,
+    settings: State<'_, AppSettings>,
+    tools: Vec<String>,
+) -> Result<(), AppError> {
+    settings.set(&AppSettingsPatch { allowed_tools: Some(tools), ..Default::default() }, &app)
 }
 
 // ── Relay URL commands ──
 
 #[tauri::command]
-pub fn relay_get_relay_url(app: tauri::AppHandle) -> String {
-    use tauri_plugin_store::StoreExt;
-    app.store("relay-settings.json")
-        .ok()
-        .and_then(|s| s.get("relay_url"))
-        .and_then(|v| v.as_str().map(String::from))
-        .unwrap_or_else(|| "wss://relay.windowagent.io/ws".to_string())
+pub fn relay_get_relay_url(settings: State<'_, AppSettings>) -> String {
+    settings.get().relay_url
 }
 
 #[tauri::command]
-pub fn relay_set_relay_url(app: tauri::AppHandle, url: String) -> Result<(), AppError> {
-    use tauri_plugin_store::StoreExt;
+pub fn relay_set_relay_url(
+    app: tauri::AppHandle,
+    settings: State<'_, AppSettings>,
+    url: String,
+) -> Result<(), AppError> {
     if url.trim().is_empty() {
         return Err(AppError::Validation("Relay URL cannot be empty".into()));
     }
-    let store = app
-        .store("relay-settings.json")
-        .map_err(|e| AppError::Config(e.to_string()))?;
-    store.set("relay_url", serde_json::json!(url));
-    store.save().map_err(|e| AppError::Config(e.to_string()))
+    settings.set(&AppSettingsPatch { relay_url: Some(url), ..Default::default() }, &app)
 }
 
 // ── Directory commands ──
@@ -601,19 +578,18 @@ pub async fn relay_send_friend_request(
 #[tauri::command]
 pub fn relay_update_directory_profile(
     app: tauri::AppHandle,
+    settings: State<'_, AppSettings>,
     manager: State<'_, RelayManager>,
     agent_name: String,
     agent_description: String,
     discoverable: bool,
 ) -> Result<(), AppError> {
-    // Persist settings
-    use tauri_plugin_store::StoreExt;
-    if let Ok(store) = app.store("relay-settings.json") {
-        store.set("discoverable", serde_json::json!(discoverable));
-        store.set("directory_agent_name", serde_json::json!(agent_name));
-        store.set("directory_agent_description", serde_json::json!(agent_description));
-        let _ = store.save();
-    }
+    settings.set(&AppSettingsPatch {
+        discoverable: Some(discoverable),
+        directory_agent_name: Some(agent_name.clone()),
+        directory_agent_description: Some(agent_description.clone()),
+        ..Default::default()
+    }, &app)?;
 
     manager
         .update_directory_profile(&agent_name, &agent_description, discoverable)
@@ -621,58 +597,28 @@ pub fn relay_update_directory_profile(
 }
 
 #[tauri::command]
-pub fn relay_get_directory_settings(app: tauri::AppHandle) -> Result<serde_json::Value, AppError> {
-    use tauri_plugin_store::StoreExt;
-    let store = app.store("relay-settings.json").ok();
-    let discoverable = store.as_ref()
-        .and_then(|s| s.get("discoverable"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true);
-    let agent_name = store.as_ref()
-        .and_then(|s| s.get("directory_agent_name"))
-        .and_then(|v| v.as_str().map(String::from))
-        .unwrap_or_default();
-    let agent_description = store.as_ref()
-        .and_then(|s| s.get("directory_agent_description"))
-        .and_then(|v| v.as_str().map(String::from))
-        .unwrap_or_default();
-
+pub fn relay_get_directory_settings(settings: State<'_, AppSettings>) -> Result<serde_json::Value, AppError> {
+    let s = settings.get();
     Ok(serde_json::json!({
-        "discoverable": discoverable,
-        "agent_name": agent_name,
-        "agent_description": agent_description,
+        "discoverable": s.discoverable,
+        "agent_name": s.directory_agent_name,
+        "agent_description": s.directory_agent_description,
     }))
 }
 
 #[tauri::command]
 pub fn relay_set_directory_settings(
     app: tauri::AppHandle,
+    settings: State<'_, AppSettings>,
     manager: State<'_, RelayManager>,
     discoverable: bool,
 ) -> Result<(), AppError> {
-    use tauri_plugin_store::StoreExt;
-    if let Ok(store) = app.store("relay-settings.json") {
-        store.set("discoverable", serde_json::json!(discoverable));
-        let _ = store.save();
-    }
+    settings.set(&AppSettingsPatch { discoverable: Some(discoverable), ..Default::default() }, &app)?;
 
     // Update on relay server if connected
     if manager.status().map(|s| s == crate::relay::manager::NetworkStatus::Active).unwrap_or(false) {
-        let agent_name = {
-            use tauri_plugin_store::StoreExt;
-            app.store("relay-settings.json").ok()
-                .and_then(|s| s.get("directory_agent_name"))
-                .and_then(|v| v.as_str().map(String::from))
-                .unwrap_or_default()
-        };
-        let agent_desc = {
-            use tauri_plugin_store::StoreExt;
-            app.store("relay-settings.json").ok()
-                .and_then(|s| s.get("directory_agent_description"))
-                .and_then(|v| v.as_str().map(String::from))
-                .unwrap_or_default()
-        };
-        let _ = manager.update_directory_profile(&agent_name, &agent_desc, discoverable);
+        let s = settings.get();
+        let _ = manager.update_directory_profile(&s.directory_agent_name, &s.directory_agent_description, discoverable);
     }
 
     Ok(())
