@@ -129,7 +129,7 @@ export default function Sidebar() {
           onClick={() => toggleView("network")}
         >
           <Network size={20} />
-          <span>{t("settings:tabs.network")}</span>
+          <span>{t("network:panel.title")}</span>
         </div>
         <div
           className={`menu-item ${mainView === "vault" ? "active" : ""}`}

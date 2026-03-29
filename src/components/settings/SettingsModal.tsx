@@ -6,14 +6,15 @@ import { useNavigationStore } from "../../stores/navigationStore";
 import GeneralSettingsPanel from "./GeneralSettingsPanel";
 import ThinkingSettingsPanel from "./ThinkingSettingsPanel";
 import BrandingSettingsPanel from "./BrandingSettingsPanel";
-import NetworkSettingsPanel from "./NetworkSettingsPanel";
+import ApiServerSection from "./ApiServerSection";
+import ProxySection from "./ProxySection";
 import ExportSection from "./ExportSection";
 import CredentialManager from "./CredentialManager";
-import type { NetworkSettingsPanelRef } from "./NetworkSettingsPanel";
+import type { ApiServerSectionRef } from "./ApiServerSection";
 import type { ThinkingSettingsPanelRef } from "./ThinkingSettingsPanel";
 import type { BrandingSettingsPanelRef } from "./BrandingSettingsPanel";
 
-type Tab = "general" | "thinking" | "branding" | "credentials" | "backup" | "network";
+type Tab = "api" | "thinking" | "tools" | "appearance" | "credentials" | "backup";
 
 export default function SettingsPage() {
   const { t } = useTranslation("settings");
@@ -23,18 +24,16 @@ export default function SettingsPage() {
   const goBack = useNavigationStore((s) => s.goBack);
   const isOpen = mainView === "settings";
 
-  const [tab, setTab] = useState<Tab>("general");
+  const [tab, setTab] = useState<Tab>("api");
 
-  const networkRef = useRef<NetworkSettingsPanelRef>(null);
+  const apiRef = useRef<ApiServerSectionRef>(null);
   const thinkingRef = useRef<ThinkingSettingsPanelRef>(null);
   const brandingRef = useRef<BrandingSettingsPanelRef>(null);
 
   useEffect(() => {
     if (isOpen) {
-      // If no API key, start on network tab where API settings live
-      const defaultTab = store.hasApiKey ? "general" : "network";
+      const defaultTab = store.hasApiKey ? "appearance" : "api";
       setTab(defaultTab);
-      // Clear stale errors from previous visits
       if (settingsError) {
         useSettingsStore.setState({ settingsError: null });
       }
@@ -43,13 +42,13 @@ export default function SettingsPage() {
 
   const handleSave = () => {
     const branding = brandingRef.current?.getValues();
-    const networkValues = networkRef.current?.getValues();
+    const apiValues = apiRef.current?.getValues();
     const thinking = thinkingRef.current?.getValues();
     saveSettings({
-      apiKey: networkValues?.apiKey ?? "",
-      clearApiKey: networkValues?.clearApiKey ?? false,
-      baseUrl: networkValues?.baseUrl ?? "",
-      modelName: networkValues?.modelName ?? "",
+      apiKey: apiValues?.apiKey ?? "",
+      clearApiKey: apiValues?.clearApiKey ?? false,
+      baseUrl: apiValues?.baseUrl ?? "",
+      modelName: apiValues?.modelName ?? "",
       thinkingEnabled: thinking?.thinkingEnabled ?? true,
       thinkingBudget: thinking?.thinkingBudget ?? 4096,
       companyName: branding?.companyName.trim(),
@@ -65,7 +64,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-tabs" role="tablist">
-        {(["general", "thinking", "branding", "credentials", "backup", "network"] as const).map((key) => (
+        {(["api", "thinking", "tools", "appearance", "credentials", "backup"] as const).map((key) => (
           <button
             key={key}
             role="tab"
@@ -82,20 +81,21 @@ export default function SettingsPage() {
 
       <div className="settings-page-body">
         <div className="settings-page-content" role="tabpanel" id={`settings-tabpanel-${tab}`} aria-labelledby={`settings-tab-${tab}`}>
-          <div style={{ display: tab === "general" ? undefined : "none" }}>
-            <GeneralSettingsPanel />
+          <div style={{ display: tab === "api" ? undefined : "none" }}>
+            <ApiServerSection ref={apiRef} isOpen={isOpen} />
+          </div>
+          <div style={{ display: tab === "tools" ? undefined : "none" }}>
+            <ProxySection isOpen={isOpen} />
           </div>
           <div style={{ display: tab === "thinking" ? undefined : "none" }}>
             <ThinkingSettingsPanel ref={thinkingRef} isOpen={isOpen} />
           </div>
-          <div style={{ display: tab === "branding" ? undefined : "none" }}>
+          <div style={{ display: tab === "appearance" ? undefined : "none" }}>
+            <GeneralSettingsPanel />
             <BrandingSettingsPanel ref={brandingRef} isOpen={isOpen} />
           </div>
           {tab === "credentials" && <CredentialManager />}
           {tab === "backup" && <ExportSection />}
-          <div style={{ display: tab === "network" ? undefined : "none" }}>
-            <NetworkSettingsPanel ref={networkRef} isOpen={isOpen} />
-          </div>
         </div>
       </div>
 

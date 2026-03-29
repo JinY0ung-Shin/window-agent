@@ -364,6 +364,20 @@
   border-color: var(--danger-border);
 }
 
+/* ── Network Settings Modal ── */
+.network-settings-modal {
+  max-width: 520px;
+}
+
+.network-settings-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 0;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 /* ── Network Panel ── */
 .network-panel {
   display: flex;
@@ -389,12 +403,12 @@
 .network-panel-header h2 {
   font-size: 1rem;
   font-weight: 600;
-  flex: 1;
 }
 
 .network-panel-header .network-panel-actions {
   display: flex;
   gap: 4px;
+  margin-left: auto;
 }
 
 .network-panel-empty {

@@ -77,11 +77,16 @@
     "retryTitle": "재시도",
     "queued": "대기 중"
   },
+  "settingsSection": {
+    "title": "네트워크 설정",
+    "relay": "릴레이 서버",
+    "browser": "브라우저 프록시"
+  },
   "panel": {
     "title": "{{term_agent}} 네트워크",
     "inviteTitle": "초대",
     "inactive": "네트워크가 비활성 상태입니다.",
-    "inactiveHint": "설정에서 {{term_agent}} 네트워크를 활성화하세요.",
+    "inactiveHint": "⚙ 버튼을 눌러 네트워크를 활성화하세요.",
     "refreshTitle": "새로고침"
   },
   "peer": {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Network, Users, RefreshCw } from "lucide-react";
+import { Network, Users, RefreshCw, Settings } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import DraggableHeader from "../layout/DraggableHeader";
 import EmptyState from "../common/EmptyState";
@@ -8,11 +8,13 @@ import ContactList from "./ContactList";
 import PeerThread from "./PeerThread";
 import InviteDialog from "./InviteDialog";
 import ContactDetailModal from "./ContactDetailModal";
+import NetworkSettingsModal from "./NetworkSettingsModal";
 
 export default function NetworkPanel() {
   const { t } = useTranslation("network");
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [detailContactId, setDetailContactId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const status = useNetworkStore((s) => s.status);
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const refreshContacts = useNetworkStore((s) => s.refreshContacts);
@@ -30,6 +32,13 @@ export default function NetworkPanel() {
         <DraggableHeader className="network-panel-header">
           <Network size={20} />
           <h2>{t("panel.title")}</h2>
+          <button
+            className="icon-btn"
+            onClick={() => setShowSettings(true)}
+            title={t("settingsSection.title")}
+          >
+            <Settings size={16} />
+          </button>
         </DraggableHeader>
         <EmptyState
           icon={<Network size={40} strokeWidth={1.5} />}
@@ -37,6 +46,9 @@ export default function NetworkPanel() {
           hint={t("panel.inactiveHint")}
           className="network-panel-empty"
         />
+        {showSettings && (
+          <NetworkSettingsModal onClose={() => setShowSettings(false)} />
+        )}
       </div>
     );
   }
@@ -48,6 +60,13 @@ export default function NetworkPanel() {
         <DraggableHeader className="network-panel-header">
           <Network size={20} />
           <h2>{t("panel.title")}</h2>
+          <button
+            className="icon-btn"
+            onClick={() => setShowSettings(true)}
+            title={t("settingsSection.title")}
+          >
+            <Settings size={16} />
+          </button>
           <div className="network-panel-actions">
             <button
               className="icon-btn"
@@ -90,6 +109,10 @@ export default function NetworkPanel() {
           contactId={detailContactId}
           onClose={() => setDetailContactId(null)}
         />
+      )}
+
+      {showSettings && (
+        <NetworkSettingsModal onClose={() => setShowSettings(false)} />
       )}
     </div>
   );

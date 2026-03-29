@@ -77,11 +77,16 @@
     "retryTitle": "Retry",
     "queued": "Queued"
   },
+  "settingsSection": {
+    "title": "Network Settings",
+    "relay": "Relay Server",
+    "browser": "Browser Proxy"
+  },
   "panel": {
     "title": "{{term_agent_cap}} Network",
     "inviteTitle": "Invite",
     "inactive": "Network is inactive.",
-    "inactiveHint": "Enable {{term_agent}} network in settings.",
+    "inactiveHint": "Press ⚙ to enable the network.",
     "refreshTitle": "Refresh"
   },
   "peer": {

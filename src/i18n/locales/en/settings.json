@@ -1,15 +1,16 @@
 {
   "title": "Settings",
   "tabs": {
-    "general": "General",
+    "api": "API Server",
     "thinking": "Thinking",
-    "branding": "Branding",
+    "tools": "Tools",
+    "appearance": "Appearance",
     "credentials": "Environment Variables",
-    "backup": "Backup/Restore",
-    "network": "Network"
+    "backup": "Backup/Restore"
   },
   "sections": {
     "apiServer": "API Server",
+    "browser": "Browser",
     "agentNetwork": "{{term_agent_cap}} Network"
   },
   "general": {
