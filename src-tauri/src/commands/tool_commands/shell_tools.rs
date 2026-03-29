@@ -525,16 +525,54 @@ pub(super) async fn tool_run_shell(
         ));
     }
 
+    // ── Resolve {{credential:ID}} placeholders inline ──
+    // LLMs sometimes use browser_type placeholder syntax in shell commands.
+    // Resolve them here so both $CRED_* env vars and {{credential:ID}} work.
+    let mut inline_redact_pairs: Vec<(String, String)> = Vec::new();
+    let command = {
+        let cred_map: std::collections::HashMap<&str, &str> = credentials
+            .iter()
+            .map(|e| (e.id.as_str(), e.value.as_str()))
+            .collect();
+        let prefix = "{{credential:";
+        let suffix = "}}";
+        let mut result = String::with_capacity(command.len());
+        let mut pos = 0;
+        let bytes = command.as_str();
+        while let Some(start) = bytes[pos..].find(prefix) {
+            let abs_start = pos + start;
+            let id_start = abs_start + prefix.len();
+            if let Some(end) = bytes[id_start..].find(suffix) {
+                let id = &bytes[id_start..id_start + end];
+                if let Some(&value) = cred_map.get(id) {
+                    result.push_str(&bytes[pos..abs_start]);
+                    result.push_str(value);
+                    inline_redact_pairs.push((id.to_string(), value.to_string()));
+                    pos = id_start + end + suffix.len();
+                    continue;
+                }
+            }
+            // Not a valid placeholder or unknown credential — keep as-is
+            result.push_str(&bytes[pos..pos + start + prefix.len()]);
+            pos = pos + start + prefix.len();
+        }
+        if pos < bytes.len() {
+            result.push_str(&bytes[pos..]);
+        }
+        result
+    };
+
     // ── SSH security hardening ──
     let shell = resolve_shell();
     let sanitize_result = sanitize_ssh_command(&command, shell.is_posix)?;
     let effective_command = sanitize_result.command.clone();
 
-    // Build redaction pairs: (credential_id, secret_value)
-    let redact_pairs: Vec<(String, String)> = credentials
+    // Build redaction pairs: env-injected + inline-resolved
+    let mut redact_pairs: Vec<(String, String)> = credentials
         .iter()
         .map(|e| (e.id.clone(), e.value.clone()))
         .collect();
+    redact_pairs.extend(inline_redact_pairs);
 
     // Clone credential env vars for the blocking thread
     let env_vars: Vec<(String, String)> = credentials

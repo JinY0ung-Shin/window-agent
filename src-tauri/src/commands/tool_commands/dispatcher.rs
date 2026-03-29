@@ -326,12 +326,23 @@ pub(crate) async fn execute_tool_inner(
         "run_shell" => {
             let workspace = super::scope::resolve_workspace_path(app, db, conversation_id)?;
             let default_dir = workspace.to_string_lossy().to_string();
-            let allowed_ids = credential_service::get_agent_allowed_credentials(app, db, conversation_id)
-                .unwrap_or_default();
+            let allowed_ids = match credential_service::get_agent_allowed_credentials(app, db, conversation_id) {
+                Ok(ids) => ids,
+                Err(e) => {
+                    tracing::warn!("Failed to load allowed credentials for conversation {conversation_id}: {e}");
+                    std::collections::HashSet::new()
+                }
+            };
             let cred_entries = if allowed_ids.is_empty() {
                 Vec::new()
             } else {
-                credential_service::resolve_credential_env_entries(app, &allowed_ids)?
+                match credential_service::resolve_credential_env_entries(app, &allowed_ids) {
+                    Ok(entries) => entries,
+                    Err(e) => {
+                        tracing::warn!("Failed to resolve credential env entries: {e}");
+                        Vec::new()
+                    }
+                }
             };
             tool_run_shell(input, &default_dir, &cred_entries).await
         }
@@ -433,8 +444,13 @@ pub(crate) async fn execute_tool_inner_for_agent(
             let default_dir = std::env::var("HOME")
                 .or_else(|_| std::env::var("USERPROFILE"))
                 .unwrap_or_else(|_| "/tmp".to_string());
-            let allowed_ids = credential_service::get_agent_allowed_credentials_by_agent_id(app, db, agent_id)
-                .unwrap_or_default();
+            let allowed_ids = match credential_service::get_agent_allowed_credentials_by_agent_id(app, db, agent_id) {
+                Ok(ids) => ids,
+                Err(e) => {
+                    tracing::warn!("Failed to load allowed credentials for agent {agent_id}: {e}");
+                    std::collections::HashSet::new()
+                }
+            };
             let cred_entries = if allowed_ids.is_empty() {
                 Vec::new()
             } else {
