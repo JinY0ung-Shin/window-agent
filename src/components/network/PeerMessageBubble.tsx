@@ -19,6 +19,11 @@ export default function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
   return (
     <div className={`peer-msg ${isOutgoing ? "outgoing" : "incoming"}`}>
       <div className="peer-msg-bubble">
+        {!isOutgoing && msg.responding_agent_id && (
+          <div className="peer-msg-agent-tag">
+            {msg.sender_agent !== "local" ? msg.sender_agent : msg.responding_agent_id.slice(0, 8)}
+          </div>
+        )}
         <div className="peer-msg-content">
           <MessageBody content={msg.content} />
         </div>

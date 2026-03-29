@@ -421,6 +421,7 @@ mod tests {
                 thinking_enabled: None,
                 thinking_budget: None,
                 is_default: None,
+                network_visible: None,
                 sort_order: None,
             },
         )

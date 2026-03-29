@@ -18,6 +18,7 @@ pub struct ContactRow {
     pub status: String,
     pub invite_card_raw: Option<String>,
     pub addresses_json: Option<String>,
+    pub published_agents_json: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -32,6 +33,7 @@ pub struct ContactUpdate {
     pub capabilities_json: Option<String>,
     pub status: Option<String>,
     pub addresses_json: Option<Option<String>>,
+    pub published_agents_json: Option<Option<String>>,
 }
 
 // ── Contact operations ──
@@ -39,8 +41,8 @@ pub struct ContactUpdate {
 pub fn insert_contact(db: &Database, contact: &ContactRow) -> Result<(), DbError> {
     db.with_conn(|conn| {
         conn.execute(
-            "INSERT INTO contacts (id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            "INSERT INTO contacts (id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, published_agents_json, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             rusqlite::params![
                 contact.id,
                 contact.peer_id,
@@ -54,6 +56,7 @@ pub fn insert_contact(db: &Database, contact: &ContactRow) -> Result<(), DbError
                 contact.status,
                 contact.invite_card_raw,
                 contact.addresses_json,
+                contact.published_agents_json,
                 contact.created_at,
                 contact.updated_at,
             ],
@@ -65,7 +68,7 @@ pub fn insert_contact(db: &Database, contact: &ContactRow) -> Result<(), DbError
 pub fn get_contact(db: &Database, id: &str) -> Result<Option<ContactRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at
+            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, published_agents_json, created_at, updated_at
              FROM contacts WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(rusqlite::params![id], map_contact_row)?;
@@ -82,7 +85,7 @@ pub fn get_contact_by_peer_id(
 ) -> Result<Option<ContactRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at
+            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, published_agents_json, created_at, updated_at
              FROM contacts WHERE peer_id = ?1",
         )?;
         let mut rows = stmt.query_map(rusqlite::params![peer_id], map_contact_row)?;
@@ -96,7 +99,7 @@ pub fn get_contact_by_peer_id(
 pub fn list_contacts(db: &Database) -> Result<Vec<ContactRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, created_at, updated_at
+            "SELECT id, peer_id, public_key, display_name, agent_name, agent_description, local_agent_id, mode, capabilities_json, status, invite_card_raw, addresses_json, published_agents_json, created_at, updated_at
              FROM contacts ORDER BY created_at DESC",
         )?;
         let rows = stmt.query_map([], map_contact_row)?;
@@ -143,6 +146,10 @@ pub fn update_contact(
         }
         if let Some(ref v) = updates.addresses_json {
             sets.push(format!("addresses_json = ?{}", params.len() + 1));
+            params.push(Box::new(v.clone()));
+        }
+        if let Some(ref v) = updates.published_agents_json {
+            sets.push(format!("published_agents_json = ?{}", params.len() + 1));
             params.push(Box::new(v.clone()));
         }
 
@@ -201,7 +208,8 @@ fn map_contact_row(row: &rusqlite::Row) -> Result<ContactRow, rusqlite::Error> {
         status: row.get(9)?,
         invite_card_raw: row.get(10)?,
         addresses_json: row.get(11)?,
-        created_at: row.get(12)?,
-        updated_at: row.get(13)?,
+        published_agents_json: row.get(12)?,
+        created_at: row.get(13)?,
+        updated_at: row.get(14)?,
     })
 }

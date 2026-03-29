@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use wa_shared::protocol::PublishedAgent;
 
 pub const PROTOCOL_VERSION: u32 = 1;
 
@@ -19,12 +20,21 @@ pub enum Payload {
         agent_name: String,
         agent_description: String,
         public_key: String,
+        /// Agents published by the sender for network visitors.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        published_agents: Option<Vec<PublishedAgent>>,
     },
     MessageRequest {
         content: String,
+        /// Which agent the sender wants to talk to (chosen by remote peer).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        target_agent_id: Option<String>,
     },
     MessageResponse {
         content: String,
+        /// Which agent actually generated this response.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        responding_agent_id: Option<String>,
     },
     Ack {
         acked_message_id: String,
@@ -63,6 +73,7 @@ mod tests {
             "test-agent".into(),
             Payload::MessageRequest {
                 content: "hello".into(),
+                target_agent_id: None,
             },
         );
         let json = serde_json::to_string(&env).unwrap();
@@ -78,6 +89,7 @@ mod tests {
             agent_name: "agent1".into(),
             agent_description: "A test agent".into(),
             public_key: "AAAA".into(),
+            published_agents: None,
         };
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains("\"type\":\"Introduce\""));
@@ -91,12 +103,15 @@ mod tests {
                 agent_name: "a".into(),
                 agent_description: "b".into(),
                 public_key: "pk".into(),
+                published_agents: None,
             },
             Payload::MessageRequest {
                 content: "c".into(),
+                target_agent_id: None,
             },
             Payload::MessageResponse {
                 content: "d".into(),
+                responding_agent_id: None,
             },
             Payload::Ack {
                 acked_message_id: "e".into(),
@@ -135,6 +150,7 @@ mod tests {
             "agent".into(),
             Payload::MessageRequest {
                 content: "hi".into(),
+                target_agent_id: None,
             },
         );
         assert_eq!(env.correlation_id, None);

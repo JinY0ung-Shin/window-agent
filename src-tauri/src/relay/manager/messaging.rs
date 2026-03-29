@@ -129,6 +129,7 @@ impl RelayManager {
             status: "pending_outgoing".to_string(),
             invite_card_raw: None,
             addresses_json: None,
+            published_agents_json: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -144,6 +145,16 @@ impl RelayManager {
             if name.is_empty() { "Agent".to_string() } else { name }
         };
 
+        // Include published agents list
+        let published_agents = {
+            let visible = crate::db::agent_operations::list_network_visible_agents_impl(&db).ok();
+            visible.map(|agents| agents.into_iter().map(|a| wa_shared::protocol::PublishedAgent {
+                agent_id: a.id,
+                name: a.name,
+                description: a.description,
+            }).collect::<Vec<_>>())
+        };
+
         let introduce_envelope = Envelope {
             version: 1,
             message_id: uuid::Uuid::new_v4().to_string(),
@@ -154,6 +165,7 @@ impl RelayManager {
                 agent_name: my_agent_name,
                 agent_description: String::new(),
                 public_key: my_public_b64,
+                published_agents,
             },
         };
 
@@ -176,6 +188,8 @@ impl RelayManager {
                     delivery_state: "sending".to_string(),
                     retry_count: 0,
                     raw_envelope: Some(encrypted_json),
+                    target_agent_id: None,
+                    responding_agent_id: None,
                     created_at: now_msg.clone(),
                 };
                 let _ = relay_db::insert_peer_message(&db, &msg);
@@ -208,6 +222,8 @@ impl RelayManager {
                     delivery_state: "queued".to_string(),
                     retry_count: 0,
                     raw_envelope: encrypted,
+                    target_agent_id: None,
+                    responding_agent_id: None,
                     created_at: now_msg.clone(),
                 };
                 let _ = relay_db::insert_peer_message(&db, &msg);

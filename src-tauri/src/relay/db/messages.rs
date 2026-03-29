@@ -15,6 +15,8 @@ pub struct PeerMessageRow {
     pub delivery_state: String,
     pub retry_count: i32,
     pub raw_envelope: Option<String>,
+    pub target_agent_id: Option<String>,
+    pub responding_agent_id: Option<String>,
     pub created_at: String,
 }
 
@@ -24,8 +26,8 @@ pub struct PeerMessageRow {
 pub fn insert_peer_message(db: &Database, msg: &PeerMessageRow) -> Result<bool, DbError> {
     db.with_conn(|conn| {
         let affected = conn.execute(
-            "INSERT OR IGNORE INTO peer_messages (id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT OR IGNORE INTO peer_messages (id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, target_agent_id, responding_agent_id, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             rusqlite::params![
                 msg.id,
                 msg.thread_id,
@@ -38,6 +40,8 @@ pub fn insert_peer_message(db: &Database, msg: &PeerMessageRow) -> Result<bool, 
                 msg.delivery_state,
                 msg.retry_count,
                 msg.raw_envelope,
+                msg.target_agent_id,
+                msg.responding_agent_id,
                 msg.created_at,
             ],
         )?;
@@ -51,7 +55,7 @@ pub fn get_thread_messages(
 ) -> Result<Vec<PeerMessageRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, created_at
+            "SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, target_agent_id, responding_agent_id, created_at
              FROM peer_messages WHERE thread_id = ?1 ORDER BY created_at ASC, id ASC",
         )?;
         let rows = stmt.query_map(rusqlite::params![thread_id], map_message_row)?;
@@ -68,7 +72,7 @@ pub fn get_thread_messages_recent(
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
             "SELECT * FROM (
-                SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, created_at
+                SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, target_agent_id, responding_agent_id, created_at
                 FROM peer_messages WHERE thread_id = ?1 ORDER BY created_at DESC, id DESC LIMIT ?2
              ) ORDER BY created_at ASC, id ASC",
         )?;
@@ -105,7 +109,7 @@ pub fn update_message_state(
 pub fn get_peer_message(db: &Database, id: &str) -> Result<Option<PeerMessageRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, created_at
+            "SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, target_agent_id, responding_agent_id, created_at
              FROM peer_messages WHERE id = ?1",
         )?;
         let mut rows = stmt.query_map(rusqlite::params![id], map_message_row)?;
@@ -122,7 +126,7 @@ pub fn get_message_by_unique_id(
 ) -> Result<Option<PeerMessageRow>, DbError> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
-            "SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, created_at
+            "SELECT id, thread_id, message_id_unique, correlation_id, direction, sender_agent, content, approval_state, delivery_state, retry_count, raw_envelope, target_agent_id, responding_agent_id, created_at
              FROM peer_messages WHERE message_id_unique = ?1",
         )?;
         let mut rows = stmt.query_map(rusqlite::params![unique_id], map_message_row)?;
@@ -161,6 +165,8 @@ fn map_message_row(row: &rusqlite::Row) -> Result<PeerMessageRow, rusqlite::Erro
         delivery_state: row.get(8)?,
         retry_count: row.get(9)?,
         raw_envelope: row.get(10)?,
-        created_at: row.get(11)?,
+        target_agent_id: row.get(11)?,
+        responding_agent_id: row.get(12)?,
+        created_at: row.get(13)?,
     })
 }

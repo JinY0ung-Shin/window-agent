@@ -20,6 +20,8 @@ interface Props {
   onThinkingEnabledChange: (enabled: boolean | null) => void;
   thinkingBudget: string;
   onThinkingBudgetChange: (budget: string) => void;
+  networkVisible: boolean;
+  onNetworkVisibleChange: (visible: boolean) => void;
   canDelete: boolean;
   onDelete: () => void;
 }
@@ -32,6 +34,7 @@ export default function AgentMetadataForm({
   temperature, onTemperatureChange,
   thinkingEnabled, onThinkingEnabledChange,
   thinkingBudget, onThinkingBudgetChange,
+  networkVisible, onNetworkVisibleChange,
   canDelete, onDelete,
 }: Props) {
   const { t } = useTranslation("glossary");
@@ -133,6 +136,20 @@ export default function AgentMetadataForm({
           />
         </div>
       )}
+
+      <div className="agent-editor-divider" />
+
+      <div className="form-group">
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={networkVisible}
+            onChange={(e) => onNetworkVisibleChange(e.target.checked)}
+          />
+          {ta("metadata.networkVisible")}
+        </label>
+        <span className="form-text">{ta("metadata.networkVisibleHint")}</span>
+      </div>
 
       {canDelete && (
         <>

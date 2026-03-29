@@ -47,6 +47,12 @@ pub async fn init_db(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     .execute(pool)
     .await?;
 
+    // Add agents_json column (incremental migration)
+    sqlx::query("ALTER TABLE peer_directory ADD COLUMN agents_json TEXT")
+        .execute(pool)
+        .await
+        .ok(); // Ignore error if column already exists
+
     Ok(())
 }
 
@@ -151,6 +157,7 @@ pub struct DirectoryRow {
     pub agent_description: String,
     pub discoverable: bool,
     pub last_seen: String,
+    pub agents_json: Option<String>,
 }
 
 /// Insert or update a peer's directory profile.
@@ -161,15 +168,17 @@ pub async fn upsert_profile(
     agent_name: &str,
     agent_description: &str,
     discoverable: bool,
+    agents_json: Option<&str>,
 ) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        INSERT INTO peer_directory (peer_id, public_key, agent_name, agent_description, discoverable, last_seen, updated_at)
-        VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        INSERT INTO peer_directory (peer_id, public_key, agent_name, agent_description, discoverable, agents_json, last_seen, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         ON CONFLICT(peer_id) DO UPDATE SET
             agent_name = excluded.agent_name,
             agent_description = excluded.agent_description,
             discoverable = excluded.discoverable,
+            agents_json = excluded.agents_json,
             last_seen = datetime('now'),
             updated_at = datetime('now')
         "#,
@@ -179,6 +188,7 @@ pub async fn upsert_profile(
     .bind(agent_name)
     .bind(agent_description)
     .bind(discoverable)
+    .bind(agents_json)
     .execute(pool)
     .await?;
     Ok(())
@@ -212,9 +222,10 @@ pub async fn search_directory(
         r#"
         SELECT COUNT(*) FROM peer_directory
         WHERE discoverable = 1
-          AND (agent_name LIKE ? OR peer_id LIKE ?)
+          AND (agent_name LIKE ? OR peer_id LIKE ? OR agents_json LIKE ?)
         "#,
     )
+    .bind(&pattern)
     .bind(&pattern)
     .bind(&pattern)
     .fetch_one(pool)
@@ -222,14 +233,15 @@ pub async fn search_directory(
 
     let rows: Vec<DirectoryRow> = sqlx::query_as(
         r#"
-        SELECT peer_id, public_key, agent_name, agent_description, discoverable, last_seen
+        SELECT peer_id, public_key, agent_name, agent_description, discoverable, last_seen, agents_json
         FROM peer_directory
         WHERE discoverable = 1
-          AND (agent_name LIKE ? OR peer_id LIKE ?)
+          AND (agent_name LIKE ? OR peer_id LIKE ? OR agents_json LIKE ?)
         ORDER BY last_seen DESC
         LIMIT ? OFFSET ?
         "#,
     )
+    .bind(&pattern)
     .bind(&pattern)
     .bind(&pattern)
     .bind(limit)
@@ -250,7 +262,7 @@ pub async fn get_peer_from_directory(
 ) -> Result<Option<DirectoryRow>, sqlx::Error> {
     let row: Option<DirectoryRow> = sqlx::query_as(
         r#"
-        SELECT peer_id, public_key, agent_name, agent_description, discoverable, last_seen
+        SELECT peer_id, public_key, agent_name, agent_description, discoverable, last_seen, agents_json
         FROM peer_directory
         WHERE peer_id = ? AND discoverable = 1
         "#,

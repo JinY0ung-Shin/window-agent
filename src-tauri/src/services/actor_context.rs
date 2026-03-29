@@ -521,6 +521,7 @@ mod tests {
                 thinking_enabled: Some(true),
                 thinking_budget: Some(8000),
                 is_default: None,
+                network_visible: None,
                 sort_order: None,
             },
         )
@@ -652,6 +653,7 @@ mod tests {
                 thinking_enabled: None,
                 thinking_budget: None,
                 is_default: None,
+                network_visible: None,
                 sort_order: None,
             },
         )
@@ -704,6 +706,7 @@ mod tests {
                 thinking_enabled: None,
                 thinking_budget: None,
                 is_default: None,
+                network_visible: None,
                 sort_order: None,
             },
         )

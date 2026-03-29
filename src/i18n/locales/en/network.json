@@ -94,6 +94,7 @@
     "offline": "○ Offline",
     "noMessages": "No messages yet. Start a conversation.",
     "inputPlaceholder": "Type a message...",
+    "defaultAgent": "Default Agent",
     "pendingApprovalHint": "Approve this contact before sending messages"
   },
   "directory": {
@@ -128,6 +129,7 @@
     "descriptionLabel": "Description",
     "boundAgentLabel": "Assigned {{term_agent_cap}}",
     "boundAgentHint": "{{term_agent_cap}} that responds to messages from this contact",
+    "publishedAgents": "Published Agents",
     "modeLabel": "Mode",
     "secretaryMode": "Secretary",
     "delegateHint": "Delegate mode coming in Phase 2",

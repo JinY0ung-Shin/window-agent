@@ -94,6 +94,7 @@
     "offline": "○ 오프라인",
     "noMessages": "아직 메시지가 없습니다. 대화를 시작하세요.",
     "inputPlaceholder": "메시지를 입력하세요...",
+    "defaultAgent": "기본 에이전트",
     "pendingApprovalHint": "메시지를 보내려면 먼저 연락처를 승인하세요"
   },
   "directory": {
@@ -128,6 +129,7 @@
     "descriptionLabel": "설명",
     "boundAgentLabel": "담당 {{term_agent}}",
     "boundAgentHint": "이 연락처의 메시지에 응답할 {{term_agent}}",
+    "publishedAgents": "공개된 에이전트",
     "modeLabel": "모드",
     "secretaryMode": "비서 (Secretary)",
     "delegateHint": "대리인 모드는 Phase 2에서 지원 예정",

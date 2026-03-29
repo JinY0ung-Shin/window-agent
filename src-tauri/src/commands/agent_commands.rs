@@ -199,6 +199,7 @@ pub fn sync_agents_from_fs(
                     thinking_enabled: None,
                     thinking_budget: None,
                     is_default: None,
+                    network_visible: None,
                     sort_order: None,
                 },
             );
@@ -267,6 +268,7 @@ pub fn seed_manager_agent(
             thinking_enabled: None,
             thinking_budget: None,
             is_default: Some(true),
+            network_visible: None,
             sort_order: Some(0),
         },
     )?;

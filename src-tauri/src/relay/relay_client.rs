@@ -85,6 +85,7 @@ enum Command {
         agent_name: String,
         agent_description: String,
         discoverable: bool,
+        agents: Option<Vec<wa_shared::protocol::PublishedAgent>>,
     },
     SearchDirectory {
         query: String,
@@ -148,12 +149,14 @@ impl RelayHandle {
         agent_name: String,
         agent_description: String,
         discoverable: bool,
+        agents: Option<Vec<wa_shared::protocol::PublishedAgent>>,
     ) -> Result<(), RelayClientError> {
         self.cmd_tx
             .send(Command::UpdateProfile {
                 agent_name,
                 agent_description,
                 discoverable,
+                agents,
             })
             .map_err(|_| RelayClientError::Closed)
     }
@@ -507,10 +510,12 @@ where
             agent_name,
             agent_description,
             discoverable,
+            agents,
         } => ClientMessage::UpdateProfile {
             agent_name,
             agent_description,
             discoverable,
+            agents,
         },
         Command::SearchDirectory {
             query,

@@ -18,10 +18,17 @@ impl RelayManager {
     fn auto_register_profile(&self, app_handle: &tauri::AppHandle, handle: &RelayHandle) {
         use tauri::Manager;
         let s = app_handle.state::<crate::settings::AppSettings>().get();
+        let db = app_handle.state::<crate::db::Database>();
+        let published_agents = crate::db::agent_operations::list_network_visible_agents_impl(&db)
+            .ok()
+            .map(|agents| agents.into_iter().map(|a| wa_shared::protocol::PublishedAgent {
+                agent_id: a.id, name: a.name, description: a.description,
+            }).collect::<Vec<_>>());
         let _ = handle.update_profile(
             s.directory_agent_name.clone(),
             s.directory_agent_description.clone(),
             s.discoverable,
+            published_agents,
         );
     }
 
@@ -220,9 +227,9 @@ impl RelayManager {
 
         // Handle Introduce from unknown peer
         if db_peer_id.is_none() {
-            if let Payload::Introduce { ref agent_name, ref agent_description, ref public_key } = envelope.payload {
+            if let Payload::Introduce { ref agent_name, ref agent_description, ref public_key, ref published_agents } = envelope.payload {
                 self.handle_introduce(
-                    app_handle, &db, sender_relay_peer_id, agent_name, agent_description, public_key, &encrypted,
+                    app_handle, &db, sender_relay_peer_id, agent_name, agent_description, public_key, published_agents.as_deref(), &encrypted,
                 );
                 // Send peer ACK
                 if let Some(h) = self.relay_handle.lock().ok().and_then(|h| h.clone()) {
@@ -237,18 +244,25 @@ impl RelayManager {
         let contact_peer_id = db_peer_id.unwrap();
 
         // Introduce from already-known peer: if we sent a friend request (pending_outgoing),
-        // auto-transition to accepted.
-        if matches!(envelope.payload, Payload::Introduce { .. }) {
+        // auto-transition to accepted. Also update published_agents.
+        if let Payload::Introduce { ref published_agents, .. } = envelope.payload {
             if let Ok(Some(contact)) = relay_db::get_contact_by_peer_id(&db, &contact_peer_id) {
+                // Always update published_agents_json when we receive Introduce
+                let pa_json = published_agents.as_ref()
+                    .and_then(|a| serde_json::to_string(a).ok());
+                let mut update = relay_db::ContactUpdate {
+                    published_agents_json: Some(pa_json),
+                    ..Default::default()
+                };
                 if contact.status == "pending_outgoing" {
-                    let _ = relay_db::update_contact(&db, &contact.id, relay_db::ContactUpdate {
-                        status: Some("accepted".to_string()),
-                        capabilities_json: Some(
-                            serde_json::to_string(&crate::relay::capability::CapabilitySet::default_phase1())
-                                .unwrap_or_else(|_| "{}".into()),
-                        ),
-                        ..Default::default()
-                    });
+                    update.status = Some("accepted".to_string());
+                    update.capabilities_json = Some(
+                        serde_json::to_string(&crate::relay::capability::CapabilitySet::default_phase1())
+                            .unwrap_or_else(|_| "{}".into()),
+                    );
+                }
+                let _ = relay_db::update_contact(&db, &contact.id, update);
+                if contact.status == "pending_outgoing" {
                     let _ = app_handle.emit("relay:contact-accepted", serde_json::json!({
                         "contact_id": contact.id,
                         "peer_id": contact_peer_id,
@@ -297,6 +311,7 @@ impl RelayManager {
         agent_name: &str,
         agent_description: &str,
         public_key_b64: &str,
+        published_agents: Option<&[wa_shared::protocol::PublishedAgent]>,
         _encrypted: &EncryptedEnvelope,
     ) {
         // Verify: derive relay_peer_id from provided public_key and check it matches
@@ -320,6 +335,8 @@ impl RelayManager {
         }
 
         // Create contact with pending_approval status
+        let published_agents_json = published_agents
+            .and_then(|a| serde_json::to_string(a).ok());
         let now = chrono::Utc::now().to_rfc3339();
         let contact = relay_db::ContactRow {
             id: uuid::Uuid::new_v4().to_string(),
@@ -340,6 +357,7 @@ impl RelayManager {
             status: "pending_approval".to_string(),
             invite_card_raw: None,
             addresses_json: None,
+            published_agents_json,
             created_at: now.clone(),
             updated_at: now,
         };

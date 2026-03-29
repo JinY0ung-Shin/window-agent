@@ -94,6 +94,8 @@
     "temperatureLabel": "Temperature (default if empty)",
     "temperaturePlaceholder": "Default",
     "thinkingLabel": "Thinking Mode",
-    "thinkingGlobal": "Global"
+    "thinkingGlobal": "Global",
+    "networkVisible": "Publish to Network",
+    "networkVisibleHint": "When enabled, other network users can select this agent to chat with."
   }
 }

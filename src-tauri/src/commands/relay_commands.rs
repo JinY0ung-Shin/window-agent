@@ -145,6 +145,7 @@ pub async fn relay_accept_invite(
             status: "accepted".to_string(),
             invite_card_raw: Some(code),
             addresses_json,
+            published_agents_json: None,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -176,12 +177,18 @@ pub async fn relay_accept_invite(
             })
             .map(|agent| (agent.name, agent.description))
             .unwrap_or_else(|| ("local-agent".to_string(), String::new()));
+        let published_agents = crate::db::agent_operations::list_network_visible_agents_impl(&db)
+            .ok()
+            .map(|agents| agents.into_iter().map(|a| wa_shared::protocol::PublishedAgent {
+                agent_id: a.id, name: a.name, description: a.description,
+            }).collect::<Vec<_>>());
         let introduce_envelope = Envelope::new(
             local_name.clone(),
             Payload::Introduce {
                 agent_name: local_name,
                 agent_description: local_desc,
                 public_key: public_key_b64,
+                published_agents,
             },
         );
         if let Err(e) = manager.send_message(&contact.peer_id, &introduce_envelope).await {
@@ -319,6 +326,7 @@ pub async fn relay_send_message(
     manager: State<'_, RelayManager>,
     contact_id: String,
     content: String,
+    target_agent_id: Option<String>,
 ) -> Result<(), AppError> {
     // 1. Look up contact
     let contact = relay_db::get_contact(&db, &contact_id)
@@ -367,6 +375,7 @@ pub async fn relay_send_message(
         "local".into(),
         Payload::MessageRequest {
             content: content.clone(),
+            target_agent_id: target_agent_id.clone(),
         },
     );
 
@@ -385,6 +394,8 @@ pub async fn relay_send_message(
         delivery_state: "sending".to_string(),
         retry_count: 0,
         raw_envelope: serde_json::to_string(&envelope).ok(),
+        target_agent_id,
+        responding_agent_id: None,
         created_at: now.clone(),
     };
     relay_db::insert_peer_message(&db, &msg).map_err(|e| AppError::Relay(e.to_string()))?;
@@ -578,6 +589,7 @@ pub async fn relay_send_friend_request(
 #[tauri::command]
 pub fn relay_update_directory_profile(
     app: tauri::AppHandle,
+    db: State<'_, Database>,
     settings: State<'_, AppSettings>,
     manager: State<'_, RelayManager>,
     agent_name: String,
@@ -591,8 +603,14 @@ pub fn relay_update_directory_profile(
         ..Default::default()
     }, &app)?;
 
+    let published_agents = crate::db::agent_operations::list_network_visible_agents_impl(&db)
+        .ok()
+        .map(|agents| agents.into_iter().map(|a| wa_shared::protocol::PublishedAgent {
+            agent_id: a.id, name: a.name, description: a.description,
+        }).collect::<Vec<_>>());
+
     manager
-        .update_directory_profile(&agent_name, &agent_description, discoverable)
+        .update_directory_profile(&agent_name, &agent_description, discoverable, published_agents)
         .map_err(|e| AppError::Relay(e.to_string()))
 }
 
@@ -609,6 +627,7 @@ pub fn relay_get_directory_settings(settings: State<'_, AppSettings>) -> Result<
 #[tauri::command]
 pub fn relay_set_directory_settings(
     app: tauri::AppHandle,
+    db: State<'_, Database>,
     settings: State<'_, AppSettings>,
     manager: State<'_, RelayManager>,
     discoverable: bool,
@@ -618,7 +637,12 @@ pub fn relay_set_directory_settings(
     // Update on relay server if connected
     if manager.status().map(|s| s == crate::relay::manager::NetworkStatus::Active).unwrap_or(false) {
         let s = settings.get();
-        let _ = manager.update_directory_profile(&s.directory_agent_name, &s.directory_agent_description, discoverable);
+        let published_agents = crate::db::agent_operations::list_network_visible_agents_impl(&db)
+            .ok()
+            .map(|agents| agents.into_iter().map(|a| wa_shared::protocol::PublishedAgent {
+                agent_id: a.id, name: a.name, description: a.description,
+            }).collect::<Vec<_>>());
+        let _ = manager.update_directory_profile(&s.directory_agent_name, &s.directory_agent_description, discoverable, published_agents);
     }
 
     Ok(())

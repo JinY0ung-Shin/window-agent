@@ -95,6 +95,17 @@ pub struct DirectoryPeer {
     pub is_online: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_seen: Option<String>,
+    /// List of agents this peer has published for network access.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agents: Option<Vec<PublishedAgent>>,
+}
+
+/// An agent published by a peer for network visitors to select.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PublishedAgent {
+    pub agent_id: String,
+    pub name: String,
+    pub description: String,
 }
 
 // ── Client → Server ──
@@ -127,6 +138,9 @@ pub enum ClientMessage {
         agent_name: String,
         agent_description: String,
         discoverable: bool,
+        /// List of agents published for network visitors.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agents: Option<Vec<PublishedAgent>>,
     },
     /// Search peers in the directory
     SearchDirectory {

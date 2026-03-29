@@ -95,6 +95,7 @@ export interface Agent {
   thinking_enabled: boolean | null;
   thinking_budget: number | null;
   is_default: boolean;
+  network_visible: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -349,8 +350,15 @@ export interface ContactRow {
   status: string;
   invite_card_raw: string | null;
   addresses_json: string | null;
+  published_agents_json: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PublishedAgent {
+  agent_id: string;
+  name: string;
+  description: string;
 }
 
 export interface PeerThreadRow {
@@ -375,5 +383,7 @@ export interface PeerMessageRow {
   delivery_state: string;
   retry_count: number;
   raw_envelope: string | null;
+  target_agent_id: string | null;
+  responding_agent_id: string | null;
   created_at: string;
 }

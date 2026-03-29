@@ -34,6 +34,7 @@ export default function AgentEditor() {
   const [temperature, setTemperature] = useState("");
   const [thinkingEnabled, setThinkingEnabled] = useState<boolean | null>(null);
   const [thinkingBudget, setThinkingBudget] = useState("");
+  const [networkVisible, setNetworkVisible] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [activePanel, setActivePanel] = useState<"persona" | "tools" | "credentials" | "skills">("persona");
 
@@ -53,6 +54,7 @@ export default function AgentEditor() {
       setTemperature(editingAgent.temperature != null ? String(editingAgent.temperature) : "");
       setThinkingEnabled(editingAgent.thinking_enabled);
       setThinkingBudget(editingAgent.thinking_budget != null ? String(editingAgent.thinking_budget) : "");
+      setNetworkVisible(editingAgent.network_visible ?? false);
     } else {
       setName("");
       setDescription("");
@@ -61,6 +63,7 @@ export default function AgentEditor() {
       setTemperature("");
       setThinkingEnabled(null);
       setThinkingBudget("");
+      setNetworkVisible(false);
     }
   }, [editingAgent]);
 
@@ -77,6 +80,7 @@ export default function AgentEditor() {
       temperature: temperature ? parseFloat(temperature) : null,
       thinking_enabled: thinkingEnabled,
       thinking_budget: thinkingBudget ? parseInt(thinkingBudget, 10) : null,
+      network_visible: networkVisible,
     });
   };
 
@@ -149,6 +153,8 @@ export default function AgentEditor() {
             onThinkingEnabledChange={setThinkingEnabled}
             thinkingBudget={thinkingBudget}
             onThinkingBudgetChange={setThinkingBudget}
+            networkVisible={networkVisible}
+            onNetworkVisibleChange={setNetworkVisible}
             canDelete={!!editingAgentId && !isDefault}
             onDelete={handleDelete}
           />

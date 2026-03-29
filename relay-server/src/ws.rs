@@ -284,8 +284,9 @@ async fn handle_client_message(
             agent_name,
             agent_description,
             discoverable,
+            agents,
         } => {
-            handle_update_profile(state, sender_peer_id, sender_tx, &agent_name, &agent_description, discoverable).await;
+            handle_update_profile(state, sender_peer_id, sender_tx, &agent_name, &agent_description, discoverable, agents.as_deref()).await;
         }
 
         ClientMessage::SearchDirectory {
@@ -450,6 +451,7 @@ async fn handle_update_profile(
     agent_name: &str,
     agent_description: &str,
     discoverable: bool,
+    agents: Option<&[PublishedAgent]>,
 ) {
     // Get the peer's public key (already registered during auth).
     let public_key = match state.get_known_key(peer_id).await {
@@ -463,6 +465,8 @@ async fn handle_update_profile(
         }
     };
 
+    let agents_json = agents.and_then(|a| serde_json::to_string(a).ok());
+
     if let Err(e) = db::upsert_profile(
         state.db(),
         peer_id,
@@ -470,6 +474,7 @@ async fn handle_update_profile(
         agent_name,
         agent_description,
         discoverable,
+        agents_json.as_deref(),
     ).await {
         warn!(error = %e, "Failed to upsert profile");
         send_msg(tx, &ServerMessage::Error {
@@ -512,6 +517,9 @@ async fn handle_search_directory(
                         continue;
                     }
                     let is_online = state.is_online(&row.peer_id).await;
+                    let agents: Option<Vec<PublishedAgent>> = row.agents_json
+                        .as_deref()
+                        .and_then(|j| serde_json::from_str(j).ok());
                     v.push(DirectoryPeer {
                         peer_id: row.peer_id,
                         public_key: row.public_key,
@@ -519,6 +527,7 @@ async fn handle_search_directory(
                         agent_description: row.agent_description,
                         is_online,
                         last_seen: Some(row.last_seen),
+                        agents,
                     });
                 }
                 v
@@ -550,6 +559,9 @@ async fn handle_get_peer_profile(
     match db::get_peer_from_directory(state.db(), peer_id).await {
         Ok(Some(row)) => {
             let is_online = state.is_online(&row.peer_id).await;
+            let agents: Option<Vec<PublishedAgent>> = row.agents_json
+                .as_deref()
+                .and_then(|j| serde_json::from_str(j).ok());
             send_msg(tx, &ServerMessage::PeerProfileResult {
                 peer: Some(DirectoryPeer {
                     peer_id: row.peer_id,
@@ -558,6 +570,7 @@ async fn handle_get_peer_profile(
                     agent_description: row.agent_description,
                     is_online,
                     last_seen: Some(row.last_seen),
+                    agents,
                 }),
             });
         }

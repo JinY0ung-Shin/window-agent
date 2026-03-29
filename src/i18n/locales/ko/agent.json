@@ -94,6 +94,8 @@
     "temperatureLabel": "Temperature (비워두면 기본값)",
     "temperaturePlaceholder": "기본값",
     "thinkingLabel": "Thinking 모드",
-    "thinkingGlobal": "글로벌"
+    "thinkingGlobal": "글로벌",
+    "networkVisible": "네트워크에 공개",
+    "networkVisibleHint": "활성화하면 네트워크의 다른 사용자가 이 에이전트를 선택하여 대화할 수 있습니다."
   }
 }

@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import { Loader2, Search, UserPlus } from "lucide-react";
 import Modal from "../common/Modal";
 import { useNetworkStore } from "../../stores/networkStore";
-import { useAgentStore } from "../../stores/agentStore";
 import { toErrorMessage } from "../../utils/errorUtils";
 import type { DirectoryPeer } from "../../services/commands/relayCommands";
 
@@ -14,7 +13,6 @@ interface Props {
 export default function InviteDialog({ onClose }: Props) {
   const { t } = useTranslation("network");
 
-  const agents = useAgentStore((s) => s.agents);
   const searchDirectory = useNetworkStore((s) => s.searchDirectory);
   const sendFriendRequest = useNetworkStore((s) => s.sendFriendRequest);
   const directoryResults = useNetworkStore((s) => s.directoryResults);
@@ -62,14 +60,14 @@ export default function InviteDialog({ onClose }: Props) {
     setSendingPeer(peer.peer_id);
     setError("");
     try {
-      await sendFriendRequest(peer, agents[0]?.id);
+      await sendFriendRequest(peer);
       setSentPeers((prev) => new Set(prev).add(peer.peer_id));
     } catch (e) {
       setError(toErrorMessage(e));
     } finally {
       setSendingPeer(null);
     }
-  }, [sendFriendRequest, agents]);
+  }, [sendFriendRequest]);
 
   return (
     <Modal
@@ -119,6 +117,13 @@ export default function InviteDialog({ onClose }: Props) {
                     </div>
                     {peer.agent_description && (
                       <div className="directory-peer-desc">{peer.agent_description}</div>
+                    )}
+                    {peer.agents && peer.agents.length > 0 && (
+                      <div className="directory-peer-agents">
+                        {peer.agents.map((a) => (
+                          <span key={a.agent_id} className="agent-chip">{a.name}</span>
+                        ))}
+                      </div>
                     )}
                     <div className="directory-peer-id">{peer.peer_id.slice(0, 12)}...</div>
                   </div>

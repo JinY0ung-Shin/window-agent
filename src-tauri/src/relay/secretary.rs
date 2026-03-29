@@ -32,10 +32,10 @@ pub async fn handle_incoming_message(
     contact_peer_id: &str,
     envelope: &Envelope,
 ) -> Result<(), String> {
-    // 1. Extract content (MessageRequest or MessageResponse)
-    let content = match &envelope.payload {
-        Payload::MessageRequest { content } => content.clone(),
-        Payload::MessageResponse { content } => content.clone(),
+    // 1. Extract content and target_agent_id
+    let (content, target_agent_id) = match &envelope.payload {
+        Payload::MessageRequest { content, target_agent_id } => (content.clone(), target_agent_id.clone()),
+        Payload::MessageResponse { content, .. } => (content.clone(), None),
         _ => return Err("Expected MessageRequest or MessageResponse payload".into()),
     };
 
@@ -44,10 +44,37 @@ pub async fn handle_incoming_message(
         .map_err(|e| e.to_string())?
         .ok_or_else(|| format!("Unknown contact peer_id: {}", contact_peer_id))?;
 
-    // 3. Find existing thread or create a new one
+    // 3. Find existing thread or create a new one (routed by target_agent_id)
     let threads = relay_db::list_threads_for_contact(db, &contact.id)
         .map_err(|e| e.to_string())?;
-    let thread_id = if let Some(thread) = threads.first() {
+    let thread_id = if let Some(ref tid) = target_agent_id {
+        // Find thread bound to this specific agent
+        if let Some(t) = threads.iter().find(|t| t.local_agent_id.as_deref() == Some(tid)) {
+            t.id.clone()
+        } else {
+            // Create new thread for this agent
+            let agent_name = crate::db::agent_operations::get_agent_impl(db, tid.clone())
+                .map(|a| a.name)
+                .unwrap_or_default();
+            let now = chrono::Utc::now().to_rfc3339();
+            let new_thread = relay_db::PeerThreadRow {
+                id: uuid::Uuid::new_v4().to_string(),
+                contact_id: contact.id.clone(),
+                local_agent_id: Some(tid.clone()),
+                title: if agent_name.is_empty() {
+                    format!("Conversation with {}", contact.display_name)
+                } else {
+                    format!("{} — {}", contact.display_name, agent_name)
+                },
+                summary: None,
+                created_at: now.clone(),
+                updated_at: now,
+            };
+            let new_tid = new_thread.id.clone();
+            relay_db::create_thread(db, &new_thread).map_err(|e| e.to_string())?;
+            new_tid
+        }
+    } else if let Some(thread) = threads.first() {
         thread.id.clone()
     } else {
         let now = chrono::Utc::now().to_rfc3339();
@@ -82,6 +109,8 @@ pub async fn handle_incoming_message(
         delivery_state: "received".to_string(),
         retry_count: 0,
         raw_envelope,
+        target_agent_id: target_agent_id.clone(),
+        responding_agent_id: None,
         created_at: now,
     };
 
@@ -193,8 +222,11 @@ async fn generate_and_send_response(
         serde_json::json!({ "thread_id": thread_id }),
     );
 
-    // 1. Determine which agent to use
-    let agent_id = resolve_agent_id(app, &db, contact, thread_id)?;
+    // 1. Determine which agent to use (target_agent_id from thread takes priority)
+    let target_from_thread = relay_db::get_thread(&db, thread_id)
+        .ok().flatten()
+        .and_then(|t| t.local_agent_id.clone());
+    let agent_id = resolve_agent_id(app, &db, contact, thread_id, target_from_thread.as_deref())?;
 
     // 2. Resolve agent context (persona + tools)
     let app_data_dir = app.path().app_data_dir()
@@ -379,6 +411,7 @@ async fn generate_and_send_response(
         "local".into(),
         Payload::MessageResponse {
             content: response_text.clone(),
+            responding_agent_id: Some(agent_id.clone()),
         },
     ).with_correlation(incoming_message_id.to_string());
 
@@ -402,6 +435,8 @@ async fn generate_and_send_response(
         delivery_state: "queued".to_string(),
         retry_count: 0,
         raw_envelope: Some(raw_envelope_json.clone()),
+        target_agent_id: None,
+        responding_agent_id: Some(agent_id.clone()),
         created_at: now.clone(),
     };
 
@@ -457,12 +492,27 @@ async fn generate_and_send_response(
 }
 
 /// Determine which agent should respond to this contact's messages.
+/// Priority: target_agent_id (visitor's choice) → thread binding → contact binding → default.
 fn resolve_agent_id(
     _app: &tauri::AppHandle,
     db: &Database,
     contact: &relay_db::ContactRow,
     thread_id: &str,
+    target_agent_id: Option<&str>,
 ) -> Result<String, String> {
+    // 0. Visitor-selected agent (highest priority) — must be network_visible
+    if let Some(tid) = target_agent_id {
+        if !tid.is_empty() {
+            if let Ok(agent) = crate::db::agent_operations::get_agent_impl(db, tid.to_string()) {
+                if agent.network_visible {
+                    return Ok(agent.id);
+                }
+            }
+            // Agent not found or not visible — fall through to other options
+            tracing::warn!(target_agent_id = tid, "requested agent not found or not network_visible, falling back");
+        }
+    }
+
     // 1. Check thread-level binding
     if let Ok(Some(thread)) = relay_db::get_thread(db, thread_id) {
         if let Some(ref aid) = thread.local_agent_id {
@@ -508,6 +558,7 @@ mod tests {
             status: "accepted".to_string(),
             invite_card_raw: None,
             addresses_json: None,
+            published_agents_json: None,
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         };
@@ -545,6 +596,7 @@ mod tests {
                 thinking_enabled: None,
                 thinking_budget: None,
                 is_default: Some(true),
+                network_visible: None,
                 sort_order: None,
             },
         ).unwrap();

@@ -84,10 +84,11 @@ impl RelayManager {
         agent_name: &str,
         agent_description: &str,
         discoverable: bool,
+        agents: Option<Vec<wa_shared::protocol::PublishedAgent>>,
     ) -> Result<(), RelayError> {
         let handle = self.relay_handle.lock().map_err(|_| lock_err())?
             .clone().ok_or(RelayError::NotActive)?;
-        handle.update_profile(agent_name.to_string(), agent_description.to_string(), discoverable)
+        handle.update_profile(agent_name.to_string(), agent_description.to_string(), discoverable, agents)
             .map_err(|e| RelayError::Transport(e.to_string()))
     }
 

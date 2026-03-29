@@ -85,8 +85,9 @@ export async function relayRejectContact(contactId: string): Promise<void> {
 export async function relaySendMessage(
   contactId: string,
   content: string,
+  targetAgentId?: string,
 ): Promise<void> {
-  return invoke("relay_send_message", { contactId, content });
+  return invoke("relay_send_message", { contactId, content, targetAgentId: targetAgentId ?? null });
 }
 
 // ── Network Enabled ──
@@ -128,6 +129,7 @@ export interface DirectoryPeer {
   agent_description: string;
   is_online: boolean;
   last_seen: string | null;
+  agents?: Array<{ agent_id: string; name: string; description: string }>;
 }
 
 export async function relaySearchDirectory(

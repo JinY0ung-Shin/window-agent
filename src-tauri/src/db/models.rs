@@ -158,6 +158,7 @@ pub struct Agent {
     pub thinking_enabled: Option<bool>,
     pub thinking_budget: Option<i64>,
     pub is_default: bool,
+    pub network_visible: bool,
     pub sort_order: i64,
     pub created_at: String,
     pub updated_at: String,
@@ -174,6 +175,7 @@ pub struct CreateAgentRequest {
     pub thinking_enabled: Option<bool>,
     pub thinking_budget: Option<i64>,
     pub is_default: Option<bool>,
+    pub network_visible: Option<bool>,
     pub sort_order: Option<i64>,
 }
 
@@ -195,6 +197,7 @@ pub struct UpdateAgentRequest {
     pub thinking_enabled: Option<Option<bool>>,
     #[serde(default)]
     pub thinking_budget: Option<Option<i64>>,
+    pub network_visible: Option<bool>,
     pub sort_order: Option<i64>,
 }
 

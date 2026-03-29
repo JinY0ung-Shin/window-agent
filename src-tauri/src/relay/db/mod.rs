@@ -30,6 +30,7 @@ mod tests {
             status: "pending".to_string(),
             invite_card_raw: None,
             addresses_json: None,
+            published_agents_json: None,
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
         }
@@ -60,6 +61,8 @@ mod tests {
             delivery_state: "pending".to_string(),
             retry_count: 0,
             raw_envelope: None,
+            target_agent_id: None,
+            responding_agent_id: None,
             created_at: "2024-01-01T00:00:00Z".to_string(),
         }
     }
@@ -520,7 +523,7 @@ mod tests {
                 name: "Relay Agent".into(),
                 avatar: None, description: None, model: None,
                 temperature: None, thinking_enabled: None, thinking_budget: None,
-                is_default: None, sort_order: None,
+                is_default: None, network_visible: None, sort_order: None,
             },
         )
         .unwrap();
@@ -537,6 +540,7 @@ mod tests {
                 capabilities_json: Some(r#"{"can_tools":true}"#.to_string()),
                 status: Some("accepted".to_string()),
                 addresses_json: Some(Some(r#"["/ip4/10.0.0.1/tcp/80"]"#.to_string())),
+                published_agents_json: None,
             },
         )
         .unwrap();

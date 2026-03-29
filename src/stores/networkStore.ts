@@ -80,7 +80,7 @@ interface NetworkState {
   selectThread: (threadId: string | null) => Promise<void>;
   loadThreads: (contactId: string) => Promise<void>;
   loadMessages: (threadId: string) => Promise<void>;
-  sendMessage: (contactId: string, content: string) => Promise<void>;
+  sendMessage: (contactId: string, content: string, targetAgentId?: string) => Promise<void>;
   approveContact: (contactId: string) => Promise<void>;
   rejectContact: (contactId: string) => Promise<void>;
   searchDirectory: (query: string) => Promise<void>;
@@ -263,8 +263,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     }
   },
 
-  sendMessage: async (contactId, content) => {
-    await relaySendMessage(contactId, content);
+  sendMessage: async (contactId, content, targetAgentId) => {
+    await relaySendMessage(contactId, content, targetAgentId);
     const { selectedContactId } = get();
     if (selectedContactId === contactId) {
       await get().loadThreads(contactId);

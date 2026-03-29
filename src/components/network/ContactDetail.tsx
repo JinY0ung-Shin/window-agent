@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Trash2, Save } from "lucide-react";
+import type { PublishedAgent } from "../../services/types";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useAgentStore } from "../../stores/agentStore";
 import {
@@ -39,6 +40,7 @@ interface InnerProps {
     agent_name: string;
     agent_description: string;
     local_agent_id: string | null;
+    published_agents_json: string | null;
     mode: string;
     status: string;
   };
@@ -48,16 +50,20 @@ interface InnerProps {
   onRefresh: () => Promise<void>;
 }
 
-function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: InnerProps) {
+function ContactDetailInner({ contact, t, onDeselect, onRefresh }: InnerProps) {
   const connectedPeers = useNetworkStore((s) => s.connectedPeers);
   const approveContact = useNetworkStore((s) => s.approveContact);
   const rejectContact = useNetworkStore((s) => s.rejectContact);
   const isOnline = connectedPeers.has(contact.peer_id);
   const isPendingApproval = contact.status === "pending_approval";
   const [displayName, setDisplayName] = useState(contact.display_name);
-  const [localAgentId, setLocalAgentId] = useState(contact.local_agent_id ?? "");
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const publishedAgents: PublishedAgent[] = useMemo(() => {
+    if (!contact.published_agents_json) return [];
+    try { return JSON.parse(contact.published_agents_json); } catch { return []; }
+  }, [contact.published_agents_json]);
 
   const statusText = isPendingApproval
     ? t("contact.pendingApproval")
@@ -65,9 +71,7 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
       ? t("contact.online")
       : t("contact.offline");
 
-  const hasChanges =
-    displayName !== contact.display_name ||
-    (localAgentId || null) !== contact.local_agent_id;
+  const hasChanges = displayName !== contact.display_name;
 
   const handleSave = async () => {
     setSaving(true);
@@ -75,7 +79,6 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
       await relayUpdateContact(
         contact.id,
         displayName !== contact.display_name ? displayName : undefined,
-        localAgentId !== (contact.local_agent_id ?? "") ? localAgentId || undefined : undefined,
       );
       await onRefresh();
     } finally {
@@ -117,19 +120,19 @@ function ContactDetailInner({ contact, agents, t, onDeselect, onRefresh }: Inner
         </div>
       )}
 
-      <div className="form-group">
-        <label>{t("contact.boundAgentLabel")}</label>
-        <select
-          value={localAgentId}
-          onChange={(e) => setLocalAgentId(e.target.value)}
-        >
-          <option value="">{t("invite.noSelection")}</option>
-          {agents.map((a) => (
-            <option key={a.id} value={a.id}>{a.name}</option>
-          ))}
-        </select>
-        <span className="form-text">{t("contact.boundAgentHint")}</span>
-      </div>
+      {publishedAgents.length > 0 && (
+        <div className="form-group">
+          <label>{t("contact.publishedAgents")}</label>
+          <ul className="published-agents-list">
+            {publishedAgents.map((a) => (
+              <li key={a.agent_id}>
+                <strong>{a.name}</strong>
+                {a.description && <span> — {a.description}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="form-group">
         <label>{t("contact.modeLabel")}</label>

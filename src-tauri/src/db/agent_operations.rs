@@ -4,7 +4,7 @@ use super::Database;
 use chrono::Utc;
 use uuid::Uuid;
 
-const AGENT_COLUMNS: &str = "SELECT id, folder_name, name, avatar, description, model, temperature, thinking_enabled, thinking_budget, is_default, sort_order, created_at, updated_at FROM agents";
+const AGENT_COLUMNS: &str = "SELECT id, folder_name, name, avatar, description, model, temperature, thinking_enabled, thinking_budget, is_default, network_visible, sort_order, created_at, updated_at FROM agents";
 
 pub fn create_agent_impl(
     db: &Database,
@@ -23,13 +23,14 @@ pub fn create_agent_impl(
             thinking_enabled: request.thinking_enabled,
             thinking_budget: request.thinking_budget,
             is_default: request.is_default.unwrap_or(false),
+            network_visible: request.network_visible.unwrap_or(false),
             sort_order: request.sort_order.unwrap_or(0),
             created_at: now.clone(),
             updated_at: now,
         };
 
         conn.execute(
-            "INSERT INTO agents (id, folder_name, name, avatar, description, model, temperature, thinking_enabled, thinking_budget, is_default, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT INTO agents (id, folder_name, name, avatar, description, model, temperature, thinking_enabled, thinking_budget, is_default, network_visible, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             rusqlite::params![
                 agent.id,
                 agent.folder_name,
@@ -41,6 +42,7 @@ pub fn create_agent_impl(
                 agent.thinking_enabled.map(|b| b as i64),
                 agent.thinking_budget,
                 agent.is_default as i64,
+                agent.network_visible as i64,
                 agent.sort_order,
                 agent.created_at,
                 agent.updated_at,
@@ -110,10 +112,11 @@ pub fn update_agent_impl(
         let temperature = request.temperature.unwrap_or(current.temperature);
         let thinking_enabled = request.thinking_enabled.unwrap_or(current.thinking_enabled);
         let thinking_budget = request.thinking_budget.unwrap_or(current.thinking_budget);
+        let network_visible = request.network_visible.unwrap_or(current.network_visible);
         let sort_order = request.sort_order.unwrap_or(current.sort_order);
 
         conn.execute(
-            "UPDATE agents SET name = ?1, avatar = ?2, description = ?3, model = ?4, temperature = ?5, thinking_enabled = ?6, thinking_budget = ?7, sort_order = ?8, updated_at = ?9 WHERE id = ?10",
+            "UPDATE agents SET name = ?1, avatar = ?2, description = ?3, model = ?4, temperature = ?5, thinking_enabled = ?6, thinking_budget = ?7, network_visible = ?8, sort_order = ?9, updated_at = ?10 WHERE id = ?11",
             rusqlite::params![
                 name,
                 avatar,
@@ -122,6 +125,7 @@ pub fn update_agent_impl(
                 temperature,
                 thinking_enabled.map(|b| b as i64),
                 thinking_budget,
+                network_visible as i64,
                 sort_order,
                 now,
                 id,
@@ -164,6 +168,7 @@ pub fn delete_agent_impl(db: &Database, id: String) -> Result<(), DbError> {
 fn row_to_agent(row: &rusqlite::Row) -> Result<Agent, rusqlite::Error> {
     let thinking_enabled_raw: Option<i64> = row.get(7)?;
     let is_default_raw: i64 = row.get(9)?;
+    let network_visible_raw: i64 = row.get(10)?;
     Ok(Agent {
         id: row.get(0)?,
         folder_name: row.get(1)?,
@@ -175,9 +180,20 @@ fn row_to_agent(row: &rusqlite::Row) -> Result<Agent, rusqlite::Error> {
         thinking_enabled: thinking_enabled_raw.map(|v| v != 0),
         thinking_budget: row.get(8)?,
         is_default: is_default_raw != 0,
-        sort_order: row.get(10)?,
-        created_at: row.get(11)?,
-        updated_at: row.get(12)?,
+        network_visible: network_visible_raw != 0,
+        sort_order: row.get(11)?,
+        created_at: row.get(12)?,
+        updated_at: row.get(13)?,
+    })
+}
+
+pub fn list_network_visible_agents_impl(db: &Database) -> Result<Vec<Agent>, DbError> {
+    db.with_conn(|conn| {
+        let mut stmt = conn.prepare(
+            &format!("{AGENT_COLUMNS} WHERE network_visible = 1 ORDER BY sort_order ASC, created_at ASC"),
+        )?;
+        let rows = stmt.query_map([], row_to_agent)?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
     })
 }
 
@@ -200,6 +216,7 @@ mod tests {
             thinking_enabled: None,
             thinking_budget: None,
             is_default: None,
+            network_visible: None,
             sort_order: None,
         }
     }
@@ -229,6 +246,7 @@ mod tests {
                 thinking_enabled: Some(true),
                 thinking_budget: Some(10000),
                 is_default: Some(true),
+                network_visible: None,
                 sort_order: Some(1),
             },
         )
@@ -322,6 +340,7 @@ mod tests {
                 temperature: Some(Some(0.5)),
                 thinking_enabled: Some(Some(true)),
                 thinking_budget: Some(Some(5000)),
+                network_visible: None,
                 sort_order: None,
             },
         )
@@ -358,6 +377,7 @@ mod tests {
                 temperature: None,
                 thinking_enabled: None,
                 thinking_budget: None,
+                network_visible: None,
                 sort_order: None,
             },
         )

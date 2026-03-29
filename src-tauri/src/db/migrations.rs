@@ -419,6 +419,56 @@ fn run_incremental_migrations(conn: &Connection) -> Result<(), rusqlite::Error> 
         }
     }
 
+    // ── Add network_visible column to agents ──
+    {
+        let agent_cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(agents)")?
+            .query_map([], |row| { let name: String = row.get(1)?; Ok(name) })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !agent_cols.contains(&"network_visible".to_string()) {
+            conn.execute_batch(
+                "ALTER TABLE agents ADD COLUMN network_visible INTEGER DEFAULT 0;"
+            )?;
+        }
+    }
+
+    // ── Add target_agent_id, responding_agent_id to peer_messages ──
+    {
+        let pm_cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(peer_messages)")?
+            .query_map([], |row| { let name: String = row.get(1)?; Ok(name) })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !pm_cols.contains(&"target_agent_id".to_string()) {
+            conn.execute_batch(
+                "ALTER TABLE peer_messages ADD COLUMN target_agent_id TEXT;"
+            )?;
+        }
+        if !pm_cols.contains(&"responding_agent_id".to_string()) {
+            conn.execute_batch(
+                "ALTER TABLE peer_messages ADD COLUMN responding_agent_id TEXT;"
+            )?;
+        }
+    }
+
+    // ── Add published_agents_json to contacts ──
+    {
+        let ct_cols: Vec<String> = conn
+            .prepare("PRAGMA table_info(contacts)")?
+            .query_map([], |row| { let name: String = row.get(1)?; Ok(name) })?
+            .filter_map(|r| r.ok())
+            .collect();
+
+        if !ct_cols.contains(&"published_agents_json".to_string()) {
+            conn.execute_batch(
+                "ALTER TABLE contacts ADD COLUMN published_agents_json TEXT;"
+            )?;
+        }
+    }
+
     Ok(())
 }
 
@@ -638,6 +688,23 @@ mod tests {
                 tool_name TEXT NOT NULL,
                 tool_input TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS peer_messages (
+                id TEXT PRIMARY KEY,
+                thread_id TEXT NOT NULL,
+                message_id_unique TEXT NOT NULL UNIQUE,
+                direction TEXT NOT NULL,
+                sender_agent TEXT NOT NULL DEFAULT '',
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            CREATE TABLE IF NOT EXISTS contacts (
+                id TEXT PRIMARY KEY,
+                peer_id TEXT NOT NULL UNIQUE,
+                public_key TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );"
         ).unwrap();
 
