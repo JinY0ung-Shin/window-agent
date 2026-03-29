@@ -247,6 +247,8 @@ pub fn run() {
             commands::relay_list_threads,
             commands::relay_get_thread,
             commands::relay_get_thread_messages,
+            commands::relay_delete_thread,
+            commands::relay_clear_thread_messages,
             commands::relay_get_peer_id,
             commands::relay_get_network_enabled,
             commands::relay_set_network_enabled,

@@ -95,6 +95,10 @@
     "noMessages": "No messages yet. Start a conversation.",
     "inputPlaceholder": "Type a message...",
     "defaultAgent": "Default Agent",
+    "showMyChats": "Show my chats only",
+    "showAllChats": "Show all chats",
+    "clearHistory": "Clear chat history",
+    "noMyMessages": "No messages sent yet.",
     "pendingApprovalHint": "Approve this contact before sending messages"
   },
   "directory": {

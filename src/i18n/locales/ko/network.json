@@ -95,6 +95,10 @@
     "noMessages": "아직 메시지가 없습니다. 대화를 시작하세요.",
     "inputPlaceholder": "메시지를 입력하세요...",
     "defaultAgent": "기본 에이전트",
+    "showMyChats": "내 대화만 보기",
+    "showAllChats": "전체 대화 보기",
+    "clearHistory": "대화 기록 삭제",
+    "noMyMessages": "아직 보낸 메시지가 없습니다.",
     "pendingApprovalHint": "메시지를 보내려면 먼저 연락처를 승인하세요"
   },
   "directory": {

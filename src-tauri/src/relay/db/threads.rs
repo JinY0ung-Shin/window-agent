@@ -62,6 +62,23 @@ pub fn get_thread(db: &Database, id: &str) -> Result<Option<PeerThreadRow>, DbEr
     })
 }
 
+pub fn delete_thread(db: &Database, id: &str) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute("DELETE FROM peer_threads WHERE id = ?1", rusqlite::params![id])?;
+        Ok(())
+    })
+}
+
+pub fn clear_thread_messages(db: &Database, thread_id: &str) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        conn.execute(
+            "DELETE FROM peer_messages WHERE thread_id = ?1",
+            rusqlite::params![thread_id],
+        )?;
+        Ok(())
+    })
+}
+
 fn map_thread_row(row: &rusqlite::Row) -> Result<PeerThreadRow, rusqlite::Error> {
     Ok(PeerThreadRow {
         id: row.get(0)?,

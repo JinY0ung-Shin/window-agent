@@ -19,6 +19,7 @@ import {
   relaySendFriendRequest,
   relaySetDirectorySettings,
   relayUpdateDirectoryProfile,
+  relayClearThreadMessages,
   type ContactRow,
   type PeerThreadRow,
   type PeerMessageRow,
@@ -66,6 +67,7 @@ interface NetworkState {
   directoryTotal: number;
   directoryLoading: boolean;
   discoverable: boolean;
+  showAllMessages: boolean;
   _lastSearchQuery: string;
 
   // ── Actions ──
@@ -86,6 +88,8 @@ interface NetworkState {
   searchDirectory: (query: string) => Promise<void>;
   sendFriendRequest: (peer: DirectoryPeer, localAgentId?: string) => Promise<void>;
   setDiscoverable: (discoverable: boolean) => Promise<void>;
+  toggleShowAllMessages: () => void;
+  clearThreadMessages: (threadId: string) => Promise<void>;
   setupEventListeners: () => Promise<() => void>;
 }
 
@@ -106,6 +110,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   directoryTotal: 0,
   directoryLoading: false,
   discoverable: true,
+  showAllMessages: false,
   _lastSearchQuery: "",
 
   initialize: async () => {
@@ -206,7 +211,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   refreshContacts: async () => {
     try {
       const contacts = await relayListContacts();
-      set({ contacts });
+      const pendingApprovals = contacts.filter((c) => c.status === "pending_approval").length;
+      set({ contacts, pendingApprovals });
     } catch (e) {
       set({ error: toErrorMessage(e) });
     }
@@ -320,6 +326,18 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
   setDiscoverable: async (discoverable) => {
     await relaySetDirectorySettings(discoverable);
     set({ discoverable });
+  },
+
+  toggleShowAllMessages: () => {
+    set((s) => ({ showAllMessages: !s.showAllMessages }));
+  },
+
+  clearThreadMessages: async (threadId) => {
+    await relayClearThreadMessages(threadId);
+    const { selectedThreadId } = get();
+    if (selectedThreadId === threadId) {
+      set({ messages: [] });
+    }
   },
 
   setupEventListeners: async () => {

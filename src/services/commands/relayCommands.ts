@@ -190,6 +190,14 @@ export async function relaySetDirectorySettings(
 
 // ── Threads ──
 
+export async function relayDeleteThread(threadId: string): Promise<void> {
+  return invoke("relay_delete_thread", { threadId });
+}
+
+export async function relayClearThreadMessages(threadId: string): Promise<void> {
+  return invoke("relay_clear_thread_messages", { threadId });
+}
+
 export async function relayListThreads(
   contactId: string,
 ): Promise<PeerThreadRow[]> {

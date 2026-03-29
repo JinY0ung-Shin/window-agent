@@ -249,8 +249,17 @@ async fn generate_and_send_response(
         Some(&app_settings.company_name),
     ).map_err(|e| format!("Failed to resolve agent context: {e}"))?;
 
-    // 3. Build system prompt
-    let system_prompt = llm_helpers::build_system_prompt(&resolved, &scope);
+    // 3. Build system prompt + peer context
+    let mut system_prompt = llm_helpers::build_system_prompt(&resolved, &scope);
+    system_prompt.push_str(&format!(
+        "\n\n[PEER CONTEXT]\n\
+         You are conversing with an external peer (from another organization/user).\n\
+         - Peer display name: {}\n\
+         - Peer agent: {}{}",
+        contact.display_name,
+        contact.agent_name,
+        if contact.agent_description.is_empty() { String::new() } else { format!(" ({})", contact.agent_description) },
+    ));
 
     // 4. Build conversation history from thread messages (last 50 for context window)
     let messages = relay_db::get_thread_messages_recent(&db, thread_id, 50)

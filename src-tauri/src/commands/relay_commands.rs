@@ -474,6 +474,22 @@ pub fn relay_get_thread_messages(
     relay_db::get_thread_messages(&db, &thread_id).map_err(|e| AppError::Relay(e.to_string()))
 }
 
+#[tauri::command]
+pub fn relay_delete_thread(
+    db: State<'_, Database>,
+    thread_id: String,
+) -> Result<(), AppError> {
+    relay_db::delete_thread(&db, &thread_id).map_err(|e| AppError::Relay(e.to_string()))
+}
+
+#[tauri::command]
+pub fn relay_clear_thread_messages(
+    db: State<'_, Database>,
+    thread_id: String,
+) -> Result<(), AppError> {
+    relay_db::clear_thread_messages(&db, &thread_id).map_err(|e| AppError::Relay(e.to_string()))
+}
+
 // ── Network settings commands ──
 
 #[tauri::command]
