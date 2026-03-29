@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Settings, Eye, EyeOff, Trash2 } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
@@ -23,6 +23,8 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
   const showAllMessages = useNetworkStore((s) => s.showAllMessages);
   const toggleShowAllMessages = useNetworkStore((s) => s.toggleShowAllMessages);
   const clearThreadMessages = useNetworkStore((s) => s.clearThreadMessages);
+
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const contact = contacts.find((c) => c.id === selectedContactId);
   const isOnline = contact ? connectedPeers.has(contact.peer_id) : false;
@@ -71,9 +73,17 @@ export default function PeerThread({ settingsOpen, onToggleSettings }: PeerThrea
           </button>
           {selectedThreadId && (
             <button
-              className="icon-btn"
-              onClick={() => clearThreadMessages(selectedThreadId)}
-              title={t("peer.clearHistory")}
+              className={`icon-btn${confirmClear ? " confirm" : ""}`}
+              onClick={() => {
+                if (confirmClear) {
+                  clearThreadMessages(selectedThreadId);
+                  setConfirmClear(false);
+                } else {
+                  setConfirmClear(true);
+                  setTimeout(() => setConfirmClear(false), 3000);
+                }
+              }}
+              title={confirmClear ? t("common:confirm") : t("peer.clearHistory")}
             >
               <Trash2 size={16} />
             </button>
