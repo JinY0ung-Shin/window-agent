@@ -111,6 +111,7 @@ export interface CreateAgentRequest {
   thinking_enabled?: boolean | null;
   thinking_budget?: number | null;
   is_default?: boolean;
+  network_visible?: boolean;
   sort_order?: number;
 }
 
@@ -122,6 +123,7 @@ export interface UpdateAgentRequest {
   temperature?: number | null;
   thinking_enabled?: boolean | null;
   thinking_budget?: number | null;
+  network_visible?: boolean;
   sort_order?: number;
 }
 

@@ -149,6 +149,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           temperature: updates.temperature,
           thinking_enabled: updates.thinking_enabled,
           thinking_budget: updates.thinking_budget,
+          network_visible: updates.network_visible,
         });
       } else {
         // Create new agent — generate folder_name from name
@@ -164,6 +165,7 @@ export const useAgentStore = create<AgentState>((set, get) => ({
           temperature: updates.temperature,
           thinking_enabled: updates.thinking_enabled,
           thinking_budget: updates.thinking_budget,
+          network_visible: updates.network_visible,
         });
         folderName = created.folder_name;
         set({ editingAgentId: created.id });
