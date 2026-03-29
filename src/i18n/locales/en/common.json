@@ -17,6 +17,7 @@
   "clearChat": "Clear Chat",
   "defaultConversationTitle": "New Conversation",
   "loadingMessage": "Thinking...",
+  "recallingMemory": "Recalling memories...",
   "noResponse": "No response received.",
   "apiError": "An error occurred during API call. Please check your API key.",
   "serverResponse": "Server response: {{detail}}",

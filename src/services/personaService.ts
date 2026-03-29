@@ -1,7 +1,12 @@
 import type { Agent, PersonaFiles } from "./types";
 import * as cmds from "./tauriCommands";
+import * as vault from "./commands/vaultCommands";
 import { useSettingsStore } from "../stores/settingsStore";
 import { i18n } from "../i18n";
+import { logger } from "./logger";
+
+/** Vault context 노트의 well-known 제목 */
+export const VAULT_CONTEXT_TITLE = "_context";
 
 const PERSONA_FILE_NAMES: Array<keyof PersonaFiles> = [
   "identity",
@@ -135,6 +140,45 @@ export async function readBootFile(folderName: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+/**
+ * Read the agent's _context vault note (if it exists).
+ * This is a curated summary the agent maintains across conversations.
+ * Returns the note content or null.
+ */
+export async function readVaultContext(agentId: string): Promise<string | null> {
+  try {
+    const notes = await vault.vaultListNotes(agentId);
+    const ctx = notes.find((n) => n.title === VAULT_CONTEXT_TITLE);
+    if (!ctx) return null;
+    const full = await vault.vaultReadNote(ctx.id);
+    return full.content || null;
+  } catch (e) {
+    logger.debug("Vault context read failed", e);
+    return null;
+  }
+}
+
+/**
+ * Load startup content for a new conversation: vault context + BOOT.md.
+ * Returns { merged, hasVaultContext } so callers can distinguish sources.
+ */
+export async function loadStartupContent(
+  folderName: string,
+  agentId: string,
+): Promise<{ merged: string | null; hasVaultContext: boolean }> {
+  const [boot, vaultCtx] = await Promise.all([
+    readBootFile(folderName),
+    readVaultContext(agentId),
+  ]);
+  const parts: string[] = [];
+  if (vaultCtx) parts.push(vaultCtx);
+  if (boot) parts.push(boot);
+  return {
+    merged: parts.length > 0 ? parts.join("\n\n---\n\n") : null,
+    hasVaultContext: vaultCtx !== null,
+  };
 }
 
 /**

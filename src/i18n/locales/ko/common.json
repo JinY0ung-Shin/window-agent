@@ -17,6 +17,7 @@
   "clearChat": "대화 초기화",
   "defaultConversationTitle": "새 대화",
   "loadingMessage": "생각 중...",
+  "recallingMemory": "기억을 떠올리는 중...",
   "noResponse": "응답을 받지 못했습니다.",
   "apiError": "API 호출 중 오류가 발생했습니다. API 키가 정확한지 확인해 주세요.",
   "serverResponse": "서버 응답: {{detail}}",

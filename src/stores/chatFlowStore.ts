@@ -12,7 +12,7 @@ import { useToolRunStore } from "./toolRunStore";
 import { useSummaryStore } from "./summaryStore";
 import { resetChatContext } from "./resetHelper";
 import {
-  readBootFile,
+  loadStartupContent,
   invalidatePersonaCache,
 } from "../services/personaService";
 import {
@@ -251,10 +251,13 @@ async function sendNormalMessage() {
   if (!convResult) return;
   const { convId, isNew } = convResult;
 
-  // Load BOOT.md for new conversations (cached for regenerate)
+  // Load BOOT.md + vault _context note for new conversations
   let bootContent: string | null | undefined;
+  let hasVaultContext = false;
   if (isNew && agent) {
-    bootContent = await readBootFile(agent.folder_name);
+    const startup = await loadStartupContent(agent.folder_name, agent.id);
+    bootContent = startup.merged;
+    hasVaultContext = startup.hasVaultContext;
     if (bootContent) {
       bootContentCache.set(convId, bootContent);
     }
@@ -292,6 +295,11 @@ async function sendNormalMessage() {
 
   const currentRequestId = `req-${Date.now()}`;
   const { msgId: firstMsgId, msg: pendingMsg } = createPendingMessage(currentRequestId);
+
+  // vault context가 있는 새 대화: "기억을 떠올리는 중..." 로딩 메시지
+  if (hasVaultContext) {
+    pendingMsg.content = i18n.t("common:recallingMemory");
+  }
 
   // Use fresh store state (not the stale `messages` captured at function start)
   // to avoid overwriting messages added by concurrent processes (e.g. a previous
@@ -392,12 +400,12 @@ async function regenerateStream(
         cachedBoot = bootContentCache.get(convId);
       } else if (agent) {
         try {
-          const bootFromDisk = await readBootFile(agent.folder_name);
-          if (bootFromDisk) {
-            cachedBoot = bootFromDisk;
-            bootContentCache.set(convId, bootFromDisk);
+          const startup = await loadStartupContent(agent.folder_name, agent.id);
+          if (startup.merged) {
+            cachedBoot = startup.merged;
+            bootContentCache.set(convId, startup.merged);
           }
-        } catch (e) { logger.debug("BOOT.md read failed for regenerate", e); }
+        } catch (e) { logger.debug("Startup content read failed for regenerate", e); }
       }
     }
 
