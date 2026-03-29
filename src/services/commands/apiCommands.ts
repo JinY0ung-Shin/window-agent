@@ -49,6 +49,7 @@ export interface AppSettingsInner {
   // Browser
   browser_headless: boolean;
   browser_proxy: string;
+  browser_no_proxy: string;
 }
 
 export interface AppSettingsPatch {
@@ -69,6 +70,7 @@ export interface AppSettingsPatch {
   // Browser
   browser_headless?: boolean | null;
   browser_proxy?: string | null;
+  browser_no_proxy?: string | null;
 }
 
 export async function getAppSettings(): Promise<AppSettingsInner> {
@@ -113,6 +115,18 @@ export async function setBrowserProxy(proxy: string): Promise<void> {
 
 export async function detectSystemProxy(): Promise<string> {
   return invoke("detect_system_proxy");
+}
+
+export async function getBrowserNoProxy(): Promise<string> {
+  return invoke("get_browser_no_proxy");
+}
+
+export async function setBrowserNoProxy(noProxy: string): Promise<void> {
+  return invoke("set_browser_no_proxy", { noProxy });
+}
+
+export async function detectSystemNoProxy(): Promise<string> {
+  return invoke("detect_system_no_proxy");
 }
 
 // ── Shell Info ──

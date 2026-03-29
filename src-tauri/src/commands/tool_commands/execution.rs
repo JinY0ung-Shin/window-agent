@@ -204,10 +204,31 @@ pub async fn set_browser_proxy(app: AppHandle, proxy: String) -> Result<(), AppE
     Ok(())
 }
 
+/// Get the current browser NO_PROXY bypass list.
+#[tauri::command]
+pub async fn get_browser_no_proxy(app: AppHandle) -> Result<String, AppError> {
+    let browser = app.state::<crate::browser::BrowserManager>();
+    Ok(browser.get_no_proxy().await)
+}
+
+/// Set the browser NO_PROXY bypass list.
+#[tauri::command]
+pub async fn set_browser_no_proxy(app: AppHandle, no_proxy: String) -> Result<(), AppError> {
+    let browser = app.state::<crate::browser::BrowserManager>();
+    browser.set_no_proxy(no_proxy).await;
+    Ok(())
+}
+
 /// Detect system proxy settings and return the URL (or empty string).
 #[tauri::command]
 pub fn detect_system_proxy() -> Result<String, AppError> {
     Ok(crate::browser::detect_system_proxy().unwrap_or_default())
+}
+
+/// Detect system NO_PROXY settings and return the bypass list (or empty string).
+#[tauri::command]
+pub fn detect_system_no_proxy() -> Result<String, AppError> {
+    Ok(crate::browser::detect_system_no_proxy().unwrap_or_default())
 }
 
 /// Get the resolved shell configuration for display in settings UI.

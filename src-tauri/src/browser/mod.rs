@@ -4,7 +4,7 @@ pub(crate) mod security;
 mod session;
 pub(crate) mod sidecar;
 
-pub use sidecar::detect_system_proxy;
+pub use sidecar::{detect_system_proxy, detect_system_no_proxy};
 
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -27,6 +27,8 @@ pub struct BrowserManager {
     idle_task: Arc<Mutex<Option<tokio::task::JoinHandle<()>>>>,
     /// Proxy server URL for browser (e.g. "http://proxy:8080"). Empty = system default.
     proxy_server: Arc<Mutex<String>>,
+    /// Comma-separated list of hosts to bypass proxy (NO_PROXY). Empty = none.
+    no_proxy: Arc<Mutex<String>>,
     /// Whether to run the browser in headless mode (no visible window).
     headless: Arc<Mutex<bool>>,
     pub(crate) app_data_dir: PathBuf,
@@ -84,8 +86,8 @@ impl BrowserManager {
         let screenshots_dir = app_data_dir.join("browser_screenshots");
         std::fs::create_dir_all(&screenshots_dir).ok();
 
-        // Load saved settings from AppSettings (unified) or detect system proxy
-        let (proxy, headless) = if let Some(ref handle) = app_handle {
+        // Load saved settings from AppSettings (unified) or detect system defaults
+        let (proxy, no_proxy, headless) = if let Some(ref handle) = app_handle {
             use tauri::Manager;
             let s = handle.state::<crate::settings::AppSettings>().get();
             let p = if s.browser_proxy.is_empty() {
@@ -93,9 +95,18 @@ impl BrowserManager {
             } else {
                 s.browser_proxy
             };
-            (p, s.browser_headless)
+            let np = if s.browser_no_proxy.is_empty() {
+                sidecar::detect_system_no_proxy().unwrap_or_default()
+            } else {
+                s.browser_no_proxy
+            };
+            (p, np, s.browser_headless)
         } else {
-            (sidecar::detect_system_proxy().unwrap_or_default(), false)
+            (
+                sidecar::detect_system_proxy().unwrap_or_default(),
+                sidecar::detect_system_no_proxy().unwrap_or_default(),
+                false,
+            )
         };
 
         Self {
@@ -104,6 +115,7 @@ impl BrowserManager {
             pending_approvals: Arc::new(Mutex::new(HashMap::new())),
             idle_task: Arc::new(Mutex::new(None)),
             proxy_server: Arc::new(Mutex::new(proxy)),
+            no_proxy: Arc::new(Mutex::new(no_proxy)),
             headless: Arc::new(Mutex::new(headless)),
             app_data_dir,
             app_handle,

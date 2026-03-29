@@ -55,11 +55,17 @@ impl BrowserManager {
             headless
         );
 
+        let no_proxy = self.no_proxy.lock().await.clone();
+        if !no_proxy.is_empty() {
+            tracing::info!("sidecar: no_proxy={}", no_proxy);
+        }
+
         let mut cmd = Command::new(&node_path);
         cmd.arg(&script_path)
             .env("PLAYWRIGHT_BROWSERS_PATH", &browsers_path)
             .env("PLAYWRIGHT_BROWSERS_PATH_FALLBACK", &fallback_path)
             .env("BROWSER_PROXY_SERVER", &proxy)
+            .env("BROWSER_NO_PROXY", &no_proxy)
             .env("BROWSER_HEADLESS", if headless { "1" } else { "0" })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -262,6 +268,28 @@ pub(super) fn resolve_sidecar_script(app_handle: Option<&tauri::AppHandle>) -> O
     None
 }
 
+/// Detect system NO_PROXY setting from environment variables.
+/// Returns a comma-separated list of hosts/domains to bypass.
+pub fn detect_system_no_proxy() -> Option<String> {
+    for var in ["NO_PROXY", "no_proxy"] {
+        if let Ok(val) = std::env::var(var) {
+            let trimmed = val.trim().to_string();
+            if !trimmed.is_empty() {
+                return Some(trimmed);
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(bypass) = detect_windows_registry_no_proxy() {
+            return Some(bypass);
+        }
+    }
+
+    None
+}
+
 /// Detect system proxy settings.
 /// Windows: reads from environment variables (HTTP_PROXY / HTTPS_PROXY).
 /// These are also set by many corporate proxy tools.
@@ -347,6 +375,43 @@ fn detect_windows_registry_proxy() -> Option<String> {
                     } else {
                         Some(format!("http://{}", val))
                     };
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Read NO_PROXY (ProxyOverride) from Windows registry.
+/// Windows stores bypass list as semicolon-separated, e.g. "*.local;10.*;localhost".
+/// We convert to comma-separated for Playwright compatibility.
+#[cfg(target_os = "windows")]
+fn detect_windows_registry_no_proxy() -> Option<String> {
+    use std::process::Command as StdCommand;
+    let output = StdCommand::new("reg")
+        .args([
+            "query",
+            r"HKCU\Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+            "/v",
+            "ProxyOverride",
+        ])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.starts_with("ProxyOverride") {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if let Some(val) = parts.last() {
+                let val = val.trim();
+                if !val.is_empty() {
+                    // Windows uses semicolons; convert to commas
+                    return Some(val.replace(';', ","));
                 }
             }
         }

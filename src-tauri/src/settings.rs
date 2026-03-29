@@ -57,6 +57,7 @@ pub struct AppSettingsInner {
     // Browser (persisted in browser-config.json)
     pub browser_headless: bool,
     pub browser_proxy: String,
+    pub browser_no_proxy: String,
 }
 
 impl Default for AppSettingsInner {
@@ -77,6 +78,7 @@ impl Default for AppSettingsInner {
             directory_agent_description: String::new(),
             browser_headless: false,
             browser_proxy: String::new(),
+            browser_no_proxy: String::new(),
         }
     }
 }
@@ -101,6 +103,7 @@ pub struct AppSettingsPatch {
     // Browser
     pub browser_headless: Option<bool>,
     pub browser_proxy: Option<String>,
+    pub browser_no_proxy: Option<String>,
 }
 
 // ── AppSettings impl ─────────────────────────────────────
@@ -155,6 +158,7 @@ fn read_from_store(app: &tauri::AppHandle) -> AppSettingsInner {
     if let Ok(store) = app.store(STORE_BROWSER) {
         if let Some(v) = read_bool(&store, "headless") { s.browser_headless = v; }
         if let Some(v) = read_str(&store, "proxy_server") { s.browser_proxy = v.to_string(); }
+        if let Some(v) = read_str(&store, "no_proxy") { s.browser_no_proxy = v; }
     }
 
     // Env var overrides (dev convenience)
@@ -210,6 +214,7 @@ impl AppSettings {
             directory_agent_description: patch.directory_agent_description.clone().unwrap_or_else(|| guard.directory_agent_description.clone()),
             browser_headless: patch.browser_headless.unwrap_or(guard.browser_headless),
             browser_proxy: patch.browser_proxy.clone().unwrap_or_else(|| guard.browser_proxy.clone()),
+            browser_no_proxy: patch.browser_no_proxy.clone().unwrap_or_else(|| guard.browser_no_proxy.clone()),
         };
 
         // Persist to the appropriate store files based on which fields changed.
@@ -220,7 +225,7 @@ impl AppSettings {
         let has_relay = patch.network_enabled.is_some() || patch.relay_url.is_some()
             || patch.allowed_tools.is_some() || patch.discoverable.is_some()
             || patch.directory_agent_name.is_some() || patch.directory_agent_description.is_some();
-        let has_browser = patch.browser_headless.is_some() || patch.browser_proxy.is_some();
+        let has_browser = patch.browser_headless.is_some() || patch.browser_proxy.is_some() || patch.browser_no_proxy.is_some();
 
         if has_app {
             let store = app.store(STORE_APP)
@@ -252,6 +257,7 @@ impl AppSettings {
                 .map_err(|e| AppError::Config(format!("Failed to open browser settings store: {e}")))?;
             store.set("headless", serde_json::json!(new.browser_headless));
             store.set("proxy_server", serde_json::json!(&new.browser_proxy));
+            store.set("no_proxy", serde_json::json!(&new.browser_no_proxy));
             store.save().map_err(|e| AppError::Config(format!("Failed to persist browser settings: {e}")))?;
         }
 
@@ -418,6 +424,7 @@ mod tests {
             directory_agent_description: patch.directory_agent_description.clone().unwrap_or_else(|| current.directory_agent_description.clone()),
             browser_headless: patch.browser_headless.unwrap_or(current.browser_headless),
             browser_proxy: patch.browser_proxy.clone().unwrap_or_else(|| current.browser_proxy.clone()),
+            browser_no_proxy: patch.browser_no_proxy.clone().unwrap_or_else(|| current.browser_no_proxy.clone()),
         }
     }
 }

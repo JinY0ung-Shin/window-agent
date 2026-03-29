@@ -176,6 +176,40 @@ impl BrowserManager {
         }
     }
 
+    /// Get the current browser NO_PROXY bypass list.
+    pub async fn get_no_proxy(&self) -> String {
+        self.no_proxy.lock().await.clone()
+    }
+
+    /// Set the browser NO_PROXY bypass list and restart sidecar to apply.
+    pub async fn set_no_proxy(&self, no_proxy: String) {
+        *self.no_proxy.lock().await = no_proxy.clone();
+
+        // Kill existing sidecar so it restarts with new setting on next use
+        let mut sidecar = self.sidecar.lock().await;
+        if let Some(mut s) = sidecar.take() {
+            let _ = s.child.kill();
+        }
+
+        // Clear all cached sessions
+        {
+            let mut sessions = self.sessions.write().await;
+            sessions.clear();
+        }
+
+        // Persist via AppSettings
+        if let Some(ref handle) = self.app_handle {
+            use tauri::Manager;
+            let _ = handle.state::<crate::settings::AppSettings>().set(
+                &crate::settings::AppSettingsPatch {
+                    browser_no_proxy: Some(no_proxy),
+                    ..Default::default()
+                },
+                handle,
+            );
+        }
+    }
+
     /// Get the current browser proxy server URL.
     pub async fn get_proxy_server(&self) -> String {
         self.proxy_server.lock().await.clone()

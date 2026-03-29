@@ -188,8 +188,15 @@ function getLaunchOptions(extra = {}) {
   const opts = { headless, args: LAUNCH_ARGS, ...extra };
   const proxyServer = process.env.BROWSER_PROXY_SERVER;
   if (proxyServer) {
-    opts.proxy = { server: proxyServer };
-    log(`Proxy configured: ${proxyServer}`);
+    const proxyConfig = { server: proxyServer };
+    const noProxy = process.env.BROWSER_NO_PROXY;
+    if (noProxy) {
+      proxyConfig.bypass = noProxy;
+      log(`Proxy configured: ${proxyServer} (bypass: ${noProxy})`);
+    } else {
+      log(`Proxy configured: ${proxyServer}`);
+    }
+    opts.proxy = proxyConfig;
   }
   return opts;
 }

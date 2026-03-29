@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { getBrowserProxy, setBrowserProxy, detectSystemProxy, getBrowserHeadless, setBrowserHeadless } from "../../services/commands/apiCommands";
+import {
+  getBrowserProxy, setBrowserProxy, detectSystemProxy,
+  getBrowserNoProxy, setBrowserNoProxy, detectSystemNoProxy,
+  getBrowserHeadless, setBrowserHeadless,
+} from "../../services/commands/apiCommands";
 import { logger } from "../../services/logger";
 
 interface Props {
@@ -11,6 +15,7 @@ export default function ProxySection({ isOpen }: Props) {
   const { t } = useTranslation("settings");
 
   const [browserProxy, setBrowserProxyState] = useState("");
+  const [browserNoProxy, setBrowserNoProxyState] = useState("");
   const [browserProxySaving, setBrowserProxySaving] = useState(false);
   const [browserProxySaved, setBrowserProxySaved] = useState(false);
   const [browserProxyDetecting, setBrowserProxyDetecting] = useState(false);
@@ -24,6 +29,8 @@ export default function ProxySection({ isOpen }: Props) {
         setBrowserProxySaved(false);
         setBrowserProxyDetectMsg("");
       }).catch((e) => logger.debug("Failed to get browser proxy", e));
+      getBrowserNoProxy().then(setBrowserNoProxyState)
+        .catch((e) => logger.debug("Failed to get browser no_proxy", e));
       getBrowserHeadless().then(setHeadless).catch((e) => logger.debug("Failed to get headless", e));
     }
   }, [isOpen]);
@@ -71,7 +78,10 @@ export default function ProxySection({ isOpen }: Props) {
           onClick={async () => {
             setBrowserProxySaving(true);
             try {
-              await setBrowserProxy(browserProxy.trim());
+              await Promise.all([
+                setBrowserProxy(browserProxy.trim()),
+                setBrowserNoProxy(browserNoProxy.trim()),
+              ]);
               setBrowserProxySaved(true);
             } catch (e) {
               logger.debug("Failed to save browser proxy", e);
@@ -89,9 +99,15 @@ export default function ProxySection({ isOpen }: Props) {
             setBrowserProxyDetecting(true);
             setBrowserProxyDetectMsg("");
             try {
-              const detected = await detectSystemProxy();
-              if (detected) {
-                setBrowserProxyState(detected);
+              const [detectedProxy, detectedNoProxy] = await Promise.all([
+                detectSystemProxy(),
+                detectSystemNoProxy(),
+              ]);
+              if (detectedProxy) {
+                setBrowserProxyState(detectedProxy);
+                if (detectedNoProxy) {
+                  setBrowserNoProxyState(detectedNoProxy);
+                }
                 setBrowserProxyDetectMsg(t("general.browserProxyDetected"));
               } else {
                 setBrowserProxyDetectMsg(t("general.browserProxyNotDetected"));
@@ -114,6 +130,20 @@ export default function ProxySection({ isOpen }: Props) {
         <p className="form-text">{browserProxyDetectMsg}</p>
       )}
       <p className="form-text">{t("general.browserProxyHint")}</p>
+    </div>
+    <div className="form-group">
+      <label htmlFor="browserNoProxy">{t("general.browserNoProxyLabel", { defaultValue: "No Proxy" })}</label>
+      <input
+        id="browserNoProxy"
+        type="text"
+        placeholder={t("general.browserNoProxyPlaceholder", { defaultValue: "localhost,127.0.0.1,*.local" })}
+        value={browserNoProxy}
+        onChange={(e) => {
+          setBrowserNoProxyState(e.target.value);
+          setBrowserProxySaved(false);
+        }}
+      />
+      <p className="form-text">{t("general.browserNoProxyHint", { defaultValue: "Comma-separated list of hosts to bypass proxy (e.g. localhost,127.0.0.1,*.example.com)" })}</p>
     </div>
     </>
   );
