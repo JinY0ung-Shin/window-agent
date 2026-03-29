@@ -2,7 +2,7 @@
 
 > AI 에이전트 기반 데스크톱 어시스턴트. 여러 에이전트를 생성하고, 도구를 사용하며, 브라우저 자동화를 수행하고, 릴레이 네트워크를 통해 에이전트 간 통신을 지원한다.
 
-**Version:** 0.14.1
+**Version:** 0.14.2
 **Last Updated:** 2026-03-29
 
 ---
@@ -608,8 +608,19 @@ Dormant ──start()──→ Starting ──connected──→ Active
    - thread.local_agent_id
    - contact.local_agent_id
    - default agent
-3. 해당 에이전트의 persona + tools로 LLM 호출 (tool loop, max 10 iterations)
-4. MessageResponse에 responding_agent_id 포함하여 응답
+3. system prompt에 `[PEER CONTEXT]` 섹션 추가 (상대방 이름/에이전트 정보)
+4. 해당 에이전트의 persona + tools로 LLM 호출 (tool loop, max 10 iterations)
+5. MessageResponse에 responding_agent_id 포함하여 응답
+
+### 9.8.1 프론트엔드 메시지 표시
+- **기본 모드 ("내 대화")**: 내가 UI에서 보낸 메시지(`direction=outgoing`, `responding_agent_id=null`)와 그에 대한 상대방 응답(`direction=incoming`, `correlation_id`가 내 메시지에 연결)만 표시
+- **전체 보기**: 상대방이 보낸 요청 + 내 에이전트의 자동응답까지 모두 표시
+- PeerThread 헤더의 👁 토글로 전환, `showAllMessages` 상태로 관리
+
+### 9.8.2 대화 기록 관리
+- `relay_clear_thread_messages(thread_id)`: 스레드의 모든 메시지 일괄 삭제
+- `relay_delete_thread(thread_id)`: 스레드 자체 삭제 (CASCADE로 메시지도 삭제)
+- UI에서 🗑 버튼 (2단계 확인: 첫 클릭 → confirm → 3초 내 재클릭 → 실행)
 
 ### 9.9 에이전트 공개 (network_visible)
 - AgentEditor에서 "네트워크에 공개" 토글
@@ -706,7 +717,7 @@ BrowserSession {
 | memoryStore | 메모리/다이제스트 |
 | messageStore | 메시지 라우팅 |
 | navigationStore | mainView 라우팅 (chat/team/cron/vault/network/agent/settings) |
-| networkStore | 릴레이 연결, 연락처, 피어 채팅, 디렉토리 |
+| networkStore | 릴레이 연결, 연락처, 피어 채팅, 디렉토리, 메시지 필터링(showAllMessages) |
 | settingsStore | API 키, 모델, 테마, 로케일 |
 | skillStore | 활성 스킬 |
 | streamStore / streamResponses | 스트리밍 응답 상태 |
@@ -811,7 +822,7 @@ services/
 `approve_browser_domain`, `get_browser_artifact`, `get_browser_headless`, `set_browser_headless`, `get_browser_proxy`, `set_browser_proxy`, `get_browser_no_proxy`, `set_browser_no_proxy`, `detect_system_proxy`, `detect_system_no_proxy`, `get_shell_info`, `get_workspace_path`
 
 ### Relay / Network
-`relay_start`, `relay_stop`, `relay_status`, `relay_generate_invite`, `relay_accept_invite`, `relay_list_contacts`, `relay_update_contact`, `relay_remove_contact`, `relay_approve_contact`, `relay_reject_contact`, `relay_bind_agent`, `relay_send_message`, `relay_list_threads`, `relay_get_thread`, `relay_get_thread_messages`, `relay_get_peer_id`, `relay_get_network_enabled`, `relay_set_network_enabled`, `relay_get_connection_info`, `relay_get_relay_url`, `relay_set_relay_url`, `relay_get_allowed_tools`, `relay_set_allowed_tools`, `relay_search_directory`, `relay_send_friend_request`, `relay_update_directory_profile`, `relay_get_directory_settings`, `relay_set_directory_settings`
+`relay_start`, `relay_stop`, `relay_status`, `relay_generate_invite`, `relay_accept_invite`, `relay_list_contacts`, `relay_update_contact`, `relay_remove_contact`, `relay_approve_contact`, `relay_reject_contact`, `relay_bind_agent`, `relay_send_message`, `relay_list_threads`, `relay_get_thread`, `relay_get_thread_messages`, `relay_delete_thread`, `relay_clear_thread_messages`, `relay_get_peer_id`, `relay_get_network_enabled`, `relay_set_network_enabled`, `relay_get_connection_info`, `relay_get_relay_url`, `relay_set_relay_url`, `relay_get_allowed_tools`, `relay_set_allowed_tools`, `relay_search_directory`, `relay_send_friend_request`, `relay_update_directory_profile`, `relay_get_directory_settings`, `relay_set_directory_settings`
 
 ### Team
 `create_team`, `get_team_detail`, `list_teams`, `update_team`, `delete_team`, `add_team_member`, `remove_team_member`, `create_team_run`, `update_team_run_status`, `get_team_run`, `get_running_runs`, `create_team_task`, `update_team_task`, `get_team_tasks`, `abort_team_run`, `execute_delegation`, `handle_team_report`
@@ -866,8 +877,11 @@ services/
 
 ### 14.4 Credential in Tools
 - `browser_type`에서 `{{credential:KEY}}` 문법으로 비밀번호 자동 입력
-- `run_shell`에서 credential이 `CRED_*` 환경변수로 자동 주입
-- 실행 결과에서 credential 값 자동 redact
+- `run_shell`에서 credential 접근 2가지 방식 병행:
+  - `CRED_*` 환경변수 자동 주입 (예: `$CRED_GITHUB_TOKEN`)
+  - `{{credential:KEY}}` 인라인 치환 (command 문자열에서 직접 치환)
+- 실행 결과에서 credential 값 자동 redact (환경변수/인라인 모두)
+- 자동 승인 정책: `auto_approve=true`일 때 `run_shell`도 자동 승인 (credential 유무 무관). `browser_type`은 `{{credential:*}}` placeholder 사용 시에만 confirm 유지. `manage_schedule`은 항상 confirm.
 
 ---
 
@@ -887,6 +901,13 @@ services/
    - TeamMember: `report` 도구로 결과 보고 지시
    - TeamLeaderSynthesis: 보고서 종합 지시
    - RelayResponse: 자연스러운 메시지 응답 지시
+9. **피어 컨텍스트** (RelayResponse only) — secretary가 자동응답 시 추가:
+   ```
+   [PEER CONTEXT]
+   You are conversing with an external peer (from another organization/user).
+   - Peer display name: {display_name}
+   - Peer agent: {agent_name} ({agent_description})
+   ```
 
 ---
 
