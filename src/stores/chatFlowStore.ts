@@ -23,6 +23,7 @@ import {
 import { parseErrorMessage } from "../constants";
 import { toErrorMessage } from "../utils/errorUtils";
 import { i18n } from "../i18n";
+import { notifyChatDone } from "../services/notificationService";
 import { emitLifecycleEvent, onLifecycleEvent } from "../services/lifecycleEvents";
 import {
   msg, conv, stream, boot, summary,
@@ -334,6 +335,7 @@ async function sendNormalMessage() {
       },
       { currentRequestId, currentMsgId: firstMsgId },
     );
+    notifyChatDone(agent?.name);
   } catch (error) {
     handleStreamError(error, firstMsgId);
   } finally {
@@ -443,6 +445,7 @@ async function regenerateStream(
       summary().maybeGenerateSummary(
         convId, baseSystemPrompt, msg().messages, () => conv().loadConversations(),
       );
+      notifyChatDone(agent?.name);
     }
   } catch (error) {
     handleStreamError(error, msgId);

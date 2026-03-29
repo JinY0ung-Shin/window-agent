@@ -15,6 +15,7 @@ import koVault from "./locales/ko/vault.json";
 import koPrompts from "./locales/ko/prompts.json";
 import koTeam from "./locales/ko/team.json";
 import koCron from "./locales/ko/cron.json";
+import koNotification from "./locales/ko/notification.json";
 
 import enCommon from "./locales/en/common.json";
 import enGlossary from "./locales/en/glossary.json";
@@ -27,6 +28,7 @@ import enVault from "./locales/en/vault.json";
 import enPrompts from "./locales/en/prompts.json";
 import enTeam from "./locales/en/team.json";
 import enCron from "./locales/en/cron.json";
+import enNotification from "./locales/en/notification.json";
 
 export const SUPPORTED_LOCALES = ["ko", "en"] as const;
 export type Locale = (typeof SUPPORTED_LOCALES)[number];
@@ -46,6 +48,7 @@ const resources = {
     prompts: koPrompts,
     team: koTeam,
     cron: koCron,
+    notification: koNotification,
   },
   en: {
     common: enCommon,
@@ -59,6 +62,7 @@ const resources = {
     prompts: enPrompts,
     team: enTeam,
     cron: enCron,
+    notification: enNotification,
   },
 };
 
@@ -78,6 +82,7 @@ i18n.use(initReactI18next).init({
     "prompts",
     "team",
     "cron",
+    "notification",
   ],
   defaultNS: "common",
   interpolation: {

@@ -1,0 +1,22 @@
+{
+  "defaultAgent": "Agent",
+  "chatDone": {
+    "title": "Response Complete",
+    "body": "{{agent}} has finished responding."
+  },
+  "networkMessage": {
+    "title": "Network Message",
+    "body": "A new message has arrived.",
+    "bodyWithName": "A message from {{name}} has arrived."
+  },
+  "teamDone": {
+    "title": "Team Run Complete",
+    "body": "Team execution has finished.",
+    "bodyWithName": "{{team}} team execution has finished."
+  },
+  "settings": {
+    "label": "System Notifications",
+    "hint": "Receive notifications for response completion, network messages, etc. while in background.",
+    "permissionDenied": "Notification permission is blocked by the browser."
+  }
+}

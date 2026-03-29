@@ -27,6 +27,7 @@ import {
   updateMessageInList,
 } from "../services/streamHelpers";
 import { logger } from "../services/logger";
+import { notifyTeamDone } from "../services/notificationService";
 import {
   resolveEffectiveSettings,
   resolveToolConfig,
@@ -354,6 +355,13 @@ export const useTeamChatFlowStore = create<TeamChatFlowState>((_set, _get) => ({
             logger.debug("Failed to persist team run status", e);
           }
           stream().removeRun(run_id);
+
+          // Notify user of team completion
+          const completedRun = useTeamRunStore.getState().activeRuns[run_id];
+          const teamId = completedRun?.team_id;
+          const team = teamId ? useTeamStore.getState().teams.find((t) => t.id === teamId) : null;
+          notifyTeamDone(team?.name);
+
           conv().loadConversations().catch((e) =>
             logger.error("Failed to reload conversations:", e),
           );

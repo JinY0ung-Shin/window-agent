@@ -30,6 +30,7 @@ type NetworkStatus = "dormant" | "starting" | "active" | "stopping" | "reconnect
 
 import { logger } from "../services/logger";
 import { toErrorMessage } from "../utils/errorUtils";
+import { notifyNetworkMessage } from "../services/notificationService";
 
 // Event payload types emitted by the Rust backend
 interface ConnectionStatePayload {
@@ -365,6 +366,7 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
         if (selectedThreadId) {
           get().loadMessages(selectedThreadId);
         }
+        notifyNetworkMessage();
       }),
     );
 
