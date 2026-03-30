@@ -13,6 +13,7 @@ import CredentialManager from "./CredentialManager";
 import type { ApiServerSectionRef } from "./ApiServerSection";
 import type { ThinkingSettingsPanelRef } from "./ThinkingSettingsPanel";
 import type { BrandingSettingsPanelRef } from "./BrandingSettingsPanel";
+import type { ProxySectionRef } from "./ProxySection";
 
 type Tab = "api" | "thinking" | "tools" | "appearance" | "credentials" | "backup";
 
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const apiRef = useRef<ApiServerSectionRef>(null);
   const thinkingRef = useRef<ThinkingSettingsPanelRef>(null);
   const brandingRef = useRef<BrandingSettingsPanelRef>(null);
+  const proxyRef = useRef<ProxySectionRef>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -40,7 +42,9 @@ export default function SettingsPage() {
     }
   }, [isOpen]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Save proxy/no_proxy settings (managed separately by BrowserManager)
+    await proxyRef.current?.save().catch(() => {});
     const branding = brandingRef.current?.getValues();
     const apiValues = apiRef.current?.getValues();
     const thinking = thinkingRef.current?.getValues();
@@ -85,7 +89,7 @@ export default function SettingsPage() {
             <ApiServerSection ref={apiRef} isOpen={isOpen} />
           </div>
           <div style={{ display: tab === "tools" ? undefined : "none" }}>
-            <ProxySection isOpen={isOpen} />
+            <ProxySection ref={proxyRef} isOpen={isOpen} />
           </div>
           <div style={{ display: tab === "thinking" ? undefined : "none" }}>
             <ThinkingSettingsPanel ref={thinkingRef} isOpen={isOpen} />

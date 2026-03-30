@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useTranslation } from "react-i18next";
 import {
   getBrowserProxy, setBrowserProxy, detectSystemProxy,
@@ -7,11 +7,15 @@ import {
 } from "../../services/commands/apiCommands";
 import { logger } from "../../services/logger";
 
+export interface ProxySectionRef {
+  save: () => Promise<void>;
+}
+
 interface Props {
   isOpen: boolean;
 }
 
-export default function ProxySection({ isOpen }: Props) {
+const ProxySection = forwardRef<ProxySectionRef, Props>(function ProxySection({ isOpen }, ref) {
   const { t } = useTranslation("settings");
 
   const [browserProxy, setBrowserProxyState] = useState("");
@@ -34,6 +38,15 @@ export default function ProxySection({ isOpen }: Props) {
       getBrowserHeadless().then(setHeadless).catch((e) => logger.debug("Failed to get headless", e));
     }
   }, [isOpen]);
+
+  useImperativeHandle(ref, () => ({
+    save: async () => {
+      await Promise.all([
+        setBrowserProxy(browserProxy.trim()),
+        setBrowserNoProxy(browserNoProxy.trim()),
+      ]);
+    },
+  }));
 
   return (
     <>
@@ -147,4 +160,6 @@ export default function ProxySection({ isOpen }: Props) {
     </div>
     </>
   );
-}
+});
+
+export default ProxySection;
