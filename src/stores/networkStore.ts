@@ -20,6 +20,8 @@ import {
   relaySetDirectorySettings,
   relayUpdateDirectoryProfile,
   relayClearThreadMessages,
+  relayClearMyChatMessages,
+  relayClearAllMyChatMessages,
   type ContactRow,
   type PeerThreadRow,
   type PeerMessageRow,
@@ -89,6 +91,7 @@ interface NetworkState {
   sendFriendRequest: (peer: DirectoryPeer, localAgentId?: string) => Promise<void>;
   setDiscoverable: (discoverable: boolean) => Promise<void>;
   clearThreadMessages: (threadId: string) => Promise<void>;
+  clearMyChatMessages: (threadId: string) => Promise<void>;
   setupEventListeners: () => Promise<() => void>;
 }
 
@@ -119,6 +122,10 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       logger.debug("Network enabled check failed", e);
       enabled = false;
     }
+    // Clear ephemeral "my chat" messages from previous session (regardless of network state)
+    await relayClearAllMyChatMessages().catch((e) =>
+      logger.debug("Clear ephemeral messages failed:", e),
+    );
     set({ networkEnabled: enabled });
     if (enabled) {
       try {
@@ -331,6 +338,14 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
     const { selectedThreadId } = get();
     if (selectedThreadId === threadId) {
       set({ messages: [] });
+    }
+  },
+
+  clearMyChatMessages: async (threadId) => {
+    await relayClearMyChatMessages(threadId);
+    const { selectedThreadId } = get();
+    if (selectedThreadId === threadId) {
+      await get().loadMessages(threadId);
     }
   },
 

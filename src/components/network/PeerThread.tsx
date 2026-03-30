@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Trash2 } from "lucide-react";
+import { Trash2, SquarePen } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useMessageScroll } from "../../hooks/useMessageScroll";
 import PeerMessageBubble from "./PeerMessageBubble";
@@ -17,6 +17,7 @@ export default function PeerThread() {
   const contacts = useNetworkStore((s) => s.contacts);
   const connectedPeers = useNetworkStore((s) => s.connectedPeers);
   const clearThreadMessages = useNetworkStore((s) => s.clearThreadMessages);
+  const clearMyChatMessages = useNetworkStore((s) => s.clearMyChatMessages);
 
   const [activeTab, setActiveTab] = useState<TabKey>("my");
   const [confirmClear, setConfirmClear] = useState(false);
@@ -75,6 +76,15 @@ export default function PeerThread() {
           </span>
         </div>
         <div className="peer-thread-actions">
+          {selectedThreadId && activeTab === "my" && myMessages.length > 0 && (
+            <button
+              className="icon-btn"
+              onClick={() => clearMyChatMessages(selectedThreadId)}
+              title={t("peer.newConversation")}
+            >
+              <SquarePen size={16} />
+            </button>
+          )}
           {selectedThreadId && (
             <button
               className={`icon-btn${confirmClear ? " confirm" : ""}`}

@@ -79,6 +79,61 @@ pub fn clear_thread_messages(db: &Database, thread_id: &str) -> Result<(), DbErr
     })
 }
 
+/// Clear only "my chat" messages from a thread:
+/// - outgoing messages sent by user (responding_agent_id IS NULL)
+/// - incoming responses correlated to those messages
+pub fn clear_my_chat_messages(db: &Database, thread_id: &str) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        // 1. Delete incoming responses correlated to my outgoing messages
+        tx.execute(
+            "DELETE FROM peer_messages WHERE thread_id = ?1
+             AND direction = 'incoming' AND correlation_id IS NOT NULL
+             AND correlation_id IN (
+                 SELECT message_id_unique FROM peer_messages
+                 WHERE thread_id = ?1 AND direction = 'outgoing' AND responding_agent_id IS NULL
+             )",
+            rusqlite::params![thread_id],
+        )?;
+        // 2. Delete my outgoing messages (user-sent, not auto-responses)
+        tx.execute(
+            "DELETE FROM peer_messages WHERE thread_id = ?1
+             AND direction = 'outgoing' AND responding_agent_id IS NULL",
+            rusqlite::params![thread_id],
+        )?;
+        tx.commit()?;
+        Ok(())
+    })
+}
+
+/// Clear "my chat" messages from ALL threads (used on app startup for ephemeral behavior).
+/// Skips messages still pending delivery (queued/sending) to avoid losing undelivered messages.
+pub fn clear_all_my_chat_messages(db: &Database) -> Result<(), DbError> {
+    db.with_conn(|conn| {
+        let tx = conn.unchecked_transaction()?;
+        // 1. Delete incoming responses correlated to delivered user-sent outgoing messages
+        tx.execute(
+            "DELETE FROM peer_messages
+             WHERE direction = 'incoming' AND correlation_id IS NOT NULL
+             AND correlation_id IN (
+                 SELECT message_id_unique FROM peer_messages
+                 WHERE direction = 'outgoing' AND responding_agent_id IS NULL
+                 AND delivery_state NOT IN ('queued', 'sending')
+             )",
+            [],
+        )?;
+        // 2. Delete user-sent outgoing messages that have already been delivered
+        tx.execute(
+            "DELETE FROM peer_messages
+             WHERE direction = 'outgoing' AND responding_agent_id IS NULL
+             AND delivery_state NOT IN ('queued', 'sending')",
+            [],
+        )?;
+        tx.commit()?;
+        Ok(())
+    })
+}
+
 fn map_thread_row(row: &rusqlite::Row) -> Result<PeerThreadRow, rusqlite::Error> {
     Ok(PeerThreadRow {
         id: row.get(0)?,

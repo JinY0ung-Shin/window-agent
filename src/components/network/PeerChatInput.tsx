@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Send, ChevronDown, Bot } from "lucide-react";
+import { Send, ChevronDown, Bot, Lock } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import { useChatInputLogic } from "../../hooks/useChatInputLogic";
 import type { PublishedAgent } from "../../services/types";
@@ -9,6 +9,7 @@ export default function PeerChatInput() {
   const { t } = useTranslation("network");
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const contacts = useNetworkStore((s) => s.contacts);
+  const messages = useNetworkStore((s) => s.messages);
   const sendMessage = useNetworkStore((s) => s.sendMessage);
 
   const contact = contacts.find((c) => c.id === selectedContactId);
@@ -17,9 +18,28 @@ export default function PeerChatInput() {
     try { return JSON.parse(contact.published_agents_json); } catch { return []; }
   }, [contact?.published_agents_json]);
 
+  // Check if there are user-sent outgoing messages → lock agent picker to latest target
+  const lockedAgentId = useMemo(() => {
+    const userMsgs = messages.filter(
+      (m) => m.direction === "outgoing" && !m.responding_agent_id,
+    );
+    if (userMsgs.length === 0) return null;
+    const lastMsg = userMsgs[userMsgs.length - 1];
+    return lastMsg.target_agent_id ?? "";
+  }, [messages]);
+
+  const isAgentLocked = lockedAgentId !== null;
+
   const [selectedAgentId, setSelectedAgentId] = useState<string>("");
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+
+  // Sync selectedAgentId with locked agent when messages change
+  useEffect(() => {
+    if (isAgentLocked) {
+      setSelectedAgentId(lockedAgentId);
+    }
+  }, [isAgentLocked, lockedAgentId]);
 
   const selectedAgent = publishedAgents.find((a) => a.agent_id === selectedAgentId);
 
@@ -56,17 +76,18 @@ export default function PeerChatInput() {
       {publishedAgents.length > 0 && (
         <div className="peer-agent-picker-wrap" ref={pickerRef}>
           <button
-            className="peer-agent-picker-trigger"
-            onClick={() => setShowAgentPicker(!showAgentPicker)}
-            title={t("peer.selectAgent")}
+            className={`peer-agent-picker-trigger${isAgentLocked ? " locked" : ""}`}
+            onClick={() => !isAgentLocked && setShowAgentPicker(!showAgentPicker)}
+            disabled={isAgentLocked}
+            title={isAgentLocked ? t("peer.agentLocked") : t("peer.selectAgent")}
           >
-            <Bot size={14} />
+            {isAgentLocked ? <Lock size={14} /> : <Bot size={14} />}
             <span className="peer-agent-picker-label">
               {selectedAgent ? selectedAgent.name : t("peer.defaultAgent")}
             </span>
-            <ChevronDown size={12} className={showAgentPicker ? "rotated" : ""} />
+            {!isAgentLocked && <ChevronDown size={12} className={showAgentPicker ? "rotated" : ""} />}
           </button>
-          {showAgentPicker && (
+          {showAgentPicker && !isAgentLocked && (
             <div className="peer-agent-picker-dropdown">
               <button
                 className={`peer-agent-picker-option${!selectedAgentId ? " active" : ""}`}

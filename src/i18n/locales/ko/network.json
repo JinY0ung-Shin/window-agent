@@ -103,6 +103,8 @@
     "tabMyChat": "내 대화",
     "tabIncoming": "수신 대화",
     "clearHistory": "대화 기록 삭제",
+    "newConversation": "대화 초기화",
+    "agentLocked": "대화 중에는 에이전트를 변경할 수 없습니다",
     "noMyMessages": "아직 보낸 메시지가 없습니다.",
     "noIncomingMessages": "상대방이 보낸 메시지가 없습니다.",
     "incomingReadOnly": "상대방과 에이전트 간의 대화입니다 (읽기 전용)",

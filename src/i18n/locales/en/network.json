@@ -103,6 +103,8 @@
     "tabMyChat": "My Chat",
     "tabIncoming": "Incoming",
     "clearHistory": "Clear chat history",
+    "newConversation": "Reset My Chat",
+    "agentLocked": "Cannot change agent during a conversation",
     "noMyMessages": "No messages sent yet.",
     "noIncomingMessages": "No incoming messages yet.",
     "incomingReadOnly": "Conversation between the peer and your agent (read-only)",

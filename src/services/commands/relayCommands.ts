@@ -198,6 +198,14 @@ export async function relayClearThreadMessages(threadId: string): Promise<void> 
   return invoke("relay_clear_thread_messages", { threadId });
 }
 
+export async function relayClearMyChatMessages(threadId: string): Promise<void> {
+  return invoke("relay_clear_my_chat_messages", { threadId });
+}
+
+export async function relayClearAllMyChatMessages(): Promise<void> {
+  return invoke("relay_clear_all_my_chat_messages");
+}
+
 export async function relayListThreads(
   contactId: string,
 ): Promise<PeerThreadRow[]> {

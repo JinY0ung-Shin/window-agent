@@ -519,6 +519,23 @@ pub fn relay_clear_thread_messages(
     relay_db::clear_thread_messages(&db, &thread_id).map_err(|e| AppError::Relay(e.to_string()))
 }
 
+/// Clear only "my chat" messages from a specific thread (user-sent + their responses).
+#[tauri::command]
+pub fn relay_clear_my_chat_messages(
+    db: State<'_, Database>,
+    thread_id: String,
+) -> Result<(), AppError> {
+    relay_db::clear_my_chat_messages(&db, &thread_id).map_err(|e| AppError::Relay(e.to_string()))
+}
+
+/// Clear all "my chat" messages across all threads (called on app startup for ephemeral behavior).
+#[tauri::command]
+pub fn relay_clear_all_my_chat_messages(
+    db: State<'_, Database>,
+) -> Result<(), AppError> {
+    relay_db::clear_all_my_chat_messages(&db).map_err(|e| AppError::Relay(e.to_string()))
+}
+
 // ── Network settings commands ──
 
 #[tauri::command]
