@@ -291,7 +291,7 @@ const handlers = {
     if (sessions.has(session_id)) throw new Error(`Session already exists: ${session_id}`);
 
     const b = await ensureBrowser();
-    const context = await b.newContext({ viewport: { width: 1280, height: 720 } });
+    const context = await b.newContext({ viewport: null });
     const page = await context.newPage();
     sessions.set(session_id, { context, page, refMap: {} });
     log(`Session created: ${session_id}`);
@@ -384,6 +384,161 @@ const handlers = {
     const response = await buildResponse(page);
     sessions.get(session_id).refMap = response.ref_map;
     return response;
+  },
+
+  async scroll({ session_id, params }) {
+    const deltaX = (params && params.x) || 0;
+    const deltaY = (params && params.y) || 300;
+
+    const { page } = getSession(session_id);
+    await page.mouse.wheel(deltaX, deltaY);
+    await page.waitForTimeout(300);
+
+    const response = await buildResponse(page);
+    sessions.get(session_id).refMap = response.ref_map;
+    return response;
+  },
+
+  async key({ session_id, params }) {
+    const { key } = params || {};
+    if (!key) throw new Error('params.key is required');
+
+    const { page } = getSession(session_id);
+    await page.keyboard.press(key);
+    await page.waitForTimeout(300);
+
+    const response = await buildResponse(page);
+    sessions.get(session_id).refMap = response.ref_map;
+    return response;
+  },
+
+  async select_option({ session_id, params }) {
+    const { ref, value } = params || {};
+    if (ref === undefined || ref === null) throw new Error('params.ref is required');
+    if (value === undefined || value === null) throw new Error('params.value is required');
+
+    const session = getSession(session_id);
+    const entry = session.refMap[String(ref)];
+    if (!entry) throw new Error(`Ref ${ref} not found in current snapshot`);
+
+    const { page } = session;
+    const locator = page.locator(entry.selector);
+    await locator.selectOption(value, { timeout: 5000 });
+
+    const response = await buildResponse(page);
+    session.refMap = response.ref_map;
+    return response;
+  },
+
+  async hover({ session_id, params }) {
+    const { ref } = params || {};
+    if (ref === undefined || ref === null) throw new Error('params.ref is required');
+
+    const session = getSession(session_id);
+    const entry = session.refMap[String(ref)];
+    if (!entry) throw new Error(`Ref ${ref} not found in current snapshot`);
+
+    const { page } = session;
+    const locator = page.locator(entry.selector);
+    await locator.hover({ timeout: 5000 });
+
+    const response = await buildResponse(page);
+    session.refMap = response.ref_map;
+    return response;
+  },
+
+  async handle_dialog({ session_id, params }) {
+    const { accept, promptText } = params || {};
+
+    const session = getSession(session_id);
+    const { page } = session;
+
+    // Set up a one-time dialog handler for the next dialog
+    const dialogPromise = new Promise((resolve) => {
+      page.once('dialog', async (dialog) => {
+        const info = { type: dialog.type(), message: dialog.message(), defaultValue: dialog.defaultValue() };
+        if (accept === false) {
+          await dialog.dismiss();
+        } else {
+          await dialog.accept(promptText || undefined);
+        }
+        resolve(info);
+      });
+    });
+
+    // Race: either a dialog arrives within 5s, or we time out
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
+    const dialogInfo = await Promise.race([dialogPromise, timeoutPromise]);
+
+    const response = await buildResponse(page);
+    session.refMap = response.ref_map;
+    return { ...response, dialog: dialogInfo };
+  },
+
+  async tabs({ session_id, params }) {
+    const { action, url } = params || {};
+    if (!action) throw new Error('params.action is required (list|create|close|select)');
+
+    const session = getSession(session_id);
+    const { context, page } = session;
+
+    if (action === 'list') {
+      const pages = context.pages();
+      const tabList = pages.map((p, i) => ({
+        index: i,
+        url: p.url(),
+        title: '', // title requires async; kept lightweight
+        active: p === page,
+      }));
+      return { success: true, tabs: tabList };
+    }
+
+    if (action === 'create') {
+      const newPage = await context.newPage();
+      if (url) {
+        await newPage.goto(url, { waitUntil: 'load', timeout: 30000 });
+      }
+      session.page = newPage;
+      const response = await buildResponse(newPage);
+      session.refMap = response.ref_map;
+      return response;
+    }
+
+    if (action === 'close') {
+      const pages = context.pages();
+      if (pages.length <= 1) throw new Error('Cannot close the last tab');
+      await page.close();
+      const remaining = context.pages();
+      session.page = remaining[remaining.length - 1];
+      const response = await buildResponse(session.page);
+      session.refMap = response.ref_map;
+      return response;
+    }
+
+    if (action === 'select') {
+      const index = params.index;
+      if (index === undefined || index === null) throw new Error('params.index is required for select');
+      const pages = context.pages();
+      if (index < 0 || index >= pages.length) throw new Error(`Tab index ${index} out of range (0-${pages.length - 1})`);
+      session.page = pages[index];
+      const response = await buildResponse(session.page);
+      session.refMap = response.ref_map;
+      return response;
+    }
+
+    throw new Error(`Unknown tabs action: ${action}`);
+  },
+
+  async evaluate({ session_id, params }) {
+    const { expression } = params || {};
+    if (!expression) throw new Error('params.expression is required');
+
+    const { page } = getSession(session_id);
+    const result = await page.evaluate(expression);
+
+    const response = await buildResponse(page);
+    sessions.get(session_id).refMap = response.ref_map;
+    return { ...response, eval_result: result };
   },
 
   async close_session({ session_id }) {

@@ -131,4 +131,124 @@ impl BrowserManager {
             .await?;
         self.build_tool_result(&resp)
     }
+
+    /// Scroll the page
+    pub async fn scroll(
+        &self,
+        conversation_id: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<BrowserToolResult, String> {
+        let session_id = self.get_or_create_session(conversation_id).await?;
+        let resp = self
+            .send_command("scroll", &session_id, serde_json::json!({ "x": x, "y": y }))
+            .await?;
+        self.update_session_from_response(conversation_id, &resp)
+            .await?;
+        self.build_tool_result(&resp)
+    }
+
+    /// Press a keyboard key
+    pub async fn key(
+        &self,
+        conversation_id: &str,
+        key: &str,
+    ) -> Result<BrowserToolResult, String> {
+        let session_id = self.get_or_create_session(conversation_id).await?;
+        let resp = self
+            .send_command("key", &session_id, serde_json::json!({ "key": key }))
+            .await?;
+        self.update_session_from_response(conversation_id, &resp)
+            .await?;
+        self.build_tool_result(&resp)
+    }
+
+    /// Select an option from a dropdown
+    pub async fn select_option(
+        &self,
+        conversation_id: &str,
+        ref_num: u32,
+        value: &str,
+    ) -> Result<BrowserToolResult, String> {
+        let session_id = self.get_or_create_session(conversation_id).await?;
+        let resp = self
+            .send_command(
+                "select_option",
+                &session_id,
+                serde_json::json!({ "ref": ref_num, "value": value }),
+            )
+            .await?;
+        self.update_session_from_response(conversation_id, &resp)
+            .await?;
+        self.build_tool_result(&resp)
+    }
+
+    /// Hover over an element
+    pub async fn hover(
+        &self,
+        conversation_id: &str,
+        ref_num: u32,
+    ) -> Result<BrowserToolResult, String> {
+        let session_id = self.get_or_create_session(conversation_id).await?;
+        let resp = self
+            .send_command("hover", &session_id, serde_json::json!({ "ref": ref_num }))
+            .await?;
+        self.update_session_from_response(conversation_id, &resp)
+            .await?;
+        self.build_tool_result(&resp)
+    }
+
+    /// Handle a browser dialog (alert/confirm/prompt)
+    pub async fn handle_dialog(
+        &self,
+        conversation_id: &str,
+        accept: bool,
+        prompt_text: Option<&str>,
+    ) -> Result<BrowserToolResult, String> {
+        let session_id = self.get_or_create_session(conversation_id).await?;
+        let mut params = serde_json::json!({ "accept": accept });
+        if let Some(text) = prompt_text {
+            params["promptText"] = serde_json::json!(text);
+        }
+        let resp = self
+            .send_command("handle_dialog", &session_id, params)
+            .await?;
+        self.update_session_from_response(conversation_id, &resp)
+            .await?;
+        self.build_tool_result(&resp)
+    }
+
+    /// Manage browser tabs (list/create/close/select)
+    pub async fn tabs(
+        &self,
+        conversation_id: &str,
+        params: serde_json::Value,
+    ) -> Result<BrowserToolResult, String> {
+        let session_id = self.get_or_create_session(conversation_id).await?;
+        let resp = self
+            .send_command("tabs", &session_id, params)
+            .await?;
+        self.update_session_from_response(conversation_id, &resp)
+            .await?;
+        self.build_tool_result(&resp)
+    }
+
+    /// Execute JavaScript in the page
+    pub async fn evaluate(
+        &self,
+        conversation_id: &str,
+        expression: &str,
+    ) -> Result<BrowserToolResult, String> {
+        let session_id = self.get_or_create_session(conversation_id).await?;
+        let resp = self
+            .send_command(
+                "evaluate",
+                &session_id,
+                serde_json::json!({ "expression": expression }),
+            )
+            .await?;
+        self.update_session_from_response(conversation_id, &resp)
+            .await?;
+        self.build_tool_result(&resp)
+    }
 }

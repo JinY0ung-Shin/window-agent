@@ -215,7 +215,9 @@ pub(crate) async fn execute_tool_inner(
 
         // ── Browser automation tools ──
         "browser_navigate" | "browser_snapshot" | "browser_click" | "browser_type"
-        | "browser_wait" | "browser_back" => {
+        | "browser_wait" | "browser_back" | "browser_scroll" | "browser_key"
+        | "browser_select_option" | "browser_hover" | "browser_handle_dialog"
+        | "browser_tabs" | "browser_evaluate" => {
             let browser = app.state::<crate::browser::BrowserManager>();
             let result = match tool_name {
                 "browser_navigate" => {
@@ -276,6 +278,49 @@ pub(crate) async fn execute_tool_inner(
                     browser.wait(conversation_id, seconds).await?
                 }
                 "browser_back" => browser.back(conversation_id).await?,
+                "browser_scroll" => {
+                    let x = input["x"].as_f64().unwrap_or(0.0);
+                    let y = input["y"].as_f64().unwrap_or(300.0);
+                    browser.scroll(conversation_id, x, y).await?
+                }
+                "browser_key" => {
+                    let key = input["key"]
+                        .as_str()
+                        .ok_or("browser_key: missing 'key' parameter")?;
+                    browser.key(conversation_id, key).await?
+                }
+                "browser_select_option" => {
+                    let ref_num = input["ref"]
+                        .as_u64()
+                        .ok_or("browser_select_option: missing 'ref' parameter (u32)")?
+                        as u32;
+                    let value = input["value"]
+                        .as_str()
+                        .ok_or("browser_select_option: missing 'value' parameter")?;
+                    browser.select_option(conversation_id, ref_num, value).await?
+                }
+                "browser_hover" => {
+                    let ref_num = input["ref"]
+                        .as_u64()
+                        .ok_or("browser_hover: missing 'ref' parameter (u32)")?
+                        as u32;
+                    browser.hover(conversation_id, ref_num).await?
+                }
+                "browser_handle_dialog" => {
+                    let accept = input.get("accept").and_then(|v| v.as_bool()).unwrap_or(true);
+                    let prompt_text = input.get("prompt_text").and_then(|v| v.as_str());
+                    browser.handle_dialog(conversation_id, accept, prompt_text).await?
+                }
+                "browser_tabs" => {
+                    let params = input.clone();
+                    browser.tabs(conversation_id, params).await?
+                }
+                "browser_evaluate" => {
+                    let expression = input["expression"]
+                        .as_str()
+                        .ok_or("browser_evaluate: missing 'expression' parameter")?;
+                    browser.evaluate(conversation_id, expression).await?
+                }
                 _ => unreachable!(),
             };
 
