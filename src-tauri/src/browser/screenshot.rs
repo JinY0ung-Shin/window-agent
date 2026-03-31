@@ -13,6 +13,12 @@ pub struct BrowserToolResult {
     pub element_count: usize,
     pub artifact_id: String,
     pub screenshot_path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tabs: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub eval_result: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dialog: Option<serde_json::Value>,
 }
 
 impl BrowserManager {
@@ -48,6 +54,9 @@ impl BrowserManager {
             element_count: resp.element_count.unwrap_or(0),
             artifact_id,
             screenshot_path,
+            tabs: resp.tabs.clone(),
+            eval_result: resp.eval_result.clone(),
+            dialog: resp.dialog.clone(),
         })
     }
 
@@ -87,6 +96,9 @@ mod tests {
             element_count: Some(100),
             error: None,
             screenshot: None,
+            tabs: None,
+            eval_result: None,
+            dialog: None,
         };
         let result = manager.build_tool_result(&resp).unwrap();
         assert!(result.snapshot.len() < 5000);
@@ -106,6 +118,9 @@ mod tests {
             element_count: Some(5),
             error: None,
             screenshot: None,
+            tabs: None,
+            eval_result: None,
+            dialog: None,
         };
         let result = manager.build_tool_result(&resp).unwrap();
         assert_eq!(result.snapshot, "small content");
@@ -127,6 +142,9 @@ mod tests {
             element_count: Some(50),
             error: None,
             screenshot: None,
+            tabs: None,
+            eval_result: None,
+            dialog: None,
         };
         let result = manager.build_tool_result(&resp).unwrap();
         assert!(result.snapshot.contains("truncated"));
@@ -160,6 +178,9 @@ mod tests {
             element_count: Some(1),
             error: None,
             screenshot: None,
+            tabs: None,
+            eval_result: None,
+            dialog: None,
         };
         let result = manager.build_tool_result(&resp).unwrap();
         assert!(!result.artifact_id.is_empty());

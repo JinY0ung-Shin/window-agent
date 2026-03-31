@@ -76,6 +76,15 @@ pub(crate) struct SidecarResponse {
     pub(crate) element_count: Option<usize>,
     pub(crate) error: Option<String>,
     pub(crate) screenshot: Option<String>, // base64 PNG
+    /// Extra data from browser_tabs list action
+    #[serde(default)]
+    pub(crate) tabs: Option<serde_json::Value>,
+    /// Extra data from browser_evaluate action
+    #[serde(default)]
+    pub(crate) eval_result: Option<serde_json::Value>,
+    /// Extra data from browser_handle_dialog action
+    #[serde(default)]
+    pub(crate) dialog: Option<serde_json::Value>,
 }
 
 

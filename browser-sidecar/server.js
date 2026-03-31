@@ -454,21 +454,29 @@ const handlers = {
     const { page } = session;
 
     // Set up a one-time dialog handler for the next dialog
-    const dialogPromise = new Promise((resolve) => {
-      page.once('dialog', async (dialog) => {
-        const info = { type: dialog.type(), message: dialog.message(), defaultValue: dialog.defaultValue() };
-        if (accept === false) {
-          await dialog.dismiss();
-        } else {
-          await dialog.accept(promptText || undefined);
-        }
-        resolve(info);
-      });
-    });
+    const handler = async (dialog) => {
+      const info = { type: dialog.type(), message: dialog.message(), defaultValue: dialog.defaultValue() };
+      if (accept === false) {
+        await dialog.dismiss();
+      } else {
+        await dialog.accept(promptText || undefined);
+      }
+      dialogResult = info;
+    };
+    let dialogResult = null;
+    page.once('dialog', handler);
 
     // Race: either a dialog arrives within 5s, or we time out
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve(null), 5000));
-    const dialogInfo = await Promise.race([dialogPromise, timeoutPromise]);
+    const dialogPromise = new Promise((resolve) => {
+      const check = setInterval(() => { if (dialogResult) { clearInterval(check); resolve(dialogResult); } }, 100);
+      setTimeout(() => { clearInterval(check); resolve(null); }, 5000);
+    });
+    const dialogInfo = await dialogPromise;
+
+    // Clean up listener if dialog never appeared
+    if (!dialogInfo) {
+      page.removeListener('dialog', handler);
+    }
 
     const response = await buildResponse(page);
     session.refMap = response.ref_map;
@@ -521,6 +529,7 @@ const handlers = {
       const pages = context.pages();
       if (index < 0 || index >= pages.length) throw new Error(`Tab index ${index} out of range (0-${pages.length - 1})`);
       session.page = pages[index];
+      await pages[index].bringToFront();
       const response = await buildResponse(session.page);
       session.refMap = response.ref_map;
       return response;
