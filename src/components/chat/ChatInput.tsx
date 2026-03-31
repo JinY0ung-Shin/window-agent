@@ -31,7 +31,7 @@ export default function ChatInput() {
 
   const { textareaProps, localValue, flushAndSend } = useChatInputLogic({
     sendFn: sendMessage,
-    disabled: isToolBusy,
+    disabled: isBusy,
   });
 
   const placeholder = toolRunState === "tool_waiting"
