@@ -7,6 +7,7 @@ use crate::db::Database;
 use crate::memory::SystemMemoryManager;
 use crate::services::actor_context::{self, ExecutionRole, ExecutionScope, ExecutionTrigger};
 use crate::services::{api_service, credential_service, llm_helpers};
+use crate::settings::AppSettings;
 use chrono::Utc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -245,9 +246,9 @@ async fn execute_cron_job(app: AppHandle, job: CronJob, run: CronRun) {
         }
     }
 
-    const MAX_TOOL_ITERATIONS: usize = 10;
+    let max_tool_iterations = app.state::<AppSettings>().get().max_tool_iterations as usize;
 
-    for iteration in 0..MAX_TOOL_ITERATIONS {
+    for iteration in 0..max_tool_iterations {
         let result = api_service::do_completion(&client, &api_key, &base_url, &body, Some(&app)).await;
 
         // On first attempt with thinking, handle thinking-specific errors

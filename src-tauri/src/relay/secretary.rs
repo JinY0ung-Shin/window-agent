@@ -314,10 +314,10 @@ async fn generate_and_send_response(
     let client = api_state.client()
         .map_err(|e| format!("API client error: {e}"))?;
 
-    const MAX_TOOL_ITERATIONS: usize = 10;
+    let max_tool_iterations = app.state::<AppSettings>().get().max_tool_iterations as usize;
     let mut response_text = String::new();
 
-    for iteration in 0..MAX_TOOL_ITERATIONS {
+    for iteration in 0..max_tool_iterations {
         let result = api_service::do_completion(&client, &api_key, &base_url, &body, Some(app)).await;
 
         // Handle thinking-specific errors on first attempt

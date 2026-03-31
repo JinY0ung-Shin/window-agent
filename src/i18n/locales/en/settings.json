@@ -64,6 +64,10 @@
     "enabled": "Enabled",
     "disabled": "Disabled"
   },
+  "tools": {
+    "maxIterationsLabel": "Max Tool Iterations",
+    "maxIterationsHint": "Maximum number of consecutive tool calls the AI can make in a single turn. Value between 1 and 100."
+  },
   "branding": {
     "companyNameLabel": "Company/Workspace Name",
     "companyNamePlaceholder": "e.g., My Company",

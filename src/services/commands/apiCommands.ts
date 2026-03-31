@@ -50,6 +50,8 @@ export interface AppSettingsInner {
   browser_headless: boolean;
   browser_proxy: string;
   browser_no_proxy: string;
+  // Tool loop
+  max_tool_iterations: number;
 }
 
 export interface AppSettingsPatch {
@@ -71,6 +73,8 @@ export interface AppSettingsPatch {
   browser_headless?: boolean | null;
   browser_proxy?: string | null;
   browser_no_proxy?: string | null;
+  // Tool loop
+  max_tool_iterations?: number | null;
 }
 
 export async function getAppSettings(): Promise<AppSettingsInner> {

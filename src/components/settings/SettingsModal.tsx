@@ -8,6 +8,7 @@ import ThinkingSettingsPanel from "./ThinkingSettingsPanel";
 import BrandingSettingsPanel from "./BrandingSettingsPanel";
 import ApiServerSection from "./ApiServerSection";
 import ProxySection from "./ProxySection";
+import ToolIterationsSection from "./ToolIterationsSection";
 import ExportSection from "./ExportSection";
 import CredentialManager from "./CredentialManager";
 import type { ApiServerSectionRef } from "./ApiServerSection";
@@ -89,6 +90,7 @@ export default function SettingsPage() {
             <ApiServerSection ref={apiRef} isOpen={isOpen} />
           </div>
           <div style={{ display: tab === "tools" ? undefined : "none" }}>
+            <ToolIterationsSection isOpen={isOpen} />
             <ProxySection ref={proxyRef} isOpen={isOpen} />
           </div>
           <div style={{ display: tab === "thinking" ? undefined : "none" }}>

@@ -5,6 +5,7 @@ import { useMessageStore } from "../stores/messageStore";
 import { useConversationStore } from "../stores/conversationStore";
 import { useStreamStore, cacheStreamContent, getCachedStreamContent } from "../stores/streamStore";
 import { useBootstrapStore } from "../stores/bootstrapStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import { useSummaryStore } from "../stores/summaryStore";
 import { useToolRunStore } from "../stores/toolRunStore";
 import { getToolTier, type ToolDefinition } from "./toolRegistry";
@@ -37,7 +38,11 @@ export type StreamDoneEvent = {
 
 // ── Constants ─────────────────────────────────────────
 
-export const MAX_TOOL_ITERATIONS = 10;
+export const DEFAULT_MAX_TOOL_ITERATIONS = 10;
+
+export function getMaxToolIterations(): number {
+  return useSettingsStore.getState().maxToolIterations || DEFAULT_MAX_TOOL_ITERATIONS;
+}
 
 // ── Store accessors (shorthand) ──────────────────────
 

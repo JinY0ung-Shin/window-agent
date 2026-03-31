@@ -23,6 +23,7 @@ import {
   type StreamChunkEvent,
   type StreamDoneEvent,
   msg, conv, stream,
+  getMaxToolIterations,
   createPendingMessage,
   updateMessageInList,
 } from "../services/streamHelpers";
@@ -529,12 +530,12 @@ async function sendTeamMessageFlow() {
     };
     const leaderTools = [...toOpenAITools(toolDefinitions), delegateTool];
 
-    const MAX_LEADER_TOOL_ITERATIONS = 10;
+    const maxLeaderToolIterations = getMaxToolIterations();
     let iterationCount = 0;
     let currentRequestId = leaderRequestId;
     let currentMsgId = leaderMsgId;
 
-    while (iterationCount <= MAX_LEADER_TOOL_ITERATIONS) {
+    while (iterationCount <= maxLeaderToolIterations) {
       const done = await streamOneTurn({
         baseSystemPrompt,
         effective,
@@ -692,7 +693,7 @@ async function sendTeamMessageFlow() {
       } else if (toolCalls && toolCalls.length > 0) {
         // Leader used non-delegate tools — execute them and continue the loop
         iterationCount++;
-        if (iterationCount > MAX_LEADER_TOOL_ITERATIONS) {
+        if (iterationCount > maxLeaderToolIterations) {
           useMessageStore.setState({
             messages: updateMessageInList(msg().messages, currentMsgId, {
               content: replyContent || i18n.t("common:noResponse"),

@@ -58,6 +58,8 @@ pub struct AppSettingsInner {
     pub browser_headless: bool,
     pub browser_proxy: String,
     pub browser_no_proxy: String,
+    // Tool loop
+    pub max_tool_iterations: u32,
 }
 
 impl Default for AppSettingsInner {
@@ -79,6 +81,7 @@ impl Default for AppSettingsInner {
             browser_headless: false,
             browser_proxy: String::new(),
             browser_no_proxy: String::new(),
+            max_tool_iterations: 10,
         }
     }
 }
@@ -104,6 +107,8 @@ pub struct AppSettingsPatch {
     pub browser_headless: Option<bool>,
     pub browser_proxy: Option<String>,
     pub browser_no_proxy: Option<String>,
+    // Tool loop
+    pub max_tool_iterations: Option<u32>,
 }
 
 // ── AppSettings impl ─────────────────────────────────────
@@ -142,6 +147,7 @@ fn read_from_store(app: &tauri::AppHandle) -> AppSettingsInner {
         if let Some(v) = read_str(&store, "company_name") { s.company_name = v; }
         if let Some(v) = read_bool(&store, "branding_initialized") { s.branding_initialized = v; }
         if let Some(v) = read_str(&store, "locale").filter(|v| !v.is_empty()) { s.locale = v; }
+        if let Some(v) = read_u32(&store, "max_tool_iterations") { s.max_tool_iterations = v; }
     }
 
     // ── relay-settings.json ──
@@ -215,13 +221,14 @@ impl AppSettings {
             browser_headless: patch.browser_headless.unwrap_or(guard.browser_headless),
             browser_proxy: patch.browser_proxy.clone().unwrap_or_else(|| guard.browser_proxy.clone()),
             browser_no_proxy: patch.browser_no_proxy.clone().unwrap_or_else(|| guard.browser_no_proxy.clone()),
+            max_tool_iterations: patch.max_tool_iterations.unwrap_or(guard.max_tool_iterations),
         };
 
         // Persist to the appropriate store files based on which fields changed.
         let has_app = patch.model_name.is_some() || patch.thinking_enabled.is_some()
             || patch.thinking_budget.is_some() || patch.ui_theme.is_some()
             || patch.company_name.is_some() || patch.branding_initialized.is_some()
-            || patch.locale.is_some();
+            || patch.locale.is_some() || patch.max_tool_iterations.is_some();
         let has_relay = patch.network_enabled.is_some() || patch.relay_url.is_some()
             || patch.allowed_tools.is_some() || patch.discoverable.is_some()
             || patch.directory_agent_name.is_some() || patch.directory_agent_description.is_some();
@@ -237,6 +244,7 @@ impl AppSettings {
             store.set("company_name", serde_json::json!(&new.company_name));
             store.set("branding_initialized", serde_json::json!(new.branding_initialized));
             store.set("locale", serde_json::json!(&new.locale));
+            store.set("max_tool_iterations", serde_json::json!(new.max_tool_iterations));
             store.save().map_err(|e| AppError::Config(format!("Failed to persist app settings: {e}")))?;
         }
 
@@ -425,6 +433,7 @@ mod tests {
             browser_headless: patch.browser_headless.unwrap_or(current.browser_headless),
             browser_proxy: patch.browser_proxy.clone().unwrap_or_else(|| current.browser_proxy.clone()),
             browser_no_proxy: patch.browser_no_proxy.clone().unwrap_or_else(|| current.browser_no_proxy.clone()),
+            max_tool_iterations: patch.max_tool_iterations.unwrap_or(current.max_tool_iterations),
         }
     }
 }

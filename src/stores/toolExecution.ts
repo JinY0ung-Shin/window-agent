@@ -8,7 +8,7 @@ import { useVaultStore } from "./vaultStore";
 import { invalidatePersonaCache } from "../services/personaService";
 import { type ToolDefinition } from "../services/toolRegistry";
 import {
-  MAX_TOOL_ITERATIONS,
+  getMaxToolIterations,
   msg, conv, summary,
   createPendingMessage,
   classifyToolCalls,
@@ -67,8 +67,9 @@ export async function runToolLoop(
   let { currentRequestId, currentMsgId } = state;
 
   let iterationCount = 0;
+  const maxIterations = getMaxToolIterations();
 
-  while (iterationCount <= MAX_TOOL_ITERATIONS) {
+  while (iterationCount <= maxIterations) {
     const done = await streamOneTurn({
       baseSystemPrompt,
       effective,
@@ -112,7 +113,7 @@ export async function runToolLoop(
     }
 
     iterationCount++;
-    if (iterationCount > MAX_TOOL_ITERATIONS) {
+    if (iterationCount > maxIterations) {
       handleMaxIterations(currentMsgId, replyContent);
       return;
     }

@@ -46,6 +46,7 @@ interface SettingsState {
   companyName: string;
   brandingInitialized: boolean;
   locale: Locale;
+  maxToolIterations: number;
   appReady: boolean;
   loadSettings: () => void;
   loadEnvDefaults: () => Promise<void>;
@@ -135,6 +136,7 @@ listen<{
   branding_initialized: boolean;
   locale: string;
   network_enabled: boolean;
+  max_tool_iterations: number;
 }>("settings:changed", (event) => {
   const s = event.payload;
   const prev = useSettingsStore.getState();
@@ -146,6 +148,7 @@ listen<{
     companyName: s.company_name,
     brandingInitialized: s.branding_initialized,
     locale: s.locale as Locale,
+    maxToolIterations: s.max_tool_iterations,
   };
   cacheToLocalStorage({
     ...updates,
@@ -171,6 +174,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   hasStoredKey: false,
   envLoaded: false,
   settingsError: null,
+  maxToolIterations: 10,
   appReady: false,
 
   loadSettings: () => set(readNonSecretSettings()),
@@ -229,6 +233,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         companyName: appSettings.company_name,
         brandingInitialized: appSettings.branding_initialized,
         locale: appSettings.locale as Locale,
+        maxToolIterations: appSettings.max_tool_iterations,
         hasApiKey: apiKeyExists,
         hasStoredKey: storedKeyExists,
         envLoaded: true,
