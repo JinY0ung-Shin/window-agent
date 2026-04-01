@@ -32,6 +32,20 @@ pub struct UserInfo {
     pub peer_id: Option<String>,
 }
 
+// ── Persona ──
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct PersonaData {
+    #[serde(default)]
+    pub identity: String,
+    #[serde(default)]
+    pub soul: String,
+    #[serde(default)]
+    pub user_context: String,
+    #[serde(default)]
+    pub agents: String,
+}
+
 // ── Share requests ──
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +54,8 @@ pub struct ShareAgentRequest {
     pub description: String,
     #[serde(default)]
     pub original_agent_id: Option<String>,
+    #[serde(default)]
+    pub persona: Option<PersonaData>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,6 +99,7 @@ pub struct SharedAgent {
     pub name: String,
     pub description: String,
     pub original_agent_id: Option<String>,
+    pub persona: Option<PersonaData>,
     pub skills_count: i64,
     pub notes_count: i64,
     pub created_at: String,

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bot, Wrench, BookOpen, Loader2, Trash2, Tag, Package } from "lucide-react";
+import { Bot, Wrench, BookOpen, Loader2, Trash2, Package } from "lucide-react";
 import { useHubStore } from "../../stores/hubStore";
 import EmptyState from "../common/EmptyState";
-import type { SharedAgent, SharedSkill, SharedNote } from "../../services/commands/hubCommands";
+import type { SharedAgent, SharedSkill } from "../../services/commands/hubCommands";
 
 function MyAgentCard({ agent }: { agent: SharedAgent }) {
   const { t } = useTranslation("hub");
@@ -89,62 +89,12 @@ function MySkillCard({ skill }: { skill: SharedSkill }) {
   );
 }
 
-function MyNoteCard({ note }: { note: SharedNote }) {
-  const { t } = useTranslation("hub");
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const deleteSharedNote = useHubStore((s) => s.deleteSharedNote);
-
-  return (
-    <div className="hub-card">
-      <div className="hub-card-header">
-        <BookOpen size={18} className="hub-card-icon" />
-        <div className="hub-card-title">{note.title}</div>
-        {note.note_type && <span className="hub-badge-type">{note.note_type}</span>}
-        <div className="hub-card-actions">
-          {confirmDelete ? (
-            <div className="hub-delete-confirm">
-              <button className="btn-danger-sm" onClick={() => deleteSharedNote(note.id)}>
-                {t("delete.confirm")}
-              </button>
-              <button className="btn-secondary-sm" onClick={() => setConfirmDelete(false)}>
-                {t("delete.cancel")}
-              </button>
-            </div>
-          ) : (
-            <button
-              className="hub-card-delete"
-              onClick={() => setConfirmDelete(true)}
-              title={t("delete.note")}
-            >
-              <Trash2 size={14} />
-            </button>
-          )}
-        </div>
-      </div>
-      {note.tags.length > 0 && (
-        <div className="hub-card-tags">
-          {note.tags.map((tag) => (
-            <span key={tag} className="hub-tag"><Tag size={10} /> {tag}</span>
-          ))}
-        </div>
-      )}
-      <div className="hub-card-footer">
-        {note.agent_name && (
-          <span className="hub-card-agent"><Bot size={12} /> {note.agent_name}</span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function HubMyShares() {
   const { t } = useTranslation("hub");
   const myAgents = useHubStore((s) => s.myAgents);
   const mySkills = useHubStore((s) => s.mySkills);
-  const myNotes = useHubStore((s) => s.myNotes);
   const myAgentsTotal = useHubStore((s) => s.myAgentsTotal);
   const mySkillsTotal = useHubStore((s) => s.mySkillsTotal);
-  const myNotesTotal = useHubStore((s) => s.myNotesTotal);
   const myLoading = useHubStore((s) => s.myLoading);
   const loadMyShares = useHubStore((s) => s.loadMyShares);
 
@@ -152,7 +102,7 @@ export default function HubMyShares() {
     loadMyShares();
   }, [loadMyShares]);
 
-  if (myLoading && myAgents.length === 0 && mySkills.length === 0 && myNotes.length === 0) {
+  if (myLoading && myAgents.length === 0 && mySkills.length === 0) {
     return (
       <div className="hub-loading">
         <Loader2 size={24} className="hub-spinner" />
@@ -160,7 +110,7 @@ export default function HubMyShares() {
     );
   }
 
-  const isEmpty = myAgents.length === 0 && mySkills.length === 0 && myNotes.length === 0;
+  const isEmpty = myAgents.length === 0 && mySkills.length === 0;
 
   if (isEmpty) {
     return (
@@ -198,20 +148,6 @@ export default function HubMyShares() {
           <div className="hub-card-grid">
             {mySkills.map((skill) => (
               <MySkillCard key={skill.id} skill={skill} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {myNotes.length > 0 && (
-        <div className="hub-my-section">
-          <h3 className="hub-my-section-title">
-            <BookOpen size={16} />
-            {t("mine.notes_section", { count: myNotesTotal })}
-          </h3>
-          <div className="hub-card-grid">
-            {myNotes.map((note) => (
-              <MyNoteCard key={note.id} note={note} />
             ))}
           </div>
         </div>

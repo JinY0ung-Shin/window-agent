@@ -5,7 +5,6 @@ import {
   Search,
   Users,
   Wrench,
-  BookOpen,
   Package,
   LogIn,
   LogOut,
@@ -23,13 +22,11 @@ import HubAuthForm from "./HubAuthForm";
 import HubAgentList from "./HubAgentList";
 import HubAgentDetail from "./HubAgentDetail";
 import HubSkillList from "./HubSkillList";
-import HubNoteList from "./HubNoteList";
 import HubMyShares from "./HubMyShares";
 
 const TAB_ICONS = {
   agents: Users,
   skills: Wrench,
-  notes: BookOpen,
   mine: Package,
 } as const;
 
@@ -47,20 +44,18 @@ export default function HubPanel() {
   const agentsOffset = useHubStore((s) => s.agentsOffset);
   const skillsTotal = useHubStore((s) => s.skillsTotal);
   const skillsOffset = useHubStore((s) => s.skillsOffset);
-  const notesTotal = useHubStore((s) => s.notesTotal);
-  const notesOffset = useHubStore((s) => s.notesOffset);
-
   const initialize = useHubStore((s) => s.initialize);
   const logout = useHubStore((s) => s.logout);
   const setActiveTab = useHubStore((s) => s.setActiveTab);
   const setSearchQuery = useHubStore((s) => s.setSearchQuery);
   const loadAgents = useHubStore((s) => s.loadAgents);
   const loadSkills = useHubStore((s) => s.loadSkills);
-  const loadNotes = useHubStore((s) => s.loadNotes);
 
   const agents = useAgentStore((s) => s.agents);
   const openShareDialog = useHubStore((s) => s.openShareDialog);
+  const openShareSkillDialog = useHubStore((s) => s.openShareSkillDialog);
   const [sharePickerOpen, setSharePickerOpen] = useState(false);
+  const [sharePickerMode, setSharePickerMode] = useState<"agent" | "skill">("agent");
   const sharePickerRef = useRef<HTMLDivElement>(null);
 
   const [localQuery, setLocalQuery] = useState("");
@@ -95,9 +90,8 @@ export default function HubPanel() {
     if (!loggedIn) return;
     if (activeTab === "agents") loadAgents(0);
     else if (activeTab === "skills") loadSkills(0);
-    else if (activeTab === "notes") loadNotes(0);
     // "mine" tab loads its own data via HubMyShares
-  }, [loggedIn, activeTab, searchQuery, loadAgents, loadSkills, loadNotes]);
+  }, [loggedIn, activeTab, searchQuery, loadAgents, loadSkills]);
 
   // Pagination helpers
   const currentTotal =
@@ -105,17 +99,13 @@ export default function HubPanel() {
       ? agentsTotal
       : activeTab === "skills"
         ? skillsTotal
-        : activeTab === "notes"
-          ? notesTotal
-          : 0;
+        : 0;
   const currentOffset =
     activeTab === "agents"
       ? agentsOffset
       : activeTab === "skills"
         ? skillsOffset
-        : activeTab === "notes"
-          ? notesOffset
-          : 0;
+        : 0;
   const totalPages = Math.max(1, Math.ceil(currentTotal / PAGE_SIZE));
   const currentPage = Math.floor(currentOffset / PAGE_SIZE) + 1;
 
@@ -129,12 +119,9 @@ export default function HubPanel() {
         case "skills":
           loadSkills(offset);
           break;
-        case "notes":
-          loadNotes(offset);
-          break;
       }
     },
-    [activeTab, loadAgents, loadSkills, loadNotes],
+    [activeTab, loadAgents, loadSkills],
   );
 
   const showPagination = !selectedAgentId && activeTab !== "mine" && totalPages > 1;
@@ -160,7 +147,25 @@ export default function HubPanel() {
               </button>
               {sharePickerOpen && (
                 <div className="hub-share-picker-dropdown">
-                  <div className="hub-share-picker-title">{t("share.pick_agent")}</div>
+                  <div className="hub-share-picker-tabs">
+                    <button
+                      className={`hub-share-picker-tab${sharePickerMode === "agent" ? " hub-share-picker-tab--active" : ""}`}
+                      onClick={() => setSharePickerMode("agent")}
+                    >
+                      <Bot size={14} />
+                      {t("share.mode_agent")}
+                    </button>
+                    <button
+                      className={`hub-share-picker-tab${sharePickerMode === "skill" ? " hub-share-picker-tab--active" : ""}`}
+                      onClick={() => setSharePickerMode("skill")}
+                    >
+                      <Wrench size={14} />
+                      {t("share.mode_skill")}
+                    </button>
+                  </div>
+                  <div className="hub-share-picker-title">
+                    {sharePickerMode === "agent" ? t("share.pick_agent") : t("share.pick_skill_source")}
+                  </div>
                   {agents.length === 0 ? (
                     <div className="hub-share-picker-empty">{t("share.no_agents")}</div>
                   ) : (
@@ -170,7 +175,11 @@ export default function HubPanel() {
                         className="hub-share-picker-item"
                         onClick={() => {
                           setSharePickerOpen(false);
-                          openShareDialog(agent.id, agent.folder_name, agent.name, agent.description);
+                          if (sharePickerMode === "agent") {
+                            openShareDialog(agent.id, agent.folder_name, agent.name, agent.description);
+                          } else {
+                            openShareSkillDialog(agent.folder_name);
+                          }
                         }}
                       >
                         {agent.avatar ? (
@@ -232,7 +241,7 @@ export default function HubPanel() {
           {/* Tab bar */}
           {!selectedAgentId && (
             <div className="hub-tab-bar">
-              {(["agents", "skills", "notes", "mine"] as const).map((tab) => {
+              {(["agents", "skills", "mine"] as const).map((tab) => {
                 const Icon = TAB_ICONS[tab];
                 return (
                   <button
@@ -256,8 +265,6 @@ export default function HubPanel() {
               <HubAgentList />
             ) : activeTab === "skills" ? (
               <HubSkillList />
-            ) : activeTab === "notes" ? (
-              <HubNoteList />
             ) : (
               <HubMyShares />
             )}

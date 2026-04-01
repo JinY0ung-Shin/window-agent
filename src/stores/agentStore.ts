@@ -10,6 +10,7 @@ import {
   writeToolConfig,
   getDefaultToolConfig,
 } from "../services/nativeToolRegistry";
+import { listMemoryNotes, deleteMemoryNote } from "../services/commands/memoryCommands";
 import { i18n } from "../i18n";
 import { useSettingsStore } from "./settingsStore";
 import { logger } from "../services/logger";
@@ -32,7 +33,7 @@ interface AgentState {
   setPersonaTab: (tab: PersonaTab) => void;
   updatePersonaFile: (fileName: PersonaTab, content: string) => void;
   saveAgent: (updates: Partial<Agent>) => Promise<void>;
-  deleteAgent: (id: string) => Promise<void>;
+  deleteAgent: (id: string, deleteMemory?: boolean) => Promise<void>;
   loadToolConfig: (folderName: string) => Promise<void>;
   saveToolConfig: (folderName: string, config: ToolConfig) => Promise<void>;
 }
@@ -195,7 +196,16 @@ export const useAgentStore = create<AgentState>((set, get) => ({
     get().closeEditor();
   },
 
-  deleteAgent: async (id) => {
+  deleteAgent: async (id, deleteMemory = true) => {
+    // Delete memory notes first if requested
+    if (deleteMemory) {
+      try {
+        const notes = await listMemoryNotes(id);
+        await Promise.all(notes.map((n) => deleteMemoryNote(n.id)));
+      } catch (e) {
+        logger.debug("Failed to delete memory notes:", e);
+      }
+    }
     try {
       await cmds.deleteAgent(id);
     } catch (e) {

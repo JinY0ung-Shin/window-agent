@@ -158,10 +158,11 @@ pub async fn hub_share_agent(
     name: String,
     description: String,
     original_agent_id: Option<String>,
+    persona: Option<wa_shared::community::PersonaData>,
 ) -> Result<wa_shared::community::SharedAgent, AppError> {
     let client = make_authed_hub_client(&app, &settings)?;
     client
-        .share_agent(&name, &description, original_agent_id.as_deref())
+        .share_agent(&name, &description, original_agent_id.as_deref(), persona)
         .await
 }
 

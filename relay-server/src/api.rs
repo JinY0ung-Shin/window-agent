@@ -151,6 +151,11 @@ pub async fn share_agent(
         return Err(err(StatusCode::BAD_REQUEST, "Agent name must be 1-200 characters"));
     }
 
+    let persona_json = req
+        .persona
+        .as_ref()
+        .and_then(|p| serde_json::to_string(p).ok());
+
     let id = uuid::Uuid::new_v4().to_string();
     let actual_id = hub_db::upsert_shared_agent(
         state.db(),
@@ -159,6 +164,7 @@ pub async fn share_agent(
         &req.name,
         &req.description,
         req.original_agent_id.as_deref(),
+        persona_json.as_deref(),
     )
     .await
     .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "Failed to share agent"))?;
@@ -371,6 +377,10 @@ pub async fn delete_note(
 // ── Row → Response converters ──
 
 fn agent_row_to_response(row: hub_db::SharedAgentRow) -> SharedAgent {
+    let persona = row
+        .persona_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok());
     SharedAgent {
         id: row.id,
         user_id: row.user_id,
@@ -378,6 +388,7 @@ fn agent_row_to_response(row: hub_db::SharedAgentRow) -> SharedAgent {
         name: row.name,
         description: row.description,
         original_agent_id: row.original_agent_id,
+        persona,
         skills_count: row.skills_count,
         notes_count: row.notes_count,
         created_at: row.created_at,

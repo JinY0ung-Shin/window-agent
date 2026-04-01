@@ -234,11 +234,13 @@ impl HubClient {
         name: &str,
         description: &str,
         original_agent_id: Option<&str>,
+        persona: Option<PersonaData>,
     ) -> Result<SharedAgent, AppError> {
         let body = ShareAgentRequest {
             name: name.to_string(),
             description: description.to_string(),
             original_agent_id: original_agent_id.map(String::from),
+            persona,
         };
         let resp = self
             .authed(

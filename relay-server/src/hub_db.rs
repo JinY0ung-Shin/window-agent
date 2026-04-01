@@ -28,6 +28,7 @@ pub async fn init_hub_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
             name              TEXT NOT NULL,
             description       TEXT NOT NULL DEFAULT '',
             original_agent_id TEXT,
+            persona_json      TEXT,
             created_at        TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
         )
@@ -94,6 +95,11 @@ pub async fn init_hub_tables(pool: &SqlitePool) -> Result<(), sqlx::Error> {
     sqlx::query("CREATE INDEX IF NOT EXISTS idx_sn_agent ON shared_notes (agent_id)")
         .execute(pool)
         .await?;
+
+    // Migration: add persona_json column if not exists
+    let _ = sqlx::query("ALTER TABLE shared_agents ADD COLUMN persona_json TEXT")
+        .execute(pool)
+        .await;
 
     Ok(())
 }
@@ -188,6 +194,7 @@ pub struct SharedAgentRow {
     pub name: String,
     pub description: String,
     pub original_agent_id: Option<String>,
+    pub persona_json: Option<String>,
     pub skills_count: i64,
     pub notes_count: i64,
     pub created_at: String,
@@ -201,6 +208,7 @@ pub async fn upsert_shared_agent(
     name: &str,
     description: &str,
     original_agent_id: Option<&str>,
+    persona_json: Option<&str>,
 ) -> Result<String, sqlx::Error> {
     // Try upsert on (user_id, original_agent_id) if original_agent_id provided.
     if let Some(orig_id) = original_agent_id {
@@ -214,10 +222,11 @@ pub async fn upsert_shared_agent(
 
         if let Some((existing_id,)) = existing {
             sqlx::query(
-                "UPDATE shared_agents SET name = ?, description = ?, updated_at = datetime('now') WHERE id = ?",
+                "UPDATE shared_agents SET name = ?, description = ?, persona_json = ?, updated_at = datetime('now') WHERE id = ?",
             )
             .bind(name)
             .bind(description)
+            .bind(persona_json)
             .bind(&existing_id)
             .execute(pool)
             .await?;
@@ -226,13 +235,14 @@ pub async fn upsert_shared_agent(
     }
 
     sqlx::query(
-        "INSERT INTO shared_agents (id, user_id, name, description, original_agent_id) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO shared_agents (id, user_id, name, description, original_agent_id, persona_json) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .bind(id)
     .bind(user_id)
     .bind(name)
     .bind(description)
     .bind(original_agent_id)
+    .bind(persona_json)
     .execute(pool)
     .await?;
     Ok(id.to_string())
@@ -275,7 +285,7 @@ pub async fn list_shared_agents(
     let list_sql = format!(
         r#"
         SELECT sa.id, sa.user_id, u.display_name, sa.name, sa.description,
-               sa.original_agent_id, sa.created_at, sa.updated_at,
+               sa.original_agent_id, sa.persona_json, sa.created_at, sa.updated_at,
                (SELECT COUNT(*) FROM shared_skills WHERE agent_id = sa.id) as skills_count,
                (SELECT COUNT(*) FROM shared_notes WHERE agent_id = sa.id) as notes_count
         FROM shared_agents sa
@@ -305,7 +315,7 @@ pub async fn get_shared_agent(
     sqlx::query_as(
         r#"
         SELECT sa.id, sa.user_id, u.display_name, sa.name, sa.description,
-               sa.original_agent_id, sa.created_at, sa.updated_at,
+               sa.original_agent_id, sa.persona_json, sa.created_at, sa.updated_at,
                (SELECT COUNT(*) FROM shared_skills WHERE agent_id = sa.id) as skills_count,
                (SELECT COUNT(*) FROM shared_notes WHERE agent_id = sa.id) as notes_count
         FROM shared_agents sa
@@ -325,7 +335,7 @@ pub async fn list_agents_by_user(
     sqlx::query_as(
         r#"
         SELECT sa.id, sa.user_id, u.display_name, sa.name, sa.description,
-               sa.original_agent_id, sa.created_at, sa.updated_at,
+               sa.original_agent_id, sa.persona_json, sa.created_at, sa.updated_at,
                (SELECT COUNT(*) FROM shared_skills WHERE agent_id = sa.id) as skills_count,
                (SELECT COUNT(*) FROM shared_notes WHERE agent_id = sa.id) as notes_count
         FROM shared_agents sa

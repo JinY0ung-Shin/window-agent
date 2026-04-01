@@ -16,7 +16,7 @@ interface AgentEditorActions {
   setPersonaTab: (tab: PersonaTab) => void;
   updatePersonaFile: (fileName: PersonaTab, content: string) => void;
   saveAgent: (updates: Partial<Agent>) => Promise<void>;
-  deleteAgent: (id: string) => Promise<void>;
+  deleteAgent: (id: string, deleteMemory?: boolean) => Promise<void>;
   openEditor: (agentId: string | null) => Promise<void>;
 }
 

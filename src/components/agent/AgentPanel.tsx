@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, Plus, Trash2, Bot, Settings, Crown, Upload } from "lucide-react";
+import { Users, Plus, Trash2, Bot, Settings, Crown, Upload, AlertTriangle } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
@@ -10,6 +10,12 @@ import { resetChatContext } from "../../stores/resetHelper";
 import AgentEditor from "./AgentEditor";
 import DraggableHeader from "../layout/DraggableHeader";
 import EmptyState from "../common/EmptyState";
+import Modal from "../common/Modal";
+
+interface DeleteTarget {
+  id: string;
+  name: string;
+}
 
 export default function AgentPanel() {
   const { t } = useTranslation("glossary");
@@ -22,7 +28,8 @@ export default function AgentPanel() {
   const setMainView = useNavigationStore((s) => s.setMainView);
   const uiTheme = useSettingsStore((s) => s.uiTheme);
 
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [deleteMemory, setDeleteMemory] = useState(true);
   const hubLoggedIn = useHubStore((s) => s.loggedIn);
   const openShareDialog = useHubStore((s) => s.openShareDialog);
 
@@ -36,9 +43,11 @@ export default function AgentPanel() {
     await startBootstrap();
   };
 
-  const handleDelete = (id: string) => {
-    deleteAgent(id);
-    setConfirmDeleteId(null);
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    deleteAgent(deleteTarget.id, deleteMemory);
+    setDeleteTarget(null);
+    setDeleteMemory(true);
   };
 
   return (
@@ -87,49 +96,30 @@ export default function AgentPanel() {
                     )}
                   </div>
                   <div className="agent-card-actions" onClick={(e) => e.stopPropagation()}>
-                    {confirmDeleteId === agent.id ? (
-                      <div className="agent-card-delete-confirm">
-                        <button
-                          className="btn-danger-sm"
-                          onClick={() => handleDelete(agent.id)}
-                        >
-                          {t("deleteAgent", { context: uiTheme })}
-                        </button>
-                        <button
-                          className="btn-secondary-sm"
-                          onClick={() => setConfirmDeleteId(null)}
-                        >
-                          {t("common:cancel")}
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        {hubLoggedIn && (
-                          <button
-                            className="agent-card-share"
-                            onClick={() => openShareDialog(agent.id, agent.folder_name, agent.name, agent.description)}
-                            title={t("shareAgent", { context: uiTheme })}
-                          >
-                            <Upload size={14} />
-                          </button>
-                        )}
-                        <button
-                          className="agent-card-edit"
-                          onClick={() => openEditor(agent.id)}
-                          title={t("editAgent", { context: uiTheme })}
-                        >
-                          <Settings size={14} />
-                        </button>
-                        {!agent.is_default && (
-                          <button
-                            className="agent-card-delete"
-                            onClick={() => setConfirmDeleteId(agent.id)}
-                            title={t("deleteAgent", { context: uiTheme })}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </>
+                    {hubLoggedIn && (
+                      <button
+                        className="agent-card-share"
+                        onClick={() => openShareDialog(agent.id, agent.folder_name, agent.name, agent.description)}
+                        title={t("shareAgent", { context: uiTheme })}
+                      >
+                        <Upload size={14} />
+                      </button>
+                    )}
+                    <button
+                      className="agent-card-edit"
+                      onClick={() => openEditor(agent.id)}
+                      title={t("editAgent", { context: uiTheme })}
+                    >
+                      <Settings size={14} />
+                    </button>
+                    {!agent.is_default && (
+                      <button
+                        className="agent-card-delete"
+                        onClick={() => setDeleteTarget({ id: agent.id, name: agent.name })}
+                        title={t("deleteAgent", { context: uiTheme })}
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     )}
                   </div>
                 </div>
@@ -144,6 +134,41 @@ export default function AgentPanel() {
       </div>
 
       {isEditorOpen && <AgentEditor />}
+
+      {deleteTarget && (
+        <Modal
+          title={t("deleteConfirmTitle", { context: uiTheme })}
+          onClose={() => { setDeleteTarget(null); setDeleteMemory(true); }}
+          overlayClose="currentTarget"
+          contentClassName="agent-delete-dialog"
+          footer={
+            <div className="agent-delete-footer">
+              <button className="btn-secondary" onClick={() => { setDeleteTarget(null); setDeleteMemory(true); }}>
+                {t("common:cancel")}
+              </button>
+              <button className="btn-danger" onClick={handleDelete}>
+                <Trash2 size={14} />
+                {t("deleteAgent", { context: uiTheme })}
+              </button>
+            </div>
+          }
+        >
+          <div className="agent-delete-content">
+            <div className="agent-delete-warning">
+              <AlertTriangle size={20} />
+              <span>{t("deleteConfirmMessage", { context: uiTheme, name: deleteTarget.name })}</span>
+            </div>
+            <label className="agent-delete-checkbox">
+              <input
+                type="checkbox"
+                checked={deleteMemory}
+                onChange={(e) => setDeleteMemory(e.target.checked)}
+              />
+              {t("deleteWithMemory", { context: uiTheme })}
+            </label>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

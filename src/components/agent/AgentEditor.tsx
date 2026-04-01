@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Bot } from "lucide-react";
+import { Plus, Bot, Trash2, AlertTriangle } from "lucide-react";
 import Modal from "../common/Modal";
 import { listModels } from "../../services/tauriCommands";
 import { useAgentEditor } from "../../hooks/useAgentEditor";
@@ -84,13 +84,25 @@ export default function AgentEditor() {
     });
   };
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteMemory, setDeleteMemory] = useState(true);
+
   const handleDelete = () => {
     if (editingAgentId && !isDefault) {
-      deleteAgent(editingAgentId);
+      setShowDeleteConfirm(true);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (editingAgentId) {
+      deleteAgent(editingAgentId, deleteMemory);
+      setShowDeleteConfirm(false);
+      setDeleteMemory(true);
     }
   };
 
   return (
+    <>
     <Modal
       onClose={closeEditor}
       title={editingAgentId ? t("editorTitle", { context: uiTheme }) : t("editorNewTitle", { context: uiTheme })}
@@ -228,5 +240,41 @@ export default function AgentEditor() {
         </div>
 
     </Modal>
+
+    {showDeleteConfirm && (
+      <Modal
+        title={t("deleteConfirmTitle", { context: uiTheme })}
+        onClose={() => { setShowDeleteConfirm(false); setDeleteMemory(true); }}
+        overlayClose="currentTarget"
+        contentClassName="agent-delete-dialog"
+        footer={
+          <div className="agent-delete-footer">
+            <button className="btn-secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteMemory(true); }}>
+              {t("common:cancel")}
+            </button>
+            <button className="btn-danger" onClick={confirmDelete}>
+              <Trash2 size={14} />
+              {t("deleteAgent", { context: uiTheme })}
+            </button>
+          </div>
+        }
+      >
+        <div className="agent-delete-content">
+          <div className="agent-delete-warning">
+            <AlertTriangle size={20} />
+            <span>{t("deleteConfirmMessage", { context: uiTheme, name: editingAgent?.name ?? "" })}</span>
+          </div>
+          <label className="agent-delete-checkbox">
+            <input
+              type="checkbox"
+              checked={deleteMemory}
+              onChange={(e) => setDeleteMemory(e.target.checked)}
+            />
+            {t("deleteWithMemory", { context: uiTheme })}
+          </label>
+        </div>
+      </Modal>
+    )}
+    </>
   );
 }

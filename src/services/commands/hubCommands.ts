@@ -16,6 +16,13 @@ export interface HubUserInfo {
   peer_id: string | null;
 }
 
+export interface PersonaData {
+  identity: string;
+  soul: string;
+  user_context: string;
+  agents: string;
+}
+
 export interface SharedAgent {
   id: string;
   user_id: string;
@@ -23,6 +30,7 @@ export interface SharedAgent {
   name: string;
   description: string;
   original_agent_id: string | null;
+  persona: PersonaData | null;
   skills_count: number;
   notes_count: number;
   created_at: string;
@@ -89,8 +97,8 @@ export async function hubUpdateMe(displayName?: string, peerId?: string): Promis
 
 // ── Share commands ──
 
-export async function hubShareAgent(name: string, description: string, originalAgentId?: string): Promise<SharedAgent> {
-  return invoke("hub_share_agent", { name, description, original_agent_id: originalAgentId });
+export async function hubShareAgent(name: string, description: string, originalAgentId?: string, persona?: PersonaData): Promise<SharedAgent> {
+  return invoke("hub_share_agent", { name, description, original_agent_id: originalAgentId, persona: persona ?? null });
 }
 
 export interface ShareSkillItem {

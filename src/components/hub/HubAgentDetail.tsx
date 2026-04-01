@@ -8,11 +8,12 @@ import {
   Loader2,
   Trash2,
   Tag,
-  Download,
+  UserPlus,
+  Check,
+  AlertTriangle,
 } from "lucide-react";
 import { useHubStore } from "../../stores/hubStore";
 import EmptyState from "../common/EmptyState";
-import HubInstallPopover from "./HubInstallPopover";
 import type { SharedSkill, SharedNote } from "../../services/commands/hubCommands";
 
 function SkillItem({ skill }: { skill: SharedSkill }) {
@@ -63,10 +64,12 @@ export default function HubAgentDetail() {
   const detailLoading = useHubStore((s) => s.detailLoading);
   const clearSelection = useHubStore((s) => s.clearSelection);
   const deleteSharedAgent = useHubStore((s) => s.deleteSharedAgent);
+  const hireAgent = useHubStore((s) => s.hireAgent);
   const userId = useHubStore((s) => s.userId);
   const loggedIn = useHubStore((s) => s.loggedIn);
 
-  const [showInstall, setShowInstall] = useState(false);
+  const [hiring, setHiring] = useState(false);
+  const [hireResult, setHireResult] = useState<{ installed: string[]; skipped: string[]; errors: string[] } | null>(null);
 
   const agent = agents.find((a) => a.id === selectedAgentId)
     ?? myAgents.find((a) => a.id === selectedAgentId);
@@ -89,6 +92,13 @@ export default function HubAgentDetail() {
     if (ok) clearSelection();
   };
 
+  const handleHire = async () => {
+    setHiring(true);
+    const res = await hireAgent(agent.name, agent.description);
+    setHiring(false);
+    if (res) setHireResult(res);
+  };
+
   return (
     <div className="hub-agent-detail">
       <div className="hub-detail-header">
@@ -98,24 +108,21 @@ export default function HubAgentDetail() {
         </button>
         <div className="hub-detail-actions">
           {loggedIn && (agentSkills.length > 0 || agentNotes.length > 0) && (
-            <div className="hub-install-wrapper">
-              <button
-
-                className="hub-install-all-btn"
-                onClick={() => setShowInstall(!showInstall)}
-                title={t("install.install_all")}
-              >
-                <Download size={16} />
-                {t("install.install_all")}
-              </button>
-              {showInstall && (
-                <HubInstallPopover
-                  type="agent"
-                  onClose={() => setShowInstall(false)}
-
-                />
+            <button
+              className="hub-install-all-btn"
+              onClick={handleHire}
+              disabled={hiring || !!hireResult}
+              title={t("install.hire")}
+            >
+              {hiring ? (
+                <Loader2 size={16} className="hub-spinner" />
+              ) : hireResult ? (
+                <Check size={16} />
+              ) : (
+                <UserPlus size={16} />
               )}
-            </div>
+              {hireResult ? t("install.hire_done") : t("install.hire")}
+            </button>
           )}
           {isOwner && (
             <button
@@ -128,6 +135,30 @@ export default function HubAgentDetail() {
           )}
         </div>
       </div>
+
+      {/* Hire result */}
+      {hireResult && (
+        <div className="hub-hire-result">
+          {hireResult.installed.length > 0 && (
+            <span className="hub-install-result-success">
+              <Check size={14} />
+              {t("install.result_installed", { count: hireResult.installed.length })}
+            </span>
+          )}
+          {hireResult.skipped.length > 0 && (
+            <span className="hub-install-result-skipped">
+              <AlertTriangle size={14} />
+              {t("install.result_skipped", { count: hireResult.skipped.length })}
+            </span>
+          )}
+          {hireResult.errors.length > 0 && (
+            <span className="hub-install-result-error">
+              <AlertTriangle size={14} />
+              {t("install.result_errors", { count: hireResult.errors.length })}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="hub-detail-info">
         <div className="hub-detail-name">

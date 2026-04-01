@@ -169,9 +169,72 @@
   background: var(--danger-bg);
 }
 
-.agent-card-delete-confirm {
+.agent-delete-dialog {
+  max-width: 400px;
+}
+
+.agent-delete-content {
   display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.agent-delete-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+  color: var(--text-main);
+}
+
+.agent-delete-warning svg {
+  color: var(--danger, #ef4444);
+  flex-shrink: 0;
+}
+
+.agent-delete-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--text-main);
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--hover-bg);
+}
+
+.agent-delete-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--danger, #ef4444);
+}
+
+.agent-delete-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-danger {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--danger, #ef4444);
+  color: white;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.btn-danger:hover {
+  opacity: 0.9;
 }
 
 .agent-card-desc {

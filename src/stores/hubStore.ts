@@ -21,15 +21,19 @@ import {
 } from "../services/commands/hubCommands";
 import { listSkills, readSkill, createSkill, updateSkill } from "../services/commands/skillCommands";
 import { listMemoryNotes, createMemoryNote } from "../services/commands/memoryCommands";
+import { createAgent } from "../services/commands/agentCommands";
+import { readPersonaFiles, writePersonaFiles } from "../services/personaService";
 import type { SkillMetadata, MemoryNote } from "../services/types";
+import type { PersonaData } from "../services/commands/hubCommands";
 import { logger } from "../services/logger";
 import { toErrorMessage } from "../utils/errorUtils";
 
-type HubTab = "agents" | "skills" | "notes" | "mine";
+type HubTab = "agents" | "skills" | "mine";
 
 export const PAGE_SIZE = 20;
 
-type ShareStep = "info" | "skills" | "notes" | "result";
+type ShareStep = "form" | "result";
+type ShareMode = "agent" | "skill";
 
 interface ShareResult {
   success: boolean;
@@ -86,6 +90,7 @@ interface HubState {
 
   // Share dialog
   shareDialogOpen: boolean;
+  shareMode: ShareMode;
   shareAgentId: string | null;   // local agent id
   shareFolderName: string;
   shareAgentName: string;
@@ -136,8 +141,8 @@ interface HubState {
 
   // Share actions
   openShareDialog: (agentId: string, folderName: string, name: string, description: string) => void;
+  openShareSkillDialog: (folderName: string) => void;
   closeShareDialog: () => void;
-  setShareStep: (step: ShareStep) => void;
   loadLocalContent: (folderName: string, agentId: string) => Promise<void>;
   toggleSkillSelection: (name: string) => void;
   toggleNoteSelection: (id: string) => void;
@@ -155,6 +160,7 @@ interface HubState {
   executeInstallSkill: (folderName: string, skill: SharedSkill) => Promise<InstallResult>;
   executeInstallNote: (agentId: string, note: SharedNote) => Promise<InstallResult>;
   executeInstallBulk: (folderName: string, agentId: string) => Promise<InstallResult>;
+  hireAgent: (name: string, description: string) => Promise<InstallResult | null>;
 
   // My shares actions
   loadMyShares: () => Promise<void>;
@@ -205,11 +211,12 @@ export const useHubStore = create<HubState>((set, get) => ({
 
   // Share dialog
   shareDialogOpen: false,
+  shareMode: "agent" as ShareMode,
   shareAgentId: null,
   shareFolderName: "",
   shareAgentName: "",
   shareAgentDesc: "",
-  shareStep: "info",
+  shareStep: "form",
   shareLoading: false,
   shareError: null,
   localSkills: [],
@@ -324,8 +331,9 @@ export const useHubStore = create<HubState>((set, get) => ({
       myNotesTotal: 0,
       // Clear share/install state
       shareDialogOpen: false,
+      shareMode: "agent" as ShareMode,
       shareAgentId: null,
-      shareStep: "info",
+      shareStep: "form",
       shareLoading: false,
       shareError: null,
       shareResult: null,
@@ -430,11 +438,31 @@ export const useHubStore = create<HubState>((set, get) => ({
   openShareDialog: (agentId, folderName, name, description) => {
     set({
       shareDialogOpen: true,
+      shareMode: "agent",
       shareAgentId: agentId,
       shareFolderName: folderName,
       shareAgentName: name,
       shareAgentDesc: description,
-      shareStep: "info",
+      shareStep: "form",
+      shareLoading: false,
+      shareError: null,
+      localSkills: [],
+      localNotes: [],
+      selectedSkillNames: new Set(),
+      selectedNoteIds: new Set(),
+      shareResult: null,
+    });
+  },
+
+  openShareSkillDialog: (folderName) => {
+    set({
+      shareDialogOpen: true,
+      shareMode: "skill",
+      shareAgentId: null,
+      shareFolderName: folderName,
+      shareAgentName: "",
+      shareAgentDesc: "",
+      shareStep: "form",
       shareLoading: false,
       shareError: null,
       localSkills: [],
@@ -448,11 +476,12 @@ export const useHubStore = create<HubState>((set, get) => ({
   closeShareDialog: () => {
     set({
       shareDialogOpen: false,
+      shareMode: "agent",
       shareAgentId: null,
       shareFolderName: "",
       shareAgentName: "",
       shareAgentDesc: "",
-      shareStep: "info",
+      shareStep: "form",
       shareLoading: false,
       shareError: null,
       localSkills: [],
@@ -463,13 +492,14 @@ export const useHubStore = create<HubState>((set, get) => ({
     });
   },
 
-  setShareStep: (step) => set({ shareStep: step }),
-
   loadLocalContent: async (folderName, agentId) => {
     try {
+      const skillsOnly = get().shareMode === "skill";
       const [skills, notes] = await Promise.all([
         listSkills(folderName).catch(() => [] as SkillMetadata[]),
-        listMemoryNotes(agentId).catch(() => [] as MemoryNote[]),
+        skillsOnly
+          ? Promise.resolve([] as MemoryNote[])
+          : listMemoryNotes(agentId).catch(() => [] as MemoryNote[]),
       ]);
       const allSkillNames = new Set(skills.filter((s) => s.source === "agent").map((s) => s.name));
       const allNoteIds = new Set(notes.map((n) => n.id));
@@ -519,13 +549,33 @@ export const useHubStore = create<HubState>((set, get) => ({
 
   executeShare: async () => {
     const {
-      shareAgentName, shareAgentDesc, shareAgentId, shareFolderName,
+      shareMode, shareAgentName, shareAgentDesc, shareAgentId, shareFolderName,
       selectedSkillNames, selectedNoteIds, localSkills, localNotes,
     } = get();
     set({ shareLoading: true, shareError: null });
     try {
-      // 1. Share agent
-      const sharedAgent = await hubShareAgent(shareAgentName, shareAgentDesc, shareAgentId || undefined);
+      let agentIdForSharing: string | null = null;
+
+      // 1. Share agent (only in agent mode)
+      if (shareMode === "agent") {
+        // Read persona files to include with agent
+        let persona: PersonaData | undefined;
+        try {
+          const files = await readPersonaFiles(shareFolderName);
+          if (files.identity || files.soul || files.user || files.agents) {
+            persona = {
+              identity: files.identity,
+              soul: files.soul,
+              user_context: files.user,
+              agents: files.agents,
+            };
+          }
+        } catch (e) {
+          logger.debug("Failed to read persona files for sharing:", e);
+        }
+        const sharedAgent = await hubShareAgent(shareAgentName, shareAgentDesc, shareAgentId || undefined, persona);
+        agentIdForSharing = sharedAgent.id;
+      }
 
       // 2. Share selected skills
       let skillsShared = 0;
@@ -546,14 +596,14 @@ export const useHubStore = create<HubState>((set, get) => ({
           }
         }
         if (skillItems.length > 0) {
-          await hubShareSkills(sharedAgent.id, skillItems);
+          await hubShareSkills(agentIdForSharing, skillItems);
           skillsShared = skillItems.length;
         }
       }
 
-      // 3. Share selected notes
+      // 3. Share selected notes (only in agent mode)
       let notesShared = 0;
-      if (selectedNoteIds.size > 0) {
+      if (shareMode === "agent" && selectedNoteIds.size > 0) {
         const noteItems: ShareNoteItem[] = [];
         for (const id of selectedNoteIds) {
           const note = localNotes.find((n) => n.id === id);
@@ -566,7 +616,7 @@ export const useHubStore = create<HubState>((set, get) => ({
           });
         }
         if (noteItems.length > 0) {
-          await hubShareNotes(sharedAgent.id, noteItems);
+          await hubShareNotes(agentIdForSharing, noteItems);
           notesShared = noteItems.length;
         }
       }
@@ -574,7 +624,7 @@ export const useHubStore = create<HubState>((set, get) => ({
       set({
         shareLoading: false,
         shareStep: "result",
-        shareResult: { success: true, agentId: sharedAgent.id, skillsShared, notesShared },
+        shareResult: { success: true, agentId: agentIdForSharing ?? undefined, skillsShared, notesShared },
       });
     } catch (e) {
       set({
@@ -674,6 +724,62 @@ export const useHubStore = create<HubState>((set, get) => ({
 
     set({ installLoading: false, installResult: result });
     return result;
+  },
+
+  hireAgent: async (name, description) => {
+    const { selectedAgentId, agents, myAgents, agentSkills, agentNotes } = get();
+    try {
+      // Create new local agent
+      const folderName = name.replace(/\s+/g, "-").toLowerCase();
+      const newAgent = await createAgent({
+        folder_name: folderName,
+        name,
+        description: description || undefined,
+      });
+
+      // Write persona files if available
+      const sharedAgent = agents.find((a) => a.id === selectedAgentId)
+        ?? myAgents.find((a) => a.id === selectedAgentId);
+      if (sharedAgent?.persona) {
+        try {
+          await writePersonaFiles(newAgent.folder_name, {
+            identity: sharedAgent.persona.identity || "",
+            soul: sharedAgent.persona.soul || "",
+            user: sharedAgent.persona.user_context || "",
+            agents: sharedAgent.persona.agents || "",
+          });
+        } catch (e) {
+          logger.debug("Failed to write persona files:", e);
+        }
+      }
+
+      // Install all skills and notes
+      const result: InstallResult = { installed: [], skipped: [], errors: [] };
+
+      for (const skill of agentSkills) {
+        try {
+          await createSkill(newAgent.folder_name, skill.skill_name);
+          await updateSkill(newAgent.folder_name, skill.skill_name, skill.body);
+          result.installed.push(skill.skill_name);
+        } catch {
+          result.errors.push(skill.skill_name);
+        }
+      }
+
+      for (const note of agentNotes) {
+        try {
+          await createMemoryNote(newAgent.id, note.title, note.body);
+          result.installed.push(note.title);
+        } catch {
+          result.errors.push(note.title);
+        }
+      }
+
+      return result;
+    } catch (e) {
+      logger.debug("Failed to hire agent:", e);
+      return { installed: [], skipped: [], errors: [toErrorMessage(e)] };
+    }
   },
 
   // ── My shares ──
