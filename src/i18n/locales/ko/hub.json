@@ -75,6 +75,8 @@
     "close": "닫기",
     "success": "성공적으로 공유되었습니다",
     "error": "공유 중 오류가 발생했습니다",
+    "pick_agent": "공유할 에이전트 선택",
+    "no_agents": "에이전트가 없습니다",
     "no_skills": "공유할 스킬이 없습니다",
     "no_notes": "공유할 노트가 없습니다",
     "skills_shared": "스킬 {{count}}개 공유됨",
@@ -90,7 +92,7 @@
   },
   "mine": {
     "empty": "아직 공유한 콘텐츠가 없습니다",
-    "empty_hint": "에이전트 패널에서 공유 버튼을 눌러 시작하세요",
+    "empty_hint": "상단 공유하기 버튼을 눌러 시작하세요",
     "agents_section": "에이전트 ({{count}})",
     "skills_section": "스킬 ({{count}})",
     "notes_section": "노트 ({{count}})"

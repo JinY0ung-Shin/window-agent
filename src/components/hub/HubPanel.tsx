@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Globe,
@@ -9,10 +9,13 @@ import {
   Package,
   LogIn,
   LogOut,
+  Upload,
+  Bot,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { useHubStore, PAGE_SIZE } from "../../stores/hubStore";
+import { useAgentStore } from "../../stores/agentStore";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import DraggableHeader from "../layout/DraggableHeader";
 import EmptyState from "../common/EmptyState";
@@ -22,7 +25,6 @@ import HubAgentDetail from "./HubAgentDetail";
 import HubSkillList from "./HubSkillList";
 import HubNoteList from "./HubNoteList";
 import HubMyShares from "./HubMyShares";
-import HubShareDialog from "./HubShareDialog";
 
 const TAB_ICONS = {
   agents: Users,
@@ -56,8 +58,25 @@ export default function HubPanel() {
   const loadSkills = useHubStore((s) => s.loadSkills);
   const loadNotes = useHubStore((s) => s.loadNotes);
 
+  const agents = useAgentStore((s) => s.agents);
+  const openShareDialog = useHubStore((s) => s.openShareDialog);
+  const [sharePickerOpen, setSharePickerOpen] = useState(false);
+  const sharePickerRef = useRef<HTMLDivElement>(null);
+
   const [localQuery, setLocalQuery] = useState("");
   const searchInput = useCompositionInput(setLocalQuery);
+
+  // Close share picker on outside click
+  useEffect(() => {
+    if (!sharePickerOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (sharePickerRef.current && !sharePickerRef.current.contains(e.target as Node)) {
+        setSharePickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [sharePickerOpen]);
 
   // Debounce: localQuery -> store searchQuery
   useEffect(() => {
@@ -130,6 +149,42 @@ export default function HubPanel() {
         </div>
         {loggedIn ? (
           <div className="hub-header-actions">
+            <div className="hub-share-picker-wrapper" ref={sharePickerRef}>
+              <button
+                className="btn-primary btn-sm"
+                onClick={() => setSharePickerOpen(!sharePickerOpen)}
+                title={t("share.button")}
+              >
+                <Upload size={14} />
+                {t("share.button")}
+              </button>
+              {sharePickerOpen && (
+                <div className="hub-share-picker-dropdown">
+                  <div className="hub-share-picker-title">{t("share.pick_agent")}</div>
+                  {agents.length === 0 ? (
+                    <div className="hub-share-picker-empty">{t("share.no_agents")}</div>
+                  ) : (
+                    agents.map((agent) => (
+                      <button
+                        key={agent.id}
+                        className="hub-share-picker-item"
+                        onClick={() => {
+                          setSharePickerOpen(false);
+                          openShareDialog(agent.id, agent.folder_name, agent.name, agent.description);
+                        }}
+                      >
+                        {agent.avatar ? (
+                          <img src={agent.avatar} alt={agent.name} className="hub-share-picker-avatar" />
+                        ) : (
+                          <Bot size={16} />
+                        )}
+                        <span>{agent.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
             <span className="hub-header-user">{displayName}</span>
             <button
               className="icon-btn"
@@ -236,8 +291,6 @@ export default function HubPanel() {
         </div>
       )}
 
-      {/* Share dialog (modal) */}
-      <HubShareDialog />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import TeamChatWindow from "../team/TeamChatWindow";
 import CronPanel from "../cron/CronPanel";
 import AgentPanel from "../agent/AgentPanel";
 import HubPanel from "../hub/HubPanel";
+import HubShareDialog from "../hub/HubShareDialog";
 import TourOverlay from "../tour/TourOverlay";
 import ErrorBoundary from "../common/ErrorBoundary";
 
@@ -117,6 +118,7 @@ export default function MainLayout() {
         <Bug size={18} />
       </button>
       <DebugPanel />
+      <HubShareDialog />
       <TourOverlay />
       {(chromiumInstalling || chromiumError) && (
         <div style={{
