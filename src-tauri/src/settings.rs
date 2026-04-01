@@ -26,7 +26,7 @@ const DEFAULT_MODEL: &str = "anthropic/claude-sonnet-4-20250514";
 const DEFAULT_THINKING_BUDGET: u32 = 4096;
 const DEFAULT_UI_THEME: &str = "org";
 const DEFAULT_LOCALE: &str = "ko";
-const DEFAULT_RELAY_URL: &str = "wss://relay.windowagent.io/ws";
+const DEFAULT_RELAY_URL: &str = "ws://relay.windowagent.io/ws";
 
 // ── Core types ───────────────────────────────────────────
 
@@ -47,9 +47,10 @@ pub struct AppSettingsInner {
     pub company_name: String,
     pub branding_initialized: bool,
     pub locale: String,
+    // Server URL (shared by relay + community hub, persisted in app-settings.json)
+    pub relay_url: String,
     // Relay (persisted in relay-settings.json)
     pub network_enabled: bool,
-    pub relay_url: String,
     pub allowed_tools: Vec<String>,
     pub discoverable: bool,
     pub directory_agent_name: String,
@@ -72,8 +73,8 @@ impl Default for AppSettingsInner {
             company_name: String::new(),
             branding_initialized: false,
             locale: DEFAULT_LOCALE.to_string(),
-            network_enabled: false,
             relay_url: DEFAULT_RELAY_URL.to_string(),
+            network_enabled: false,
             allowed_tools: Vec::new(),
             discoverable: true,
             directory_agent_name: String::new(),
@@ -96,9 +97,10 @@ pub struct AppSettingsPatch {
     pub company_name: Option<String>,
     pub branding_initialized: Option<bool>,
     pub locale: Option<String>,
+    // Server URL (shared by relay + community hub)
+    pub relay_url: Option<String>,
     // Relay
     pub network_enabled: Option<bool>,
-    pub relay_url: Option<String>,
     pub allowed_tools: Option<Vec<String>>,
     pub discoverable: Option<bool>,
     pub directory_agent_name: Option<String>,
@@ -148,12 +150,16 @@ fn read_from_store(app: &tauri::AppHandle) -> AppSettingsInner {
         if let Some(v) = read_bool(&store, "branding_initialized") { s.branding_initialized = v; }
         if let Some(v) = read_str(&store, "locale").filter(|v| !v.is_empty()) { s.locale = v; }
         if let Some(v) = read_u32(&store, "max_tool_iterations") { s.max_tool_iterations = v; }
+        if let Some(v) = read_str(&store, "relay_url").filter(|v| !v.is_empty()) { s.relay_url = v; }
     }
 
     // ── relay-settings.json ──
     if let Ok(store) = app.store(STORE_RELAY) {
         if let Some(v) = read_bool(&store, "network_enabled") { s.network_enabled = v; }
-        if let Some(v) = read_str(&store, "relay_url").filter(|v| !v.is_empty()) { s.relay_url = v; }
+        // Fallback: read relay_url from legacy location if not in app-settings
+        if s.relay_url == DEFAULT_RELAY_URL {
+            if let Some(v) = read_str(&store, "relay_url").filter(|v| !v.is_empty()) { s.relay_url = v; }
+        }
         if let Some(v) = read_string_vec(&store, "allowed_tools") { s.allowed_tools = v; }
         if let Some(v) = read_bool(&store, "discoverable") { s.discoverable = v; }
         if let Some(v) = read_str(&store, "directory_agent_name") { s.directory_agent_name = v; }
@@ -228,8 +234,9 @@ impl AppSettings {
         let has_app = patch.model_name.is_some() || patch.thinking_enabled.is_some()
             || patch.thinking_budget.is_some() || patch.ui_theme.is_some()
             || patch.company_name.is_some() || patch.branding_initialized.is_some()
-            || patch.locale.is_some() || patch.max_tool_iterations.is_some();
-        let has_relay = patch.network_enabled.is_some() || patch.relay_url.is_some()
+            || patch.locale.is_some() || patch.max_tool_iterations.is_some()
+            || patch.relay_url.is_some();
+        let has_relay = patch.network_enabled.is_some()
             || patch.allowed_tools.is_some() || patch.discoverable.is_some()
             || patch.directory_agent_name.is_some() || patch.directory_agent_description.is_some();
         let has_browser = patch.browser_headless.is_some() || patch.browser_proxy.is_some() || patch.browser_no_proxy.is_some();
@@ -245,6 +252,7 @@ impl AppSettings {
             store.set("branding_initialized", serde_json::json!(new.branding_initialized));
             store.set("locale", serde_json::json!(&new.locale));
             store.set("max_tool_iterations", serde_json::json!(new.max_tool_iterations));
+            store.set("relay_url", serde_json::json!(&new.relay_url));
             store.save().map_err(|e| AppError::Config(format!("Failed to persist app settings: {e}")))?;
         }
 
@@ -252,7 +260,6 @@ impl AppSettings {
             let store = app.store(STORE_RELAY)
                 .map_err(|e| AppError::Config(format!("Failed to open relay settings store: {e}")))?;
             store.set("network_enabled", serde_json::json!(new.network_enabled));
-            store.set("relay_url", serde_json::json!(&new.relay_url));
             store.set("allowed_tools", serde_json::json!(&new.allowed_tools));
             store.set("discoverable", serde_json::json!(new.discoverable));
             store.set("directory_agent_name", serde_json::json!(&new.directory_agent_name));

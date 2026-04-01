@@ -5,6 +5,11 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import { seedManagerAfterOnboarding, seedTemplateAgents } from "../../services/initService";
 import { AGENT_TEMPLATES } from "../../data/agentTemplates";
+import {
+  setBrowserProxy, setBrowserNoProxy,
+  detectSystemProxy, detectSystemNoProxy,
+} from "../../services/commands/apiCommands";
+import { relaySetRelayUrl } from "../../services/commands/relayCommands";
 import type { UITheme } from "../../stores/settingsStore";
 import type { Locale } from "../../i18n";
 import { useTourStore } from "../../stores/tourStore";
@@ -49,6 +54,14 @@ export default function OnboardingScreen() {
   const [apiBaseUrl, setApiBaseUrl] = useState("");
   const [apiTesting, setApiTesting] = useState(false);
   const [apiError, setApiError] = useState("");
+  // Server URL state
+  const [serverUrl, setServerUrl] = useState("");
+  // Proxy step state
+  const [proxyServer, setProxyServer] = useState("");
+  const [proxyNoProxy, setProxyNoProxy] = useState("");
+  const [proxyDetecting, setProxyDetecting] = useState(false);
+  const [proxyDetectMsg, setProxyDetectMsg] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const { compositionProps } = useCompositionInput(setCompanyName);
   const companyInputRef = useRef<HTMLInputElement>(null);
   const nextBtnRef = useRef<HTMLButtonElement>(null);
@@ -142,11 +155,24 @@ export default function OnboardingScreen() {
     }
   };
 
+  const saveAdvancedSettings = async () => {
+    if (serverUrl.trim()) {
+      await relaySetRelayUrl(serverUrl.trim());
+    }
+    if (proxyServer.trim()) {
+      await setBrowserProxy(proxyServer.trim());
+    }
+    if (proxyNoProxy.trim()) {
+      await setBrowserNoProxy(proxyNoProxy.trim());
+    }
+  };
+
   const handleApiSave = async () => {
     setApiTesting(true);
     setApiError("");
     try {
       await saveOnboardingApiConfig(apiKey, (apiBaseUrl || useSettingsStore.getState().baseUrl).trim());
+      await saveAdvancedSettings();
       completeOnboarding();
     } catch {
       setApiError(t("apiSaveError"));
@@ -154,7 +180,12 @@ export default function OnboardingScreen() {
     }
   };
 
-  const handleApiSkip = () => {
+  const handleApiSkip = async () => {
+    try {
+      await saveAdvancedSettings();
+    } catch (e) {
+      logger.debug("Failed to save advanced settings during skip", e);
+    }
     completeOnboarding();
   };
 
@@ -350,6 +381,88 @@ export default function OnboardingScreen() {
           onChange={(e) => setApiBaseUrl(e.target.value)}
         />
       </div>
+
+      <button
+        type="button"
+        className="onboarding-toggle-link"
+        onClick={() => setShowAdvanced((v) => !v)}
+      >
+        {showAdvanced ? t("advancedHide") : t("advancedShow")}
+      </button>
+
+      {showAdvanced && (
+        <>
+          <div className="onboarding-field">
+            <label htmlFor="serverUrl">{t("serverUrlLabel")}</label>
+            <input
+              id="serverUrl"
+              type="text"
+              placeholder={t("serverUrlPlaceholder")}
+              value={serverUrl}
+              onChange={(e) => setServerUrl(e.target.value)}
+            />
+            <p className="onboarding-hint">{t("serverUrlHint")}</p>
+          </div>
+
+          <div className="onboarding-field">
+            <label htmlFor="proxyServer">{t("proxyLabel")}</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                id="proxyServer"
+                type="text"
+                placeholder={t("proxyPlaceholder")}
+                value={proxyServer}
+                onChange={(e) => {
+                  setProxyServer(e.target.value);
+                  setProxyDetectMsg("");
+                }}
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={proxyDetecting}
+                onClick={async () => {
+                  setProxyDetecting(true);
+                  setProxyDetectMsg("");
+                  try {
+                    const [detected, detectedNo] = await Promise.all([
+                      detectSystemProxy(),
+                      detectSystemNoProxy(),
+                    ]);
+                    if (detected) {
+                      setProxyServer(detected);
+                      if (detectedNo) setProxyNoProxy(detectedNo);
+                      setProxyDetectMsg(t("proxyDetected"));
+                    } else {
+                      setProxyDetectMsg(t("proxyNotDetected"));
+                    }
+                  } catch {
+                    setProxyDetectMsg(t("proxyNotDetected"));
+                  } finally {
+                    setProxyDetecting(false);
+                  }
+                }}
+              >
+                {t("proxyDetectButton")}
+              </button>
+            </div>
+            {proxyDetectMsg && <p className="onboarding-hint">{proxyDetectMsg}</p>}
+          </div>
+
+          <div className="onboarding-field">
+            <label htmlFor="proxyNoProxy">{t("proxyNoProxyLabel")}</label>
+            <input
+              id="proxyNoProxy"
+              type="text"
+              placeholder={t("proxyNoProxyPlaceholder")}
+              value={proxyNoProxy}
+              onChange={(e) => setProxyNoProxy(e.target.value)}
+            />
+            <p className="onboarding-hint">{t("proxyNoProxyHint")}</p>
+          </div>
+        </>
+      )}
 
       {apiError && (
         <p className="onboarding-error">{apiError}</p>

@@ -10,6 +10,7 @@
   },
   "sections": {
     "apiServer": "API Server",
+    "serverUrl": "Server URL",
     "browser": "Browser",
     "agentNetwork": "{{term_agent_cap}} Network"
   },
@@ -43,7 +44,9 @@
     "modelRefreshTitle": "Refresh model list",
     "modelFetchError": "Unable to fetch model list",
     "modelDefault": "{{model}} (default)",
-    "apiKeySecurityHint": "API keys are managed by the backend only and never stored in the browser."
+    "apiKeySecurityHint": "API keys are managed by the backend only and never stored in the browser.",
+    "relayUrlLabel": "Server URL (Relay / Community Hub)",
+    "relayUrlHint": "Shared server address used by both relay network and community hub. Must start with ws:// or wss://."
   },
   "thinking": {
     "enableLabel": "Enable Thinking Mode",

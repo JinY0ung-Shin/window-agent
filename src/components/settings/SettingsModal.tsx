@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Settings } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNavigationStore } from "../../stores/navigationStore";
+import { relaySetRelayUrl } from "../../services/commands/relayCommands";
 import GeneralSettingsPanel from "./GeneralSettingsPanel";
 import ThinkingSettingsPanel from "./ThinkingSettingsPanel";
 import BrandingSettingsPanel from "./BrandingSettingsPanel";
@@ -49,6 +50,10 @@ export default function SettingsPage() {
     const branding = brandingRef.current?.getValues();
     const apiValues = apiRef.current?.getValues();
     const thinking = thinkingRef.current?.getValues();
+    // Save relay URL separately (managed by its own command)
+    if (apiValues?.relayUrl?.trim()) {
+      await relaySetRelayUrl(apiValues.relayUrl.trim()).catch(() => {});
+    }
     saveSettings({
       apiKey: apiValues?.apiKey ?? "",
       clearApiKey: apiValues?.clearApiKey ?? false,

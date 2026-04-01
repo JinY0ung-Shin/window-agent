@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { checkApiHealth, listModels, type ApiHealthCheckResponse } from "../../services/tauriCommands";
 import { getNoProxy, setNoProxy } from "../../services/commands/apiCommands";
+import { relayGetRelayUrl } from "../../services/commands/relayCommands";
 import { DEFAULT_BASE_URL, DEFAULT_MODEL } from "../../constants";
 import { logger } from "../../services/logger";
 import { toErrorMessage } from "../../utils/errorUtils";
@@ -13,6 +14,7 @@ export interface ApiServerSectionValues {
   clearApiKey: boolean;
   baseUrl: string;
   modelName: string;
+  relayUrl: string;
 }
 
 export interface ApiServerSectionRef {
@@ -39,6 +41,7 @@ const ApiServerSection = forwardRef<ApiServerSectionRef, Props>(
     const [healthResult, setHealthResult] = useState<ApiHealthCheckResponse | null>(null);
     const [healthError, setHealthError] = useState("");
     const [noProxyEnabled, setNoProxyEnabled] = useState(false);
+    const [tempRelayUrl, setTempRelayUrl] = useState("");
 
     const fetchModels = async () => {
       setModelsLoading(true);
@@ -64,6 +67,7 @@ const ApiServerSection = forwardRef<ApiServerSectionRef, Props>(
         setHealthError("");
         fetchModels();
         getNoProxy().then(setNoProxyEnabled).catch((e) => logger.debug("Failed to get proxy setting", e));
+        relayGetRelayUrl().then(setTempRelayUrl).catch((e) => logger.debug("Failed to get relay URL", e));
       }
     }, [isOpen]);
 
@@ -73,6 +77,7 @@ const ApiServerSection = forwardRef<ApiServerSectionRef, Props>(
         clearApiKey: clearStoredApiKey,
         baseUrl: tempBaseUrl,
         modelName: tempModelName,
+        relayUrl: tempRelayUrl,
       }),
     }));
 
@@ -236,6 +241,22 @@ const ApiServerSection = forwardRef<ApiServerSectionRef, Props>(
           )}
           <p className="form-text">
             {t("general.apiKeySecurityHint")}
+          </p>
+        </div>
+
+        <h3 className="settings-section-title">{t("sections.serverUrl")}</h3>
+
+        <div className="form-group">
+          <label htmlFor="relayUrl">{t("general.relayUrlLabel")}</label>
+          <input
+            id="relayUrl"
+            type="text"
+            placeholder="ws://relay.windowagent.io/ws"
+            value={tempRelayUrl}
+            onChange={(e) => setTempRelayUrl(e.target.value)}
+          />
+          <p className="form-text">
+            {t("general.relayUrlHint")}
           </p>
         </div>
       </>

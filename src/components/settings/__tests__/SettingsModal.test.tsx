@@ -43,20 +43,20 @@ describe("SettingsPage", () => {
     expect(screen.getByText("환경 설정")).toBeInTheDocument();
   });
 
-  it("general tab is active by default when API key exists", async () => {
+  it("appearance tab is active by default when API key exists", async () => {
     useSettingsStore.setState({ hasApiKey: true });
     useNavigationStore.setState({ mainView: "settings" });
     await act(async () => { render(<SettingsPage />); });
-    const generalTab = screen.getByText("일반");
-    expect(generalTab.className).toContain("active");
+    const appearanceTab = screen.getByText("외관");
+    expect(appearanceTab.className).toContain("active");
   });
 
-  it("network tab is active by default when API key is missing", async () => {
+  it("api tab is active by default when API key is missing", async () => {
     useSettingsStore.setState({ hasApiKey: false });
     useNavigationStore.setState({ mainView: "settings" });
     await act(async () => { render(<SettingsPage />); });
-    const networkTab = screen.getByText("네트워크");
-    expect(networkTab.className).toContain("active");
+    const apiTab = screen.getByRole("tab", { name: "API 서버" });
+    expect(apiTab.className).toContain("active");
   });
 
   it("switching to thinking tab shows thinking controls", async () => {
@@ -104,7 +104,7 @@ describe("SettingsPage", () => {
     });
 
     await act(async () => { render(<SettingsPage />); });
-    await act(async () => { fireEvent.click(screen.getByText("네트워크")); });
+    await act(async () => { fireEvent.click(screen.getByRole("tab", { name: "API 서버" })); });
     await act(async () => { fireEvent.click(screen.getByText("연결 확인")); });
 
     expect(await screen.findByText("연결 성공")).toBeInTheDocument();
