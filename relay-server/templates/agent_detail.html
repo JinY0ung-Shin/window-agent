@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ agent.name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>{{ agent.name }}</h1>
+  <p>Shared by <a href="/users/{{ agent.user_id }}">{{ agent.display_name }}</a> · {{ agent.created_at }}</p>
+</hgroup>
+
+{% if !agent.description.is_empty() %}
+<p>{{ agent.description }}</p>
+{% endif %}
+
+<h2>Skills ({{ skills.len() }})</h2>
+{% if skills.is_empty() %}
+<p class="empty-state">No skills shared for this agent.</p>
+{% else %}
+<div class="card-grid">
+  {% for skill in skills %}
+  <article>
+    <header><a href="/skills/{{ skill.id }}"><strong>{{ skill.skill_name }}</strong></a></header>
+    <p>{{ skill.description }}</p>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Notes ({{ notes.len() }})</h2>
+{% if notes.is_empty() %}
+<p class="empty-state">No notes shared for this agent.</p>
+{% else %}
+<div class="card-grid">
+  {% for note in notes %}
+  <article>
+    <header>
+      <a href="/notes/{{ note.id }}"><strong>{{ note.title }}</strong></a>
+      {% if !note.note_type.is_empty() %}
+      <span class="badge badge-type">{{ note.note_type }}</span>
+      {% endif %}
+    </header>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

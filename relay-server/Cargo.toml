@@ -22,6 +22,15 @@ rand = "0.8"
 hex = "0.4"
 dotenvy = "0.15"
 
+# Community Hub
+argon2 = "0.5"
+jsonwebtoken = "9"
+pulldown-cmark = "0.12"
+ammonia = "3"
+askama = "0.12"
+askama_axum = "0.4"
+tower-http = { version = "0.6", features = ["cors", "limit"] }
+
 [dev-dependencies]
 tokio-tungstenite = "0.26"
 wa-shared = { path = "../shared" }

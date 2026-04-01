@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ note.title }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>{{ note.title }}</h1>
+  <p>
+    Shared by <a href="/users/{{ note.user_id }}">{{ note.display_name }}</a>
+    {% if !note.agent_name.is_empty() %}
+    · Agent: <a href="/agents/{{ note.agent_id }}">{{ note.agent_name }}</a>
+    {% endif %}
+  </p>
+</hgroup>
+
+<div class="tag-list" style="margin-bottom: 1rem;">
+  {% if !note.note_type.is_empty() %}
+  <span class="badge badge-type">{{ note.note_type }}</span>
+  {% endif %}
+  {% for tag in tags %}
+  <span class="badge">{{ tag }}</span>
+  {% endfor %}
+</div>
+
+<div class="markdown-body">
+  {{ body_html|safe }}
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Notes{% endblock %}
+{% block content %}
+<h1>Shared Notes</h1>
+
+<form role="search" method="get" action="/notes">
+  <input type="search" name="q" placeholder="Search notes..." value="{{ q }}">
+  <button type="submit">Search</button>
+</form>
+
+{% if notes.is_empty() %}
+<div class="empty-state"><p>No notes found.</p></div>
+{% else %}
+<div class="card-grid">
+  {% for note in notes %}
+  <article>
+    <header>
+      <a href="/notes/{{ note.id }}"><strong>{{ note.title }}</strong></a>
+      {% if !note.note_type.is_empty() %}
+      <span class="badge badge-type">{{ note.note_type }}</span>
+      {% endif %}
+      {% if !note.agent_name.is_empty() %}
+      <br><small>from {{ note.agent_name }}</small>
+      {% endif %}
+    </header>
+    <footer>
+      <small>by <a href="/users/{{ note.user_id }}">{{ note.display_name }}</a></small>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="pagination">
+  {% if has_prev %}
+  <a href="/notes?q={{ q }}&offset={{ prev_offset }}" role="button" class="outline">Prev</a>
+  {% endif %}
+  {% if has_next %}
+  <a href="/notes?q={{ q }}&offset={{ next_offset }}" role="button" class="outline">Next</a>
+  {% endif %}
+</div>
+{% endblock %}

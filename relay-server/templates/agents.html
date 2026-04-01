@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Agents{% endblock %}
+{% block content %}
+<h1>Shared Agents</h1>
+
+<form role="search" method="get" action="/agents">
+  <input type="search" name="q" placeholder="Search agents..." value="{{ q }}">
+  <button type="submit">Search</button>
+</form>
+
+{% if agents.is_empty() %}
+<div class="empty-state"><p>No agents found.</p></div>
+{% else %}
+<div class="card-grid">
+  {% for agent in agents %}
+  <article>
+    <header>
+      <a href="/agents/{{ agent.id }}"><strong>{{ agent.name }}</strong></a>
+      <br><small>by <a href="/users/{{ agent.user_id }}">{{ agent.display_name }}</a></small>
+    </header>
+    <p>{{ agent.description }}</p>
+    <footer>
+      <span class="badge badge-skill">{{ agent.skills_count }} skills</span>
+      <span class="badge badge-note">{{ agent.notes_count }} notes</span>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="pagination">
+  {% if has_prev %}
+  <a href="/agents?q={{ q }}&offset={{ prev_offset }}" role="button" class="outline">Prev</a>
+  {% endif %}
+  {% if has_next %}
+  <a href="/agents?q={{ q }}&offset={{ next_offset }}" role="button" class="outline">Next</a>
+  {% endif %}
+</div>
+{% endblock %}

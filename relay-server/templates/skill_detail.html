@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ skill.skill_name }}{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>{{ skill.skill_name }}</h1>
+  <p>
+    Shared by <a href="/users/{{ skill.user_id }}">{{ skill.display_name }}</a>
+    {% if !skill.agent_name.is_empty() %}
+    · Agent: <a href="/agents/{{ skill.agent_id }}">{{ skill.agent_name }}</a>
+    {% endif %}
+  </p>
+</hgroup>
+
+{% if !skill.description.is_empty() %}
+<p><em>{{ skill.description }}</em></p>
+{% endif %}
+
+<h2>Content</h2>
+<div class="markdown-body">
+  {{ body_html|safe }}
+</div>
+{% endblock %}

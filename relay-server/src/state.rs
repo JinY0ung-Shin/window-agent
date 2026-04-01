@@ -26,12 +26,16 @@ struct Inner {
     seen_messages: Mutex<HashMap<String, Instant>>,
     /// Rate limit for directory searches: peer_id → (count, window_start)
     search_rate_limits: RwLock<HashMap<String, (u32, Instant)>>,
+    /// Rate limit for auth endpoints: ip/key → (count, window_start)
+    auth_rate_limits: RwLock<HashMap<String, (u32, Instant)>>,
+    /// JWT signing secret for community hub
+    jwt_secret: String,
     /// SQLite connection pool
     db: SqlitePool,
 }
 
 impl AppState {
-    pub fn new(db: SqlitePool) -> Self {
+    pub fn new(db: SqlitePool, jwt_secret: String) -> Self {
         Self {
             inner: Arc::new(Inner {
                 connections: RwLock::new(HashMap::new()),
@@ -39,6 +43,8 @@ impl AppState {
                 presence_subscriptions: RwLock::new(HashMap::new()),
                 seen_messages: Mutex::new(HashMap::new()),
                 search_rate_limits: RwLock::new(HashMap::new()),
+                auth_rate_limits: RwLock::new(HashMap::new()),
+                jwt_secret,
                 db,
             }),
         }
@@ -46,6 +52,10 @@ impl AppState {
 
     pub fn db(&self) -> &SqlitePool {
         &self.inner.db
+    }
+
+    pub fn jwt_secret(&self) -> &str {
+        &self.inner.jwt_secret
     }
 
     // ── Connection management ──
@@ -175,6 +185,11 @@ impl AppState {
         let window = std::time::Duration::from_secs(60);
         let max_per_window: u32 = 10;
 
+        // Evict expired entries when map grows large
+        if limits.len() > 1000 {
+            limits.retain(|_, (_, start)| now.duration_since(*start) <= window);
+        }
+
         if let Some((count, start)) = limits.get_mut(peer_id) {
             if now.duration_since(*start) > window {
                 *count = 1;
@@ -188,6 +203,37 @@ impl AppState {
             }
         } else {
             limits.insert(peer_id.to_string(), (1, now));
+            false
+        }
+    }
+
+    // ── Auth rate limiting ──
+
+    /// Check auth rate limit by key (e.g. email). Returns `true` if rate limited.
+    pub async fn check_auth_rate(&self, key: &str) -> bool {
+        let mut limits = self.inner.auth_rate_limits.write().await;
+        let now = Instant::now();
+        let window = std::time::Duration::from_secs(60);
+        let max_per_window: u32 = 10;
+
+        // Evict expired entries when map grows large
+        if limits.len() > 1000 {
+            limits.retain(|_, (_, start)| now.duration_since(*start) <= window);
+        }
+
+        if let Some((count, start)) = limits.get_mut(key) {
+            if now.duration_since(*start) > window {
+                *count = 1;
+                *start = now;
+                false
+            } else if *count >= max_per_window {
+                true
+            } else {
+                *count += 1;
+                false
+            }
+        } else {
+            limits.insert(key.to_string(), (1, now));
             false
         }
     }

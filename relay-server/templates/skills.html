@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Skills{% endblock %}
+{% block content %}
+<h1>Shared Skills</h1>
+
+<form role="search" method="get" action="/skills">
+  <input type="search" name="q" placeholder="Search skills..." value="{{ q }}">
+  <button type="submit">Search</button>
+</form>
+
+{% if skills.is_empty() %}
+<div class="empty-state"><p>No skills found.</p></div>
+{% else %}
+<div class="card-grid">
+  {% for skill in skills %}
+  <article>
+    <header>
+      <a href="/skills/{{ skill.id }}"><strong>{{ skill.skill_name }}</strong></a>
+      {% if !skill.agent_name.is_empty() %}
+      <br><small>from {{ skill.agent_name }}</small>
+      {% endif %}
+    </header>
+    <p>{{ skill.description }}</p>
+    <footer>
+      <small>by <a href="/users/{{ skill.user_id }}">{{ skill.display_name }}</a></small>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="pagination">
+  {% if has_prev %}
+  <a href="/skills?q={{ q }}&offset={{ prev_offset }}" role="button" class="outline">Prev</a>
+  {% endif %}
+  {% if has_next %}
+  <a href="/skills?q={{ q }}&offset={{ next_offset }}" role="button" class="outline">Next</a>
+  {% endif %}
+</div>
+{% endblock %}

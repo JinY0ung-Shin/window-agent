@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<hgroup>
+  <h1>Window Agent Community Hub</h1>
+  <p>Share and discover agents, skills, and knowledge</p>
+</hgroup>
+
+<div class="stats">
+  <div class="stat-card">
+    <h2>{{ agents_count }}</h2>
+    <small>Agents</small>
+  </div>
+  <div class="stat-card">
+    <h2>{{ skills_count }}</h2>
+    <small>Skills</small>
+  </div>
+  <div class="stat-card">
+    <h2>{{ notes_count }}</h2>
+    <small>Notes</small>
+  </div>
+</div>
+
+{% if !recent_agents.is_empty() %}
+<h2>Recent Agents</h2>
+<div class="card-grid">
+  {% for agent in recent_agents %}
+  <article>
+    <header>
+      <a href="/agents/{{ agent.id }}"><strong>{{ agent.name }}</strong></a>
+      <br><small>by {{ agent.display_name }}</small>
+    </header>
+    <p>{{ agent.description }}</p>
+    <footer>
+      <span class="badge badge-skill">{{ agent.skills_count }} skills</span>
+      <span class="badge badge-note">{{ agent.notes_count }} notes</span>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if !recent_skills.is_empty() %}
+<h2>Recent Skills</h2>
+<div class="card-grid">
+  {% for skill in recent_skills %}
+  <article>
+    <header>
+      <a href="/skills/{{ skill.id }}"><strong>{{ skill.skill_name }}</strong></a>
+      {% if !skill.agent_name.is_empty() %}
+      <br><small>from {{ skill.agent_name }}</small>
+      {% endif %}
+    </header>
+    <p>{{ skill.description }}</p>
+    <footer><small>by {{ skill.display_name }}</small></footer>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if !recent_notes.is_empty() %}
+<h2>Recent Notes</h2>
+<div class="card-grid">
+  {% for note in recent_notes %}
+  <article>
+    <header>
+      <a href="/notes/{{ note.id }}"><strong>{{ note.title }}</strong></a>
+      {% if !note.note_type.is_empty() %}
+      <span class="badge badge-type">{{ note.note_type }}</span>
+      {% endif %}
+    </header>
+    <footer><small>by {{ note.display_name }}</small></footer>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if recent_agents.is_empty() && recent_skills.is_empty() && recent_notes.is_empty() %}
+<div class="empty-state">
+  <h2>No shared content yet</h2>
+  <p>Be the first to share your agent, skills, or knowledge!</p>
+</div>
+{% endif %}
+{% endblock %}

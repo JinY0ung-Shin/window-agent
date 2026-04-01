@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ user.display_name }}{% endblock %}
+{% block content %}
+<h1>{{ user.display_name }}</h1>
+<p>Member since {{ user.created_at }}</p>
+
+<h2>Shared Agents ({{ agents.len() }})</h2>
+{% if agents.is_empty() %}
+<p class="empty-state">No agents shared yet.</p>
+{% else %}
+<div class="card-grid">
+  {% for agent in agents %}
+  <article>
+    <header><a href="/agents/{{ agent.id }}"><strong>{{ agent.name }}</strong></a></header>
+    <p>{{ agent.description }}</p>
+    <footer>
+      <span class="badge badge-skill">{{ agent.skills_count }} skills</span>
+      <span class="badge badge-note">{{ agent.notes_count }} notes</span>
+    </footer>
+  </article>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
