@@ -26,7 +26,9 @@ const DEFAULT_MODEL: &str = "anthropic/claude-sonnet-4-20250514";
 const DEFAULT_THINKING_BUDGET: u32 = 4096;
 const DEFAULT_UI_THEME: &str = "org";
 const DEFAULT_LOCALE: &str = "ko";
-const DEFAULT_RELAY_URL: &str = "ws://relay.windowagent.io/ws";
+const DEFAULT_RELAY_URL: &str = "";
+/// Fallback used when relay_url is empty (shown as placeholder in UI).
+pub const FALLBACK_RELAY_URL: &str = "ws://relay.windowagent.io/ws";
 
 // ── Core types ───────────────────────────────────────────
 
@@ -156,8 +158,8 @@ fn read_from_store(app: &tauri::AppHandle) -> AppSettingsInner {
     // ── relay-settings.json ──
     if let Ok(store) = app.store(STORE_RELAY) {
         if let Some(v) = read_bool(&store, "network_enabled") { s.network_enabled = v; }
-        // Fallback: read relay_url from legacy location if not in app-settings
-        if s.relay_url == DEFAULT_RELAY_URL {
+        // Fallback: read relay_url from legacy location if not set in app-settings
+        if s.relay_url.is_empty() {
             if let Some(v) = read_str(&store, "relay_url").filter(|v| !v.is_empty()) { s.relay_url = v; }
         }
         if let Some(v) = read_string_vec(&store, "allowed_tools") { s.allowed_tools = v; }
@@ -196,6 +198,16 @@ impl AppSettings {
             .lock()
             .expect("AppSettings lock poisoned")
             .clone()
+    }
+
+    /// Get the effective relay URL, falling back to the default if empty.
+    pub fn resolve_relay_url(&self) -> String {
+        let url = self.get().relay_url;
+        if url.trim().is_empty() {
+            FALLBACK_RELAY_URL.to_string()
+        } else {
+            url
+        }
     }
 
     /// Apply a partial update: persist first, then update in-memory, then emit event.

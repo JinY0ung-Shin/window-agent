@@ -23,7 +23,7 @@ pub type HubUserInfo = UserInfo;
 // ── Helpers ─────────────────────────────────────────────
 
 fn make_hub_client(settings: &AppSettings) -> Result<HubClient, AppError> {
-    let relay_url = settings.get().relay_url;
+    let relay_url = settings.resolve_relay_url();
     Ok(HubClient::new(&relay_url, None))
 }
 
@@ -31,7 +31,7 @@ fn make_authed_hub_client(
     app: &tauri::AppHandle,
     settings: &AppSettings,
 ) -> Result<HubClient, AppError> {
-    let relay_url = settings.get().relay_url;
+    let relay_url = settings.resolve_relay_url();
     let auth = hub_client::load_hub_auth(app)
         .ok_or_else(|| AppError::Api("Not logged in to Community Hub".into()))?;
     Ok(HubClient::new(&relay_url, Some(auth.token)))

@@ -11,7 +11,7 @@
   },
   "relay": {
     "label": "릴레이 서버 URL",
-    "placeholder": "wss://relay.example.com/ws",
+    "placeholder": "ws://relay.windowagent.io/ws",
     "validationError": "유효한 WebSocket URL을 입력하세요 (ws:// 또는 wss://)",
     "saved": "저장됨 — 네트워크를 재시작해야 적용됩니다",
     "hint": "피어 연결에 사용할 WebSocket 릴레이 서버의 URL입니다."

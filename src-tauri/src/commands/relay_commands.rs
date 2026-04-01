@@ -60,7 +60,7 @@ pub fn relay_generate_invite(
     addresses: Vec<String>,
     expiry_hours: Option<u64>,
 ) -> Result<String, AppError> {
-    let relay_url = settings.get().relay_url;
+    let relay_url = settings.resolve_relay_url();
     invite::generate_invite_with_relay(&identity, addresses, agent_name, agent_description, expiry_hours, Some(relay_url))
         .map_err(|e| AppError::Relay(e.to_string()))
 }
@@ -568,7 +568,7 @@ pub fn relay_get_connection_info(
 ) -> Result<ConnectionInfo, AppError> {
     Ok(ConnectionInfo {
         peer_id: manager.peer_id().map_err(|e| AppError::Relay(e.to_string()))?.to_string(),
-        relay_url: settings.get().relay_url,
+        relay_url: settings.resolve_relay_url(),
         status: format!("{:?}", manager.status().map_err(|e| AppError::Relay(e.to_string()))?).to_lowercase(),
     })
 }
@@ -605,9 +605,7 @@ pub fn relay_set_relay_url(
     settings: State<'_, AppSettings>,
     url: String,
 ) -> Result<(), AppError> {
-    if url.trim().is_empty() {
-        return Err(AppError::Validation("Relay URL cannot be empty".into()));
-    }
+    // Allow empty string to reset to default (fallback URL will be used)
     settings.set(&AppSettingsPatch { relay_url: Some(url), ..Default::default() }, &app)
 }
 

@@ -19,10 +19,10 @@ impl RelayManager {
             status: "starting".into(), peer_count: 0,
         });
 
-        // Read relay URL from unified settings
+        // Read relay URL from unified settings (falls back to default if empty)
         let relay_url = {
             use tauri::Manager;
-            app_handle.state::<crate::settings::AppSettings>().get().relay_url
+            app_handle.state::<crate::settings::AppSettings>().resolve_relay_url()
         };
 
         // Build peer indexes from contacts DB
