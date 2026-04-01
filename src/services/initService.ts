@@ -98,15 +98,10 @@ export async function initializeApp(): Promise<void> {
   // Step 7: Auto-initialize branding for upgraded users.
   // After migration, if brandingInitialized is still false but the user has data,
   // they are a legacy user who upgraded — auto-initialize with existing values.
-  if (!settings.brandingInitialized) {
-    const conversations = useConversationStore.getState().conversations;
-    const hasExistingSettings = [
-      "openai_base_url", "openai_model_name",
-      "thinking_enabled", "thinking_budget",
-    ].some((key) => localStorage.getItem(key) !== null);
-    if (conversations.length > 0 || hasExistingSettings) {
-      settings.initializeBranding(settings.companyName || "", settings.uiTheme || "org");
-    }
+  // Use pre-hydration isFreshInstall flag — NOT a post-hydration localStorage check,
+  // because loadEnvDefaults() writes backend defaults to localStorage even on fresh installs.
+  if (!settings.brandingInitialized && !isFreshInstall) {
+    settings.initializeBranding(settings.companyName || "", settings.uiTheme || "org");
   }
 
   // Step 8: Register heartbeat lifecycle (listens for session:start/end)
