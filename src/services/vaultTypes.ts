@@ -1,6 +1,7 @@
 // ── Vault note types ─────────────────────────────────
 
-export type NoteType = "knowledge" | "conversation" | "decision" | "reflection";
+/** Free-form category string — LLM assigns whatever category fits best. */
+export type NoteType = string;
 export type NoteScope = "agent" | "shared";
 
 export interface VaultNote {

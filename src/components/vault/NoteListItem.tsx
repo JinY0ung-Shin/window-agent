@@ -23,7 +23,14 @@ export default function NoteListItem({ note, isSelected, onClick }: NoteListItem
     return date.toLocaleDateString(i18n.language === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" });
   };
 
-  const categoryColor = `var(--vault-${note.noteType})`;
+  const categoryColor = (() => {
+    let hash = 0;
+    for (let i = 0; i < note.noteType.length; i++) {
+      hash = note.noteType.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = ((hash % 360) + 360) % 360;
+    return `hsl(${hue}, 55%, 55%)`;
+  })();
 
   return (
     <div

@@ -69,11 +69,11 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   loadNotes: async (agentId) => {
     const version = ++_loadVersion;
     const isAgentChange = get().activeAgent !== (agentId ?? null);
-    // Only clear notes when switching agents; keep existing notes during refresh
+    // Only show loading skeleton when switching agents; refresh silently
     if (isAgentChange) {
       set({ notes: [], notesStatus: "loading", activeAgent: agentId ?? null });
     } else {
-      set({ notesStatus: get().notes.length > 0 ? "loaded" : "loading", activeAgent: agentId ?? null });
+      set({ activeAgent: agentId ?? null });
     }
     try {
       const notes = await vault.vaultListNotes(agentId);

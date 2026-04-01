@@ -110,17 +110,13 @@ fn collect_entries_recursive(
 /// Infer note category from the vault-relative path.
 /// e.g. "decision/auth-flow.md" -> "decision", "knowledge/topic.md" -> "knowledge"
 fn infer_vault_category(path: &str) -> String {
-    let valid_categories = ["knowledge", "decision", "conversation", "reflection"];
-    let first_component = Path::new(path)
+    // Use the first path component as the category (free-form, LLM-assigned).
+    Path::new(path)
         .components()
         .next()
         .and_then(|c| c.as_os_str().to_str())
-        .unwrap_or("knowledge");
-    if valid_categories.contains(&first_component) {
-        first_component.to_string()
-    } else {
-        "knowledge".to_string()
-    }
+        .unwrap_or("general")
+        .to_string()
 }
 
 /// Strip YAML frontmatter from content if present (read-modify-write support).

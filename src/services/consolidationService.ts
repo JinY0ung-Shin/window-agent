@@ -53,8 +53,7 @@ export async function consolidateConversation(
       const digestId = await cmds.writeDigest(agentId, conversationId, digestContent);
       await cmds.updateConversationDigest(conversationId, digestId);
 
-      // Archive raw notes from this conversation
-      await cmds.archiveConversationNotes(conversationId, agentId);
+      // Notes persist after consolidation — no longer archived automatically.
     } else {
       // Digest already exists but consolidation incomplete — read the digest
       try {

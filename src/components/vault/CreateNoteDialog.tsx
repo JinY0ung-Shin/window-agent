@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import Modal from "../common/Modal";
-import type { NoteType, NoteScope } from "../../services/vaultTypes";
+import type { NoteScope } from "../../services/vaultTypes";
 import { useVaultStore } from "../../stores/vaultStore";
 
 interface CreateNoteDialogProps {
@@ -10,8 +10,6 @@ interface CreateNoteDialogProps {
   onClose: () => void;
   defaultAgentId: string | null;
 }
-
-const CATEGORY_KEYS: NoteType[] = ["knowledge", "decision", "conversation", "reflection"];
 
 export default function CreateNoteDialog({
   isOpen,
@@ -22,7 +20,7 @@ export default function CreateNoteDialog({
   const createNote = useVaultStore((s) => s.createNote);
 
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState<NoteType>("knowledge");
+  const [category, setCategory] = useState("knowledge");
   const [scope, setScope] = useState<NoteScope>("agent");
   const [tags, setTags] = useState("");
   const [content, setContent] = useState("");
@@ -87,20 +85,12 @@ export default function CreateNoteDialog({
           {/* Category */}
           <div className="vault-create-field">
             <label>{t("create.categoryLabel")}</label>
-            <div className="vault-create-radio-group">
-              {CATEGORY_KEYS.map((key) => (
-                <label key={key} className="vault-create-radio">
-                  <input
-                    type="radio"
-                    name="category"
-                    value={key}
-                    checked={category === key}
-                    onChange={() => setCategory(key)}
-                  />
-                  {t(`category.${key}`)}
-                </label>
-              ))}
-            </div>
+            <input
+              type="text"
+              value={category}
+              placeholder={t("create.categoryPlaceholder")}
+              onChange={(e) => setCategory(e.target.value)}
+            />
           </div>
 
           {/* Scope */}

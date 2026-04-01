@@ -8,12 +8,15 @@ interface NoteMetadataBarProps {
   onTagClick?: (tag: string) => void;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
-  knowledge: "var(--vault-knowledge)",
-  conversation: "var(--vault-conversation)",
-  decision: "var(--vault-decision)",
-  reflection: "var(--vault-reflection)",
-};
+/** Generate a stable HSL color from a string. */
+function categoryColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 55%, 55%)`;
+}
 
 function formatDate(iso: string): string {
   try {
@@ -32,7 +35,7 @@ function formatDate(iso: string): string {
 
 export default function NoteMetadataBar({ note, onTagClick }: NoteMetadataBarProps) {
   const { t } = useTranslation("vault");
-  const catColor = CATEGORY_COLORS[note.noteType] ?? "var(--text-muted)";
+  const catColor = categoryColor(note.noteType);
 
   return (
     <div className="vault-metadata-bar">

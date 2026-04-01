@@ -267,6 +267,14 @@ export async function buildConversationContext(params: {
     const header = i18n.t("prompts:vaultGuide.header");
     const body = i18n.t("prompts:vaultGuide.body");
     systemPrompt += `\n\n${header}\n${body}`;
+
+    // Inject existing categories so the LLM knows what's already in use
+    if (params.vaultNotes?.length) {
+      const cats = [...new Set(params.vaultNotes.map((n) => n.noteType).filter(Boolean))].sort();
+      if (cats.length > 0) {
+        systemPrompt += `\nExisting categories: ${cats.join(", ")}`;
+      }
+    }
   }
 
   // Learning mode prompt injection (between skills and memory)

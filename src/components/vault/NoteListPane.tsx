@@ -1,7 +1,6 @@
 import { useState, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useVaultStore } from "../../stores/vaultStore";
-import type { NoteType } from "../../services/vaultTypes";
 import NoteSearchBar from "./NoteSearchBar";
 import NoteFilterBar from "./NoteFilterBar";
 import NoteListItem from "./NoteListItem";
@@ -56,7 +55,15 @@ export default function NoteListPane() {
     if (debounceRef.current) clearTimeout(debounceRef.current);
   }, []);
 
-  // Derive available tags from notes
+  // Derive available categories and tags from notes
+  const availableCategories = useMemo(() => {
+    const catSet = new Set<string>();
+    for (const n of notes) {
+      if (n.noteType) catSet.add(n.noteType);
+    }
+    return Array.from(catSet).sort();
+  }, [notes]);
+
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     for (const n of notes) {
@@ -96,8 +103,9 @@ export default function NoteListPane() {
       <NoteFilterBar
         activeCategory={activeCategory}
         activeTags={activeTags}
+        availableCategories={availableCategories}
         availableTags={availableTags}
-        onCategoryChange={(cat) => setActiveCategory(cat as NoteType | null)}
+        onCategoryChange={setActiveCategory}
         onTagsChange={setActiveTags}
       />
       <div className="vault-note-list">

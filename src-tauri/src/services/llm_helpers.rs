@@ -14,7 +14,7 @@ Note format:\n\
 - YAML frontmatter (id, type, tags, confidence) + markdown body\n\
 - Start with `# Title` as the first line\n\
 - Use [[Note Title]] wikilinks to connect notes — they appear in the graph\n\
-- Categories: knowledge/ (facts/info), decision/ (choices), conversation/ (chat summaries), reflection/ (insights)\n\n\
+- Categories are free-form: use any category name as the directory (e.g. knowledge/, api-design/, meeting-notes/). Choose the most descriptive category for the content.\n\n\
 Writing guidelines:\n\
 - write_file(scope: 'vault', path: '<category>/<filename>.md', content: '...')\n\
 - Frontmatter is auto-generated — just write the body\n\

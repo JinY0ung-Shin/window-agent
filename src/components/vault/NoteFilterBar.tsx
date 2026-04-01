@@ -1,25 +1,29 @@
 import { useTranslation } from "react-i18next";
-import type { NoteType } from "../../services/vaultTypes";
 
 interface NoteFilterBarProps {
-  activeCategory: NoteType | null;
+  activeCategory: string | null;
   activeTags: string[];
+  availableCategories: string[];
   availableTags: string[];
-  onCategoryChange: (cat: NoteType | null) => void;
+  onCategoryChange: (cat: string | null) => void;
   onTagsChange: (tags: string[]) => void;
   collapsed?: boolean;
 }
 
-const CATEGORIES: { key: NoteType; cssVar: string }[] = [
-  { key: "knowledge", cssVar: "var(--vault-knowledge)" },
-  { key: "decision", cssVar: "var(--vault-decision)" },
-  { key: "conversation", cssVar: "var(--vault-conversation)" },
-  { key: "reflection", cssVar: "var(--vault-reflection)" },
-];
+/** Generate a stable HSL color from a string. */
+function categoryColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const hue = ((hash % 360) + 360) % 360;
+  return `hsl(${hue}, 55%, 55%)`;
+}
 
 export default function NoteFilterBar({
   activeCategory,
   activeTags,
+  availableCategories,
   availableTags,
   onCategoryChange,
   onTagsChange,
@@ -38,26 +42,29 @@ export default function NoteFilterBar({
 
   return (
     <div className="vault-filter-bar">
-      <div className="vault-filter-categories">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat.key}
-            className={`vault-filter-chip${activeCategory === cat.key ? " active" : ""}`}
-            style={{
-              "--chip-color": cat.cssVar,
-            } as React.CSSProperties}
-            onClick={() =>
-              onCategoryChange(activeCategory === cat.key ? null : cat.key)
-            }
-          >
-            <span
-              className="vault-filter-chip-dot"
-              style={{ background: cat.cssVar }}
-            />
-            {t(`category.${cat.key}`)}
-          </button>
-        ))}
-      </div>
+      {availableCategories.length > 0 && (
+        <div className="vault-filter-categories">
+          {availableCategories.map((cat) => {
+            const color = categoryColor(cat);
+            return (
+              <button
+                key={cat}
+                className={`vault-filter-chip${activeCategory === cat ? " active" : ""}`}
+                style={{ "--chip-color": color } as React.CSSProperties}
+                onClick={() =>
+                  onCategoryChange(activeCategory === cat ? null : cat)
+                }
+              >
+                <span
+                  className="vault-filter-chip-dot"
+                  style={{ background: color }}
+                />
+                {t(`category.${cat}`, { defaultValue: cat })}
+              </button>
+            );
+          })}
+        </div>
+      )}
       {availableTags.length > 0 && (
         <div className="vault-filter-tags">
           {availableTags.map((tag) => (

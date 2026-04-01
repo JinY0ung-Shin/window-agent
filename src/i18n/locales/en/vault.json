@@ -55,6 +55,7 @@
     "titleLabel": "Title",
     "titlePlaceholder": "Note title",
     "categoryLabel": "Category",
+    "categoryPlaceholder": "e.g. knowledge, api-design, meeting-notes",
     "scopeLabel": "Scope",
     "agentOnly": "{{term_agent_cap}} only",
     "shared": "Shared",
