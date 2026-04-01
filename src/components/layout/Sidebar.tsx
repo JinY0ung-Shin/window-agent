@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Bot, Clock, Network, Plus, Settings, Users } from "lucide-react";
+import { BookOpen, Bot, Clock, Globe, Network, Plus, Settings, Users } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useTeamStore } from "../../stores/teamStore";
@@ -137,6 +137,13 @@ export default function Sidebar() {
         >
           <BookOpen size={20} />
           <span>{t("vault:title")}</span>
+        </div>
+        <div
+          className={`menu-item ${mainView === "hub" ? "active" : ""}`}
+          onClick={() => toggleView("hub")}
+        >
+          <Globe size={20} />
+          <span>{t("hub:title")}</span>
         </div>
         <div
           className={`menu-item ${mainView === "team" ? "active" : ""}`}

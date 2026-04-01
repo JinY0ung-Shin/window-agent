@@ -12,6 +12,7 @@ import TeamPanel from "../team/TeamPanel";
 import TeamChatWindow from "../team/TeamChatWindow";
 import CronPanel from "../cron/CronPanel";
 import AgentPanel from "../agent/AgentPanel";
+import HubPanel from "../hub/HubPanel";
 import TourOverlay from "../tour/TourOverlay";
 import ErrorBoundary from "../common/ErrorBoundary";
 
@@ -101,6 +102,10 @@ export default function MainLayout() {
         <NetworkPanel />
       ) : mainView === "agent" ? (
         <AgentPanel />
+      ) : mainView === "hub" ? (
+        <ErrorBoundary fallbackClassName="main-area">
+          <HubPanel />
+        </ErrorBoundary>
       ) : (
         <ChatWindow />
       )}

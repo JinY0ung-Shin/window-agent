@@ -1,0 +1,61 @@
+{
+  "title": "Community Hub",
+  "tabs": {
+    "agents": "Agents",
+    "skills": "Skills",
+    "notes": "Notes"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "email": "Email",
+    "emailPlaceholder": "Enter your email",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "displayName": "Display Name",
+    "displayNamePlaceholder": "Name shown in the community",
+    "loginBtn": "Login",
+    "registerBtn": "Register"
+  },
+  "search": {
+    "placeholder": "Search agents, skills, notes..."
+  },
+  "agent": {
+    "skills": "Skills",
+    "notes": "Notes",
+    "backToList": "Back to list",
+    "sharedBy": "Shared by {{name}}"
+  },
+  "skill": {
+    "agent": "Agent"
+  },
+  "note": {
+    "agent": "Agent",
+    "type": "Type"
+  },
+  "pagination": {
+    "page": "{{current}} / {{total}}"
+  },
+  "empty": {
+    "notLoggedIn": "Welcome to Community Hub",
+    "notLoggedInHint": "Login to share and explore agents, skills, and notes",
+    "agents": "No shared agents",
+    "agentsHint": "Explore agents shared by other users",
+    "skills": "No shared skills",
+    "skillsHint": "Explore skills shared by other users",
+    "notes": "No shared notes",
+    "notesHint": "Explore notes shared by other users"
+  },
+  "error": {
+    "agentNotFound": "Agent not found",
+    "loadFailed": "Failed to load data"
+  },
+  "delete": {
+    "agent": "Delete agent",
+    "skill": "Delete skill",
+    "note": "Delete note",
+    "confirm": "Delete",
+    "cancel": "Cancel"
+  }
+}

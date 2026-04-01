@@ -2,6 +2,7 @@ pub mod actor_context;
 pub mod api_service;
 pub mod credential_service;
 pub mod cron_scheduler;
+pub mod hub_client;
 pub mod llm_helpers;
 pub mod marketplace_service;
 pub mod skill_service;

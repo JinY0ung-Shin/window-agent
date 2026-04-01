@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type MainView = "chat" | "network" | "vault" | "team" | "cron" | "agent" | "settings";
+export type MainView = "chat" | "network" | "vault" | "team" | "cron" | "agent" | "hub" | "settings";
 
 const LS_KEY = "main_view";
 
@@ -12,7 +12,7 @@ interface NavigationState {
   goBack: () => void;
 }
 
-const VALID_VIEWS: MainView[] = ["chat", "network", "vault", "team", "cron", "agent", "settings"];
+const VALID_VIEWS: MainView[] = ["chat", "network", "vault", "team", "cron", "agent", "hub", "settings"];
 
 function loadMainView(): MainView {
   const stored = localStorage.getItem(LS_KEY);
