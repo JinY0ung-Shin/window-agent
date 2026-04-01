@@ -23,6 +23,7 @@ import { listSkills, readSkill, createSkill, updateSkill } from "../services/com
 import { listMemoryNotes, createMemoryNote } from "../services/commands/memoryCommands";
 import { createAgent } from "../services/commands/agentCommands";
 import { readPersonaFiles, writePersonaFiles } from "../services/personaService";
+import { useAgentStore } from "./agentStore";
 import type { SkillMetadata, MemoryNote } from "../services/types";
 import type { PersonaData } from "../services/commands/hubCommands";
 import { logger } from "../services/logger";
@@ -47,6 +48,18 @@ interface InstallResult {
   installed: string[];
   skipped: string[];
   errors: string[];
+}
+
+function buildHiredPersona(name: string, description: string, sharedAgent?: SharedAgent) {
+  const identity = sharedAgent?.persona?.identity?.trim();
+  const fallbackDescription = description.trim();
+
+  return {
+    identity: identity || `# ${name}${fallbackDescription ? `\n\n${fallbackDescription}` : ""}`,
+    soul: sharedAgent?.persona?.soul || "",
+    user: sharedAgent?.persona?.user_context || "",
+    agents: sharedAgent?.persona?.agents || "",
+  };
 }
 
 interface HubState {
@@ -549,7 +562,7 @@ export const useHubStore = create<HubState>((set, get) => ({
 
   executeShare: async () => {
     const {
-      shareMode, shareAgentName, shareAgentDesc, shareAgentId, shareFolderName,
+      shareMode, shareAgentName, shareAgentDesc, shareAgentId, shareFolderName, activeTab,
       selectedSkillNames, selectedNoteIds, localSkills, localNotes,
     } = get();
     set({ shareLoading: true, shareError: null });
@@ -619,6 +632,14 @@ export const useHubStore = create<HubState>((set, get) => ({
           await hubShareNotes(agentIdForSharing, noteItems);
           notesShared = noteItems.length;
         }
+      }
+
+      if (activeTab === "mine") {
+        await get().loadMyShares();
+      } else if (shareMode === "agent" && activeTab === "agents") {
+        await get().loadAgents(0);
+      } else if (shareMode === "skill" && activeTab === "skills") {
+        await get().loadSkills(0);
       }
 
       set({
@@ -740,17 +761,10 @@ export const useHubStore = create<HubState>((set, get) => ({
       // Write persona files if available
       const sharedAgent = agents.find((a) => a.id === selectedAgentId)
         ?? myAgents.find((a) => a.id === selectedAgentId);
-      if (sharedAgent?.persona) {
-        try {
-          await writePersonaFiles(newAgent.folder_name, {
-            identity: sharedAgent.persona.identity || "",
-            soul: sharedAgent.persona.soul || "",
-            user: sharedAgent.persona.user_context || "",
-            agents: sharedAgent.persona.agents || "",
-          });
-        } catch (e) {
-          logger.debug("Failed to write persona files:", e);
-        }
+      try {
+        await writePersonaFiles(newAgent.folder_name, buildHiredPersona(name, description, sharedAgent));
+      } catch (e) {
+        logger.debug("Failed to write persona files:", e);
       }
 
       // Install all skills and notes
@@ -774,6 +788,8 @@ export const useHubStore = create<HubState>((set, get) => ({
           result.errors.push(note.title);
         }
       }
+
+      await useAgentStore.getState().loadAgents();
 
       return result;
     } catch (e) {
