@@ -258,7 +258,7 @@ pub async fn list_agents(
     Query(params): Query<PaginationParams>,
 ) -> Result<Json<PaginatedResponse<SharedAgent>>, (StatusCode, Json<ApiError>)> {
     let limit = params.limit.min(50);
-    let (rows, total) = hub_db::list_shared_agents(state.db(), params.q.as_deref(), limit, params.offset)
+    let (rows, total) = hub_db::list_shared_agents(state.db(), params.q.as_deref(), params.user_id.as_deref(), limit, params.offset)
         .await
         .map_err(|_| err(StatusCode::INTERNAL_SERVER_ERROR, "Database error"))?;
 
@@ -279,6 +279,7 @@ pub async fn list_skills(
         state.db(),
         params.q.as_deref(),
         params.agent_id.as_deref(),
+        params.user_id.as_deref(),
         limit,
         params.offset,
     )
@@ -302,6 +303,7 @@ pub async fn list_notes(
         state.db(),
         params.q.as_deref(),
         params.agent_id.as_deref(),
+        params.user_id.as_deref(),
         limit,
         params.offset,
     )

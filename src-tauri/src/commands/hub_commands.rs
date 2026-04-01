@@ -194,11 +194,12 @@ pub async fn hub_list_agents(
     _app: tauri::AppHandle,
     settings: State<'_, AppSettings>,
     q: Option<String>,
+    user_id: Option<String>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<wa_shared::community::PaginatedResponse<wa_shared::community::SharedAgent>, AppError> {
     let client = make_hub_client(&settings)?;
-    client.list_agents(q.as_deref(), limit, offset).await
+    client.list_agents(q.as_deref(), user_id.as_deref(), limit, offset).await
 }
 
 #[tauri::command]
@@ -207,12 +208,13 @@ pub async fn hub_list_skills(
     settings: State<'_, AppSettings>,
     q: Option<String>,
     agent_id: Option<String>,
+    user_id: Option<String>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<wa_shared::community::PaginatedResponse<wa_shared::community::SharedSkill>, AppError> {
     let client = make_hub_client(&settings)?;
     client
-        .list_skills(q.as_deref(), agent_id.as_deref(), limit, offset)
+        .list_skills(q.as_deref(), agent_id.as_deref(), user_id.as_deref(), limit, offset)
         .await
 }
 
@@ -222,12 +224,13 @@ pub async fn hub_list_notes(
     settings: State<'_, AppSettings>,
     q: Option<String>,
     agent_id: Option<String>,
+    user_id: Option<String>,
     limit: Option<u32>,
     offset: Option<u32>,
 ) -> Result<wa_shared::community::PaginatedResponse<wa_shared::community::SharedNote>, AppError> {
     let client = make_hub_client(&settings)?;
     client
-        .list_notes(q.as_deref(), agent_id.as_deref(), limit, offset)
+        .list_notes(q.as_deref(), agent_id.as_deref(), user_id.as_deref(), limit, offset)
         .await
 }
 

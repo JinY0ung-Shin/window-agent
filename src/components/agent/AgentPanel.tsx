@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Users, Plus, Trash2, Bot, Settings, Crown } from "lucide-react";
+import { Users, Plus, Trash2, Bot, Settings, Crown, Upload } from "lucide-react";
 import { useAgentStore } from "../../stores/agentStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import { useNavigationStore } from "../../stores/navigationStore";
+import { useHubStore } from "../../stores/hubStore";
 import { resetChatContext } from "../../stores/resetHelper";
 import AgentEditor from "./AgentEditor";
 import DraggableHeader from "../layout/DraggableHeader";
@@ -22,6 +23,8 @@ export default function AgentPanel() {
   const uiTheme = useSettingsStore((s) => s.uiTheme);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const hubLoggedIn = useHubStore((s) => s.loggedIn);
+  const openShareDialog = useHubStore((s) => s.openShareDialog);
 
   useEffect(() => {
     loadAgents();
@@ -101,6 +104,15 @@ export default function AgentPanel() {
                       </div>
                     ) : (
                       <>
+                        {hubLoggedIn && (
+                          <button
+                            className="agent-card-share"
+                            onClick={() => openShareDialog(agent.id, agent.folder_name, agent.name, agent.description)}
+                            title={t("shareAgent", { context: uiTheme })}
+                          >
+                            <Upload size={14} />
+                          </button>
+                        )}
                         <button
                           className="agent-card-edit"
                           onClick={() => openEditor(agent.id)}

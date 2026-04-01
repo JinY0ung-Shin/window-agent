@@ -116,16 +116,16 @@ export async function hubShareNotes(agentId: string | null, notes: ShareNoteItem
 
 // ── List commands ──
 
-export async function hubListAgents(q?: string, limit?: number, offset?: number): Promise<PaginatedResponse<SharedAgent>> {
-  return invoke("hub_list_agents", { q, limit, offset });
+export async function hubListAgents(q?: string, limit?: number, offset?: number, userId?: string): Promise<PaginatedResponse<SharedAgent>> {
+  return invoke("hub_list_agents", { q, user_id: userId, limit, offset });
 }
 
-export async function hubListSkills(q?: string, agentId?: string, limit?: number, offset?: number): Promise<PaginatedResponse<SharedSkill>> {
-  return invoke("hub_list_skills", { q, agent_id: agentId, limit, offset });
+export async function hubListSkills(q?: string, agentId?: string, limit?: number, offset?: number, userId?: string): Promise<PaginatedResponse<SharedSkill>> {
+  return invoke("hub_list_skills", { q, agent_id: agentId, user_id: userId, limit, offset });
 }
 
-export async function hubListNotes(q?: string, agentId?: string, limit?: number, offset?: number): Promise<PaginatedResponse<SharedNote>> {
-  return invoke("hub_list_notes", { q, agent_id: agentId, limit, offset });
+export async function hubListNotes(q?: string, agentId?: string, limit?: number, offset?: number, userId?: string): Promise<PaginatedResponse<SharedNote>> {
+  return invoke("hub_list_notes", { q, agent_id: agentId, user_id: userId, limit, offset });
 }
 
 // ── Delete commands ──

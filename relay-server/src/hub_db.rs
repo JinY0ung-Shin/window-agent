@@ -241,15 +241,23 @@ pub async fn upsert_shared_agent(
 pub async fn list_shared_agents(
     pool: &SqlitePool,
     query: Option<&str>,
+    user_id: Option<&str>,
     limit: u32,
     offset: u32,
 ) -> Result<(Vec<SharedAgentRow>, u64), sqlx::Error> {
     let pattern = query.filter(|q| !q.is_empty()).map(|q| format!("%{q}%"));
 
-    let where_clause = if pattern.is_some() {
-        "WHERE (sa.name LIKE ? OR sa.description LIKE ? OR u.display_name LIKE ?)"
+    let mut conditions = Vec::new();
+    if pattern.is_some() {
+        conditions.push("(sa.name LIKE ? OR sa.description LIKE ? OR u.display_name LIKE ?)");
+    }
+    if user_id.is_some() {
+        conditions.push("sa.user_id = ?");
+    }
+    let where_clause = if conditions.is_empty() {
+        String::new()
     } else {
-        ""
+        format!("WHERE {}", conditions.join(" AND "))
     };
 
     let count_sql = format!(
@@ -258,6 +266,9 @@ pub async fn list_shared_agents(
     let mut count_q = sqlx::query_as(&count_sql);
     if let Some(ref p) = pattern {
         count_q = count_q.bind(p).bind(p).bind(p);
+    }
+    if let Some(uid) = user_id {
+        count_q = count_q.bind(uid);
     }
     let total: (i64,) = count_q.fetch_one(pool).await?;
 
@@ -277,6 +288,9 @@ pub async fn list_shared_agents(
     let mut list_q = sqlx::query_as(&list_sql);
     if let Some(ref p) = pattern {
         list_q = list_q.bind(p).bind(p).bind(p);
+    }
+    if let Some(uid) = user_id {
+        list_q = list_q.bind(uid);
     }
     list_q = list_q.bind(limit).bind(offset);
     let rows: Vec<SharedAgentRow> = list_q.fetch_all(pool).await?;
@@ -376,6 +390,7 @@ pub async fn list_shared_skills(
     pool: &SqlitePool,
     query: Option<&str>,
     agent_id: Option<&str>,
+    user_id: Option<&str>,
     limit: u32,
     offset: u32,
 ) -> Result<(Vec<SharedSkillRow>, u64), sqlx::Error> {
@@ -387,6 +402,9 @@ pub async fn list_shared_skills(
     }
     if agent_id.is_some() {
         conditions.push("ss.agent_id = ?");
+    }
+    if user_id.is_some() {
+        conditions.push("ss.user_id = ?");
     }
     let where_clause = if conditions.is_empty() {
         String::new()
@@ -403,6 +421,9 @@ pub async fn list_shared_skills(
     }
     if let Some(aid) = agent_id {
         count_q = count_q.bind(aid);
+    }
+    if let Some(uid) = user_id {
+        count_q = count_q.bind(uid);
     }
     let total: (i64,) = count_q.fetch_one(pool).await?;
 
@@ -424,6 +445,9 @@ pub async fn list_shared_skills(
     }
     if let Some(aid) = agent_id {
         list_q = list_q.bind(aid);
+    }
+    if let Some(uid) = user_id {
+        list_q = list_q.bind(uid);
     }
     list_q = list_q.bind(limit).bind(offset);
     let rows: Vec<SharedSkillRow> = list_q.fetch_all(pool).await?;
@@ -501,6 +525,7 @@ pub async fn list_shared_notes(
     pool: &SqlitePool,
     query: Option<&str>,
     agent_id: Option<&str>,
+    user_id: Option<&str>,
     limit: u32,
     offset: u32,
 ) -> Result<(Vec<SharedNoteRow>, u64), sqlx::Error> {
@@ -512,6 +537,9 @@ pub async fn list_shared_notes(
     }
     if agent_id.is_some() {
         conditions.push("sn.agent_id = ?");
+    }
+    if user_id.is_some() {
+        conditions.push("sn.user_id = ?");
     }
     let where_clause = if conditions.is_empty() {
         String::new()
@@ -528,6 +556,9 @@ pub async fn list_shared_notes(
     }
     if let Some(aid) = agent_id {
         count_q = count_q.bind(aid);
+    }
+    if let Some(uid) = user_id {
+        count_q = count_q.bind(uid);
     }
     let total: (i64,) = count_q.fetch_one(pool).await?;
 
@@ -549,6 +580,9 @@ pub async fn list_shared_notes(
     }
     if let Some(aid) = agent_id {
         list_q = list_q.bind(aid);
+    }
+    if let Some(uid) = user_id {
+        list_q = list_q.bind(uid);
     }
     list_q = list_q.bind(limit).bind(offset);
     let rows: Vec<SharedNoteRow> = list_q.fetch_all(pool).await?;

@@ -1,14 +1,17 @@
 import { useTranslation } from "react-i18next";
-import { Wrench, Loader2, Bot, Trash2 } from "lucide-react";
+import { Wrench, Loader2, Bot, Trash2, Download } from "lucide-react";
 import { useState } from "react";
 import { useHubStore } from "../../stores/hubStore";
 import EmptyState from "../common/EmptyState";
+import HubInstallPopover from "./HubInstallPopover";
 import type { SharedSkill } from "../../services/commands/hubCommands";
 
 function SkillCard({ skill }: { skill: SharedSkill }) {
   const { t } = useTranslation("hub");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
   const userId = useHubStore((s) => s.userId);
+  const loggedIn = useHubStore((s) => s.loggedIn);
   const deleteSharedSkill = useHubStore((s) => s.deleteSharedSkill);
   const isOwner = userId === skill.user_id;
 
@@ -17,34 +20,56 @@ function SkillCard({ skill }: { skill: SharedSkill }) {
       <div className="hub-card-header">
         <Wrench size={18} className="hub-card-icon" />
         <div className="hub-card-title">{skill.skill_name}</div>
-        {isOwner && (
-          <div className="hub-card-actions">
-            {confirmDelete ? (
-              <div className="hub-delete-confirm">
-                <button
-                  className="btn-danger-sm"
-                  onClick={() => deleteSharedSkill(skill.id)}
-                >
-                  {t("delete.confirm")}
-                </button>
-                <button
-                  className="btn-secondary-sm"
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  {t("delete.cancel")}
-                </button>
-              </div>
-            ) : (
+        <div className="hub-card-actions">
+          {loggedIn && (
+            <div className="hub-install-wrapper">
               <button
-                className="hub-card-delete"
-                onClick={() => setConfirmDelete(true)}
-                title={t("delete.skill")}
+
+                className="hub-card-install"
+                onClick={() => setShowInstall(!showInstall)}
+                title={t("install.button")}
               >
-                <Trash2 size={14} />
+                <Download size={14} />
               </button>
-            )}
-          </div>
-        )}
+              {showInstall && (
+                <HubInstallPopover
+                  type="skill"
+                  skill={skill}
+                  onClose={() => setShowInstall(false)}
+
+                />
+              )}
+            </div>
+          )}
+          {isOwner && (
+            <>
+              {confirmDelete ? (
+                <div className="hub-delete-confirm">
+                  <button
+                    className="btn-danger-sm"
+                    onClick={() => deleteSharedSkill(skill.id)}
+                  >
+                    {t("delete.confirm")}
+                  </button>
+                  <button
+                    className="btn-secondary-sm"
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    {t("delete.cancel")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="hub-card-delete"
+                  onClick={() => setConfirmDelete(true)}
+                  title={t("delete.skill")}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
       {skill.description && (
         <div className="hub-card-desc">{skill.description}</div>

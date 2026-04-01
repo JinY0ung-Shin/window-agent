@@ -305,12 +305,16 @@ impl HubClient {
     pub async fn list_agents(
         &self,
         q: Option<&str>,
+        user_id: Option<&str>,
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<PaginatedResponse<SharedAgent>, AppError> {
         let mut params = Vec::new();
         if let Some(q) = q {
             params.push(("q", q.to_string()));
+        }
+        if let Some(user_id) = user_id {
+            params.push(("user_id", user_id.to_string()));
         }
         if let Some(limit) = limit {
             params.push(("limit", limit.to_string()));
@@ -334,6 +338,7 @@ impl HubClient {
         &self,
         q: Option<&str>,
         agent_id: Option<&str>,
+        user_id: Option<&str>,
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<PaginatedResponse<SharedSkill>, AppError> {
@@ -343,6 +348,9 @@ impl HubClient {
         }
         if let Some(agent_id) = agent_id {
             params.push(("agent_id", agent_id.to_string()));
+        }
+        if let Some(user_id) = user_id {
+            params.push(("user_id", user_id.to_string()));
         }
         if let Some(limit) = limit {
             params.push(("limit", limit.to_string()));
@@ -366,6 +374,7 @@ impl HubClient {
         &self,
         q: Option<&str>,
         agent_id: Option<&str>,
+        user_id: Option<&str>,
         limit: Option<u32>,
         offset: Option<u32>,
     ) -> Result<PaginatedResponse<SharedNote>, AppError> {
@@ -375,6 +384,9 @@ impl HubClient {
         }
         if let Some(agent_id) = agent_id {
             params.push(("agent_id", agent_id.to_string()));
+        }
+        if let Some(user_id) = user_id {
+            params.push(("user_id", user_id.to_string()));
         }
         if let Some(limit) = limit {
             params.push(("limit", limit.to_string()));

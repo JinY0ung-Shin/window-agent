@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
@@ -7,9 +8,11 @@ import {
   Loader2,
   Trash2,
   Tag,
+  Download,
 } from "lucide-react";
 import { useHubStore } from "../../stores/hubStore";
 import EmptyState from "../common/EmptyState";
+import HubInstallPopover from "./HubInstallPopover";
 import type { SharedSkill, SharedNote } from "../../services/commands/hubCommands";
 
 function SkillItem({ skill }: { skill: SharedSkill }) {
@@ -53,6 +56,7 @@ function NoteItem({ note }: { note: SharedNote }) {
 export default function HubAgentDetail() {
   const { t } = useTranslation("hub");
   const agents = useHubStore((s) => s.agents);
+  const myAgents = useHubStore((s) => s.myAgents);
   const selectedAgentId = useHubStore((s) => s.selectedAgentId);
   const agentSkills = useHubStore((s) => s.agentSkills);
   const agentNotes = useHubStore((s) => s.agentNotes);
@@ -60,8 +64,12 @@ export default function HubAgentDetail() {
   const clearSelection = useHubStore((s) => s.clearSelection);
   const deleteSharedAgent = useHubStore((s) => s.deleteSharedAgent);
   const userId = useHubStore((s) => s.userId);
+  const loggedIn = useHubStore((s) => s.loggedIn);
 
-  const agent = agents.find((a) => a.id === selectedAgentId);
+  const [showInstall, setShowInstall] = useState(false);
+
+  const agent = agents.find((a) => a.id === selectedAgentId)
+    ?? myAgents.find((a) => a.id === selectedAgentId);
 
   if (!agent) {
     return (
@@ -88,8 +96,28 @@ export default function HubAgentDetail() {
           <ArrowLeft size={18} />
           {t("agent.backToList")}
         </button>
-        {isOwner && (
-          <div className="hub-detail-actions">
+        <div className="hub-detail-actions">
+          {loggedIn && (agentSkills.length > 0 || agentNotes.length > 0) && (
+            <div className="hub-install-wrapper">
+              <button
+
+                className="hub-install-all-btn"
+                onClick={() => setShowInstall(!showInstall)}
+                title={t("install.install_all")}
+              >
+                <Download size={16} />
+                {t("install.install_all")}
+              </button>
+              {showInstall && (
+                <HubInstallPopover
+                  type="agent"
+                  onClose={() => setShowInstall(false)}
+
+                />
+              )}
+            </div>
+          )}
+          {isOwner && (
             <button
               className="hub-delete-btn"
               onClick={handleDelete}
@@ -97,8 +125,8 @@ export default function HubAgentDetail() {
             >
               <Trash2 size={16} />
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <div className="hub-detail-info">

@@ -136,6 +136,8 @@ pub struct PaginationParams {
     pub q: Option<String>,
     #[serde(default)]
     pub agent_id: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<String>,
 }
 
 fn default_limit() -> u32 {

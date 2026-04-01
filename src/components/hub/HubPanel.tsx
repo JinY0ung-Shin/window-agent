@@ -6,6 +6,7 @@ import {
   Users,
   Wrench,
   BookOpen,
+  Package,
   LogIn,
   LogOut,
   ChevronLeft,
@@ -20,11 +21,14 @@ import HubAgentList from "./HubAgentList";
 import HubAgentDetail from "./HubAgentDetail";
 import HubSkillList from "./HubSkillList";
 import HubNoteList from "./HubNoteList";
+import HubMyShares from "./HubMyShares";
+import HubShareDialog from "./HubShareDialog";
 
 const TAB_ICONS = {
   agents: Users,
   skills: Wrench,
   notes: BookOpen,
+  mine: Package,
 } as const;
 
 export default function HubPanel() {
@@ -73,6 +77,7 @@ export default function HubPanel() {
     if (activeTab === "agents") loadAgents(0);
     else if (activeTab === "skills") loadSkills(0);
     else if (activeTab === "notes") loadNotes(0);
+    // "mine" tab loads its own data via HubMyShares
   }, [loggedIn, activeTab, searchQuery, loadAgents, loadSkills, loadNotes]);
 
   // Pagination helpers
@@ -81,13 +86,17 @@ export default function HubPanel() {
       ? agentsTotal
       : activeTab === "skills"
         ? skillsTotal
-        : notesTotal;
+        : activeTab === "notes"
+          ? notesTotal
+          : 0;
   const currentOffset =
     activeTab === "agents"
       ? agentsOffset
       : activeTab === "skills"
         ? skillsOffset
-        : notesOffset;
+        : activeTab === "notes"
+          ? notesOffset
+          : 0;
   const totalPages = Math.max(1, Math.ceil(currentTotal / PAGE_SIZE));
   const currentPage = Math.floor(currentOffset / PAGE_SIZE) + 1;
 
@@ -108,6 +117,9 @@ export default function HubPanel() {
     },
     [activeTab, loadAgents, loadSkills, loadNotes],
   );
+
+  const showPagination = !selectedAgentId && activeTab !== "mine" && totalPages > 1;
+  const showSearch = activeTab !== "mine";
 
   return (
     <div className="hub-panel">
@@ -149,21 +161,23 @@ export default function HubPanel() {
       ) : (
         <div className="hub-panel-body">
           {/* Search bar */}
-          <div className="hub-search">
-            <Search size={16} className="hub-search-icon" />
-            <input
-              type="text"
-              className="hub-search-input"
-              placeholder={t("search.placeholder")}
-              value={localQuery}
-              {...searchInput.compositionProps}
-            />
-          </div>
+          {showSearch && (
+            <div className="hub-search">
+              <Search size={16} className="hub-search-icon" />
+              <input
+                type="text"
+                className="hub-search-input"
+                placeholder={t("search.placeholder")}
+                value={localQuery}
+                {...searchInput.compositionProps}
+              />
+            </div>
+          )}
 
           {/* Tab bar */}
           {!selectedAgentId && (
             <div className="hub-tab-bar">
-              {(["agents", "skills", "notes"] as const).map((tab) => {
+              {(["agents", "skills", "notes", "mine"] as const).map((tab) => {
                 const Icon = TAB_ICONS[tab];
                 return (
                   <button
@@ -187,13 +201,15 @@ export default function HubPanel() {
               <HubAgentList />
             ) : activeTab === "skills" ? (
               <HubSkillList />
-            ) : (
+            ) : activeTab === "notes" ? (
               <HubNoteList />
+            ) : (
+              <HubMyShares />
             )}
           </div>
 
           {/* Pagination */}
-          {!selectedAgentId && totalPages > 1 && (
+          {showPagination && (
             <div className="hub-pagination">
               <button
                 className="hub-pagination-btn"
@@ -219,6 +235,9 @@ export default function HubPanel() {
           )}
         </div>
       )}
+
+      {/* Share dialog (modal) */}
+      <HubShareDialog />
     </div>
   );
 }

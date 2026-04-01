@@ -253,11 +253,11 @@ fn paginate(total: u64, limit: u32, offset: u32) -> (bool, bool, u32, u32) {
 
 pub async fn landing(State(state): State<AppState>) -> Response {
     let (ra, agents_count) =
-        hub_db::list_shared_agents(state.db(), None, 6, 0).await.unwrap_or_default();
+        hub_db::list_shared_agents(state.db(), None, None, 6, 0).await.unwrap_or_default();
     let (rs, skills_count) =
-        hub_db::list_shared_skills(state.db(), None, None, 6, 0).await.unwrap_or_default();
+        hub_db::list_shared_skills(state.db(), None, None, None, 6, 0).await.unwrap_or_default();
     let (rn, notes_count) =
-        hub_db::list_shared_notes(state.db(), None, None, 6, 0).await.unwrap_or_default();
+        hub_db::list_shared_notes(state.db(), None, None, None, 6, 0).await.unwrap_or_default();
 
     render(LandingTemplate {
         agents_count,
@@ -356,7 +356,7 @@ pub async fn agents_page(
     let limit = 20u32;
     let q = if params.q.is_empty() { None } else { Some(params.q.as_str()) };
     let (rows, total) =
-        hub_db::list_shared_agents(state.db(), q, limit, params.offset).await.unwrap_or_default();
+        hub_db::list_shared_agents(state.db(), q, None, limit, params.offset).await.unwrap_or_default();
     let (has_prev, has_next, prev_offset, next_offset) = paginate(total, limit, params.offset);
 
     render(AgentsTemplate {
@@ -393,7 +393,7 @@ pub async fn skills_page(
     let limit = 20u32;
     let q = if params.q.is_empty() { None } else { Some(params.q.as_str()) };
     let (rows, total) =
-        hub_db::list_shared_skills(state.db(), q, None, limit, params.offset).await.unwrap_or_default();
+        hub_db::list_shared_skills(state.db(), q, None, None, limit, params.offset).await.unwrap_or_default();
     let (has_prev, has_next, prev_offset, next_offset) = paginate(total, limit, params.offset);
 
     render(SkillsTemplate {
@@ -425,7 +425,7 @@ pub async fn notes_page(
     let limit = 20u32;
     let q = if params.q.is_empty() { None } else { Some(params.q.as_str()) };
     let (rows, total) =
-        hub_db::list_shared_notes(state.db(), q, None, limit, params.offset).await.unwrap_or_default();
+        hub_db::list_shared_notes(state.db(), q, None, None, limit, params.offset).await.unwrap_or_default();
     let (has_prev, has_next, prev_offset, next_offset) = paginate(total, limit, params.offset);
 
     render(NotesTemplate {

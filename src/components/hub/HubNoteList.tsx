@@ -1,14 +1,17 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BookOpen, Loader2, Bot, Tag, Trash2 } from "lucide-react";
+import { BookOpen, Loader2, Bot, Tag, Trash2, Download } from "lucide-react";
 import { useHubStore } from "../../stores/hubStore";
 import EmptyState from "../common/EmptyState";
+import HubInstallPopover from "./HubInstallPopover";
 import type { SharedNote } from "../../services/commands/hubCommands";
 
 function NoteCard({ note }: { note: SharedNote }) {
   const { t } = useTranslation("hub");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showInstall, setShowInstall] = useState(false);
   const userId = useHubStore((s) => s.userId);
+  const loggedIn = useHubStore((s) => s.loggedIn);
   const deleteSharedNote = useHubStore((s) => s.deleteSharedNote);
   const isOwner = userId === note.user_id;
 
@@ -20,34 +23,56 @@ function NoteCard({ note }: { note: SharedNote }) {
         {note.note_type && (
           <span className="hub-badge-type">{note.note_type}</span>
         )}
-        {isOwner && (
-          <div className="hub-card-actions">
-            {confirmDelete ? (
-              <div className="hub-delete-confirm">
-                <button
-                  className="btn-danger-sm"
-                  onClick={() => deleteSharedNote(note.id)}
-                >
-                  {t("delete.confirm")}
-                </button>
-                <button
-                  className="btn-secondary-sm"
-                  onClick={() => setConfirmDelete(false)}
-                >
-                  {t("delete.cancel")}
-                </button>
-              </div>
-            ) : (
+        <div className="hub-card-actions">
+          {loggedIn && (
+            <div className="hub-install-wrapper">
               <button
-                className="hub-card-delete"
-                onClick={() => setConfirmDelete(true)}
-                title={t("delete.note")}
+
+                className="hub-card-install"
+                onClick={() => setShowInstall(!showInstall)}
+                title={t("install.button")}
               >
-                <Trash2 size={14} />
+                <Download size={14} />
               </button>
-            )}
-          </div>
-        )}
+              {showInstall && (
+                <HubInstallPopover
+                  type="note"
+                  note={note}
+                  onClose={() => setShowInstall(false)}
+
+                />
+              )}
+            </div>
+          )}
+          {isOwner && (
+            <>
+              {confirmDelete ? (
+                <div className="hub-delete-confirm">
+                  <button
+                    className="btn-danger-sm"
+                    onClick={() => deleteSharedNote(note.id)}
+                  >
+                    {t("delete.confirm")}
+                  </button>
+                  <button
+                    className="btn-secondary-sm"
+                    onClick={() => setConfirmDelete(false)}
+                  >
+                    {t("delete.cancel")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  className="hub-card-delete"
+                  onClick={() => setConfirmDelete(true)}
+                  title={t("delete.note")}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
       {note.tags.length > 0 && (
         <div className="hub-card-tags">

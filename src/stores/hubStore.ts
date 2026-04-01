@@ -10,16 +10,40 @@ import {
   hubDeleteAgent,
   hubDeleteSkill,
   hubDeleteNote,
+  hubShareAgent,
+  hubShareSkills,
+  hubShareNotes,
   type SharedAgent,
   type SharedSkill,
   type SharedNote,
+  type ShareSkillItem,
+  type ShareNoteItem,
 } from "../services/commands/hubCommands";
+import { listSkills, readSkill, createSkill, updateSkill } from "../services/commands/skillCommands";
+import { listMemoryNotes, createMemoryNote } from "../services/commands/memoryCommands";
+import type { SkillMetadata, MemoryNote } from "../services/types";
 import { logger } from "../services/logger";
 import { toErrorMessage } from "../utils/errorUtils";
 
-type HubTab = "agents" | "skills" | "notes";
+type HubTab = "agents" | "skills" | "notes" | "mine";
 
 export const PAGE_SIZE = 20;
+
+type ShareStep = "info" | "skills" | "notes" | "result";
+
+interface ShareResult {
+  success: boolean;
+  agentId?: string;
+  skillsShared: number;
+  notesShared: number;
+  error?: string;
+}
+
+interface InstallResult {
+  installed: string[];
+  skipped: string[];
+  errors: string[];
+}
 
 interface HubState {
   initialized: boolean;
@@ -62,9 +86,35 @@ interface HubState {
 
   // Share dialog
   shareDialogOpen: boolean;
-  shareAgentId: string | null;
+  shareAgentId: string | null;   // local agent id
+  shareFolderName: string;
+  shareAgentName: string;
+  shareAgentDesc: string;
+  shareStep: ShareStep;
   shareLoading: boolean;
   shareError: string | null;
+  localSkills: SkillMetadata[];
+  localNotes: MemoryNote[];
+  selectedSkillNames: Set<string>;
+  selectedNoteIds: Set<string>;
+  shareResult: ShareResult | null;
+
+  // Install
+  installPopoverOpen: boolean;
+  installItemType: "skill" | "note" | "agent" | null;
+  installSkill: SharedSkill | null;
+  installNote: SharedNote | null;
+  installLoading: boolean;
+  installResult: InstallResult | null;
+
+  // My shares
+  myAgents: SharedAgent[];
+  myAgentsTotal: number;
+  mySkills: SharedSkill[];
+  mySkillsTotal: number;
+  myNotes: SharedNote[];
+  myNotesTotal: number;
+  myLoading: boolean;
 
   error: string | null;
 
@@ -84,8 +134,30 @@ interface HubState {
   selectAgent: (agentId: string) => Promise<void>;
   clearSelection: () => void;
 
-  openShareDialog: (localAgentId: string) => void;
+  // Share actions
+  openShareDialog: (agentId: string, folderName: string, name: string, description: string) => void;
   closeShareDialog: () => void;
+  setShareStep: (step: ShareStep) => void;
+  loadLocalContent: (folderName: string, agentId: string) => Promise<void>;
+  toggleSkillSelection: (name: string) => void;
+  toggleNoteSelection: (id: string) => void;
+  toggleAllSkills: (selected: boolean) => void;
+  toggleAllNotes: (selected: boolean) => void;
+  setShareAgentName: (name: string) => void;
+  setShareAgentDesc: (desc: string) => void;
+  executeShare: () => Promise<void>;
+
+  // Install actions
+  openInstallSkill: (skill: SharedSkill) => void;
+  openInstallNote: (note: SharedNote) => void;
+  openInstallAgent: () => void;
+  closeInstall: () => void;
+  executeInstallSkill: (folderName: string, skill: SharedSkill) => Promise<InstallResult>;
+  executeInstallNote: (agentId: string, note: SharedNote) => Promise<InstallResult>;
+  executeInstallBulk: (folderName: string, agentId: string) => Promise<InstallResult>;
+
+  // My shares actions
+  loadMyShares: () => Promise<void>;
 
   deleteSharedAgent: (id: string) => Promise<boolean>;
   deleteSharedSkill: (id: string) => Promise<boolean>;
@@ -134,8 +206,34 @@ export const useHubStore = create<HubState>((set, get) => ({
   // Share dialog
   shareDialogOpen: false,
   shareAgentId: null,
+  shareFolderName: "",
+  shareAgentName: "",
+  shareAgentDesc: "",
+  shareStep: "info",
   shareLoading: false,
   shareError: null,
+  localSkills: [],
+  localNotes: [],
+  selectedSkillNames: new Set<string>(),
+  selectedNoteIds: new Set<string>(),
+  shareResult: null,
+
+  // Install
+  installPopoverOpen: false,
+  installItemType: null,
+  installSkill: null,
+  installNote: null,
+  installLoading: false,
+  installResult: null,
+
+  // My shares
+  myAgents: [],
+  myAgentsTotal: 0,
+  mySkills: [],
+  mySkillsTotal: 0,
+  myNotes: [],
+  myNotesTotal: 0,
+  myLoading: false,
 
   error: null,
 
@@ -218,11 +316,30 @@ export const useHubStore = create<HubState>((set, get) => ({
       agentNotes: [],
       searchQuery: "",
       error: null,
+      myAgents: [],
+      myAgentsTotal: 0,
+      mySkills: [],
+      mySkillsTotal: 0,
+      myNotes: [],
+      myNotesTotal: 0,
+      // Clear share/install state
+      shareDialogOpen: false,
+      shareAgentId: null,
+      shareStep: "info",
+      shareLoading: false,
+      shareError: null,
+      shareResult: null,
+      installPopoverOpen: false,
+      installItemType: null,
+      installSkill: null,
+      installNote: null,
+      installLoading: false,
+      installResult: null,
     });
   },
 
   setActiveTab: (tab) => {
-    set({ activeTab: tab, searchQuery: "" });
+    set({ activeTab: tab, searchQuery: "", selectedAgentId: null });
   },
 
   setSearchQuery: (q) => {
@@ -235,7 +352,6 @@ export const useHubStore = create<HubState>((set, get) => ({
     set({ agentsLoading: true, error: null });
     try {
       const res = await hubListAgents(q, PAGE_SIZE, resolvedOffset);
-      // Stale response guard
       if ((get().searchQuery || undefined) !== q) return;
       set({
         agents: res.items,
@@ -255,7 +371,6 @@ export const useHubStore = create<HubState>((set, get) => ({
     set({ skillsLoading: true, error: null });
     try {
       const res = await hubListSkills(q, undefined, PAGE_SIZE, resolvedOffset);
-      // Stale response guard
       if ((get().searchQuery || undefined) !== q) return;
       set({
         skills: res.items,
@@ -275,7 +390,6 @@ export const useHubStore = create<HubState>((set, get) => ({
     set({ notesLoading: true, error: null });
     try {
       const res = await hubListNotes(q, undefined, PAGE_SIZE, resolvedOffset);
-      // Stale response guard
       if ((get().searchQuery || undefined) !== q) return;
       set({
         notes: res.items,
@@ -311,18 +425,291 @@ export const useHubStore = create<HubState>((set, get) => ({
     set({ selectedAgentId: null, agentSkills: [], agentNotes: [] });
   },
 
-  openShareDialog: (localAgentId) => {
-    set({ shareDialogOpen: true, shareAgentId: localAgentId, shareError: null });
+  // ── Share actions ──
+
+  openShareDialog: (agentId, folderName, name, description) => {
+    set({
+      shareDialogOpen: true,
+      shareAgentId: agentId,
+      shareFolderName: folderName,
+      shareAgentName: name,
+      shareAgentDesc: description,
+      shareStep: "info",
+      shareLoading: false,
+      shareError: null,
+      localSkills: [],
+      localNotes: [],
+      selectedSkillNames: new Set(),
+      selectedNoteIds: new Set(),
+      shareResult: null,
+    });
   },
 
   closeShareDialog: () => {
-    set({ shareDialogOpen: false, shareAgentId: null, shareLoading: false, shareError: null });
+    set({
+      shareDialogOpen: false,
+      shareAgentId: null,
+      shareFolderName: "",
+      shareAgentName: "",
+      shareAgentDesc: "",
+      shareStep: "info",
+      shareLoading: false,
+      shareError: null,
+      localSkills: [],
+      localNotes: [],
+      selectedSkillNames: new Set(),
+      selectedNoteIds: new Set(),
+      shareResult: null,
+    });
   },
+
+  setShareStep: (step) => set({ shareStep: step }),
+
+  loadLocalContent: async (folderName, agentId) => {
+    try {
+      const [skills, notes] = await Promise.all([
+        listSkills(folderName).catch(() => [] as SkillMetadata[]),
+        listMemoryNotes(agentId).catch(() => [] as MemoryNote[]),
+      ]);
+      const allSkillNames = new Set(skills.filter((s) => s.source === "agent").map((s) => s.name));
+      const allNoteIds = new Set(notes.map((n) => n.id));
+      set({
+        localSkills: skills.filter((s) => s.source === "agent"),
+        localNotes: notes,
+        selectedSkillNames: allSkillNames,
+        selectedNoteIds: allNoteIds,
+      });
+    } catch (e) {
+      logger.debug("Failed to load local content for sharing:", e);
+    }
+  },
+
+  toggleSkillSelection: (name) => {
+    const current = new Set(get().selectedSkillNames);
+    if (current.has(name)) current.delete(name);
+    else current.add(name);
+    set({ selectedSkillNames: current });
+  },
+
+  toggleNoteSelection: (id) => {
+    const current = new Set(get().selectedNoteIds);
+    if (current.has(id)) current.delete(id);
+    else current.add(id);
+    set({ selectedNoteIds: current });
+  },
+
+  toggleAllSkills: (selected) => {
+    if (selected) {
+      set({ selectedSkillNames: new Set(get().localSkills.map((s) => s.name)) });
+    } else {
+      set({ selectedSkillNames: new Set() });
+    }
+  },
+
+  toggleAllNotes: (selected) => {
+    if (selected) {
+      set({ selectedNoteIds: new Set(get().localNotes.map((n) => n.id)) });
+    } else {
+      set({ selectedNoteIds: new Set() });
+    }
+  },
+
+  setShareAgentName: (name) => set({ shareAgentName: name }),
+  setShareAgentDesc: (desc) => set({ shareAgentDesc: desc }),
+
+  executeShare: async () => {
+    const {
+      shareAgentName, shareAgentDesc, shareAgentId, shareFolderName,
+      selectedSkillNames, selectedNoteIds, localSkills, localNotes,
+    } = get();
+    set({ shareLoading: true, shareError: null });
+    try {
+      // 1. Share agent
+      const sharedAgent = await hubShareAgent(shareAgentName, shareAgentDesc, shareAgentId || undefined);
+
+      // 2. Share selected skills
+      let skillsShared = 0;
+      if (selectedSkillNames.size > 0) {
+        const skillItems: ShareSkillItem[] = [];
+        for (const name of selectedSkillNames) {
+          const meta = localSkills.find((s) => s.name === name);
+          if (!meta) continue;
+          try {
+            const content = await readSkill(shareFolderName, name);
+            skillItems.push({
+              name,
+              description: meta.description || "",
+              body: content.raw_content,
+            });
+          } catch (e) {
+            logger.debug(`Failed to read skill ${name}:`, e);
+          }
+        }
+        if (skillItems.length > 0) {
+          await hubShareSkills(sharedAgent.id, skillItems);
+          skillsShared = skillItems.length;
+        }
+      }
+
+      // 3. Share selected notes
+      let notesShared = 0;
+      if (selectedNoteIds.size > 0) {
+        const noteItems: ShareNoteItem[] = [];
+        for (const id of selectedNoteIds) {
+          const note = localNotes.find((n) => n.id === id);
+          if (!note) continue;
+          noteItems.push({
+            title: note.title,
+            note_type: "",
+            tags: [],
+            body: note.content,
+          });
+        }
+        if (noteItems.length > 0) {
+          await hubShareNotes(sharedAgent.id, noteItems);
+          notesShared = noteItems.length;
+        }
+      }
+
+      set({
+        shareLoading: false,
+        shareStep: "result",
+        shareResult: { success: true, agentId: sharedAgent.id, skillsShared, notesShared },
+      });
+    } catch (e) {
+      set({
+        shareLoading: false,
+        shareError: toErrorMessage(e),
+        shareStep: "result",
+        shareResult: { success: false, skillsShared: 0, notesShared: 0, error: toErrorMessage(e) },
+      });
+    }
+  },
+
+  // ── Install actions ──
+
+  openInstallSkill: (skill) => {
+    set({ installPopoverOpen: true, installItemType: "skill", installSkill: skill, installNote: null, installResult: null });
+  },
+
+  openInstallNote: (note) => {
+    set({ installPopoverOpen: true, installItemType: "note", installNote: note, installSkill: null, installResult: null });
+  },
+
+  openInstallAgent: () => {
+    set({ installPopoverOpen: true, installItemType: "agent", installSkill: null, installNote: null, installResult: null });
+  },
+
+  closeInstall: () => {
+    set({ installPopoverOpen: false, installItemType: null, installSkill: null, installNote: null, installLoading: false, installResult: null });
+  },
+
+  executeInstallSkill: async (folderName, skill) => {
+    set({ installLoading: true });
+    const result: InstallResult = { installed: [], skipped: [], errors: [] };
+    try {
+      const existing = await listSkills(folderName);
+      if (existing.some((s) => s.name === skill.skill_name)) {
+        result.skipped.push(skill.skill_name);
+      } else {
+        await createSkill(folderName, skill.skill_name);
+        await updateSkill(folderName, skill.skill_name, skill.body);
+        result.installed.push(skill.skill_name);
+      }
+    } catch (e) {
+      logger.debug(`Failed to install skill ${skill.skill_name}:`, e);
+      result.errors.push(skill.skill_name);
+    }
+    set({ installLoading: false, installResult: result });
+    return result;
+  },
+
+  executeInstallNote: async (agentId, note) => {
+    set({ installLoading: true });
+    const result: InstallResult = { installed: [], skipped: [], errors: [] };
+    try {
+      await createMemoryNote(agentId, note.title, note.body);
+      result.installed.push(note.title);
+    } catch (e) {
+      logger.debug(`Failed to install note ${note.title}:`, e);
+      result.errors.push(note.title);
+    }
+    set({ installLoading: false, installResult: result });
+    return result;
+  },
+
+  executeInstallBulk: async (folderName, agentId) => {
+    const { agentSkills, agentNotes } = get();
+    set({ installLoading: true });
+    const result: InstallResult = { installed: [], skipped: [], errors: [] };
+
+    // Install skills
+    let existingSkills: SkillMetadata[] = [];
+    try { existingSkills = await listSkills(folderName); } catch { /* empty */ }
+    const existingNames = new Set(existingSkills.map((s) => s.name));
+
+    for (const skill of agentSkills) {
+      try {
+        if (existingNames.has(skill.skill_name)) {
+          result.skipped.push(skill.skill_name);
+        } else {
+          await createSkill(folderName, skill.skill_name);
+          await updateSkill(folderName, skill.skill_name, skill.body);
+          result.installed.push(skill.skill_name);
+        }
+      } catch {
+        result.errors.push(skill.skill_name);
+      }
+    }
+
+    // Install notes
+    for (const note of agentNotes) {
+      try {
+        await createMemoryNote(agentId, note.title, note.body);
+        result.installed.push(note.title);
+      } catch {
+        result.errors.push(note.title);
+      }
+    }
+
+    set({ installLoading: false, installResult: result });
+    return result;
+  },
+
+  // ── My shares ──
+
+  loadMyShares: async () => {
+    const userId = get().userId;
+    if (!userId) return;
+    set({ myLoading: true });
+    try {
+      const [agents, skills, notes] = await Promise.all([
+        hubListAgents(undefined, 50, 0, userId),
+        hubListSkills(undefined, undefined, 50, 0, userId),
+        hubListNotes(undefined, undefined, 50, 0, userId),
+      ]);
+      set({
+        myAgents: agents.items,
+        myAgentsTotal: agents.total,
+        mySkills: skills.items,
+        mySkillsTotal: skills.total,
+        myNotes: notes.items,
+        myNotesTotal: notes.total,
+        myLoading: false,
+      });
+    } catch (e) {
+      set({ myLoading: false, error: toErrorMessage(e) });
+    }
+  },
+
+  // ── Delete ──
 
   deleteSharedAgent: async (id) => {
     try {
       await hubDeleteAgent(id);
-      get().loadAgents(0);
+      const { activeTab } = get();
+      if (activeTab === "mine") get().loadMyShares();
+      else get().loadAgents(0);
       return true;
     } catch (e) {
       set({ error: toErrorMessage(e) });
@@ -333,7 +720,9 @@ export const useHubStore = create<HubState>((set, get) => ({
   deleteSharedSkill: async (id) => {
     try {
       await hubDeleteSkill(id);
-      get().loadSkills(0);
+      const { activeTab } = get();
+      if (activeTab === "mine") get().loadMyShares();
+      else get().loadSkills(0);
       return true;
     } catch (e) {
       set({ error: toErrorMessage(e) });
@@ -344,7 +733,9 @@ export const useHubStore = create<HubState>((set, get) => ({
   deleteSharedNote: async (id) => {
     try {
       await hubDeleteNote(id);
-      get().loadNotes(0);
+      const { activeTab } = get();
+      if (activeTab === "mine") get().loadMyShares();
+      else get().loadNotes(0);
       return true;
     } catch (e) {
       set({ error: toErrorMessage(e) });
