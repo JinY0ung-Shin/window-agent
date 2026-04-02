@@ -222,7 +222,7 @@ pub(super) fn remove_vault_note_by_path(app: &AppHandle, path: &str) -> Result<(
 
 // ── Web search ──
 
-pub(super) async fn tool_web_search(input: &str) -> Result<serde_json::Value, String> {
+pub(super) async fn tool_web_search(input: &str, client: &reqwest::Client) -> Result<serde_json::Value, String> {
     // If input doesn't look like a URL, treat it as a search query
     let url = if input.starts_with("http://") || input.starts_with("https://") {
         input.to_string()
@@ -233,16 +233,10 @@ pub(super) async fn tool_web_search(input: &str) -> Result<serde_json::Value, St
         )
     };
 
-    let client = reqwest::Client::builder()
-        .timeout(super::execution::TOOL_TIMEOUT)
-        .build()
-        .map_err(|e| format!("HTTP client error: {}", e))?;
-
     const MAX_BODY_BYTES: usize = 50_000;
 
     let resp = client
         .get(&url)
-        .header("User-Agent", "WindowAgent/1.0")
         .send()
         .await
         .map_err(|e| format!("web_search request failed: {}", e))?;

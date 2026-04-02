@@ -82,21 +82,12 @@ impl ApiState {
             base_url = u;
         }
 
-        let client = Self::build_client(no_proxy);
+        let client = crate::utils::http::build_http_client(no_proxy);
 
         Self {
             inner: Mutex::new(ApiConfig { api_key, base_url, no_proxy }),
             client: Mutex::new(client),
         }
-    }
-
-    fn build_client(no_proxy: bool) -> reqwest::Client {
-        let mut builder = reqwest::Client::builder()
-            .user_agent("WindowAgent/0.5.4");
-        if no_proxy {
-            builder = builder.no_proxy();
-        }
-        builder.build().unwrap_or_else(|_| reqwest::Client::new())
     }
 
     /// Toggle proxy bypass and rebuild the HTTP client.
@@ -112,7 +103,7 @@ impl ApiState {
         drop(cfg);
 
         // Rebuild client with new proxy setting
-        *self.client.lock().map_err(|_| AppError::Lock("API client lock poisoned".into()))? = Self::build_client(enabled);
+        *self.client.lock().map_err(|_| AppError::Lock("API client lock poisoned".into()))? = crate::utils::http::build_http_client(enabled);
         Ok(())
     }
 

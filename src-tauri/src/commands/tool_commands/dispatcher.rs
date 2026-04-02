@@ -210,7 +210,9 @@ pub(crate) async fn execute_tool_inner(
                 .as_str()
                 .or_else(|| input["query"].as_str())
                 .ok_or("web_search: missing 'url' or 'query' parameter")?;
-            tool_web_search(url).await
+            let api_state = app.state::<crate::api::ApiState>();
+            let client = api_state.client().map_err(|e| e.to_string())?;
+            tool_web_search(url, &client).await
         }
 
         // ── Browser automation tools ──
@@ -429,7 +431,9 @@ pub(crate) async fn execute_tool_inner_for_agent(
                 .get("url")
                 .and_then(|v| v.as_str())
                 .ok_or("web_search: missing 'url' parameter")?;
-            tool_web_search(url).await
+            let api_state = app.state::<crate::api::ApiState>();
+            let client = api_state.client().map_err(|e| e.to_string())?;
+            tool_web_search(url, &client).await
         }
         "read_file" | "write_file" | "delete_file" | "list_directory" => {
             let scope = input
