@@ -116,9 +116,12 @@ struct ServerError {
 
 impl HubClient {
     pub fn new(relay_url: &str, token: Option<String>) -> Self {
+        // Hub API targets an internal relay server that should bypass corporate proxies.
+        // Always use no_proxy() to avoid proxy interception (e.g. 403 Forbidden).
         Self {
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(30))
+                .no_proxy()
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
             base_url: hub_base_url(relay_url),
