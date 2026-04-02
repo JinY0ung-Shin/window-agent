@@ -35,8 +35,11 @@ export async function writeToolConfig(folderName: string, config: ToolConfig): P
 }
 
 export async function getEffectiveTools(folderName: string): Promise<ToolDefinition[]> {
-  const config = await readToolConfig(folderName);
-  if (!config) return []; // no config = no tools (backward compat)
+  let config = await readToolConfig(folderName);
+  if (!config) {
+    // No TOOL_CONFIG.json yet (e.g. new agent before first save) — use defaults
+    config = await getDefaultToolConfig();
+  }
 
   const nativeTools = await getNativeTools();
   const result: ToolDefinition[] = [];
