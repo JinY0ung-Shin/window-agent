@@ -6,7 +6,19 @@
     "tools": "도구",
     "appearance": "외관",
     "credentials": "환경 변수",
+    "plugins": "플러그인",
     "backup": "백업/복원"
+  },
+  "plugins": {
+    "loading": "플러그인 로딩 중...",
+    "loadingMatrix": "스킬 현황 로딩 중...",
+    "noPlugins": "스킬이 포함된 로컬 Claude Code 플러그인이 없습니다. Claude Code에서 플러그인을 설치하면 여기에 표시됩니다.",
+    "noSkills": "이 플러그인에 스킬이 없습니다.",
+    "noAgents": "에이전트를 먼저 생성하세요.",
+    "skill": "스킬",
+    "apply": "변경 적용",
+    "installed": "{{count}}개 설치 완료",
+    "removed": "{{count}}개 제거 완료"
   },
   "sections": {
     "apiServer": "API 서버",

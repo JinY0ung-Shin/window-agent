@@ -46,3 +46,62 @@ export async function marketplaceInstallSkills(
 ): Promise<InstallResult> {
   return invoke("marketplace_install_skills", { folder_name: folderName, repo_url: repoUrl, git_ref: gitRef, skills });
 }
+
+// ── Local Claude Code plugin commands ──
+
+export interface LocalPluginInfo {
+  name: string;
+  marketplace: string;
+  version: string;
+  install_path: string;
+  skill_count: number;
+}
+
+export async function localCcPluginsList(): Promise<LocalPluginInfo[]> {
+  return invoke("local_cc_plugins_list");
+}
+
+export async function localCcPluginSkills(installPath: string): Promise<RemoteSkillInfo[]> {
+  return invoke("local_cc_plugin_skills", { install_path: installPath });
+}
+
+export async function localCcInstallSkills(
+  folderName: string,
+  skills: RemoteSkillInfo[],
+): Promise<InstallResult> {
+  return invoke("local_cc_install_skills", { folder_name: folderName, skills });
+}
+
+// ── Skill matrix commands ──
+
+export interface AgentBrief {
+  id: string;
+  name: string;
+  folder_name: string;
+}
+
+export interface SkillMatrix {
+  agents: AgentBrief[];
+  matrix: Record<string, string[]>; // skill_name → folder_names that have it
+}
+
+export interface SkillAssignment {
+  skill_name: string;
+  source_path: string;
+  add_to: string[];
+  remove_from: string[];
+}
+
+export interface BatchResult {
+  installed: string[];
+  removed: string[];
+  errors: string[];
+}
+
+export async function skillMatrix(skillNames: string[]): Promise<SkillMatrix> {
+  return invoke("skill_matrix", { skill_names: skillNames });
+}
+
+export async function skillMatrixApply(assignments: SkillAssignment[]): Promise<BatchResult> {
+  return invoke("skill_matrix_apply", { assignments });
+}

@@ -1,5 +1,6 @@
 use crate::error::AppError;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::Path;
 
 // ── GitHub marketplace types ──
@@ -429,6 +430,200 @@ pub fn install_skill_to_dir(
         .map_err(|e| AppError::Io(format!("Failed to write SKILL.md: {}", e)))?;
 
     Ok(())
+}
+
+// ── Local Claude Code plugin scanning ──
+
+/// Entry in ~/.claude/plugins/installed_plugins.json
+#[derive(Debug, Deserialize)]
+struct InstalledPluginsFile {
+    #[allow(dead_code)]
+    version: u32,
+    plugins: HashMap<String, Vec<InstalledPluginEntry>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct InstalledPluginEntry {
+    #[allow(dead_code)]
+    scope: String,
+    #[serde(rename = "installPath")]
+    install_path: String,
+    version: String,
+    #[allow(dead_code)]
+    #[serde(rename = "installedAt")]
+    installed_at: Option<String>,
+    #[allow(dead_code)]
+    #[serde(rename = "lastUpdated")]
+    last_updated: Option<String>,
+}
+
+/// Info about a locally installed Claude Code plugin.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LocalPluginInfo {
+    pub name: String,
+    pub marketplace: String,
+    pub version: String,
+    pub install_path: String,
+    pub skill_count: usize,
+}
+
+/// Read ~/.claude/plugins/installed_plugins.json and return plugin info.
+pub fn list_local_cc_plugins() -> Result<Vec<LocalPluginInfo>, AppError> {
+    let home = std::env::var("HOME")
+        .map_err(|_| AppError::Io("HOME environment variable not set".to_string()))?;
+    let json_path = Path::new(&home).join(".claude/plugins/installed_plugins.json");
+
+    if !json_path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = std::fs::read_to_string(&json_path)
+        .map_err(|e| AppError::Io(format!("Failed to read installed_plugins.json: {}", e)))?;
+
+    let file: InstalledPluginsFile = serde_json::from_str(&content)
+        .map_err(|e| AppError::Json(format!("Failed to parse installed_plugins.json: {}", e)))?;
+
+    let mut plugins = Vec::new();
+
+    for (key, entries) in &file.plugins {
+        // key format: "plugin-name@marketplace-name"
+        let parts: Vec<&str> = key.splitn(2, '@').collect();
+        let (plugin_name, marketplace) = if parts.len() == 2 {
+            (parts[0].to_string(), parts[1].to_string())
+        } else {
+            (key.clone(), "unknown".to_string())
+        };
+
+        // Use the first (most recent) entry
+        if let Some(entry) = entries.first() {
+            let install_path = &entry.install_path;
+            let skills_dir = Path::new(install_path).join("skills");
+
+            let skill_count = if skills_dir.is_dir() {
+                count_skill_dirs(&skills_dir)
+            } else {
+                0
+            };
+
+            plugins.push(LocalPluginInfo {
+                name: plugin_name,
+                marketplace,
+                version: entry.version.clone(),
+                install_path: install_path.clone(),
+                skill_count,
+            });
+        }
+    }
+
+    // Sort by name
+    plugins.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(plugins)
+}
+
+/// Count subdirectories that contain SKILL.md.
+fn count_skill_dirs(skills_dir: &Path) -> usize {
+    std::fs::read_dir(skills_dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|e| {
+                    e.file_type().map(|t| t.is_dir()).unwrap_or(false)
+                        && e.path().join("SKILL.md").exists()
+                })
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// List skills inside a local Claude Code plugin's cache directory.
+pub fn list_local_cc_plugin_skills(install_path: &str) -> Result<Vec<RemoteSkillInfo>, AppError> {
+    let skills_dir = Path::new(install_path).join("skills");
+
+    if !skills_dir.is_dir() {
+        return Ok(Vec::new());
+    }
+
+    let entries = std::fs::read_dir(&skills_dir)
+        .map_err(|e| AppError::Io(format!("Failed to read skills directory: {}", e)))?;
+
+    let mut skills = Vec::new();
+
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+
+        let skill_md = entry.path().join("SKILL.md");
+        if !skill_md.exists() {
+            continue;
+        }
+
+        let content = match std::fs::read_to_string(&skill_md) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        let dir_name = entry.file_name().to_string_lossy().to_string();
+        let parsed = crate::services::skill_service::parse_frontmatter(&content, &dir_name);
+        let meta = crate::services::skill_service::build_metadata(
+            &parsed.frontmatter,
+            &dir_name,
+            parsed.diagnostics,
+        );
+
+        skills.push(RemoteSkillInfo {
+            name: meta.name,
+            description: meta.description,
+            path: skill_md.to_string_lossy().to_string(),
+        });
+    }
+
+    skills.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(skills)
+}
+
+/// Install skills from a local Claude Code plugin cache into agent skills directory.
+pub fn install_local_cc_skills(
+    agent_skills_dir: &Path,
+    skills: &[RemoteSkillInfo],
+) -> Result<InstallResult, AppError> {
+    std::fs::create_dir_all(agent_skills_dir)
+        .map_err(|e| AppError::Io(format!("Failed to create skills dir: {}", e)))?;
+
+    let mut result = InstallResult {
+        installed: Vec::new(),
+        skipped: Vec::new(),
+        errors: Vec::new(),
+    };
+
+    for skill in skills {
+        // Check duplicate
+        if agent_skills_dir.join(&skill.name).exists() {
+            result.skipped.push(skill.name.clone());
+            continue;
+        }
+
+        // skill.path is the absolute path to SKILL.md in the plugin cache
+        let source_path = Path::new(&skill.path);
+        if !source_path.exists() {
+            result.errors.push(format!("{}: SKILL.md not found", skill.name));
+            continue;
+        }
+
+        match std::fs::read_to_string(source_path) {
+            Ok(content) => {
+                match install_skill_to_dir(agent_skills_dir, &skill.name, &content) {
+                    Ok(()) => result.installed.push(skill.name.clone()),
+                    Err(e) => result.errors.push(format!("{}: {}", skill.name, e)),
+                }
+            }
+            Err(e) => {
+                result.errors.push(format!("{}: {}", skill.name, e));
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 // ── GitHub API types ──

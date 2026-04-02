@@ -647,3 +647,157 @@ code.shell-info-value {
   background: var(--success-bg, rgba(52, 199, 89, 0.15));
   color: var(--success, #34c759);
 }
+
+/* ── Plugins Section ── */
+
+.plugins-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugins-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugins-selector select {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+}
+
+.plugins-loading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 12px 0;
+}
+
+.plugins-empty {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 12px 0;
+}
+
+.plugins-error {
+  font-size: 0.82rem;
+  color: var(--error, #ef4444);
+  padding: 4px 0;
+}
+
+.plugins-matrix-wrapper {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 400px;
+}
+
+.plugins-matrix {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.plugins-matrix thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.plugins-matrix th,
+.plugins-matrix td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plugins-matrix-skill-header {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-main);
+  min-width: 160px;
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+}
+
+.plugins-matrix-agent-header {
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-main);
+  min-width: 70px;
+  max-width: 100px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plugins-matrix-skill-cell {
+  position: sticky;
+  left: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+.plugins-matrix-skill-name {
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 200px;
+}
+
+.plugins-matrix-cell {
+  text-align: center;
+}
+
+.plugins-matrix-cell-changed {
+  background: var(--warning-bg, rgba(255, 204, 0, 0.1));
+}
+
+.plugins-matrix-cell input[type="checkbox"] {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.plugins-result {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.plugins-result-ok {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--success, #34c759);
+}
+
+.plugins-result-err {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--error, #ef4444);
+}
+
+.plugins-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.plugins-actions .btn-primary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

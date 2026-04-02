@@ -12,12 +12,13 @@ import ProxySection from "./ProxySection";
 import ToolIterationsSection from "./ToolIterationsSection";
 import ExportSection from "./ExportSection";
 import CredentialManager from "./CredentialManager";
+import PluginsSection from "./PluginsSection";
 import type { ApiServerSectionRef } from "./ApiServerSection";
 import type { ThinkingSettingsPanelRef } from "./ThinkingSettingsPanel";
 import type { BrandingSettingsPanelRef } from "./BrandingSettingsPanel";
 import type { ProxySectionRef } from "./ProxySection";
 
-type Tab = "api" | "thinking" | "tools" | "appearance" | "credentials" | "backup";
+type Tab = "api" | "thinking" | "tools" | "appearance" | "credentials" | "plugins" | "backup";
 
 export default function SettingsPage() {
   const { t } = useTranslation("settings");
@@ -74,7 +75,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="settings-tabs" role="tablist">
-        {(["api", "thinking", "tools", "appearance", "credentials", "backup"] as const).map((key) => (
+        {(["api", "thinking", "tools", "appearance", "credentials", "plugins", "backup"] as const).map((key) => (
           <button
             key={key}
             role="tab"
@@ -106,6 +107,9 @@ export default function SettingsPage() {
             <BrandingSettingsPanel ref={brandingRef} isOpen={isOpen} />
           </div>
           {tab === "credentials" && <CredentialManager />}
+          <div style={{ display: tab === "plugins" ? undefined : "none" }}>
+            <PluginsSection isOpen={tab === "plugins"} />
+          </div>
           {tab === "backup" && <ExportSection />}
         </div>
       </div>

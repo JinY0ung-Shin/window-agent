@@ -45,7 +45,13 @@
     "installed": "{{count}} skill(s) installed",
     "skipped": "{{count}} skill(s) skipped (already exist)",
     "installErrors": "Some skills failed to install:",
-    "close": "Close"
+    "close": "Close",
+    "or": "or",
+    "localPlugins": "Local Plugins",
+    "localPluginsButton": "Import from local CC plugins",
+    "localPluginsHint": "Import skills directly from plugins installed in Claude Code.",
+    "noLocalPlugins": "No local plugins with skills found",
+    "skillCount": "{{count}} skill(s)"
   },
   "credentials": {
     "title": "Environment Variables",

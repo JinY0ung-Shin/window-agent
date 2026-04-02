@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Download,
   ExternalLink,
+  HardDrive,
   Loader2,
   Search,
   Check,
@@ -15,11 +16,15 @@ import {
   marketplaceFetchPlugins,
   marketplaceFetchPluginSkills,
   marketplaceInstallSkills,
+  localCcPluginsList,
+  localCcPluginSkills,
+  localCcInstallSkills,
 } from "../../services/commands/marketplaceCommands";
 import type {
   MarketplacePluginInfo,
   RemoteSkillInfo,
   InstallResult,
+  LocalPluginInfo,
 } from "../../services/commands/marketplaceCommands";
 import { toErrorMessage } from "../../utils/errorUtils";
 
@@ -29,7 +34,7 @@ interface Props {
   onInstalled: () => void;
 }
 
-type View = "input" | "plugins" | "skills";
+type View = "input" | "plugins" | "skills" | "localPlugins";
 
 export default function MarketplacePanel({ folderName, onClose, onInstalled }: Props) {
   const { t } = useTranslation("agent");
@@ -67,11 +72,50 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
   const [skills, setSkills] = useState<RemoteSkillInfo[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
 
+  // Local CC plugins
+  const [localPlugins, setLocalPlugins] = useState<LocalPluginInfo[]>([]);
+  const [selectedLocalPlugin, setSelectedLocalPlugin] = useState<LocalPluginInfo | null>(null);
+
   // UI state
   const [view, setView] = useState<View>("input");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
+
+  const handleFetchLocalPlugins = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await localCcPluginsList();
+      // Only show plugins that have skills
+      setLocalPlugins(result.filter((p) => p.skill_count > 0));
+      setView("localPlugins");
+    } catch (e) {
+      setError(toErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleSelectLocalPlugin = useCallback(async (plugin: LocalPluginInfo) => {
+    setSelectedLocalPlugin(plugin);
+    setSelectedPlugin(null);
+    setSkills([]);
+    setSelectedSkills(new Set());
+    setInstallResult(null);
+    setLoading(true);
+    setError("");
+    try {
+      const result = await localCcPluginSkills(plugin.install_path);
+      setSkills(result);
+      setSelectedSkills(new Set(result.map((s) => s.name)));
+      setView("skills");
+    } catch (e) {
+      setError(toErrorMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   const handleFetchPlugins = useCallback(async () => {
     if (!repoUrl.trim()) return;
@@ -124,18 +168,24 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
   }, []);
 
   const handleInstall = useCallback(async () => {
-    if (!selectedPlugin || selectedSkills.size === 0) return;
+    if (selectedSkills.size === 0) return;
+    if (!selectedPlugin && !selectedLocalPlugin) return;
     setLoading(true);
     setError("");
     setInstallResult(null);
     try {
       const skillsToInstall = skills.filter((s) => selectedSkills.has(s.name));
-      const result = await marketplaceInstallSkills(
-        folderName,
-        selectedPlugin.repo_url,
-        selectedPlugin.git_ref,
-        skillsToInstall,
-      );
+      let result: InstallResult;
+      if (selectedLocalPlugin) {
+        result = await localCcInstallSkills(folderName, skillsToInstall);
+      } else {
+        result = await marketplaceInstallSkills(
+          folderName,
+          selectedPlugin!.repo_url,
+          selectedPlugin!.git_ref,
+          skillsToInstall,
+        );
+      }
       setInstallResult(result);
       if (result.installed.length > 0) {
         onInstalled();
@@ -145,22 +195,31 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
     } finally {
       setLoading(false);
     }
-  }, [selectedPlugin, selectedSkills, skills, folderName, onInstalled]);
+  }, [selectedPlugin, selectedLocalPlugin, selectedSkills, skills, folderName, onInstalled]);
 
   const goBackToPlugins = useCallback(() => {
-    setView("plugins");
-    setSelectedPlugin(null);
+    // If came from local plugins, go back there
+    if (selectedLocalPlugin) {
+      setView("localPlugins");
+      setSelectedLocalPlugin(null);
+    } else {
+      setView("plugins");
+      setSelectedPlugin(null);
+    }
     setSkills([]);
     setSelectedSkills(new Set());
     setInstallResult(null);
     setError("");
-  }, []);
+  }, [selectedLocalPlugin]);
 
   const goBackToInput = useCallback(() => {
     setView("input");
     setPlugins([]);
     setFilteredPlugins([]);
+    setSearchQuery("");
     setSelectedPlugin(null);
+    setSelectedLocalPlugin(null);
+    setLocalPlugins([]);
     setSkills([]);
     setError("");
     setInstallResult(null);
@@ -181,7 +240,8 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
         <span className="marketplace-title">
           {view === "input" && t("marketplace.title")}
           {view === "plugins" && t("marketplace.pluginList")}
-          {view === "skills" && selectedPlugin?.name}
+          {view === "localPlugins" && t("marketplace.localPlugins")}
+          {view === "skills" && (selectedLocalPlugin?.name || selectedPlugin?.name)}
         </span>
         <button className="btn-secondary marketplace-close-btn" onClick={onClose}>
           {t("common:close")}
@@ -234,6 +294,21 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
               claude-plugins-community
             </button>
           </div>
+
+          <div className="marketplace-local-section">
+            <div className="marketplace-divider">
+              <span>{t("marketplace.or")}</span>
+            </div>
+            <button
+              className="btn-secondary marketplace-local-btn"
+              onClick={handleFetchLocalPlugins}
+              disabled={loading}
+            >
+              {loading ? <Loader2 size={14} className="spin" /> : <HardDrive size={14} />}
+              {t("marketplace.localPluginsButton")}
+            </button>
+            <p className="marketplace-local-hint">{t("marketplace.localPluginsHint")}</p>
+          </div>
         </div>
       )}
 
@@ -283,6 +358,45 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
                     {plugin.author && (
                       <span className="marketplace-author">{plugin.author}</span>
                     )}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Local Plugins View */}
+      {view === "localPlugins" && (
+        <div className="marketplace-plugin-view">
+          <div className="marketplace-plugin-list">
+            {loading && (
+              <div className="marketplace-loading">
+                <Loader2 size={16} className="spin" /> {t("marketplace.loading")}
+              </div>
+            )}
+            {!loading && localPlugins.length === 0 && (
+              <div className="marketplace-empty">{t("marketplace.noLocalPlugins")}</div>
+            )}
+            {localPlugins.map((plugin) => (
+              <button
+                key={`${plugin.name}@${plugin.marketplace}`}
+                className="marketplace-plugin-row"
+                onClick={() => handleSelectLocalPlugin(plugin)}
+              >
+                <div className="marketplace-plugin-info">
+                  <div className="marketplace-plugin-name">
+                    <Package size={14} />
+                    {plugin.name}
+                    <span className="marketplace-plugin-version">v{plugin.version}</span>
+                  </div>
+                  <div className="marketplace-plugin-desc">
+                    {plugin.marketplace}
+                  </div>
+                  <div className="marketplace-plugin-meta">
+                    <span className="marketplace-tag">
+                      {t("marketplace.skillCount", { count: plugin.skill_count })}
+                    </span>
                   </div>
                 </div>
               </button>

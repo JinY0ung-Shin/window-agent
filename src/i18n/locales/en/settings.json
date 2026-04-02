@@ -6,7 +6,19 @@
     "tools": "Tools",
     "appearance": "Appearance",
     "credentials": "Environment Variables",
+    "plugins": "Plugins",
     "backup": "Backup/Restore"
+  },
+  "plugins": {
+    "loading": "Loading plugins...",
+    "loadingMatrix": "Loading skill status...",
+    "noPlugins": "No local Claude Code plugins with skills found. Install plugins in Claude Code to see them here.",
+    "noSkills": "No skills in this plugin.",
+    "noAgents": "Create an agent first.",
+    "skill": "Skill",
+    "apply": "Apply Changes",
+    "installed": "{{count}} installed",
+    "removed": "{{count}} removed"
   },
   "sections": {
     "apiServer": "API Server",

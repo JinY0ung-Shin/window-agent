@@ -199,6 +199,12 @@ pub fn run() {
             commands::marketplace_fetch_plugins,
             commands::marketplace_fetch_plugin_skills,
             commands::marketplace_install_skills,
+            // Local Claude Code plugin commands
+            commands::local_cc_plugins_list,
+            commands::local_cc_plugin_skills,
+            commands::local_cc_install_skills,
+            commands::skill_matrix,
+            commands::skill_matrix_apply,
             // Hub commands
             commands::hub_register,
             commands::hub_login,
