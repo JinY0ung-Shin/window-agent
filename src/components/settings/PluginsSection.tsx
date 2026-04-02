@@ -12,9 +12,18 @@ import type {
   RemoteSkillInfo,
   AgentBrief,
   SkillAssignment,
+  SkillMatrix as SkillMatrixType,
   BatchResult,
 } from "../../services/commands/marketplaceCommands";
 import { toErrorMessage } from "../../utils/errorUtils";
+
+function parseInstalledMap(mat: SkillMatrixType): Record<string, Set<string>> {
+  const map: Record<string, Set<string>> = {};
+  for (const [name, folders] of Object.entries(mat.matrix)) {
+    map[name] = new Set(folders);
+  }
+  return map;
+}
 
 interface Props {
   isOpen: boolean;
@@ -89,11 +98,7 @@ export default function PluginsSection({ isOpen }: Props) {
         if (cancelled) return;
         setAgents(mat.agents);
 
-        const installedMap: Record<string, Set<string>> = {};
-        for (const [name, folders] of Object.entries(mat.matrix)) {
-          installedMap[name] = new Set(folders);
-        }
-        setInstalled(installedMap);
+        setInstalled(parseInstalledMap(mat));
       } catch (e) {
         if (!cancelled) setError(toErrorMessage(e));
       } finally {

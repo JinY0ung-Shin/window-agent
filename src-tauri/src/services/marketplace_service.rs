@@ -469,9 +469,8 @@ pub struct LocalPluginInfo {
 
 /// Read ~/.claude/plugins/installed_plugins.json and return plugin info.
 pub fn list_local_cc_plugins() -> Result<Vec<LocalPluginInfo>, AppError> {
-    let home = std::env::var("HOME")
-        .map_err(|_| AppError::Io("HOME environment variable not set".to_string()))?;
-    let json_path = Path::new(&home).join(".claude/plugins/installed_plugins.json");
+    let json_path = crate::utils::config_helpers::cc_plugins_dir()?
+        .join("installed_plugins.json");
 
     if !json_path.exists() {
         return Ok(Vec::new());

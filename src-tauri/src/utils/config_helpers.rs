@@ -1,5 +1,18 @@
+use crate::error::AppError;
 use std::path::PathBuf;
 use tauri::Manager;
+
+/// Resolve the user's home directory.
+pub fn home_dir() -> Result<PathBuf, AppError> {
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .map_err(|_| AppError::Io("HOME environment variable not set".to_string()))
+}
+
+/// Resolve the Claude Code plugins cache directory (`~/.claude/plugins`).
+pub fn cc_plugins_dir() -> Result<PathBuf, AppError> {
+    Ok(home_dir()?.join(".claude/plugins"))
+}
 
 /// Resolve the app data directory from a Tauri AppHandle.
 ///

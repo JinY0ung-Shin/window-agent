@@ -97,16 +97,20 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
     }
   }, []);
 
-  const handleSelectLocalPlugin = useCallback(async (plugin: LocalPluginInfo) => {
-    setSelectedLocalPlugin(plugin);
-    setSelectedPlugin(null);
+  const handleSelectSource = useCallback(async (
+    fetcher: () => Promise<RemoteSkillInfo[]>,
+    local: LocalPluginInfo | null,
+    remote: MarketplacePluginInfo | null,
+  ) => {
+    setSelectedLocalPlugin(local);
+    setSelectedPlugin(remote);
     setSkills([]);
     setSelectedSkills(new Set());
     setInstallResult(null);
     setLoading(true);
     setError("");
     try {
-      const result = await localCcPluginSkills(plugin.install_path);
+      const result = await fetcher();
       setSkills(result);
       setSelectedSkills(new Set(result.map((s) => s.name)));
       setView("skills");
@@ -116,6 +120,12 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
       setLoading(false);
     }
   }, []);
+
+  const handleSelectLocalPlugin = useCallback(
+    (plugin: LocalPluginInfo) =>
+      handleSelectSource(() => localCcPluginSkills(plugin.install_path), plugin, null),
+    [handleSelectSource],
+  );
 
   const handleFetchPlugins = useCallback(async () => {
     if (!repoUrl.trim()) return;
@@ -133,30 +143,15 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
     }
   }, [repoUrl]);
 
-
-  const handleSelectPlugin = useCallback(async (plugin: MarketplacePluginInfo) => {
-    setSelectedPlugin(plugin);
-    setSkills([]);
-    setSelectedSkills(new Set());
-    setInstallResult(null);
-    setLoading(true);
-    setError("");
-    try {
-      const result = await marketplaceFetchPluginSkills(
-        plugin.repo_url,
-        plugin.git_ref,
-        plugin.subpath,
-      );
-      setSkills(result);
-      // Auto-select all skills
-      setSelectedSkills(new Set(result.map((s) => s.name)));
-      setView("skills");
-    } catch (e) {
-      setError(toErrorMessage(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const handleSelectPlugin = useCallback(
+    (plugin: MarketplacePluginInfo) =>
+      handleSelectSource(
+        () => marketplaceFetchPluginSkills(plugin.repo_url, plugin.git_ref, plugin.subpath),
+        null,
+        plugin,
+      ),
+    [handleSelectSource],
+  );
 
   const toggleSkill = useCallback((skillName: string) => {
     setSelectedSkills((prev) => {
