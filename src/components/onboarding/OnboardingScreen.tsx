@@ -49,6 +49,7 @@ export default function OnboardingScreen() {
   // Template step state
   const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
   const [templateSeeding, setTemplateSeeding] = useState(false);
+  const [templateSeedError, setTemplateSeedError] = useState(false);
   // API step state
   const [apiKey, setApiKey] = useState("");
   const [apiBaseUrl, setApiBaseUrl] = useState("");
@@ -135,17 +136,8 @@ export default function OnboardingScreen() {
     });
   };
 
-  const handleTemplatesComplete = async () => {
-    if (selectedTemplates.size > 0) {
-      setTemplateSeeding(true);
-      try {
-        await seedTemplateAgents([...selectedTemplates], selectedLocale);
-      } catch (e) {
-        logger.warn("Template seeding partial failure:", e);
-      }
-      setTemplateSeeding(false);
-    }
-    // Check if API is already configured — auto-skip api step
+  // Advance past the templates step: auto-skip the api step if already configured.
+  const proceedAfterTemplates = async () => {
     await useSettingsStore.getState().waitForEnv();
     const { hasApiKey } = useSettingsStore.getState();
     if (hasApiKey) {
@@ -153,6 +145,29 @@ export default function OnboardingScreen() {
     } else {
       transitionTo("api");
     }
+  };
+
+  const handleTemplatesComplete = async () => {
+    if (selectedTemplates.size > 0) {
+      setTemplateSeeding(true);
+      setTemplateSeedError(false);
+      try {
+        await seedTemplateAgents([...selectedTemplates], selectedLocale);
+      } catch (e) {
+        logger.warn("Template seeding partial failure:", e);
+        setTemplateSeedError(true);
+        setTemplateSeeding(false);
+        return; // surface the failure instead of silently advancing
+      }
+      setTemplateSeeding(false);
+    }
+    await proceedAfterTemplates();
+  };
+
+  // After a seeding failure, let the user continue without the templates.
+  const handleTemplatesContinueAnyway = async () => {
+    setTemplateSeedError(false);
+    await proceedAfterTemplates();
   };
 
   const saveAdvancedSettings = async () => {
@@ -200,6 +215,7 @@ export default function OnboardingScreen() {
         <div className="onboarding-theme-buttons">
           <button
             className={`onboarding-theme-btn ${selectedLocale === "ko" ? "selected" : ""}`}
+            aria-pressed={selectedLocale === "ko"}
             onClick={() => handleLocaleSelect("ko")}
           >
             <span className="theme-btn-title">{t("languageKo")}</span>
@@ -207,6 +223,7 @@ export default function OnboardingScreen() {
           </button>
           <button
             className={`onboarding-theme-btn ${selectedLocale === "en" ? "selected" : ""}`}
+            aria-pressed={selectedLocale === "en"}
             onClick={() => handleLocaleSelect("en")}
           >
             <span className="theme-btn-title">{t("languageEn")}</span>
@@ -251,6 +268,7 @@ export default function OnboardingScreen() {
         <div className="onboarding-theme-buttons">
           <button
             className={`onboarding-theme-btn ${selectedTheme === "classic" ? "selected" : ""}`}
+            aria-pressed={selectedTheme === "classic"}
             onClick={() => setSelectedTheme("classic")}
           >
             <Bot size={24} />
@@ -259,6 +277,7 @@ export default function OnboardingScreen() {
           </button>
           <button
             className={`onboarding-theme-btn ${selectedTheme === "org" ? "selected" : ""}`}
+            aria-pressed={selectedTheme === "org"}
             onClick={() => setSelectedTheme("org")}
           >
             <Building2 size={24} />
@@ -318,6 +337,7 @@ export default function OnboardingScreen() {
             <button
               key={tmpl.key}
               className={`onboarding-template-card ${selectedTemplates.has(tmpl.key) ? "selected" : ""}`}
+              aria-pressed={selectedTemplates.has(tmpl.key)}
               onClick={() => toggleTemplate(tmpl.key)}
               disabled={templateSeeding}
             >
@@ -326,6 +346,10 @@ export default function OnboardingScreen() {
             </button>
           ))}
         </div>
+
+        {templateSeedError && (
+          <p className="onboarding-error">{t("templateSeedingError")}</p>
+        )}
 
         <div className="onboarding-btn-row">
           <button className="onboarding-back-btn" onClick={handleBack} disabled={templateSeeding}>
@@ -342,11 +366,23 @@ export default function OnboardingScreen() {
                 <Loader size={16} className="spinning" />
                 {t("seedingMessage")}
               </>
+            ) : templateSeedError ? (
+              t("common:retry")
             ) : (
               selectedTemplates.size > 0 ? t("nextButton") : t("templatesSkipButton")
             )}
           </button>
         </div>
+
+        {templateSeedError && (
+          <button
+            className="onboarding-skip-btn"
+            onClick={handleTemplatesContinueAnyway}
+            disabled={templateSeeding}
+          >
+            {t("templateSeedingContinue")}
+          </button>
+        )}
       </>
     );
   };
@@ -406,7 +442,7 @@ export default function OnboardingScreen() {
 
           <div className="onboarding-field">
             <label htmlFor="proxyServer">{t("proxyLabel")}</label>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div className="onboarding-proxy-row">
               <input
                 id="proxyServer"
                 type="text"
@@ -416,7 +452,7 @@ export default function OnboardingScreen() {
                   setProxyServer(e.target.value);
                   setProxyDetectMsg("");
                 }}
-                style={{ flex: 1 }}
+                className="onboarding-proxy-input"
               />
               <button
                 type="button"
@@ -475,7 +511,7 @@ export default function OnboardingScreen() {
         <button
           className="onboarding-start-btn"
           onClick={handleApiSave}
-          disabled={(!apiKey.trim() && !apiBaseUrl.trim()) || apiTesting}
+          disabled={!apiKey.trim() || apiTesting}
         >
           {apiTesting ? (
             <>

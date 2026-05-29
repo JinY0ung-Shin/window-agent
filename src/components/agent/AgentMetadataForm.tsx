@@ -111,20 +111,20 @@ export default function AgentMetadataForm({
             className={`thinking-option ${thinkingEnabled === true ? "active" : ""}`}
             onClick={() => onThinkingEnabledChange(true)}
           >
-            ON
+            {ta("metadata.thinkingOn")}
           </button>
           <button
             className={`thinking-option ${thinkingEnabled === false ? "active" : ""}`}
             onClick={() => onThinkingEnabledChange(false)}
           >
-            OFF
+            {ta("metadata.thinkingOff")}
           </button>
         </div>
       </div>
 
       {thinkingEnabled === true && (
         <div className="form-group">
-          <label>Thinking Budget</label>
+          <label>{ta("metadata.thinkingBudgetLabel")}</label>
           <input
             type="number"
             min="1024"

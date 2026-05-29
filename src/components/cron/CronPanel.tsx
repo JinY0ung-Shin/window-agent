@@ -1,14 +1,16 @@
 import { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { i18n } from "../../i18n";
-import { Clock, Plus, Trash2, Settings, Bot, ChevronDown, ChevronRight } from "lucide-react";
+import { Clock, Plus, Trash2, Settings, Bot, ChevronDown, ChevronRight, Loader2, AlertCircle } from "lucide-react";
 import { useCronStore } from "../../stores/cronStore";
 import { useAgentStore } from "../../stores/agentStore";
 import CronEditor from "./CronEditor";
 import type { CronJob, CronRun } from "../../services/types";
 import { logger } from "../../services/logger";
+import { toErrorMessage } from "../../utils/errorUtils";
 import DraggableHeader from "../layout/DraggableHeader";
 import EmptyState from "../common/EmptyState";
+import ToggleSwitch from "../common/ToggleSwitch";
 
 function formatSchedule(job: CronJob): string {
   switch (job.schedule_type) {
@@ -35,11 +37,18 @@ function JobCard({ job }: { job: CronJob }) {
   const openEditor = useCronStore((s) => s.openEditor);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [toggling, setToggling] = useState(false);
   const [showRuns, setShowRuns] = useState(false);
   const [runs, setRuns] = useState<CronRun[]>([]);
+  const [runsLoading, setRunsLoading] = useState(false);
+  const [runsError, setRunsError] = useState<string | null>(null);
 
   const handleToggleRuns = async () => {
     if (!showRuns) {
+      setRunsLoading(true);
+      setRunsError(null);
       try {
         const r = await import("../../services/commands/cronCommands").then(
           (m) => m.listCronRuns(job.id, 5),
@@ -47,9 +56,36 @@ function JobCard({ job }: { job: CronJob }) {
         setRuns(r);
       } catch (e) {
         logger.error("Failed to load runs:", e);
+        setRunsError(toErrorMessage(e));
+      } finally {
+        setRunsLoading(false);
       }
     }
     setShowRuns(!showRuns);
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteJob(job.id);
+      setConfirmDelete(false);
+    } catch (e) {
+      setDeleteError(toErrorMessage(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleToggleEnabled = async (next: boolean) => {
+    setToggling(true);
+    try {
+      await toggleJob(job.id, next);
+    } catch (e) {
+      logger.error("Failed to toggle cron job:", e);
+    } finally {
+      setToggling(false);
+    }
   };
 
   const statusKey = job.claimed_at
@@ -63,25 +99,32 @@ function JobCard({ job }: { job: CronJob }) {
         <div className="cron-card-actions" onClick={(e) => e.stopPropagation()}>
           {confirmDelete ? (
             <div className="cron-card-delete-confirm">
-              <button className="btn-danger-sm" onClick={() => { deleteJob(job.id); setConfirmDelete(false); }}>
+              <button className="btn-danger-sm" onClick={handleDelete} disabled={deleting}>
+                {deleting && <Loader2 size={12} className="spinning" />}
                 {t("common:delete")}
               </button>
-              <button className="btn-secondary-sm" onClick={() => setConfirmDelete(false)}>
+              <button
+                className="btn-secondary-sm"
+                onClick={() => { setConfirmDelete(false); setDeleteError(null); }}
+                disabled={deleting}
+              >
                 {t("cancel")}
               </button>
             </div>
           ) : (
             <>
-              <button className="cron-card-edit" onClick={() => openEditor(job.id)} title={t("editJob")}>
+              <button className="cron-card-edit" onClick={() => openEditor(job.id)} title={t("editJob")} aria-label={t("editJob")}>
                 <Settings size={14} />
               </button>
-              <button className="cron-card-delete" onClick={() => setConfirmDelete(true)} title={t("deleteConfirm")}>
+              <button className="cron-card-delete" onClick={() => setConfirmDelete(true)} title={t("deleteConfirm")} aria-label={t("deleteConfirm")}>
                 <Trash2 size={14} />
               </button>
             </>
           )}
         </div>
       </div>
+
+      {deleteError && <div className="cron-card-error">{deleteError}</div>}
 
       {job.description && <div className="cron-card-desc">{job.description}</div>}
 
@@ -97,9 +140,11 @@ function JobCard({ job }: { job: CronJob }) {
           {job.run_count > 0 && <span>· {t("runCount", { count: job.run_count })}</span>}
         </div>
         <div className="cron-card-toggle" onClick={(e) => e.stopPropagation()}>
-          <button
-            className={`cron-toggle-switch${job.enabled ? " active" : ""}`}
-            onClick={() => toggleJob(job.id, !job.enabled)}
+          <ToggleSwitch
+            checked={job.enabled}
+            onChange={handleToggleEnabled}
+            disabled={toggling}
+            ariaLabel={t("enabledToggle", { name: job.name })}
             title={job.enabled ? t("enabled") : t("disabled")}
           />
         </div>
@@ -114,13 +159,26 @@ function JobCard({ job }: { job: CronJob }) {
 
       {job.run_count > 0 && (
         <>
-          <button className="cron-card-runs-toggle" onClick={handleToggleRuns}>
+          <button
+            type="button"
+            className="cron-card-runs-toggle"
+            onClick={handleToggleRuns}
+            aria-expanded={showRuns}
+          >
             {showRuns ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             {t("runHistory")}
           </button>
           {showRuns && (
             <div className="cron-card-runs">
-              {runs.length === 0 ? (
+              {runsLoading ? (
+                <div className="cron-no-runs">
+                  <Loader2 size={12} className="spinning" /> {t("common:loading")}
+                </div>
+              ) : runsError ? (
+                <div className="cron-runs-error">
+                  <AlertCircle size={12} /> {t("loadRunsError")}
+                </div>
+              ) : runs.length === 0 ? (
                 <div className="cron-no-runs">{t("noRuns")}</div>
               ) : (
                 runs.map((run) => (
@@ -146,6 +204,7 @@ function JobCard({ job }: { job: CronJob }) {
 export default function CronPanel() {
   const { t } = useTranslation("cron");
   const jobs = useCronStore((s) => s.jobs);
+  const jobsError = useCronStore((s) => s.jobsError);
   const loadJobs = useCronStore((s) => s.loadJobs);
   const isEditorOpen = useCronStore((s) => s.isEditorOpen);
   const openEditor = useCronStore((s) => s.openEditor);
@@ -184,7 +243,15 @@ export default function CronPanel() {
       </DraggableHeader>
 
       <div className="cron-panel-body">
-        {jobs.length === 0 ? (
+        {jobsError && jobs.length === 0 ? (
+          <div className="cron-panel-error">
+            <AlertCircle size={32} strokeWidth={1.5} />
+            <p>{t("loadJobsError")}</p>
+            <button className="btn-secondary" onClick={() => loadJobs()}>
+              {t("common:retry")}
+            </button>
+          </div>
+        ) : jobs.length === 0 ? (
           <EmptyState
             icon={<Clock size={48} strokeWidth={1} />}
             message={t("noJobs")}
@@ -201,7 +268,7 @@ export default function CronPanel() {
                   ) : (
                     <Bot size={18} />
                   )}
-                  <span>{agent?.name ?? "Unknown"}</span>
+                  <span>{agent?.name ?? t("unknownAgent")}</span>
                 </div>
                 <div className="cron-grid">
                   {agentJobs.map((job) => (

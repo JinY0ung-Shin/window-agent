@@ -73,6 +73,8 @@
     "delete": "삭제",
     "confirmDelete": "정말 삭제하시겠습니까?",
     "confirm": "확인",
+    "deleting": "삭제 중…",
+    "loadFailed": "노트를 불러오지 못했습니다",
     "openObsidian": "Obsidian에서 열기"
   },
   "list": {

@@ -12,6 +12,7 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 import { useHubStore, PAGE_SIZE } from "../../stores/hubStore";
 import { useAgentStore } from "../../stores/agentStore";
@@ -31,7 +32,7 @@ const TAB_ICONS = {
 } as const;
 
 export default function HubPanel() {
-  const { t } = useTranslation("hub");
+  const { t } = useTranslation(["hub", "common"]);
 
   const loggedIn = useHubStore((s) => s.loggedIn);
   const displayName = useHubStore((s) => s.displayName);
@@ -39,6 +40,7 @@ export default function HubPanel() {
   const searchQuery = useHubStore((s) => s.searchQuery);
   const selectedAgentId = useHubStore((s) => s.selectedAgentId);
   const error = useHubStore((s) => s.error);
+  const clearError = useHubStore((s) => s.clearError);
 
   const agentsTotal = useHubStore((s) => s.agentsTotal);
   const agentsOffset = useHubStore((s) => s.agentsOffset);
@@ -57,11 +59,12 @@ export default function HubPanel() {
   const [sharePickerOpen, setSharePickerOpen] = useState(false);
   const [sharePickerMode, setSharePickerMode] = useState<"agent" | "skill">("agent");
   const sharePickerRef = useRef<HTMLDivElement>(null);
+  const sharePickerTriggerRef = useRef<HTMLButtonElement>(null);
 
   const [localQuery, setLocalQuery] = useState("");
   const searchInput = useCompositionInput(setLocalQuery);
 
-  // Close share picker on outside click
+  // Close share picker on outside click or Escape (returning focus to the trigger)
   useEffect(() => {
     if (!sharePickerOpen) return;
     const handler = (e: MouseEvent) => {
@@ -69,8 +72,18 @@ export default function HubPanel() {
         setSharePickerOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSharePickerOpen(false);
+        sharePickerTriggerRef.current?.focus();
+      }
+    };
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [sharePickerOpen]);
 
   // Debounce: localQuery -> store searchQuery
@@ -138,17 +151,22 @@ export default function HubPanel() {
           <div className="hub-header-actions">
             <div className="hub-share-picker-wrapper" ref={sharePickerRef}>
               <button
+                ref={sharePickerTriggerRef}
+                type="button"
                 className="btn-primary btn-sm"
                 onClick={() => setSharePickerOpen(!sharePickerOpen)}
                 title={t("share.button")}
+                aria-haspopup="menu"
+                aria-expanded={sharePickerOpen}
               >
                 <Upload size={14} />
                 {t("share.button")}
               </button>
               {sharePickerOpen && (
-                <div className="hub-share-picker-dropdown">
+                <div className="hub-share-picker-dropdown" role="menu">
                   <div className="hub-share-picker-tabs">
                     <button
+                      type="button"
                       className={`hub-share-picker-tab${sharePickerMode === "agent" ? " hub-share-picker-tab--active" : ""}`}
                       onClick={() => setSharePickerMode("agent")}
                     >
@@ -156,6 +174,7 @@ export default function HubPanel() {
                       {t("share.mode_agent")}
                     </button>
                     <button
+                      type="button"
                       className={`hub-share-picker-tab${sharePickerMode === "skill" ? " hub-share-picker-tab--active" : ""}`}
                       onClick={() => setSharePickerMode("skill")}
                     >
@@ -172,6 +191,8 @@ export default function HubPanel() {
                     agents.map((agent) => (
                       <button
                         key={agent.id}
+                        type="button"
+                        role="menuitem"
                         className="hub-share-picker-item"
                         onClick={() => {
                           setSharePickerOpen(false);
@@ -205,12 +226,25 @@ export default function HubPanel() {
           </div>
         ) : (
           <div className="hub-header-actions">
-            <LogIn size={16} className="hub-header-login-icon" />
+            <LogIn size={16} className="hub-header-login-icon" aria-hidden="true" />
           </div>
         )}
       </DraggableHeader>
 
-      {error && <div className="hub-error">{error}</div>}
+      {error && (
+        <div className="hub-error" role="alert">
+          <span className="hub-error-text">{error}</span>
+          <button
+            type="button"
+            className="icon-btn icon-btn-sm hub-error-dismiss"
+            onClick={clearError}
+            title={t("common:close")}
+            aria-label={t("common:close")}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {!loggedIn ? (
         <div className="hub-panel-body">
@@ -240,13 +274,19 @@ export default function HubPanel() {
 
           {/* Tab bar */}
           {!selectedAgentId && (
-            <div className="hub-tab-bar">
+            <div className="hub-tab-bar" role="tablist">
               {(["agents", "skills", "mine"] as const).map((tab) => {
                 const Icon = TAB_ICONS[tab];
+                const selected = activeTab === tab;
                 return (
                   <button
                     key={tab}
-                    className={`hub-tab${activeTab === tab ? " hub-tab--active" : ""}`}
+                    type="button"
+                    role="tab"
+                    id={`hub-tab-${tab}`}
+                    aria-selected={selected}
+                    aria-controls="hub-tabpanel"
+                    className={`hub-tab${selected ? " hub-tab--active" : ""}`}
                     onClick={() => { setActiveTab(tab); setLocalQuery(""); }}
                   >
                     <Icon size={14} />
@@ -258,7 +298,12 @@ export default function HubPanel() {
           )}
 
           {/* Content */}
-          <div className="hub-content">
+          <div
+            className="hub-content"
+            {...(!selectedAgentId
+              ? { role: "tabpanel" as const, id: "hub-tabpanel", "aria-labelledby": `hub-tab-${activeTab}` }
+              : {})}
+          >
             {selectedAgentId ? (
               <HubAgentDetail />
             ) : activeTab === "agents" ? (

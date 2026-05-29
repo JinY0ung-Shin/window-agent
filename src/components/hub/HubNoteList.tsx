@@ -9,11 +9,19 @@ import type { SharedNote } from "../../services/commands/hubCommands";
 function NoteCard({ note }: { note: SharedNote }) {
   const { t } = useTranslation("hub");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const userId = useHubStore((s) => s.userId);
   const loggedIn = useHubStore((s) => s.loggedIn);
   const deleteSharedNote = useHubStore((s) => s.deleteSharedNote);
   const isOwner = userId === note.user_id;
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const ok = await deleteSharedNote(note.id);
+    setDeleting(false);
+    if (ok) setConfirmDelete(false);
+  };
 
   return (
     <div className="hub-card">
@@ -27,10 +35,13 @@ function NoteCard({ note }: { note: SharedNote }) {
           {loggedIn && (
             <div className="hub-install-wrapper">
               <button
-
+                type="button"
                 className="hub-card-install"
                 onClick={() => setShowInstall(!showInstall)}
                 title={t("install.button")}
+                aria-label={t("install.button")}
+                aria-haspopup="menu"
+                aria-expanded={showInstall}
               >
                 <Download size={14} />
               </button>
@@ -39,7 +50,6 @@ function NoteCard({ note }: { note: SharedNote }) {
                   type="note"
                   note={note}
                   onClose={() => setShowInstall(false)}
-
                 />
               )}
             </div>
@@ -50,22 +60,26 @@ function NoteCard({ note }: { note: SharedNote }) {
                 <div className="hub-delete-confirm">
                   <button
                     className="btn-danger-sm"
-                    onClick={() => deleteSharedNote(note.id)}
+                    onClick={handleDelete}
+                    disabled={deleting}
                   >
                     {t("delete.confirm")}
                   </button>
                   <button
                     className="btn-secondary-sm"
                     onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
                   >
                     {t("delete.cancel")}
                   </button>
                 </div>
               ) : (
                 <button
+                  type="button"
                   className="hub-card-delete"
                   onClick={() => setConfirmDelete(true)}
                   title={t("delete.note")}
+                  aria-label={t("delete.note")}
                 >
                   <Trash2 size={14} />
                 </button>

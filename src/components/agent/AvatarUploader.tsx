@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Camera, Bot } from "lucide-react";
 import { logger } from "../../services/logger";
 
@@ -36,37 +37,46 @@ function resizeImage(file: File, maxSize: number): Promise<string> {
 }
 
 export default function AvatarUploader({ avatar, onChange, size = 80 }: AvatarUploaderProps) {
+  const { t } = useTranslation("agent");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState("");
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setError("");
     try {
       const base64 = await resizeImage(file, 128);
       onChange(base64);
     } catch (err) {
       logger.error("Failed to resize image:", err);
+      setError(t("avatar.error"));
     }
     // Reset input so same file can be selected again
     e.target.value = "";
   };
 
   return (
-    <div
-      className="avatar-uploader"
-      style={{ width: size, height: size }}
-      onClick={() => inputRef.current?.click()}
-    >
-      {avatar ? (
-        <img src={avatar} alt="Avatar" className="avatar-uploader-img" />
-      ) : (
-        <div className="avatar-uploader-placeholder">
-          <Bot size={size * 0.4} />
+    <div className="avatar-uploader-wrapper">
+      <button
+        type="button"
+        className="avatar-uploader"
+        style={{ width: size, height: size }}
+        onClick={() => inputRef.current?.click()}
+        aria-label={t("avatar.upload")}
+        title={t("avatar.upload")}
+      >
+        {avatar ? (
+          <img src={avatar} alt={t("avatar.alt")} className="avatar-uploader-img" />
+        ) : (
+          <div className="avatar-uploader-placeholder">
+            <Bot size={size * 0.4} />
+          </div>
+        )}
+        <div className="avatar-uploader-overlay">
+          <Camera size={20} />
         </div>
-      )}
-      <div className="avatar-uploader-overlay">
-        <Camera size={20} />
-      </div>
+      </button>
       <input
         ref={inputRef}
         type="file"
@@ -74,6 +84,7 @@ export default function AvatarUploader({ avatar, onChange, size = 80 }: AvatarUp
         onChange={handleFileChange}
         style={{ display: "none" }}
       />
+      {error && <span className="form-text text-error">{error}</span>}
     </div>
   );
 }

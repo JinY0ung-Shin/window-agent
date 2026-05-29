@@ -22,6 +22,7 @@ interface Props {
 
 export default function AgentPersonaEditor({ personaFiles, personaTab, onFileChange }: Props) {
   const { t } = useTranslation("glossary");
+  const ta = useTranslation("agent").t;
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const { compositionProps } = useCompositionInput((v) => onFileChange(personaTab, v));
   const placeholders: Record<string, string> = {
@@ -30,12 +31,19 @@ export default function AgentPersonaEditor({ personaFiles, personaTab, onFileCha
     user: t("personaUserPlaceholder", { context: uiTheme }),
     agents: t("personaAgentsPlaceholder", { context: uiTheme }),
   };
+  const tabLabels: Record<string, string> = {
+    identity: t("personaIdentity", { context: uiTheme }),
+    soul: t("personaSoul", { context: uiTheme }),
+    user: t("personaUser", { context: uiTheme }),
+    agents: t("personaAgents", { context: uiTheme }),
+  };
 
   return (
     <textarea
       className="persona-editor"
       value={personaFiles?.[personaTab] ?? ""}
       placeholder={placeholders[personaTab] ?? ""}
+      aria-label={ta("persona.editorAriaLabel", { tab: tabLabels[personaTab] ?? personaTab })}
       spellCheck={false}
       {...compositionProps}
     />

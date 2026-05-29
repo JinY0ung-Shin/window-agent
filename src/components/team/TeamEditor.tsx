@@ -23,6 +23,7 @@ export default function TeamEditor() {
   const [leaderId, setLeaderId] = useState("");
   const [memberIds, setMemberIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [detail, setDetail] = useState<TeamDetail | null>(null);
 
   const isEditing = !!editingTeamId;
@@ -65,6 +66,7 @@ export default function TeamEditor() {
   const handleSave = async () => {
     if (!name.trim() || !leaderId) return;
     setSaving(true);
+    setSaveError(null);
 
     try {
       if (isEditing && editingTeamId) {
@@ -105,6 +107,7 @@ export default function TeamEditor() {
       closeTeamEditor();
     } catch (e) {
       logger.error("Failed to save team:", e);
+      setSaveError(t("saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -119,6 +122,7 @@ export default function TeamEditor() {
       title={isEditing ? t("editTeam") : t("createTeam")}
       overlayClose="currentTarget"
       contentClassName="team-editor-modal"
+      error={saveError}
       footer={
         <>
           <button className="btn-secondary" onClick={closeTeamEditor}>
@@ -186,7 +190,7 @@ export default function TeamEditor() {
             <label>{t("members")}</label>
             <div className="team-member-list">
               {memberCandidates.length === 0 ? (
-                <p className="form-text">{t("selectLeader")}</p>
+                <p className="form-text">{t("noMemberCandidates")}</p>
               ) : (
                 memberCandidates.map((agent) => (
                   <label key={agent.id} className="team-member-checkbox">

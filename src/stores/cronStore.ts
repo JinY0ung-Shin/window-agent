@@ -8,9 +8,11 @@ import type {
 } from "../services/types";
 import * as cronCmds from "../services/commands/cronCommands";
 import { logger } from "../services/logger";
+import { toErrorMessage } from "../utils/errorUtils";
 
 interface CronState {
   jobs: CronJob[];
+  jobsError: string | null;
   selectedJobId: string | null;
   isEditorOpen: boolean;
   editingJobId: string | null;
@@ -31,6 +33,7 @@ interface CronState {
 
 export const useCronStore = create<CronState>((set, get) => ({
   jobs: [],
+  jobsError: null,
   selectedJobId: null,
   isEditorOpen: false,
   editingJobId: null,
@@ -39,20 +42,20 @@ export const useCronStore = create<CronState>((set, get) => ({
   loadJobs: async () => {
     try {
       const jobs = await cronCmds.listCronJobs();
-      set({ jobs });
+      set({ jobs, jobsError: null });
     } catch (e) {
       logger.error("Failed to load cron jobs:", e);
-      set({ jobs: [] });
+      set({ jobs: [], jobsError: toErrorMessage(e) });
     }
   },
 
   loadJobsForAgent: async (agentId) => {
     try {
       const jobs = await cronCmds.listCronJobsForAgent(agentId);
-      set({ jobs });
+      set({ jobs, jobsError: null });
     } catch (e) {
       logger.error("Failed to load cron jobs for agent:", e);
-      set({ jobs: [] });
+      set({ jobs: [], jobsError: toErrorMessage(e) });
     }
   },
 
@@ -77,6 +80,7 @@ export const useCronStore = create<CronState>((set, get) => ({
       await get().loadJobs();
     } catch (e) {
       logger.error("Failed to delete cron job:", e);
+      throw e;
     }
   },
 
@@ -85,6 +89,8 @@ export const useCronStore = create<CronState>((set, get) => ({
       await cronCmds.toggleCronJob(id, enabled);
       await get().loadJobs();
     } catch (e) {
+      // Swallow: loadJobs() re-fetches authoritative state so the toggle visibly
+      // reverts on failure. (Kept graceful — callers rely on no-throw here.)
       logger.error("Failed to toggle cron job:", e);
     }
   },

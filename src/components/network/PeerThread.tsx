@@ -16,6 +16,7 @@ export default function PeerThread() {
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const contacts = useNetworkStore((s) => s.contacts);
   const connectedPeers = useNetworkStore((s) => s.connectedPeers);
+  const generatingThreads = useNetworkStore((s) => s.generatingThreads);
   const clearThreadMessages = useNetworkStore((s) => s.clearThreadMessages);
   const clearMyChatMessages = useNetworkStore((s) => s.clearMyChatMessages);
 
@@ -24,6 +25,7 @@ export default function PeerThread() {
 
   const contact = contacts.find((c) => c.id === selectedContactId);
   const isOnline = contact ? connectedPeers.has(contact.peer_id) : false;
+  const isResponding = selectedThreadId ? generatingThreads.has(selectedThreadId) : false;
 
   // "My chat" = messages I sent manually + responses to those messages
   const myMessages = useMemo(() => {
@@ -81,26 +83,43 @@ export default function PeerThread() {
               className="icon-btn"
               onClick={() => clearMyChatMessages(selectedThreadId)}
               title={t("peer.newConversation")}
+              aria-label={t("peer.newConversation")}
             >
               <SquarePen size={16} />
             </button>
           )}
           {selectedThreadId && (
-            <button
-              className={`icon-btn${confirmClear ? " confirm" : ""}`}
-              onClick={() => {
-                if (confirmClear) {
-                  clearThreadMessages(selectedThreadId);
-                  setConfirmClear(false);
-                } else {
-                  setConfirmClear(true);
-                  setTimeout(() => setConfirmClear(false), 3000);
-                }
-              }}
-              title={confirmClear ? t("common:confirm") : t("peer.clearHistory")}
-            >
-              <Trash2 size={16} />
-            </button>
+            confirmClear ? (
+              <div className="confirm-delete-row peer-thread-confirm-clear">
+                <span>{t("peer.clearHistoryConfirm")}</span>
+                <button
+                  type="button"
+                  className="btn-danger"
+                  onClick={() => {
+                    clearThreadMessages(selectedThreadId);
+                    setConfirmClear(false);
+                  }}
+                >
+                  {t("common:delete")}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setConfirmClear(false)}
+                >
+                  {t("common:cancel")}
+                </button>
+              </div>
+            ) : (
+              <button
+                className="icon-btn"
+                onClick={() => setConfirmClear(true)}
+                title={t("peer.clearHistory")}
+                aria-label={t("peer.clearHistory")}
+              >
+                <Trash2 size={16} />
+              </button>
+            )
           )}
         </div>
       </DraggableHeader>
@@ -138,6 +157,14 @@ export default function PeerThread() {
           </div>
         ) : (
           displayMessages.map((msg) => <PeerMessageBubble key={msg.id} msg={msg} />)
+        )}
+        {isResponding && (
+          <div className="peer-thread-responding" aria-live="polite">
+            <span className="peer-thread-responding-dots">
+              <span /><span /><span />
+            </span>
+            {t("peer.responding")}
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import ToggleSwitch from "../common/ToggleSwitch";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { Locale } from "../../i18n";
 import { SUPPORTED_LOCALES } from "../../i18n";
@@ -23,8 +24,7 @@ export default function GeneralSettingsPanel() {
     getShellInfo().then(setShellInfo).catch(() => {});
   }, []);
 
-  const handleNotifToggle = async () => {
-    const next = !notifEnabled;
+  const handleNotifToggle = async (next: boolean) => {
     setNotifEnabled(next);
     setNotificationsEnabled(next);
     if (next) {
@@ -53,18 +53,17 @@ export default function GeneralSettingsPanel() {
       </div>
 
       <div className="form-group">
-        <label className="toggle-row">
-          <span>{t("notification:settings.label")}</span>
-          <input
-            type="checkbox"
-            className="toggle-switch"
+        <div className="toggle-row">
+          <span id="notif-toggle-label">{t("notification:settings.label")}</span>
+          <ToggleSwitch
             checked={notifEnabled}
             onChange={handleNotifToggle}
+            ariaLabelledby="notif-toggle-label"
           />
-        </label>
+        </div>
         <span className="form-hint">{t("notification:settings.hint")}</span>
         {notifDenied && notifEnabled && (
-          <span className="form-hint" style={{ color: "var(--color-error)" }}>
+          <span className="form-text text-error">
             {t("notification:settings.permissionDenied")}
           </span>
         )}

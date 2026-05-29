@@ -13,6 +13,7 @@
   "none": "(none)",
   "confirm": "Confirm",
   "create": "Create",
+  "retry": "Retry",
   "newConversation": "New Conversation",
   "clearChat": "Clear Chat",
   "defaultConversationTitle": "New Conversation",
@@ -38,6 +39,19 @@
     "parseError": "Unable to process response.",
     "emptyResponse": "Empty response received.",
     "network": "Please check your network connection.",
-    "settingsSaveFailed": "Failed to save settings: {{error}}"
+    "settingsSaveFailed": "Failed to save settings: {{error}}",
+    "actionFailed": "The action could not be completed.",
+    "saveFailed": "Failed to save.",
+    "deleteFailed": "Failed to delete.",
+    "loadFailed": "Failed to load.",
+    "sendFailed": "Failed to send.",
+    "boundaryTitle": "Something went wrong",
+    "boundaryDetail": "An unexpected error occurred. Please try again.",
+    "boundaryDetailsSummary": "Error details"
+  },
+  "debug": {
+    "url": "URL",
+    "input": "Input",
+    "output": "Output"
   }
 }

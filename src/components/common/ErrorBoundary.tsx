@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
+import { i18n } from "../../i18n";
 
 interface Props {
   children: ReactNode;
@@ -31,11 +32,17 @@ export default class ErrorBoundary extends Component<Props, State> {
       return (
         <div className={`error-boundary-fallback ${this.props.fallbackClassName ?? ""}`}>
           <AlertCircle size={36} strokeWidth={1.5} />
-          <p className="error-boundary-title">Something went wrong</p>
-          <p className="error-boundary-detail">{this.state.error?.message}</p>
+          <p className="error-boundary-title">{i18n.t("common:errors.boundaryTitle")}</p>
+          <p className="error-boundary-detail">{i18n.t("common:errors.boundaryDetail")}</p>
+          {this.state.error?.message && (
+            <details className="error-boundary-details">
+              <summary>{i18n.t("common:errors.boundaryDetailsSummary")}</summary>
+              <pre>{this.state.error.message}</pre>
+            </details>
+          )}
           <button className="btn-primary error-boundary-retry" onClick={this.handleReset}>
             <RefreshCw size={14} />
-            Retry
+            {i18n.t("common:retry")}
           </button>
         </div>
       );

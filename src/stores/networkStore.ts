@@ -85,6 +85,8 @@ interface NetworkState {
   loadThreads: (contactId: string) => Promise<void>;
   loadMessages: (threadId: string) => Promise<void>;
   sendMessage: (contactId: string, content: string, targetAgentId?: string) => Promise<void>;
+  resendMessage: (contactId: string, content: string, targetAgentId?: string | null) => Promise<void>;
+  clearError: () => void;
   approveContact: (contactId: string) => Promise<void>;
   rejectContact: (contactId: string) => Promise<void>;
   searchDirectory: (query: string) => Promise<void>;
@@ -287,6 +289,12 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
       }
     }
   },
+
+  resendMessage: async (contactId, content, targetAgentId) => {
+    await get().sendMessage(contactId, content, targetAgentId ?? undefined);
+  },
+
+  clearError: () => set({ error: null }),
 
   approveContact: async (contactId) => {
     await relayApproveContact(contactId);

@@ -314,7 +314,7 @@ export default function PluginsSection({ isOpen }: Props) {
           )}
           {result.errors.length > 0 && (
             <span className="plugins-result-err">
-              <AlertTriangle size={14} /> {result.errors.join(", ")}
+              <AlertTriangle size={14} /> {t("plugins.applyErrors")}: {result.errors.join(", ")}
             </span>
           )}
         </div>

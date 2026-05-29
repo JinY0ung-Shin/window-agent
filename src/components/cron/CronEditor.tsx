@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { Loader2 } from "lucide-react";
 import Modal from "../common/Modal";
+import ToggleSwitch from "../common/ToggleSwitch";
 import { useCronStore } from "../../stores/cronStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useLoadOnOpen } from "../../hooks/useLoadOnOpen";
@@ -40,7 +42,10 @@ export default function CronEditor() {
   const isEditing = !!editingJobId;
 
   const loadJob = useCallback(() => getCronJob(editingJobId!), [editingJobId]);
-  const { data: loadedJob } = useLoadOnOpen(loadJob, !!editingJobId);
+  const { data: loadedJob, loading: loadingJob, error: loadError } = useLoadOnOpen(
+    loadJob,
+    !!editingJobId,
+  );
 
   useEffect(() => {
     if (!loadedJob) return;
@@ -161,22 +166,28 @@ export default function CronEditor() {
       title={isEditing ? t("editJob") : t("createJob")}
       overlayClose="currentTarget"
       contentClassName="cron-editor-modal"
-      error={saveError}
+      error={saveError ?? loadError ?? null}
       footer={
         <>
-          <button className="btn-secondary" onClick={closeEditor}>
+          <button className="btn-secondary" onClick={closeEditor} disabled={saving}>
             {t("cancel")}
           </button>
           <button
             className="btn-primary"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || loadingJob}
           >
-            {t("save")}
+            {saving && <Loader2 size={14} className="spinning" />}
+            {saving ? t("common:saving") : t("save")}
           </button>
         </>
       }
     >
+      {loadingJob ? (
+        <div className="modal-body cron-editor-loading">
+          <Loader2 size={24} className="spinning" />
+        </div>
+      ) : (
       <div className="modal-body">
         <div className="form-group">
           <label htmlFor="cronName">{t("jobName")}</label>
@@ -222,6 +233,7 @@ export default function CronEditor() {
         <div className="form-group">
           <label>{t("scheduleType")}</label>
           <select
+            aria-label={t("scheduleType")}
             value={scheduleType}
             onChange={(e) => setScheduleType(e.target.value as CronScheduleType)}
           >
@@ -236,6 +248,7 @@ export default function CronEditor() {
           {scheduleType === "at" && (
             <input
               type="datetime-local"
+              aria-label={t("scheduleValue")}
               value={atValue}
               onChange={(e) => setAtValue(e.target.value)}
             />
@@ -246,12 +259,17 @@ export default function CronEditor() {
                 <input
                   type="number"
                   min="1"
+                  aria-label={t("scheduleValue")}
                   value={everyAmount}
                   onChange={(e) => setEveryAmount(e.target.value)}
                 />
               </div>
               <div className="form-group">
-                <select value={everyUnit} onChange={(e) => setEveryUnit(e.target.value)}>
+                <select
+                  aria-label={t("scheduleType")}
+                  value={everyUnit}
+                  onChange={(e) => setEveryUnit(e.target.value)}
+                >
                   {INTERVAL_UNITS.map((u) => (
                     <option key={u.key} value={u.key}>
                       {t(`units.${u.key}`)}
@@ -264,6 +282,7 @@ export default function CronEditor() {
           {scheduleType === "cron" && (
             <input
               type="text"
+              aria-label={t("scheduleValue")}
               placeholder={t("cronPlaceholder")}
               value={cronExpr}
               onChange={(e) => setCronExpr(e.target.value)}
@@ -285,13 +304,15 @@ export default function CronEditor() {
         </div>
 
         <div className="cron-toggle-group">
-          <span className="cron-toggle-label">{t("enabled")}</span>
-          <button
-            className={`cron-toggle-switch${enabled ? " active" : ""}`}
-            onClick={() => setEnabled(!enabled)}
+          <span className="cron-toggle-label" id="cronEnabledLabel">{t("enabled")}</span>
+          <ToggleSwitch
+            checked={enabled}
+            onChange={setEnabled}
+            ariaLabelledby="cronEnabledLabel"
           />
         </div>
       </div>
+      )}
     </Modal>
   );
 }

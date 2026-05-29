@@ -41,6 +41,7 @@ const ApiServerSection = forwardRef<ApiServerSectionRef, Props>(
     const [healthResult, setHealthResult] = useState<ApiHealthCheckResponse | null>(null);
     const [healthError, setHealthError] = useState("");
     const [noProxyEnabled, setNoProxyEnabled] = useState(false);
+    const [noProxyError, setNoProxyError] = useState("");
     const [tempRelayUrl, setTempRelayUrl] = useState("");
 
     const fetchModels = async () => {
@@ -170,14 +171,22 @@ const ApiServerSection = forwardRef<ApiServerSectionRef, Props>(
                 onChange={async (e) => {
                   const val = e.target.checked;
                   setNoProxyEnabled(val);
+                  setNoProxyError("");
                   try {
                     await setNoProxy(val);
-                  } catch (e) { logger.debug("Failed to set proxy bypass", e); }
+                  } catch (err) {
+                    logger.debug("Failed to set proxy bypass", err);
+                    setNoProxyEnabled(!val);
+                    setNoProxyError(t("general.proxyBypassFailed"));
+                  }
                 }}
               />
               {t("general.proxyBypass")}
             </label>
           </div>
+          {noProxyError && (
+            <p className="form-text text-error">{noProxyError}</p>
+          )}
         </div>
 
         <div className="form-group">

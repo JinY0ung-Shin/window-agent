@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Pencil, Trash2, ExternalLink } from "lucide-react";
 import type { VaultNote } from "../../services/vaultTypes";
@@ -10,7 +10,7 @@ import BacklinksSection from "./BacklinksSection";
 interface NoteDetailPaneProps {
   note: VaultNote;
   onEdit: () => void;
-  onDelete: () => void;
+  onDelete: () => Promise<boolean>;
   onTagClick?: (tag: string) => void;
   onWikilinkClick?: (target: string) => void;
   onNavigate?: (noteId: string) => void;
@@ -28,7 +28,16 @@ export default function NoteDetailPane({
 }: NoteDetailPaneProps) {
   const { t } = useTranslation("vault");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(false);
   const allNotes = useVaultStore((s) => s.notes);
+
+  // Reset the delete-confirm row when switching to a different note
+  useEffect(() => {
+    setConfirmDelete(false);
+    setDeleting(false);
+    setDeleteError(false);
+  }, [note.id]);
 
   const handleWikilinkClick = (target: string) => {
     onWikilinkClick?.(target);
@@ -36,6 +45,24 @@ export default function NoteDetailPane({
 
   const handleNavigate = (noteId: string) => {
     onNavigate?.(noteId);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteError(false);
+    const ok = await onDelete();
+    if (ok) {
+      setConfirmDelete(false);
+    } else {
+      setDeleteError(true);
+    }
+    setDeleting(false);
+  };
+
+  const handleCancelDelete = () => {
+    setConfirmDelete(false);
+    setDeleteError(false);
   };
 
   return (
@@ -65,20 +92,27 @@ export default function NoteDetailPane({
             {t("detail.delete")}
           </button>
         ) : (
-          <div className="vault-delete-confirm">
-            <span>{t("detail.confirmDelete")}</span>
+          <div className="vault-delete-confirm" role={deleteError ? "alert" : undefined}>
+            <span className={deleteError ? "vault-delete-error" : undefined}>
+              {deleteError
+                ? t("common:errors.deleteFailed")
+                : t("detail.confirmDelete")}
+            </span>
             <button
               className="vault-action-btn vault-action-danger"
-              onClick={() => {
-                onDelete();
-                setConfirmDelete(false);
-              }}
+              onClick={handleConfirmDelete}
+              disabled={deleting}
             >
-              {t("detail.confirm")}
+              {deleting
+                ? t("detail.deleting")
+                : deleteError
+                  ? t("common:retry")
+                  : t("detail.confirm")}
             </button>
             <button
               className="vault-action-btn"
-              onClick={() => setConfirmDelete(false)}
+              onClick={handleCancelDelete}
+              disabled={deleting}
             >
               {t("common:cancel")}
             </button>

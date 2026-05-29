@@ -59,8 +59,9 @@ export default function HubAuthForm() {
 
       <div className="hub-auth-fields">
         <div className="form-group">
-          <label>{t("auth.email")}</label>
+          <label htmlFor="hub-auth-email">{t("auth.email")}</label>
           <input
+            id="hub-auth-email"
             type="email"
             value={email}
             placeholder={t("auth.emailPlaceholder")}
@@ -70,8 +71,9 @@ export default function HubAuthForm() {
           />
         </div>
         <div className="form-group">
-          <label>{t("auth.password")}</label>
+          <label htmlFor="hub-auth-password">{t("auth.password")}</label>
           <input
+            id="hub-auth-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -82,8 +84,9 @@ export default function HubAuthForm() {
         </div>
         {isRegister && (
           <div className="form-group">
-            <label>{t("auth.displayName")}</label>
+            <label htmlFor="hub-auth-displayname">{t("auth.displayName")}</label>
             <input
+              id="hub-auth-displayname"
               type="text"
               value={displayName}
               placeholder={t("auth.displayNamePlaceholder")}

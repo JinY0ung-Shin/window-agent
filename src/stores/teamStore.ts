@@ -75,6 +75,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       await get().loadTeams();
     } catch (e) {
       logger.error("Failed to delete team:", e);
+      throw e;
     }
   },
 

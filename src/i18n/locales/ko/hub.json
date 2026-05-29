@@ -66,6 +66,7 @@
     "step_skills": "스킬 선택",
     "step_notes": "노트 선택",
     "name": "이름",
+    "name_required": "공유하려면 이름을 입력하세요",
     "description": "설명",
     "select_all": "전체 선택",
     "deselect_all": "전체 해제",

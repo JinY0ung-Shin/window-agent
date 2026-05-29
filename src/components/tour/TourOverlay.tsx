@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
 import { useTourStore, TOUR_STEPS } from "../../stores/tourStore";
 import { useNavigationStore } from "../../stores/navigationStore";
@@ -24,8 +24,12 @@ export default function TourOverlay() {
   const advanceStep = useTourStore((s) => s.advanceStep);
   const skipTour = useTourStore((s) => s.skipTour);
   const [rect, setRect] = useState<SpotlightRect | null>(null);
+  // When a target never mounts, fall back to a centered tooltip with no spotlight
+  // so no step is silently dropped.
+  const [centered, setCentered] = useState(false);
   const cancelRef = useRef(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const skipBtnRef = useRef<HTMLButtonElement>(null);
   const nextBtnRef = useRef<HTMLButtonElement>(null);
 
   // Auto-start tour when pending and not completed
@@ -38,17 +42,34 @@ export default function TourOverlay() {
 
   // Focus next button when tooltip appears
   useEffect(() => {
-    if (rect && nextBtnRef.current) {
+    if ((rect || centered) && nextBtnRef.current) {
       nextBtnRef.current.focus();
     }
-  }, [rect, currentStepIndex]);
+  }, [rect, centered, currentStepIndex]);
 
-  // Keyboard handling
+  // Keyboard handling + focus trap (the tooltip is role=dialog aria-modal,
+  // so Tab must cycle between the Skip and Next buttons, never escaping
+  // into the app behind the dim backdrop).
   useEffect(() => {
     if (!tourActive) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         skipTour();
+      } else if (e.key === "Tab") {
+        const first = skipBtnRef.current;
+        const last = nextBtnRef.current;
+        if (!first || !last) return;
+        if (e.shiftKey) {
+          if (document.activeElement === first || !tooltipRef.current?.contains(document.activeElement)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || !tooltipRef.current?.contains(document.activeElement)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       } else if (e.key === "Enter" || e.key === " ") {
         // Only if focus is on the overlay (not on app controls)
         if ((e.target as HTMLElement)?.closest(".tour-tooltip")) {
@@ -103,21 +124,23 @@ export default function TourOverlay() {
       if (retries > 0) {
         requestAnimationFrame(() => findElement(retries - 1));
       } else if (!myCancelRef.cancelled) {
-        // Element not found — skip this step gracefully
+        // Element never mounted — fall back to a centered tooltip (no spotlight)
+        // so the step is shown instead of being silently dropped.
         setRect(null);
-        advanceStep();
+        setCentered(true);
       }
     };
 
     // Reset rect and find after a short delay for navigation to settle
     setRect(null);
+    setCentered(false);
     const timeoutId = setTimeout(() => findElement(20), 100);
 
     return () => {
       myCancelRef.cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [tourActive, currentStepIndex, advanceStep]);
+  }, [tourActive, currentStepIndex]);
 
   useEffect(() => {
     const cleanup = locateTarget();
@@ -132,7 +155,7 @@ export default function TourOverlay() {
     return () => window.removeEventListener("resize", handleResize);
   }, [tourActive, locateTarget]);
 
-  if (!tourActive || !rect) return null;
+  if (!tourActive || (!rect && !centered)) return null;
 
   const step = TOUR_STEPS[currentStepIndex];
   if (!step) return null;
@@ -141,50 +164,69 @@ export default function TourOverlay() {
   const tooltipWidth = 280;
   const tooltipEstimatedHeight = 160;
 
-  // Position tooltip: below if space, otherwise above
-  const spaceBelow = window.innerHeight - (rect.top + rect.height + padding);
-  const placeAbove = spaceBelow < tooltipEstimatedHeight + 24;
-  const tooltipTop = placeAbove
-    ? Math.max(12, rect.top - padding - tooltipEstimatedHeight - 12)
-    : rect.top + rect.height + padding + 12;
-  const tooltipLeft = Math.max(12, Math.min(rect.left, window.innerWidth - tooltipWidth - 12));
+  // Position tooltip: anchored to the target if measured, otherwise centered
+  // (fallback when the target never mounted) so no step is silently dropped.
+  let tooltipStyle: CSSProperties;
+  if (rect) {
+    const spaceBelow = window.innerHeight - (rect.top + rect.height + padding);
+    const placeAbove = spaceBelow < tooltipEstimatedHeight + 24;
+    const tooltipTop = placeAbove
+      ? Math.max(12, rect.top - padding - tooltipEstimatedHeight - 12)
+      : rect.top + rect.height + padding + 12;
+    const tooltipLeft = Math.max(12, Math.min(rect.left, window.innerWidth - tooltipWidth - 12));
+    tooltipStyle = { top: tooltipTop, left: tooltipLeft, maxWidth: tooltipWidth };
+  } else {
+    tooltipStyle = {
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      maxWidth: tooltipWidth,
+    };
+  }
 
   return (
     <div className="tour-overlay" role="dialog" aria-modal="true" aria-label={t(step.titleKey)}>
-      {/* Dim background with cutout */}
-      <svg className="tour-backdrop" width="100%" height="100%">
-        <defs>
-          <mask id="tour-mask">
-            <rect width="100%" height="100%" fill="white" />
-            <rect
-              x={rect.left - padding}
-              y={rect.top - padding}
-              width={rect.width + padding * 2}
-              height={rect.height + padding * 2}
-              rx="8"
-              fill="black"
-            />
-          </mask>
-        </defs>
-        <rect width="100%" height="100%" fill="rgba(0,0,0,0.5)" mask="url(#tour-mask)" />
-      </svg>
+      {/* Dim background with cutout (only when a target is spotlighted) */}
+      {rect && (
+        <svg className="tour-backdrop" width="100%" height="100%">
+          <defs>
+            <mask id="tour-mask">
+              <rect width="100%" height="100%" fill="white" />
+              <rect
+                x={rect.left - padding}
+                y={rect.top - padding}
+                width={rect.width + padding * 2}
+                height={rect.height + padding * 2}
+                rx="8"
+                fill="black"
+              />
+            </mask>
+          </defs>
+          <rect width="100%" height="100%" fill="rgba(0,0,0,0.5)" mask="url(#tour-mask)" />
+        </svg>
+      )}
+
+      {/* Plain dim backdrop for the centered fallback (no spotlight) */}
+      {!rect && centered && <div className="tour-backdrop tour-backdrop-plain" />}
 
       {/* Spotlight border */}
-      <div
-        className="tour-spotlight"
-        style={{
-          top: rect.top - padding,
-          left: rect.left - padding,
-          width: rect.width + padding * 2,
-          height: rect.height + padding * 2,
-        }}
-      />
+      {rect && (
+        <div
+          className="tour-spotlight"
+          style={{
+            top: rect.top - padding,
+            left: rect.left - padding,
+            width: rect.width + padding * 2,
+            height: rect.height + padding * 2,
+          }}
+        />
+      )}
 
       {/* Tooltip */}
       <div
         ref={tooltipRef}
         className="tour-tooltip"
-        style={{ top: tooltipTop, left: tooltipLeft, maxWidth: tooltipWidth }}
+        style={tooltipStyle}
       >
         <div className="tour-tooltip-step">
           {currentStepIndex + 1} / {TOUR_STEPS.length}
@@ -192,7 +234,7 @@ export default function TourOverlay() {
         <h3 className="tour-tooltip-title">{t(step.titleKey)}</h3>
         <p className="tour-tooltip-desc">{t(step.descKey)}</p>
         <div className="tour-tooltip-actions">
-          <button className="tour-skip-btn" onClick={skipTour}>
+          <button ref={skipBtnRef} className="tour-skip-btn" onClick={skipTour}>
             {t("tour.skipButton")}
           </button>
           <button ref={nextBtnRef} className="tour-next-btn" onClick={advanceStep}>

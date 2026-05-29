@@ -17,8 +17,35 @@
     "noAgents": "에이전트를 먼저 생성하세요.",
     "skill": "스킬",
     "apply": "변경 적용",
+    "applyErrors": "적용 오류",
     "installed": "{{count}}개 설치 완료",
     "removed": "{{count}}개 제거 완료"
+  },
+  "relayTools": {
+    "unsaved": "변경사항이 저장되지 않았습니다. 저장 버튼을 눌러 적용하세요.",
+    "names": {
+      "read_file": "파일 읽기",
+      "list_directory": "디렉터리 목록",
+      "write_file": "파일 쓰기",
+      "delete_file": "파일 삭제",
+      "web_search": "웹 검색",
+      "self_inspect": "자체 점검",
+      "manage_schedule": "일정 관리"
+    }
+  },
+  "proxy": {
+    "saveFailed": "프록시 설정 저장 실패: {{detail}}"
+  },
+  "relay": {
+    "urlSaveFailed": "서버 URL 저장 실패: {{detail}}"
+  },
+  "export": {
+    "exportSuccess": "내보내기가 완료되어 파일이 다운로드되었습니다.",
+    "importConfirm": "\"{{file}}\"을(를) 가져오시겠습니까? 기존 데이터가 변경될 수 있습니다.",
+    "importing": "가져오는 중..."
+  },
+  "credentials": {
+    "requiredHint": "이름, ID, 값을 모두 입력해야 저장할 수 있습니다."
   },
   "sections": {
     "apiServer": "API 서버",
@@ -38,6 +65,7 @@
     "baseUrlLabel": "Base URL (선택사항, vLLM / Local AI 등)",
     "baseUrlDefault": "{{url}} (기본값)",
     "proxyBypass": "프록시 우회 (Squid 등 프록시가 API 요청을 차단하는 경우)",
+    "proxyBypassFailed": "프록시 우회 설정을 변경하지 못했습니다.",
     "browserHeadlessLabel": "브라우저 Headless 모드",
     "browserHeadlessHint": "활성화하면 브라우저 창 없이 백그라운드에서 실행됩니다. 다음 브라우저 세션부터 적용됩니다.",
     "browserProxyLabel": "브라우저 프록시 서버",

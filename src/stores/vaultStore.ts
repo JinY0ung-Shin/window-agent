@@ -20,6 +20,7 @@ interface VaultState {
   notesStatus: NotesStatus;
   graph: GraphData | null;
   selectedNote: VaultNote | null;
+  noteLoadError: string | null;
   searchResults: SearchResult[];
   conflicts: ConflictInfo[];
 
@@ -59,6 +60,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   notesStatus: "idle",
   graph: null,
   selectedNote: null,
+  noteLoadError: null,
   searchResults: [],
   conflicts: [],
 
@@ -138,14 +140,14 @@ export const useVaultStore = create<VaultState>((set, get) => ({
   selectNote: async (noteId) => {
     try {
       const note = await vault.vaultReadNote(noteId);
-      set({ selectedNote: note });
+      set({ selectedNote: note, noteLoadError: null });
     } catch (e) {
       logger.debug(`Vault note ${noteId} read failed`, e);
-      set({ selectedNote: null });
+      set({ selectedNote: null, noteLoadError: noteId });
     }
   },
 
-  clearSelection: () => set({ selectedNote: null }),
+  clearSelection: () => set({ selectedNote: null, noteLoadError: null }),
 
   openInObsidian: async () => {
     await vault.vaultOpenInObsidian();
@@ -187,6 +189,7 @@ export const useVaultStore = create<VaultState>((set, get) => ({
       notesStatus: "idle",
       graph: null,
       selectedNote: null,
+      noteLoadError: null,
       searchResults: [],
       conflicts: [],
       activeAgent: null,

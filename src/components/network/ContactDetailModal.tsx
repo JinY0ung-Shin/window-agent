@@ -7,6 +7,7 @@ import {
   relayUpdateContact,
   relayRemoveContact,
 } from "../../services/commands/relayCommands";
+import { toErrorMessage } from "../../utils/errorUtils";
 import Modal from "../common/Modal";
 
 interface Props {
@@ -66,6 +67,8 @@ function ContactDetailInner({ contact, isOnline, t, onClose, onDeselect, onRefre
   const isPendingApproval = contact.status === "pending_approval";
   const [displayName, setDisplayName] = useState(contact.display_name);
   const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const publishedAgents: PublishedAgent[] = useMemo(() => {
@@ -83,22 +86,57 @@ function ContactDetailInner({ contact, isOnline, t, onClose, onDeselect, onRefre
 
   const handleSave = async () => {
     setSaving(true);
+    setError(null);
     try {
       await relayUpdateContact(
         contact.id,
         displayName !== contact.display_name ? displayName : undefined,
       );
       await onRefresh();
+    } catch (e) {
+      setError(toErrorMessage(e));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    await relayRemoveContact(contact.id);
-    onDeselect();
-    await onRefresh();
-    onClose();
+    setBusy(true);
+    setError(null);
+    try {
+      await relayRemoveContact(contact.id);
+      onDeselect();
+      await onRefresh();
+      onClose();
+    } catch (e) {
+      setError(toErrorMessage(e));
+      setBusy(false);
+    }
+  };
+
+  const handleApprove = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await approveContact(contact.id);
+      onClose();
+    } catch (e) {
+      setError(toErrorMessage(e));
+      setBusy(false);
+    }
+  };
+
+  const handleReject = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await rejectContact(contact.id);
+      onDeselect();
+      onClose();
+    } catch (e) {
+      setError(toErrorMessage(e));
+      setBusy(false);
+    }
   };
 
   const footer = (
@@ -107,20 +145,22 @@ function ContactDetailInner({ contact, isOnline, t, onClose, onDeselect, onRefre
         <>
           <button
             className="btn-primary"
-            onClick={async () => { await approveContact(contact.id); onClose(); }}
+            onClick={handleApprove}
+            disabled={busy}
           >
             {t("contact.approveContact")}
           </button>
           <button
             className="btn-danger"
-            onClick={async () => { await rejectContact(contact.id); onDeselect(); onClose(); }}
+            onClick={handleReject}
+            disabled={busy}
           >
             {t("contact.rejectContact")}
           </button>
         </>
       )}
       {!isPendingApproval && hasChanges && (
-        <button className="btn-primary" onClick={handleSave} disabled={saving}>
+        <button className="btn-primary" onClick={handleSave} disabled={saving || busy}>
           <Save size={14} />
           {saving ? t("common:saving") : t("common:save")}
         </button>
@@ -130,6 +170,7 @@ function ContactDetailInner({ contact, isOnline, t, onClose, onDeselect, onRefre
           <button
             className="btn-danger"
             onClick={() => setConfirmDelete(true)}
+            disabled={busy}
           >
             <Trash2 size={14} />
             {t("contact.deleteContact")}
@@ -137,8 +178,8 @@ function ContactDetailInner({ contact, isOnline, t, onClose, onDeselect, onRefre
         ) : (
           <div className="confirm-delete-row">
             <span>{t("contact.confirmDeleteMessage")}</span>
-            <button className="btn-danger" onClick={handleDelete}>{t("common:delete")}</button>
-            <button className="btn-secondary" onClick={() => setConfirmDelete(false)}>{t("common:cancel")}</button>
+            <button className="btn-danger" onClick={handleDelete} disabled={busy}>{t("common:delete")}</button>
+            <button className="btn-secondary" onClick={() => setConfirmDelete(false)} disabled={busy}>{t("common:cancel")}</button>
           </div>
         )
       )}
@@ -152,6 +193,7 @@ function ContactDetailInner({ contact, isOnline, t, onClose, onDeselect, onRefre
       overlayClose="currentTarget"
       contentClassName="contact-detail-modal"
       footer={footer}
+      error={error}
     >
       <div className="contact-detail">
         <div className="contact-detail-status-row">

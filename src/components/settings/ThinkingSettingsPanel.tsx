@@ -1,5 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useTranslation } from "react-i18next";
+import ToggleSwitch from "../common/ToggleSwitch";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { DEFAULT_THINKING_BUDGET } from "../../constants";
 
@@ -42,14 +43,13 @@ const ThinkingSettingsPanel = forwardRef<ThinkingSettingsPanelRef, Props>(
       <>
         <div className="form-group">
           <div className="toggle-row">
-            <label htmlFor="thinkingEnabled">{t("thinking.enableLabel")}</label>
-            <button
+            <label id="thinkingEnabled-label" htmlFor="thinkingEnabled">{t("thinking.enableLabel")}</label>
+            <ToggleSwitch
               id="thinkingEnabled"
-              className={`toggle-switch ${tempThinkingEnabled ? "on" : ""}`}
-              onClick={() => setTempThinkingEnabled(!tempThinkingEnabled)}
-            >
-              <span className="toggle-knob" />
-            </button>
+              checked={tempThinkingEnabled}
+              onChange={setTempThinkingEnabled}
+              ariaLabelledby="thinkingEnabled-label"
+            />
           </div>
           <p className="form-text">
             {t("thinking.enableHint")}

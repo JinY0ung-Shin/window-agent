@@ -17,8 +17,35 @@
     "noAgents": "Create an agent first.",
     "skill": "Skill",
     "apply": "Apply Changes",
+    "applyErrors": "Apply errors",
     "installed": "{{count}} installed",
     "removed": "{{count}} removed"
+  },
+  "relayTools": {
+    "unsaved": "You have unsaved changes. Click Save to apply them.",
+    "names": {
+      "read_file": "Read File",
+      "list_directory": "List Directory",
+      "write_file": "Write File",
+      "delete_file": "Delete File",
+      "web_search": "Web Search",
+      "self_inspect": "Self Inspect",
+      "manage_schedule": "Manage Schedule"
+    }
+  },
+  "proxy": {
+    "saveFailed": "Failed to save proxy settings: {{detail}}"
+  },
+  "relay": {
+    "urlSaveFailed": "Failed to save server URL: {{detail}}"
+  },
+  "export": {
+    "exportSuccess": "Export complete — the file has been downloaded.",
+    "importConfirm": "Import \"{{file}}\"? This may modify existing data.",
+    "importing": "Importing..."
+  },
+  "credentials": {
+    "requiredHint": "Name, ID, and value are all required to save."
   },
   "sections": {
     "apiServer": "API Server",
@@ -38,6 +65,7 @@
     "baseUrlLabel": "Base URL (optional, vLLM / Local AI, etc.)",
     "baseUrlDefault": "{{url}} (default)",
     "proxyBypass": "Bypass proxy (if proxies like Squid block API requests)",
+    "proxyBypassFailed": "Failed to change the proxy bypass setting.",
     "browserHeadlessLabel": "Browser Headless Mode",
     "browserHeadlessHint": "When enabled, the browser runs in the background without a visible window. Applies to the next browser session.",
     "browserProxyLabel": "Browser Proxy Server",

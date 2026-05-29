@@ -31,6 +31,8 @@ export default function TeamPanel() {
 
   const [teamDetails, setTeamDetails] = useState<Record<string, TeamDetail>>({});
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const teamConversationsMap = getConversationsByTeam();
 
@@ -62,9 +64,18 @@ export default function TeamPanel() {
     return agents.find((a) => a.id === agentId)?.avatar ?? null;
   };
 
-  const handleDelete = (teamId: string) => {
-    deleteTeam(teamId);
-    setConfirmDeleteId(null);
+  const handleDelete = async (teamId: string) => {
+    setDeletingId(teamId);
+    setDeleteError(null);
+    try {
+      await deleteTeam(teamId);
+      setConfirmDeleteId(null);
+    } catch (e) {
+      logger.error("Failed to delete team:", e);
+      setDeleteError(t("common:errors.deleteFailed"));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
@@ -91,15 +102,24 @@ export default function TeamPanel() {
           <div className="team-grid">
             {teams.map((team) => {
               const detail = teamDetails[team.id];
-              const memberCount = detail?.members.length ?? 0;
+              const memberCount = detail?.members.length;
               const leaderAvatar = getAgentAvatar(team.leader_agent_id);
+
+              const openChat = () => openTeamChat(team.id, team.leader_agent_id);
 
               return (
                 <div
                   key={team.id}
                   className="team-card"
-                  onClick={() => {
-                    openTeamChat(team.id, team.leader_agent_id);
+                  role="button"
+                  tabIndex={0}
+                  aria-label={t("openTeamChat", { name: team.name })}
+                  onClick={openChat}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openChat();
+                    }
                   }}
                 >
                   <div className="team-card-header">
@@ -110,12 +130,18 @@ export default function TeamPanel() {
                           <button
                             className="btn-danger-sm"
                             onClick={() => handleDelete(team.id)}
+                            disabled={deletingId === team.id}
+                            aria-label={t("deleteTeamNamed", { name: team.name })}
                           >
-                            {t("common:delete")}
+                            {deletingId === team.id ? t("common:loading") : t("common:delete")}
                           </button>
                           <button
                             className="btn-secondary-sm"
-                            onClick={() => setConfirmDeleteId(null)}
+                            onClick={() => {
+                              setConfirmDeleteId(null);
+                              setDeleteError(null);
+                            }}
+                            disabled={deletingId === team.id}
                           >
                             {t("cancel")}
                           </button>
@@ -126,13 +152,18 @@ export default function TeamPanel() {
                             className="team-card-edit"
                             onClick={() => openTeamEditor(team.id)}
                             title={t("editTeam")}
+                            aria-label={t("editTeam")}
                           >
                             <Settings size={14} />
                           </button>
                           <button
                             className="team-card-delete"
-                            onClick={() => setConfirmDeleteId(team.id)}
-                            title={t("deleteConfirm")}
+                            onClick={() => {
+                              setConfirmDeleteId(team.id);
+                              setDeleteError(null);
+                            }}
+                            title={t("deleteTeam")}
+                            aria-label={t("deleteTeam")}
                           >
                             <Trash2 size={14} />
                           </button>
@@ -140,6 +171,9 @@ export default function TeamPanel() {
                       )}
                     </div>
                   </div>
+                  {confirmDeleteId === team.id && deleteError && (
+                    <span className="form-text text-error">{deleteError}</span>
+                  )}
 
                   {team.description && (
                     <div className="team-card-desc">{team.description}</div>
@@ -155,10 +189,12 @@ export default function TeamPanel() {
                       )}
                       <span>{getAgentName(team.leader_agent_id)}</span>
                     </div>
-                    <div className="team-card-members">
-                      <Users size={14} />
-                      <span>{t("memberCount", { count: memberCount })}</span>
-                    </div>
+                    {memberCount !== undefined && (
+                      <div className="team-card-members">
+                        <Users size={14} />
+                        <span>{t("memberCount", { count: memberCount })}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Team conversation list */}
@@ -168,9 +204,11 @@ export default function TeamPanel() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       {teamConversationsMap[team.id].map((conv) => (
-                        <div
+                        <button
+                          type="button"
                           key={conv.id}
                           className="team-conv-item"
+                          aria-label={t("openConversation", { title: conv.title })}
                           onClick={() => {
                             selectTeam(team.id);
                             selectConversation(conv.id);
@@ -182,7 +220,7 @@ export default function TeamPanel() {
                           <span className="team-conv-date">
                             {new Date(conv.updated_at).toLocaleDateString(i18n.language === "ko" ? "ko-KR" : "en-US")}
                           </span>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}

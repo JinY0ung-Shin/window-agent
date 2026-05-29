@@ -319,6 +319,17 @@
   margin: 4px 0 0;
 }
 
+/* ── Proxy Row ── */
+.onboarding-proxy-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.onboarding-proxy-input {
+  flex: 1;
+}
+
 /* ── Skip Button ── */
 .onboarding-skip-btn {
   display: block;

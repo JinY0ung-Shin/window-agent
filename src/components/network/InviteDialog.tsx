@@ -94,8 +94,9 @@ export default function InviteDialog({ onClose }: Props) {
 
         <div className="directory-results">
           {directoryLoading && (
-            <div className="directory-empty">
+            <div className="directory-empty directory-searching" aria-live="polite">
               <Loader2 size={20} className="spinning" />
+              <span>{t("directory.searching")}</span>
             </div>
           )}
           {!directoryLoading && directoryResults.length === 0 && (

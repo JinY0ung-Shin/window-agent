@@ -14,7 +14,12 @@ function AgentCard({ agent }: { agent: SharedAgent }) {
       role="button"
       tabIndex={0}
       onClick={() => selectAgent(agent.id)}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") selectAgent(agent.id); }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          if (e.key === " ") e.preventDefault();
+          selectAgent(agent.id);
+        }
+      }}
     >
       <div className="hub-card-header">
         <Bot size={18} className="hub-card-icon" />

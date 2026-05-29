@@ -163,7 +163,7 @@ describe("ToolRunBlock", () => {
     fireEvent.click(screen.getByRole("button", { name: /도구 1개 실행/i }));
     fireEvent.click(screen.getByRole("button", { name: /browser_click/i }));
 
-    expect(screen.getByAltText("Browser screenshot")).toBeInTheDocument();
+    expect(screen.getByAltText("브라우저 스크린샷")).toBeInTheDocument();
     expect(screen.getByText(/Accessibility Snapshot/)).toBeInTheDocument();
   });
 });

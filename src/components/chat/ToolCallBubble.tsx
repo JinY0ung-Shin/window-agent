@@ -45,7 +45,13 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
 
   return (
     <div className={`tool-call-bubble tool-status-${status}`}>
-      <div className="tool-call-header" onClick={() => canExpand && setExpanded(!expanded)}>
+      <button
+        type="button"
+        className="tool-call-header"
+        onClick={() => canExpand && setExpanded(!expanded)}
+        disabled={!canExpand}
+        aria-expanded={canExpand ? expanded : undefined}
+      >
         <span className="tool-call-icon">{statusIcon()}</span>
         <span className="tool-call-name">{toolCall.name}</span>
         <span className={`tool-call-status-badge tool-badge-${status === "incomplete" ? "approved" : status}`}>{getToolStatusLabel(status)}</span>
@@ -54,7 +60,7 @@ export default function ToolCallBubble({ toolCall, status, result, onApprove, on
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </span>
         )}
-      </div>
+      </button>
 
       <div className="tool-call-args">{formatArgsSummary(toolCall.arguments)}</div>
 

@@ -8,29 +8,50 @@ import type { SharedAgent, SharedSkill } from "../../services/commands/hubComman
 function MyAgentCard({ agent }: { agent: SharedAgent }) {
   const { t } = useTranslation("hub");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const deleteSharedAgent = useHubStore((s) => s.deleteSharedAgent);
   const selectAgent = useHubStore((s) => s.selectAgent);
 
+  const handleDelete = async () => {
+    setDeleting(true);
+    const ok = await deleteSharedAgent(agent.id);
+    setDeleting(false);
+    if (ok) setConfirmDelete(false);
+  };
+
   return (
-    <div className="hub-card" onClick={() => selectAgent(agent.id)}>
+    <div
+      className="hub-card"
+      role="button"
+      tabIndex={0}
+      onClick={() => selectAgent(agent.id)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          if (e.key === " ") e.preventDefault();
+          selectAgent(agent.id);
+        }
+      }}
+    >
       <div className="hub-card-header">
         <Bot size={18} className="hub-card-icon" />
         <div className="hub-card-title">{agent.name}</div>
         <div className="hub-card-actions" onClick={(e) => e.stopPropagation()}>
           {confirmDelete ? (
             <div className="hub-delete-confirm">
-              <button className="btn-danger-sm" onClick={() => deleteSharedAgent(agent.id)}>
+              <button className="btn-danger-sm" onClick={handleDelete} disabled={deleting}>
                 {t("delete.confirm")}
               </button>
-              <button className="btn-secondary-sm" onClick={() => setConfirmDelete(false)}>
+              <button className="btn-secondary-sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
                 {t("delete.cancel")}
               </button>
             </div>
           ) : (
             <button
+              type="button"
               className="hub-card-delete"
               onClick={() => setConfirmDelete(true)}
               title={t("delete.agent")}
+              aria-label={t("delete.agent")}
             >
               <Trash2 size={14} />
             </button>
@@ -51,7 +72,15 @@ function MyAgentCard({ agent }: { agent: SharedAgent }) {
 function MySkillCard({ skill }: { skill: SharedSkill }) {
   const { t } = useTranslation("hub");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const deleteSharedSkill = useHubStore((s) => s.deleteSharedSkill);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const ok = await deleteSharedSkill(skill.id);
+    setDeleting(false);
+    if (ok) setConfirmDelete(false);
+  };
 
   return (
     <div className="hub-card">
@@ -61,18 +90,20 @@ function MySkillCard({ skill }: { skill: SharedSkill }) {
         <div className="hub-card-actions">
           {confirmDelete ? (
             <div className="hub-delete-confirm">
-              <button className="btn-danger-sm" onClick={() => deleteSharedSkill(skill.id)}>
+              <button className="btn-danger-sm" onClick={handleDelete} disabled={deleting}>
                 {t("delete.confirm")}
               </button>
-              <button className="btn-secondary-sm" onClick={() => setConfirmDelete(false)}>
+              <button className="btn-secondary-sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
                 {t("delete.cancel")}
               </button>
             </div>
           ) : (
             <button
+              type="button"
               className="hub-card-delete"
               onClick={() => setConfirmDelete(true)}
               title={t("delete.skill")}
+              aria-label={t("delete.skill")}
             >
               <Trash2 size={14} />
             </button>

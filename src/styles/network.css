@@ -38,6 +38,11 @@
   color: var(--success-hover);
 }
 
+.peer-thread-confirm-clear {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
 /* ── Peer Thread Tabs ── */
 .peer-thread-tabs {
   display: flex;
@@ -114,6 +119,54 @@
   font-size: 0.9rem;
 }
 
+/* ── Responding (typing) indicator ── */
+.peer-thread-responding {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  padding: 10px 14px;
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
+  background-color: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+}
+
+.peer-thread-responding-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.peer-thread-responding-dots span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: var(--text-light);
+  animation: peerTypingBounce 1.2s infinite ease-in-out;
+}
+
+.peer-thread-responding-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.peer-thread-responding-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes peerTypingBounce {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
 /* ── Peer Message Bubbles ── */
 .peer-msg {
   display: flex;
@@ -186,6 +239,21 @@
   padding: 16px 24px;
   background: linear-gradient(transparent, var(--bg-color) 20%);
   flex-shrink: 0;
+}
+
+.peer-thread-pending-banner {
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border: 1px solid var(--warning-border);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.peer-thread-send-error {
+  margin-bottom: 8px;
 }
 
 .peer-thread-input-container {
@@ -467,11 +535,24 @@
 }
 
 .network-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 16px;
   background: var(--danger-bg);
   color: var(--danger-hover);
   font-size: 0.8125rem;
   border-bottom: 1px solid var(--danger-border);
+}
+
+.network-error-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.network-error-dismiss {
+  flex-shrink: 0;
+  color: var(--danger-hover);
 }
 
 /* peer-thread-settings removed — now using ContactDetailModal */
@@ -556,7 +637,8 @@
   margin-right: 8px;
 }
 
-.contact-item:hover .contact-item-settings {
+.contact-item:hover .contact-item-settings,
+.contact-item:focus-within .contact-item-settings {
   opacity: 1;
 }
 
@@ -895,6 +977,13 @@
   color: var(--text-muted);
   font-size: 0.8125rem;
   padding: 24px 0;
+}
+
+.directory-searching {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 .directory-peer-card {

@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import ToggleSwitch from "../common/ToggleSwitch";
 import { useClipboardFeedback } from "../../hooks/useClipboardFeedback";
 import { useNetworkStore } from "../../stores/networkStore";
 
@@ -48,11 +49,12 @@ export default function NetworkToggleSection() {
 
       <div className="form-group">
         <div className="toggle-row">
-          <label>{tn("toggle.label")}</label>
-          <button
-            className={`toggle-switch ${network.networkEnabled ? "on" : ""}`}
+          <label id="network-toggle-label">{tn("toggle.label")}</label>
+          <ToggleSwitch
+            checked={network.networkEnabled}
             disabled={networkToggleLoading}
-            onClick={async () => {
+            ariaLabelledby="network-toggle-label"
+            onChange={async () => {
               if (network.networkEnabled) {
                 setNetworkToggleLoading(true);
                 try {
@@ -71,9 +73,7 @@ export default function NetworkToggleSection() {
                 }
               }
             }}
-          >
-            <span className="toggle-knob" />
-          </button>
+          />
         </div>
         <p className="form-text">
           {tn("toggle.hint")}

@@ -70,6 +70,8 @@ export default function HubAgentDetail() {
 
   const [hiring, setHiring] = useState(false);
   const [hireResult, setHireResult] = useState<{ installed: string[]; skipped: string[]; errors: string[] } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const agent = agents.find((a) => a.id === selectedAgentId)
     ?? myAgents.find((a) => a.id === selectedAgentId);
@@ -87,9 +89,11 @@ export default function HubAgentDetail() {
   const isOwner = userId === agent.user_id;
 
   const handleDelete = async () => {
-    if (!window.confirm(t("delete.confirm"))) return;
+    setDeleting(true);
     const ok = await deleteSharedAgent(agent.id);
+    setDeleting(false);
     if (ok) clearSelection();
+    else setConfirmDelete(false);
   };
 
   const handleHire = async () => {
@@ -125,13 +129,36 @@ export default function HubAgentDetail() {
             </button>
           )}
           {isOwner && (
-            <button
-              className="hub-delete-btn"
-              onClick={handleDelete}
-              title={t("delete.agent")}
-            >
-              <Trash2 size={16} />
-            </button>
+            confirmDelete ? (
+              <div className="hub-delete-confirm">
+                <button
+                  type="button"
+                  className="btn-danger-sm"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {t("delete.confirm")}
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary-sm"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                >
+                  {t("delete.cancel")}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="hub-delete-btn"
+                onClick={() => setConfirmDelete(true)}
+                title={t("delete.agent")}
+                aria-label={t("delete.agent")}
+              >
+                <Trash2 size={16} />
+              </button>
+            )
           )}
         </div>
       </div>
@@ -154,7 +181,9 @@ export default function HubAgentDetail() {
           {hireResult.errors.length > 0 && (
             <span className="hub-install-result-error">
               <AlertTriangle size={14} />
-              {t("install.result_errors", { count: hireResult.errors.length })}
+              {hireResult.installed.length === 0 && hireResult.skipped.length === 0
+                ? hireResult.errors.join(", ")
+                : t("install.result_errors", { count: hireResult.errors.length })}
             </span>
           )}
         </div>

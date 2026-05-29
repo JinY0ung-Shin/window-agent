@@ -73,6 +73,8 @@
     "delete": "Delete",
     "confirmDelete": "Are you sure you want to delete?",
     "confirm": "Confirm",
+    "deleting": "Deleting…",
+    "loadFailed": "Failed to load note",
     "openObsidian": "Open in Obsidian"
   },
   "list": {

@@ -4,14 +4,14 @@ import { relayGetAllowedTools, relaySetAllowedTools } from "../../services/comma
 import { logger } from "../../services/logger";
 
 const ALL_RELAY_TOOLS = [
-  { name: "read_file", label: "Read File" },
-  { name: "list_directory", label: "List Directory" },
-  { name: "write_file", label: "Write File" },
-  { name: "delete_file", label: "Delete File" },
-  { name: "web_search", label: "Web Search" },
-  { name: "self_inspect", label: "Self Inspect" },
-  { name: "manage_schedule", label: "Manage Schedule" },
-];
+  "read_file",
+  "list_directory",
+  "write_file",
+  "delete_file",
+  "web_search",
+  "self_inspect",
+  "manage_schedule",
+] as const;
 
 const DEFAULT_RELAY_TOOLS = ["read_file", "list_directory", "web_search", "self_inspect"];
 
@@ -26,6 +26,8 @@ export default function RelayToolsSection({ isOpen }: Props) {
   const [relayTools, setRelayTools] = useState<string[]>(DEFAULT_RELAY_TOOLS);
   const [relayToolsSaving, setRelayToolsSaving] = useState(false);
   const [relayToolsSaved, setRelayToolsSaved] = useState(false);
+  const [relayToolsDirty, setRelayToolsDirty] = useState(false);
+  const [relayToolsError, setRelayToolsError] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -33,6 +35,8 @@ export default function RelayToolsSection({ isOpen }: Props) {
         if (tools.length > 0) setRelayTools(tools);
         else setRelayTools(DEFAULT_RELAY_TOOLS);
         setRelayToolsSaved(false);
+        setRelayToolsDirty(false);
+        setRelayToolsError("");
       }).catch(() => {});
     }
   }, [isOpen]);
@@ -44,21 +48,22 @@ export default function RelayToolsSection({ isOpen }: Props) {
         {tn("tools.hint")}
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {ALL_RELAY_TOOLS.map((tool) => (
-          <label key={tool.name} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem", cursor: "pointer" }}>
+        {ALL_RELAY_TOOLS.map((toolName) => (
+          <label key={toolName} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem", cursor: "pointer" }}>
             <input
               type="checkbox"
-              checked={relayTools.includes(tool.name)}
+              checked={relayTools.includes(toolName)}
               onChange={(e) => {
                 setRelayToolsSaved(false);
+                setRelayToolsDirty(true);
                 if (e.target.checked) {
-                  setRelayTools((prev) => [...prev, tool.name]);
+                  setRelayTools((prev) => [...prev, toolName]);
                 } else {
-                  setRelayTools((prev) => prev.filter((t) => t !== tool.name));
+                  setRelayTools((prev) => prev.filter((n) => n !== toolName));
                 }
               }}
             />
-            {tool.label}
+            {t(`relayTools.names.${toolName}`)}
           </label>
         ))}
       </div>
@@ -68,11 +73,14 @@ export default function RelayToolsSection({ isOpen }: Props) {
           disabled={relayToolsSaving}
           onClick={async () => {
             setRelayToolsSaving(true);
+            setRelayToolsError("");
             try {
               await relaySetAllowedTools(relayTools);
               setRelayToolsSaved(true);
+              setRelayToolsDirty(false);
             } catch (e) {
               logger.debug("Failed to save relay tools", e);
+              setRelayToolsError(t("common:errors.saveFailed"));
             } finally {
               setRelayToolsSaving(false);
             }
@@ -85,11 +93,18 @@ export default function RelayToolsSection({ isOpen }: Props) {
           onClick={() => {
             setRelayTools(DEFAULT_RELAY_TOOLS);
             setRelayToolsSaved(false);
+            setRelayToolsDirty(true);
           }}
         >
           {tn("tools.reset")}
         </button>
       </div>
+      {relayToolsError && (
+        <p className="form-text text-error">{relayToolsError}</p>
+      )}
+      {relayToolsDirty && !relayToolsSaved && (
+        <p className="form-text text-error">{t("relayTools.unsaved")}</p>
+      )}
       {relayToolsSaved && (
         <p className="form-text text-success">
           {tn("tools.saved")}

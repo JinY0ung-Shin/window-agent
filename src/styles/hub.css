@@ -46,11 +46,23 @@
 }
 
 .hub-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 16px;
   background: var(--danger-bg);
   color: var(--danger);
   font-size: 0.8125rem;
   border-bottom: 1px solid var(--danger-border);
+}
+
+.hub-error-text {
+  flex: 1;
+}
+
+.hub-error-dismiss {
+  flex-shrink: 0;
+  color: var(--danger);
 }
 
 .hub-panel-body {
@@ -234,7 +246,8 @@
   margin-left: auto;
 }
 
-.hub-card:hover .hub-card-actions {
+.hub-card:hover .hub-card-actions,
+.hub-card:focus-within .hub-card-actions {
   display: flex;
 }
 
@@ -670,6 +683,16 @@
   color: var(--text-main);
 }
 
+.hub-share-required {
+  color: var(--danger);
+}
+
+.hub-share-hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 .hub-share-input {
   padding: 8px 12px;
   border: 1px solid var(--border);
@@ -868,6 +891,13 @@
   gap: 2px;
   max-height: 200px;
   overflow-y: auto;
+}
+
+.hub-install-empty {
+  padding: 12px 8px;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  text-align: center;
 }
 
 .hub-install-agent-item {

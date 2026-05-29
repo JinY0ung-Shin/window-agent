@@ -22,6 +22,8 @@
   "templatesTitle": "Add {{term_agents_cap}}",
   "templatesSubtitle": "Choose preset {{term_agents}} to get started (optional)",
   "templatesSkipButton": "Skip",
+  "templateSeedingError": "Failed to add some {{term_agents}}. You can retry or skip.",
+  "templateSeedingContinue": "Continue without adding",
   "apiTitle": "API Setup",
   "apiSubtitle": "Enter your API credentials to connect to an AI model",
   "apiKeyLabel": "API Key",

@@ -35,7 +35,16 @@ export default function NoteListItem({ note, isSelected, onClick }: NoteListItem
   return (
     <div
       className={`vault-note-item${isSelected ? " selected" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-current={isSelected}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <div className="vault-note-item-title">{note.title}</div>
       <div className="vault-note-item-preview">{note.bodyPreview}</div>

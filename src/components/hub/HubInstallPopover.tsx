@@ -13,13 +13,14 @@ interface Props {
 }
 
 export default function HubInstallPopover({ type, skill, note, onClose }: Props) {
-  const { t } = useTranslation("hub");
+  const { t } = useTranslation(["hub", "common"]);
   const agents = useAgentStore((s) => s.agents);
   const loadAgents = useAgentStore((s) => s.loadAgents);
   const executeInstallSkill = useHubStore((s) => s.executeInstallSkill);
   const executeInstallNote = useHubStore((s) => s.executeInstallNote);
   const executeInstallBulk = useHubStore((s) => s.executeInstallBulk);
   const popRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ installed: string[]; skipped: string[]; errors: string[] } | null>(null);
@@ -28,14 +29,32 @@ export default function HubInstallPopover({ type, skill, note, onClose }: Props)
     loadAgents();
   }, [loadAgents]);
 
+  // Remember the element that opened the popover, restore focus to it on close
+  useEffect(() => {
+    triggerRef.current = document.activeElement as HTMLElement | null;
+    return () => {
+      triggerRef.current?.focus?.();
+    };
+  }, []);
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (popRef.current && !popRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onClose();
+      }
+    };
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [onClose]);
 
   const handleSelect = async (agent: { id: string; folder_name: string }) => {
@@ -53,7 +72,7 @@ export default function HubInstallPopover({ type, skill, note, onClose }: Props)
   };
 
   return (
-    <div ref={popRef} className="hub-install-popover">
+    <div ref={popRef} className="hub-install-popover" role="menu">
       {result ? (
         <div className="hub-install-result">
           {result.installed.length > 0 && (
@@ -74,8 +93,8 @@ export default function HubInstallPopover({ type, skill, note, onClose }: Props)
               {t("install.result_errors", { count: result.errors.length })}
             </div>
           )}
-          <button className="hub-install-close-btn" onClick={onClose}>
-            {t("delete.cancel")}
+          <button type="button" className="hub-install-close-btn" onClick={onClose}>
+            {t("common:close")}
           </button>
         </div>
       ) : loading ? (
@@ -85,18 +104,24 @@ export default function HubInstallPopover({ type, skill, note, onClose }: Props)
       ) : (
         <>
           <div className="hub-install-title">{t("install.select_agent")}</div>
-          <div className="hub-install-agent-list">
-            {agents.map((agent) => (
-              <button
-                key={agent.id}
-                className="hub-install-agent-item"
-                onClick={() => handleSelect(agent)}
-              >
-                <Bot size={14} />
-                <span>{agent.name}</span>
-              </button>
-            ))}
-          </div>
+          {agents.length === 0 ? (
+            <div className="hub-install-empty">{t("share.no_agents")}</div>
+          ) : (
+            <div className="hub-install-agent-list">
+              {agents.map((agent) => (
+                <button
+                  key={agent.id}
+                  type="button"
+                  role="menuitem"
+                  className="hub-install-agent-item"
+                  onClick={() => handleSelect(agent)}
+                >
+                  <Bot size={14} />
+                  <span>{agent.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

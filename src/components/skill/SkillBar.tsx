@@ -4,6 +4,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { useSkillStore } from "../../stores/skillStore";
 import { useAgentStore } from "../../stores/agentStore";
 import { useConversationStore } from "../../stores/conversationStore";
+import { toErrorMessage } from "../../utils/errorUtils";
 import SkillChip from "./SkillChip";
 
 interface Props {
@@ -21,6 +22,7 @@ export default function SkillBar({ agentId }: Props) {
 
   const [expanded, setExpanded] = useState(false);
   const [togglingSkill, setTogglingSkill] = useState<string | null>(null);
+  const [toggleError, setToggleError] = useState("");
 
   const agent = useAgentStore((s) => s.agents.find((a) => a.id === agentId));
   const currentConversationId = useConversationStore((s) => s.currentConversationId);
@@ -29,17 +31,23 @@ export default function SkillBar({ agentId }: Props) {
     async (skillName: string) => {
       if (!agent) return;
       setTogglingSkill(skillName);
+      setToggleError("");
       try {
         if (activeSkillNames.includes(skillName)) {
           await deactivateSkill(skillName, currentConversationId ?? undefined);
         } else {
-          await activateSkill(agent.folder_name, skillName, currentConversationId ?? undefined);
+          const ok = await activateSkill(agent.folder_name, skillName, currentConversationId ?? undefined);
+          if (!ok) {
+            setToggleError(t("skills.failed", { name: skillName, error: t("skills.tokenLimitExceeded") }));
+          }
         }
+      } catch (e) {
+        setToggleError(t("skills.failed", { name: skillName, error: toErrorMessage(e) }));
       } finally {
         setTogglingSkill(null);
       }
     },
-    [agent, activeSkillNames, activateSkill, deactivateSkill, currentConversationId],
+    [agent, activeSkillNames, activateSkill, deactivateSkill, currentConversationId, t],
   );
 
   if (availableSkills.length === 0) return null;
@@ -79,6 +87,7 @@ export default function SkillBar({ agentId }: Props) {
           <div className={`skill-token-indicator ${tokenClass}`}>
             {t("skills.tokenCount", { tokens: activeSkillTokens })}
           </div>
+          {toggleError && <span className="form-text text-error">{toggleError}</span>}
         </div>
       )}
     </div>

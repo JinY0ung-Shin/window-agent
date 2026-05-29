@@ -6,6 +6,7 @@ import type { ChatMessage as ChatMessageType } from "../../services/types";
 import type { SenderInfo } from "./ToolRunBlock";
 import { useChatFlowStore } from "../../stores/chatFlowStore";
 import { useToolRunStore } from "../../stores/toolRunStore";
+import { useStreamStore } from "../../stores/streamStore";
 import { useBootstrapStore } from "../../stores/bootstrapStore";
 import ToolCallBubble from "./ToolCallBubble";
 import MessageBody from "./MessageBody";
@@ -24,6 +25,7 @@ export default function ChatMessage({ message, senderInfo }: Props) {
   const isOnboarding = useBootstrapStore((s) => s.isOnboarding);
   const { copied, copy } = useClipboardFeedback(1500);
   const regenerateMessage = useChatFlowStore((s) => s.regenerateMessage);
+  const activeRun = useStreamStore((s) => s.activeRun);
   const toolRunState = useToolRunStore((s) => s.toolRunState);
   const pendingToolCalls = useToolRunStore((s) => s.pendingToolCalls);
   const approveToolCall = useToolRunStore((s) => s.approveToolCall);
@@ -120,6 +122,12 @@ export default function ChatMessage({ message, senderInfo }: Props) {
                 </div>
               )}
               <MessageBody content={message.content} />
+              {message.status === "failed" && (
+                <div className="message-user-failed" role="alert">
+                  <AlertCircle size={14} />
+                  <span>{message.error || t("message.userFailed")}</span>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -196,13 +204,41 @@ export default function ChatMessage({ message, senderInfo }: Props) {
               {isTeam && message.status === "aborted" && (
                 <div className="team-msg-aborted">{tTeam("chat.aborted")}</div>
               )}
+              {!isTeam && message.status === "failed" && (
+                <div className="message-failed">
+                  <div className="message-failed-row" role="alert">
+                    <AlertCircle size={14} />
+                    <span>{message.error || t("message.failed")}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => regenerateMessage(message.id)}
+                    disabled={!!activeRun}
+                    title={t("message.retry")}
+                    aria-label={t("message.retry")}
+                  >
+                    <RefreshCw size={14} className={activeRun ? "spinning" : undefined} />
+                  </button>
+                </div>
+              )}
+              {!isTeam && message.status === "aborted" && (
+                <div className="message-aborted">{t("message.aborted")}</div>
+              )}
               {!isTeam && message.status === "complete" && !hasToolCalls && (
                 <div className="message-actions">
-                  <button className="action-btn" onClick={handleCopy} title={t("message.copyTitle")}>
+                  <button type="button" className="action-btn" onClick={handleCopy} title={t("message.copyTitle")} aria-label={t("message.copyTitle")}>
                     {copied ? <Check size={14} /> : <Copy size={14} />}
                   </button>
-                  <button className="action-btn" onClick={() => regenerateMessage(message.id)} title={t("message.regenerateTitle")}>
-                    <RefreshCw size={14} />
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => regenerateMessage(message.id)}
+                    disabled={!!activeRun}
+                    title={t("message.regenerateTitle")}
+                    aria-label={t("message.regenerateTitle")}
+                  >
+                    <RefreshCw size={14} className={activeRun ? "spinning" : undefined} />
                   </button>
                 </div>
               )}
@@ -216,7 +252,8 @@ export default function ChatMessage({ message, senderInfo }: Props) {
 
 /** Renders a single image attachment, loading from disk if needed. */
 function AttachmentImage({ attachment }: { attachment: import("../../services/types").Attachment }) {
+  const { t } = useTranslation("chat");
   const src = useAttachmentSrc(attachment);
   if (!src) return null;
-  return <img src={src} alt="Attached" className="message-attachment-img" />;
+  return <img src={src} alt={t("message.attachmentAlt")} className="message-attachment-img" />;
 }

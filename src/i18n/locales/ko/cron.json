@@ -55,5 +55,9 @@
   "runResult": "결과",
   "runError": "오류",
   "runStarted": "시작",
-  "runFinished": "완료"
+  "runFinished": "완료",
+  "unknownAgent": "알 수 없는 {{term_agent}}",
+  "loadJobsError": "작업을 불러오지 못했습니다",
+  "loadRunsError": "실행 이력을 불러오지 못했습니다",
+  "enabledToggle": "{{name}} 활성화"
 }

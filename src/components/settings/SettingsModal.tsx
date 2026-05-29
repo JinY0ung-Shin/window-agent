@@ -4,6 +4,7 @@ import { Settings } from "lucide-react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useNavigationStore } from "../../stores/navigationStore";
 import { relaySetRelayUrl } from "../../services/commands/relayCommands";
+import { toErrorMessage } from "../../utils/errorUtils";
 import GeneralSettingsPanel from "./GeneralSettingsPanel";
 import ThinkingSettingsPanel from "./ThinkingSettingsPanel";
 import BrandingSettingsPanel from "./BrandingSettingsPanel";
@@ -29,6 +30,7 @@ export default function SettingsPage() {
   const isOpen = mainView === "settings";
 
   const [tab, setTab] = useState<Tab>("api");
+  const [isSaving, setIsSaving] = useState(false);
 
   const apiRef = useRef<ApiServerSectionRef>(null);
   const thinkingRef = useRef<ThinkingSettingsPanelRef>(null);
@@ -46,25 +48,43 @@ export default function SettingsPage() {
   }, [isOpen]);
 
   const handleSave = async () => {
-    // Save proxy/no_proxy settings (managed separately by BrowserManager)
-    await proxyRef.current?.save().catch(() => {});
-    const branding = brandingRef.current?.getValues();
-    const apiValues = apiRef.current?.getValues();
-    const thinking = thinkingRef.current?.getValues();
-    // Save relay URL separately (managed by its own command)
-    if (apiValues?.relayUrl?.trim()) {
-      await relaySetRelayUrl(apiValues.relayUrl.trim()).catch(() => {});
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      useSettingsStore.setState({ settingsError: null });
+      const branding = brandingRef.current?.getValues();
+      const apiValues = apiRef.current?.getValues();
+      const thinking = thinkingRef.current?.getValues();
+      // Save proxy/no_proxy settings (managed separately by BrowserManager)
+      try {
+        await proxyRef.current?.save();
+      } catch (e) {
+        useSettingsStore.setState({ settingsError: t("proxy.saveFailed", { detail: toErrorMessage(e) }) });
+        return;
+      }
+      // Save relay URL separately (managed by its own command)
+      if (apiValues?.relayUrl?.trim()) {
+        try {
+          await relaySetRelayUrl(apiValues.relayUrl.trim());
+        } catch (e) {
+          useSettingsStore.setState({ settingsError: t("relay.urlSaveFailed", { detail: toErrorMessage(e) }) });
+          return;
+        }
+      }
+      await saveSettings({
+        apiKey: apiValues?.apiKey ?? "",
+        clearApiKey: apiValues?.clearApiKey ?? false,
+        baseUrl: apiValues?.baseUrl ?? "",
+        modelName: apiValues?.modelName ?? "",
+        thinkingEnabled: thinking?.thinkingEnabled ?? true,
+        thinkingBudget: thinking?.thinkingBudget ?? 4096,
+        companyName: branding?.companyName.trim(),
+        uiTheme: branding?.uiTheme,
+      });
+      // saveSettings() navigates back (goBack) on success and sets settingsError on failure.
+    } finally {
+      setIsSaving(false);
     }
-    saveSettings({
-      apiKey: apiValues?.apiKey ?? "",
-      clearApiKey: apiValues?.clearApiKey ?? false,
-      baseUrl: apiValues?.baseUrl ?? "",
-      modelName: apiValues?.modelName ?? "",
-      thinkingEnabled: thinking?.thinkingEnabled ?? true,
-      thinkingBudget: thinking?.thinkingBudget ?? 4096,
-      companyName: branding?.companyName.trim(),
-      uiTheme: branding?.uiTheme,
-    });
   };
 
   return (
@@ -119,11 +139,11 @@ export default function SettingsPage() {
       )}
 
       <div className="settings-page-footer">
-        <button className="btn-secondary" onClick={goBack}>
+        <button className="btn-secondary" onClick={goBack} disabled={isSaving}>
           {t("common:cancel")}
         </button>
-        <button className="btn-primary" onClick={handleSave}>
-          {t("common:save")}
+        <button className="btn-primary" onClick={handleSave} disabled={isSaving}>
+          {isSaving ? t("common:saving") : t("common:save")}
         </button>
       </div>
     </div>

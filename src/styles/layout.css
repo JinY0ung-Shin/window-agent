@@ -57,6 +57,16 @@
   color: var(--primary);
 }
 
+/* Native <button> reset for menu items so the nav stays keyboard-operable
+   while keeping the original .menu-item appearance. */
+.menu-item-btn {
+  background: none;
+  border: none;
+  text-align: left;
+  font: inherit;
+  width: 100%;
+}
+
 /* ── Conversation List ── */
 .conversation-list {
   flex: 1;
@@ -82,7 +92,8 @@
   display: none;
 }
 
-.conversation-item:hover .delete-btn {
+.conversation-item:hover .delete-btn,
+.conversation-item:focus-within .delete-btn {
   display: flex;
 }
 
@@ -132,6 +143,55 @@
 
 .settings-btn {
   margin-top: auto;
+}
+
+/* ── App Loading Splash ── */
+.app-loading {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background-color: var(--bg-color);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.app-loading .spinning {
+  color: var(--primary);
+}
+
+/* ── Chromium Install Overlay ── */
+.chromium-installing {
+  background-color: var(--surface);
+  padding: 24px 32px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.chromium-installing .spinning {
+  color: var(--primary);
+}
+
+.chromium-installing-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.chromium-installing-desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 
 /* ── Main Area ── */
@@ -385,7 +445,8 @@
   transition: opacity 0.15s, color 0.15s, background 0.15s;
 }
 
-.conv-item:hover .conv-item-delete {
+.conv-item:hover .conv-item-delete,
+.conv-item:focus-within .conv-item-delete {
   opacity: 1;
 }
 

@@ -10,6 +10,14 @@ function statusDot(status: string) {
   return "status-dot offline";
 }
 
+function statusTitleKey(status: string) {
+  if (status === "connected") return "contact.online";
+  if (status === "connecting") return "contact.connecting";
+  if (status === "pending_approval") return "contact.pendingApproval";
+  if (status === "pending_outgoing") return "directory.pendingOutgoing";
+  return "contact.offline";
+}
+
 interface ContactListProps {
   onOpenDetail: (contactId: string) => void;
 }
@@ -50,7 +58,12 @@ export default function ContactList({ onOpenDetail }: ContactListProps) {
                 selectContact(selectedContactId === contact.id ? null : contact.id)
               }
             >
-              <span className={statusDot(connectedPeers.has(contact.peer_id) ? "connected" : contact.status)} title={t(`contact.${connectedPeers.has(contact.peer_id) ? "online" : contact.status === "connecting" ? "connecting" : "offline"}`)} />
+              {(() => {
+                const effectiveStatus = connectedPeers.has(contact.peer_id) ? "connected" : contact.status;
+                return (
+                  <span className={statusDot(effectiveStatus)} title={t(statusTitleKey(effectiveStatus))} />
+                );
+              })()}
               <div className="contact-item-info">
                 <span className="contact-item-name">
                   {contact.display_name || contact.agent_name}

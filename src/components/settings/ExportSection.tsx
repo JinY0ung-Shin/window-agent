@@ -9,6 +9,7 @@ import { toErrorMessage } from "../../utils/errorUtils";
 
 export default function ExportSection() {
   const { t } = useTranslation("glossary");
+  const ts = useTranslation("settings").t;
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const ta = useTranslation("agent").t;
   const agents = useAgentStore((s) => s.agents);
@@ -17,7 +18,9 @@ export default function ExportSection() {
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [includeConversations, setIncludeConversations] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [pendingImportFile, setPendingImportFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -25,6 +28,7 @@ export default function ExportSection() {
   const handleExport = async () => {
     if (!selectedAgentId) return;
     setExporting(true);
+    setExported(false);
     setError("");
     try {
       const bytes = await exportAgent(selectedAgentId, includeConversations);
@@ -38,6 +42,7 @@ export default function ExportSection() {
       a.download = fileName;
       a.click();
       URL.revokeObjectURL(url);
+      setExported(true);
     } catch (e) {
       setError(ta("export.exportFailed", { error: toErrorMessage(e) }));
     } finally {
@@ -45,9 +50,18 @@ export default function ExportSection() {
     }
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFilePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (fileInputRef.current) fileInputRef.current.value = "";
     if (!file) return;
+    setError("");
+    setResult(null);
+    setPendingImportFile(file);
+  };
+
+  const handleImportConfirm = async () => {
+    if (!pendingImportFile) return;
+    const file = pendingImportFile;
 
     setImporting(true);
     setError("");
@@ -59,11 +73,11 @@ export default function ExportSection() {
       const importResult = await importAgent(bytes);
       setResult(importResult);
       await loadAgents();
+      setPendingImportFile(null);
     } catch (err) {
       setError(ta("export.importFailed", { error: err instanceof Error ? err.message : String(err) }));
     } finally {
       setImporting(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -88,7 +102,10 @@ export default function ExportSection() {
             <input
               type="checkbox"
               checked={includeConversations}
-              onChange={(e) => setIncludeConversations(e.target.checked)}
+              onChange={(e) => {
+                setIncludeConversations(e.target.checked);
+                setExported(false);
+              }}
             />
             {ta("export.includeConversations")}
           </label>
@@ -101,6 +118,9 @@ export default function ExportSection() {
             {exporting ? ta("export.exporting") : ta("export.exportButton")}
           </button>
         </div>
+        {exported && (
+          <p className="form-text text-success">{ts("export.exportSuccess")}</p>
+        )}
       </div>
 
       <div className="form-group">
@@ -110,7 +130,7 @@ export default function ExportSection() {
             ref={fileInputRef}
             type="file"
             accept=".zip"
-            onChange={handleImport}
+            onChange={handleFilePick}
             style={{ display: "none" }}
           />
           <button
@@ -122,6 +142,27 @@ export default function ExportSection() {
             {importing ? t("importing", { context: uiTheme }) : ta("export.importButton")}
           </button>
         </div>
+        {pendingImportFile && (
+          <div className="export-import-confirm">
+            <p className="form-text">{ts("export.importConfirm", { file: pendingImportFile.name })}</p>
+            <div className="confirm-delete-row">
+              <button
+                className="btn-primary btn-sm"
+                onClick={handleImportConfirm}
+                disabled={importing}
+              >
+                {importing ? ts("export.importing") : t("common:confirm")}
+              </button>
+              <button
+                className="btn-secondary btn-sm"
+                onClick={() => setPendingImportFile(null)}
+                disabled={importing}
+              >
+                {t("common:cancel")}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && <div className="export-error">{error}</div>}

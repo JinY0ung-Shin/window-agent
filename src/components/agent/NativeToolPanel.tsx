@@ -2,11 +2,18 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { ToolConfig, NativeToolDef, ToolPermissionTier } from "../../services/types";
 import { getNativeTools } from "../../services/nativeToolRegistry";
+import ToggleSwitch from "../common/ToggleSwitch";
 
-const TIER_INFO: Record<ToolPermissionTier, { label: string; color: string }> = {
-  auto: { label: "Auto", color: "#22c55e" },
-  confirm: { label: "Confirm", color: "#f59e0b" },
-  deny: { label: "Deny", color: "#ef4444" },
+const TIER_COLOR: Record<ToolPermissionTier, string> = {
+  auto: "#22c55e",
+  confirm: "#f59e0b",
+  deny: "#ef4444",
+};
+
+const TIER_LABEL_KEY: Record<ToolPermissionTier, string> = {
+  auto: "tools.tierAuto",
+  confirm: "tools.tierConfirm",
+  deny: "tools.tierDeny",
 };
 
 interface Props {
@@ -109,13 +116,12 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
     <div className="native-tool-panel">
       <div className="native-tool-auto-approve">
         <div className="toggle-row">
-          <label>{t("credentials.autoApproveTools")}</label>
-          <button
-            className={`toggle-switch ${toolConfig.auto_approve ? "on" : ""}`}
-            onClick={() => toggleAutoApprove(!toolConfig.auto_approve)}
-          >
-            <span className="toggle-knob" />
-          </button>
+          <label id="native-tool-auto-approve-label">{t("credentials.autoApproveTools")}</label>
+          <ToggleSwitch
+            checked={toolConfig.auto_approve ?? false}
+            onChange={toggleAutoApprove}
+            ariaLabelledby="native-tool-auto-approve-label"
+          />
         </div>
         <p className="form-text">{t("credentials.autoApproveToolsDesc")}</p>
       </div>
@@ -125,13 +131,12 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
         return (
           <div key={category} className="native-tool-group">
             <div className="native-tool-group-header">
-              {category === "browser" && (
-                <input
-                  type="checkbox"
-                  checked={allEnabled}
-                  onChange={(e) => toggleCategory(category, e.target.checked)}
-                />
-              )}
+              <input
+                type="checkbox"
+                checked={allEnabled}
+                onChange={(e) => toggleCategory(category, e.target.checked)}
+                aria-label={`${t("tools.selectAll")} — ${categoryLabel(category)}`}
+              />
               <span>{categoryLabel(category)}</span>
               <span className="native-tool-group-count">{tools.length}</span>
             </div>
@@ -145,6 +150,7 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
                     type="checkbox"
                     checked={enabled}
                     onChange={(e) => toggleTool(tool.name, e.target.checked)}
+                    aria-label={t("tools.toggleTool", { name: tool.name })}
                   />
                   <div className="native-tool-meta">
                     <span className="native-tool-name">{tool.name}</span>
@@ -155,10 +161,11 @@ export default function NativeToolPanel({ folderName: _folderName, toolConfig, o
                     value={tier}
                     disabled={!enabled}
                     onChange={(e) => setTier(tool.name, e.target.value as ToolPermissionTier)}
-                    style={enabled ? { color: TIER_INFO[tier].color } : undefined}
+                    style={enabled ? { color: TIER_COLOR[tier] } : undefined}
+                    aria-label={t("tools.tierLabel", { name: tool.name })}
                   >
-                    {(Object.keys(TIER_INFO) as ToolPermissionTier[]).map((t) => (
-                      <option key={t} value={t}>{TIER_INFO[t].label}</option>
+                    {(Object.keys(TIER_LABEL_KEY) as ToolPermissionTier[]).map((tierKey) => (
+                      <option key={tierKey} value={tierKey}>{t(TIER_LABEL_KEY[tierKey])}</option>
                     ))}
                   </select>
                 </div>

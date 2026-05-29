@@ -181,6 +181,8 @@ interface HubState {
   deleteSharedAgent: (id: string) => Promise<boolean>;
   deleteSharedSkill: (id: string) => Promise<boolean>;
   deleteSharedNote: (id: string) => Promise<boolean>;
+
+  clearError: () => void;
 }
 
 export const useHubStore = create<HubState>((set, get) => ({
@@ -864,4 +866,6 @@ export const useHubStore = create<HubState>((set, get) => ({
       return false;
     }
   },
+
+  clearError: () => set({ error: null }),
 }));

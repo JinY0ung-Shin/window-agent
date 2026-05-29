@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Network, Users, RefreshCw, Settings } from "lucide-react";
+import { Network, Users, RefreshCw, Settings, X } from "lucide-react";
 import { useNetworkStore } from "../../stores/networkStore";
 import DraggableHeader from "../layout/DraggableHeader";
 import EmptyState from "../common/EmptyState";
@@ -19,6 +19,7 @@ export default function NetworkPanel() {
   const selectedContactId = useNetworkStore((s) => s.selectedContactId);
   const refreshContacts = useNetworkStore((s) => s.refreshContacts);
   const error = useNetworkStore((s) => s.error);
+  const clearError = useNetworkStore((s) => s.clearError);
 
   useEffect(() => {
     if (status === "active") {
@@ -84,7 +85,20 @@ export default function NetworkPanel() {
             </button>
           </div>
         </DraggableHeader>
-        {error && <div className="network-error">{error}</div>}
+        {error && (
+          <div className="network-error">
+            <span className="network-error-text">{error}</span>
+            <button
+              type="button"
+              className="icon-btn icon-btn-sm network-error-dismiss"
+              onClick={clearError}
+              title={t("common:close")}
+              aria-label={t("common:close")}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         <ContactList onOpenDetail={setDetailContactId} />
       </div>
 

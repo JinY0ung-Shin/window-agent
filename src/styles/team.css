@@ -80,6 +80,11 @@
   box-shadow: var(--shadow-sm);
 }
 
+.team-card:focus-visible {
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
 .team-card-header {
   display: flex;
   align-items: center;
@@ -98,7 +103,8 @@
   gap: 4px;
 }
 
-.team-card:hover .team-card-actions {
+.team-card:hover .team-card-actions,
+.team-card:focus-within .team-card-actions {
   display: flex;
 }
 
@@ -183,6 +189,11 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  font-family: inherit;
   padding: 4px 6px;
   border-radius: 4px;
   cursor: pointer;

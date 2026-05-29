@@ -37,6 +37,7 @@ export default function AgentEditor() {
   const [networkVisible, setNetworkVisible] = useState(false);
   const [models, setModels] = useState<string[]>([]);
   const [activePanel, setActivePanel] = useState<"persona" | "tools" | "credentials" | "skills">("persona");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (isEditorOpen) {
@@ -71,17 +72,23 @@ export default function AgentEditor() {
 
   const isDefault = editingAgent?.is_default === true;
 
-  const handleSave = () => {
-    saveAgent({
-      name: name || t("newAgent", { context: uiTheme }),
-      description,
-      avatar,
-      model: model || null,
-      temperature: temperature ? parseFloat(temperature) : null,
-      thinking_enabled: thinkingEnabled,
-      thinking_budget: thinkingBudget ? parseInt(thinkingBudget, 10) : null,
-      network_visible: networkVisible,
-    });
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await saveAgent({
+        name: name || t("newAgent", { context: uiTheme }),
+        description,
+        avatar,
+        model: model || null,
+        temperature: temperature ? parseFloat(temperature) : null,
+        thinking_enabled: thinkingEnabled,
+        thinking_budget: thinkingBudget ? parseInt(thinkingBudget, 10) : null,
+        network_visible: networkVisible,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -111,11 +118,11 @@ export default function AgentEditor() {
       error={editorError}
       footer={
         <>
-          <button className="btn-secondary" onClick={closeEditor}>
+          <button className="btn-secondary" onClick={closeEditor} disabled={isSaving}>
             {t("common:cancel")}
           </button>
-          <button className="btn-primary" onClick={handleSave}>
-            {t("common:save")}
+          <button className="btn-primary" onClick={handleSave} disabled={isSaving}>
+            {isSaving ? t("common:saving") : t("common:save")}
           </button>
         </>
       }

@@ -6,11 +6,22 @@
       "toolRunning": "Running tool...",
       "toolContinuing": "Processing tool results..."
     },
-    "cancelTitle": "Cancel"
+    "cancelTitle": "Cancel",
+    "sendTitle": "Send",
+    "attachImage": "Attach image",
+    "attachImageLimit": "You can attach up to 4 images",
+    "attachmentPreviewAlt": "Attachment preview",
+    "removeAttachment": "Remove attachment",
+    "dismissWarning": "Dismiss warning"
   },
   "message": {
     "copyTitle": "Copy",
-    "regenerateTitle": "Regenerate"
+    "regenerateTitle": "Regenerate",
+    "failed": "Failed to generate a response",
+    "aborted": "Response was stopped",
+    "retry": "Retry",
+    "userFailed": "Failed to send",
+    "attachmentAlt": "Attached image"
   },
   "conversation": {
     "fallbackTitle": "Conversation"
@@ -33,6 +44,7 @@
       "snapshot": "Accessibility snapshot {{count}} elements",
       "screenshot": "Browser screenshot created"
     },
+    "browserScreenshotAlt": "Browser screenshot",
     "preparing": "Preparing {{name}}"
   },
   "thinking": {
@@ -68,5 +80,31 @@
     "warning": "This employee cannot use Learning Mode because memory tools are disabled",
     "warning_classic": "This agent cannot use Learning Mode because memory tools are disabled",
     "warning_org": "This employee cannot use Learning Mode because memory tools are disabled"
+  },
+  "onboardingAnim": {
+    "org": {
+      "steps": [
+        { "emoji": "📋", "text": "Reviewing interview results…" },
+        { "emoji": "📞", "text": "Sending the offer letter…" },
+        { "emoji": "🪑", "text": "Preparing a workspace…" },
+        { "emoji": "🖥️", "text": "Setting up the laptop…" },
+        { "emoji": "🪴", "text": "Placing a welcome plant on the desk…" },
+        { "emoji": "🪪", "text": "Issuing an employee badge…" },
+        { "emoji": "📇", "text": "Printing business cards…" },
+        { "emoji": "📖", "text": "Handing over the work manual…" },
+        { "emoji": "👋", "text": "Introducing to the team…" }
+      ],
+      "final": { "emoji": "✨", "text": "Ready for the first day!" }
+    },
+    "classic": {
+      "steps": [
+        { "emoji": "⚙️", "text": "Initializing the agent…" },
+        { "emoji": "🧠", "text": "Loading personality modules…" },
+        { "emoji": "💾", "text": "Creating memory space…" },
+        { "emoji": "🔧", "text": "Connecting tools…" },
+        { "emoji": "🔄", "text": "Finalizing setup…" }
+      ],
+      "final": { "emoji": "✨", "text": "Ready!" }
+    }
   }
 }

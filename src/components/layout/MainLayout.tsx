@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
-import { Bug } from "lucide-react";
+import { Bug, Loader2 } from "lucide-react";
 import Sidebar from "./Sidebar";
 import ChatWindow from "../chat/ChatWindow";
 import DebugPanel from "../debug/DebugPanel";
@@ -16,6 +16,7 @@ import HubPanel from "../hub/HubPanel";
 import HubShareDialog from "../hub/HubShareDialog";
 import TourOverlay from "../tour/TourOverlay";
 import ErrorBoundary from "../common/ErrorBoundary";
+import Modal from "../common/Modal";
 
 import { useDebugStore } from "../../stores/debugStore";
 import { useVaultStore } from "../../stores/vaultStore";
@@ -26,6 +27,7 @@ import WindowControls from "./WindowControls";
 
 export default function MainLayout() {
   const { t } = useTranslation("chat");
+  const { t: tc } = useTranslation("common");
   const isDebugOpen = useDebugStore((s) => s.isOpen);
   const setDebugOpen = useDebugStore((s) => s.setOpen);
   const mainView = useNavigationStore((s) => s.mainView);
@@ -114,64 +116,35 @@ export default function MainLayout() {
         className="debug-toggle-btn"
         onClick={() => setDebugOpen(!isDebugOpen)}
         title={t("layout.toolLog")}
+        aria-label={t("layout.toolLog")}
       >
         <Bug size={18} />
       </button>
       <DebugPanel />
       <HubShareDialog />
       <TourOverlay />
-      {(chromiumInstalling || chromiumError) && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-        }}>
-          <div style={{
-            backgroundColor: 'var(--bg-primary, white)',
-            padding: '24px 32px',
-            borderRadius: '12px',
-            textAlign: 'center',
-            maxWidth: '400px',
-          }}>
-            {chromiumError ? (
-              <>
-                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-error, #e53e3e)' }}>
-                  {t("layout.chromiumFailed")}
-                </div>
-                <div style={{ fontSize: '13px', opacity: 0.7, marginBottom: '12px' }}>
-                  {chromiumError}
-                </div>
-                <button
-                  onClick={() => setChromiumError(null)}
-                  style={{
-                    padding: '6px 16px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--border-primary, #ccc)',
-                    backgroundColor: 'transparent',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                  }}
-                >
-                  {t("layout.close")}
-                </button>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px' }}>
-                  {t("layout.chromiumInstalling")}
-                </div>
-                <div style={{ fontSize: '13px', opacity: 0.7 }}>
-                  {t("layout.chromiumInstallingDesc")}
-                </div>
-              </>
-            )}
+      {chromiumError ? (
+        <Modal
+          title={t("layout.chromiumFailed")}
+          onClose={() => setChromiumError(null)}
+          error={chromiumError}
+          footer={
+            <button className="btn-secondary" onClick={() => setChromiumError(null)}>
+              {tc("close")}
+            </button>
+          }
+        >
+          {null}
+        </Modal>
+      ) : chromiumInstalling ? (
+        <div className="modal-overlay">
+          <div className="chromium-installing">
+            <Loader2 size={28} className="spinning" />
+            <div className="chromium-installing-title">{t("layout.chromiumInstalling")}</div>
+            <div className="chromium-installing-desc">{t("layout.chromiumInstallingDesc")}</div>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

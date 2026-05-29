@@ -21,7 +21,7 @@
   --hover-bg: #f1f5f9;
   --code-bg: #f1f5f9;
   --focus-ring: #eef2ff;
-  --text-light: #94a3b8;
+  --text-light: #6b7280; /* darkened from #94a3b8 for WCAG AA contrast on light surfaces */
   --success-bg: #dcfce7;
   --success-hover: #22c55e;
   --warning-text: #d97706;
@@ -439,3 +439,34 @@ body {
   border-radius: 10px;
   line-height: 1.4;
 }
+
+/* ── Accessibility: keyboard focus ring ── */
+/* Global visible focus indicator for keyboard users (WCAG 2.4.7).
+   Mouse clicks won't trigger :focus-visible, so this only shows on Tab nav. */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+/* Text inputs/selects already show a box-shadow ring on focus; avoid doubling it. */
+.form-group input:focus:not(:focus-visible),
+.form-group select:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── Disabled control states ── */
+/* base.css only styled .btn-primary:disabled; give the other shared controls a
+   visible inert state so async-disabled buttons don't look clickable. */
+.btn-secondary:disabled,
+.btn-danger:disabled,
+.btn-danger-sm:disabled,
+.btn-secondary-sm:disabled,
+.icon-btn:disabled,
+.toggle-switch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn-secondary:disabled:hover { background-color: var(--surface); }
+.btn-danger:disabled:hover { background: var(--danger-bg); }
+.btn-danger-sm:disabled:hover { background: var(--danger-bg); }
+.btn-secondary-sm:disabled:hover { background: transparent; }
+.icon-btn:disabled:hover { background: transparent; color: var(--text-muted); }

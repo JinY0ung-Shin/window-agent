@@ -51,7 +51,11 @@
     "localPluginsButton": "Import from local CC plugins",
     "localPluginsHint": "Import skills directly from plugins installed in Claude Code.",
     "noLocalPlugins": "No local plugins with skills found",
-    "skillCount": "{{count}} skill(s)"
+    "skillCount": "{{count}} skill(s)",
+    "urlPlaceholder": "owner/repo or https://github.com/...",
+    "urlAriaLabel": "Marketplace repository URL",
+    "searchAriaLabel": "Search plugins",
+    "back": "Back"
   },
   "credentials": {
     "title": "Environment Variables",
@@ -85,7 +89,13 @@
     "categorySystem": "System",
     "loading": "Loading...",
     "noNativeTools": "No native tools registered",
-    "maxIterations": "Maximum tool call iterations reached."
+    "maxIterations": "Maximum tool call iterations reached.",
+    "tierAuto": "Auto",
+    "tierConfirm": "Confirm",
+    "tierDeny": "Deny",
+    "selectAll": "Select all",
+    "toggleTool": "Toggle {{name}}",
+    "tierLabel": "Permission tier for {{name}}"
   },
   "export": {
     "includeConversations": "Include conversations",
@@ -104,7 +114,18 @@
     "temperaturePlaceholder": "Default",
     "thinkingLabel": "Thinking Mode",
     "thinkingGlobal": "Global",
+    "thinkingOn": "ON",
+    "thinkingOff": "OFF",
+    "thinkingBudgetLabel": "Thinking Budget",
     "networkVisible": "Publish to Network",
     "networkVisibleHint": "When enabled, other network users can select this agent to chat with."
+  },
+  "avatar": {
+    "alt": "Agent avatar",
+    "upload": "Upload avatar image",
+    "error": "Failed to load image. Try a different file."
+  },
+  "persona": {
+    "editorAriaLabel": "{{tab}} persona content"
   }
 }

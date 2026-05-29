@@ -1,5 +1,6 @@
 import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { useTranslation } from "react-i18next";
+import ToggleSwitch from "../common/ToggleSwitch";
 import {
   getBrowserProxy, setBrowserProxy, detectSystemProxy,
   getBrowserNoProxy, setBrowserNoProxy, detectSystemNoProxy,
@@ -29,11 +30,11 @@ const ProxySection = forwardRef<ProxySectionRef, Props>(function ProxySection({ 
   useEffect(() => {
     if (isOpen) {
       getBrowserProxy().then((p) => {
-        setBrowserProxyState(p);
+        setBrowserProxyState(p ?? "");
         setBrowserProxySaved(false);
         setBrowserProxyDetectMsg("");
       }).catch((e) => logger.debug("Failed to get browser proxy", e));
-      getBrowserNoProxy().then(setBrowserNoProxyState)
+      getBrowserNoProxy().then((p) => setBrowserNoProxyState(p ?? ""))
         .catch((e) => logger.debug("Failed to get browser no_proxy", e));
       getBrowserHeadless().then(setHeadless).catch((e) => logger.debug("Failed to get headless", e));
     }
@@ -42,8 +43,8 @@ const ProxySection = forwardRef<ProxySectionRef, Props>(function ProxySection({ 
   useImperativeHandle(ref, () => ({
     save: async () => {
       await Promise.all([
-        setBrowserProxy(browserProxy.trim()),
-        setBrowserNoProxy(browserNoProxy.trim()),
+        setBrowserProxy((browserProxy ?? "").trim()),
+        setBrowserNoProxy((browserNoProxy ?? "").trim()),
       ]);
     },
   }));
@@ -51,13 +52,12 @@ const ProxySection = forwardRef<ProxySectionRef, Props>(function ProxySection({ 
   return (
     <>
     <div className="form-group">
-      <label className="toggle-label">
-        <span>{t("general.browserHeadlessLabel")}</span>
-        <input
-          type="checkbox"
+      <div className="toggle-row">
+        <span id="browser-headless-label">{t("general.browserHeadlessLabel")}</span>
+        <ToggleSwitch
           checked={headless}
-          onChange={async (e) => {
-            const val = e.target.checked;
+          ariaLabelledby="browser-headless-label"
+          onChange={async (val) => {
             setHeadless(val);
             try {
               await setBrowserHeadless(val);
@@ -67,7 +67,7 @@ const ProxySection = forwardRef<ProxySectionRef, Props>(function ProxySection({ 
             }
           }}
         />
-      </label>
+      </div>
       <p className="form-text">{t("general.browserHeadlessHint")}</p>
     </div>
     <div className="form-group">

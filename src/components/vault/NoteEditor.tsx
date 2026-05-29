@@ -8,17 +8,19 @@ import NoteEditorToolbar from "./NoteEditorToolbar";
 
 interface NoteEditorProps {
   note: VaultNote;
-  onSave: (updates: NoteUpdates) => void;
+  onSave: (updates: NoteUpdates) => void | Promise<void>;
   onCancel: () => void;
+  error?: string | null;
 }
 
-export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) {
+export default function NoteEditor({ note, onSave, onCancel, error }: NoteEditorProps) {
   const { t } = useTranslation("vault");
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content);
   const [tags, setTags] = useState(note.tags.join(", "));
   const [confidence, setConfidence] = useState(note.confidence);
   const [showPreview, setShowPreview] = useState(false);
+  const [saving, setSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const titleComposition = useCompositionInput(setTitle);
   const contentComposition = useCompositionInput(setContent);
@@ -30,13 +32,19 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
     tags !== note.tags.join(", ") ||
     confidence !== note.confidence;
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
+    if (saving) return;
     const parsedTags = tags
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
-    onSave({ title, content, tags: parsedTags, confidence });
-  }, [title, content, tags, confidence, onSave]);
+    setSaving(true);
+    try {
+      await onSave({ title, content, tags: parsedTags, confidence });
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, title, content, tags, confidence, onSave]);
 
   const handleCancel = useCallback(() => {
     if (isDirty && !window.confirm(t("editor.unsavedChanges"))) return;
@@ -157,12 +165,25 @@ export default function NoteEditor({ note, onSave, onCancel }: NoteEditorProps) 
             />
           </label>
         </div>
+        {error && (
+          <span className="form-text text-error vault-editor-error" role="alert">
+            {error}
+          </span>
+        )}
         <div className="vault-editor-actions">
-          <button className="vault-btn vault-btn-secondary" onClick={handleCancel}>
+          <button
+            className="vault-btn vault-btn-secondary"
+            onClick={handleCancel}
+            disabled={saving}
+          >
             {t("common:cancel")}
           </button>
-          <button className="vault-btn vault-btn-primary" onClick={handleSave}>
-            {t("common:save")}
+          <button
+            className="vault-btn vault-btn-primary"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? t("common:saving") : t("common:save")}
           </button>
         </div>
       </div>

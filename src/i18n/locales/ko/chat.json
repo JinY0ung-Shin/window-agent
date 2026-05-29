@@ -6,11 +6,22 @@
       "toolRunning": "도구 실행 중...",
       "toolContinuing": "도구 결과 처리 중..."
     },
-    "cancelTitle": "취소"
+    "cancelTitle": "취소",
+    "sendTitle": "보내기",
+    "attachImage": "이미지 첨부",
+    "attachImageLimit": "최대 4개까지 이미지를 첨부할 수 있습니다",
+    "attachmentPreviewAlt": "첨부 이미지 미리보기",
+    "removeAttachment": "첨부 이미지 삭제",
+    "dismissWarning": "경고 닫기"
   },
   "message": {
     "copyTitle": "복사",
-    "regenerateTitle": "재생성"
+    "regenerateTitle": "재생성",
+    "failed": "응답 생성에 실패했습니다",
+    "aborted": "응답이 중단되었습니다",
+    "retry": "다시 시도",
+    "userFailed": "전송에 실패했습니다",
+    "attachmentAlt": "첨부 이미지"
   },
   "conversation": {
     "fallbackTitle": "대화"
@@ -33,6 +44,7 @@
       "snapshot": "접근성 스냅샷 {{count}}개 요소",
       "screenshot": "브라우저 스크린샷 생성"
     },
+    "browserScreenshotAlt": "브라우저 스크린샷",
     "preparing": "{{name}} 준비 중"
   },
   "thinking": {
@@ -68,5 +80,31 @@
     "warning": "이 직원은 기억 도구가 비활성화되어 배움모드를 사용할 수 없습니다",
     "warning_classic": "이 에이전트는 기억 도구가 비활성화되어 학습 모드를 사용할 수 없습니다",
     "warning_org": "이 직원은 기억 도구가 비활성화되어 배움모드를 사용할 수 없습니다"
+  },
+  "onboardingAnim": {
+    "org": {
+      "steps": [
+        { "emoji": "📋", "text": "면접 결과를 정리하고 있습니다…" },
+        { "emoji": "📞", "text": "합격 통보를 보내고 있습니다…" },
+        { "emoji": "🪑", "text": "자리를 마련하고 있습니다…" },
+        { "emoji": "🖥️", "text": "노트북을 세팅하고 있습니다…" },
+        { "emoji": "🪴", "text": "책상 위에 환영 화분을 올려놓고 있습니다…" },
+        { "emoji": "🪪", "text": "사원증을 발급하고 있습니다…" },
+        { "emoji": "📇", "text": "명함을 인쇄하고 있습니다…" },
+        { "emoji": "📖", "text": "업무 매뉴얼을 전달하고 있습니다…" },
+        { "emoji": "👋", "text": "팀원들에게 소개하고 있습니다…" }
+      ],
+      "final": { "emoji": "✨", "text": "첫 출근 준비 완료!" }
+    },
+    "classic": {
+      "steps": [
+        { "emoji": "⚙️", "text": "에이전트를 초기화하고 있습니다…" },
+        { "emoji": "🧠", "text": "성격 모듈을 로드하고 있습니다…" },
+        { "emoji": "💾", "text": "기억 공간을 생성하고 있습니다…" },
+        { "emoji": "🔧", "text": "도구를 연결하고 있습니다…" },
+        { "emoji": "🔄", "text": "마무리하고 있습니다…" }
+      ],
+      "final": { "emoji": "✨", "text": "준비 완료!" }
+    }
   }
 }

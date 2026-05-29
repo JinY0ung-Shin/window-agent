@@ -41,6 +41,7 @@ const EMPTY_FORM: FormState = {
 
 export default function CredentialManager() {
   const { t } = useTranslation("agent");
+  const ts = useTranslation("settings").t;
   const { data: credentials, loading, reload: refresh } = useLoadOnOpen(listCredentials);
   const [form, setForm] = useState<FormState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -220,6 +221,10 @@ export default function CredentialManager() {
           </div>
 
           {error && <div className="cred-form-error">{error}</div>}
+
+          {(!form.name.trim() || !form.id.trim() || (form.mode === "add" && !form.value)) && (
+            <span className="cred-form-hint">{ts("credentials.requiredHint")}</span>
+          )}
 
           <div className="cred-form-actions">
             <button className="btn-secondary" onClick={() => setForm(null)}>{t("common:cancel")}</button>

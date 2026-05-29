@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useCompositionInput } from "../../hooks/useCompositionInput";
 import {
@@ -81,6 +81,11 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [installResult, setInstallResult] = useState<InstallResult | null>(null);
+
+  // Clear any stale error banner when switching screens
+  useEffect(() => {
+    setError("");
+  }, [view]);
 
   const handleFetchLocalPlugins = useCallback(async () => {
     setLoading(true);
@@ -228,6 +233,8 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
           <button
             className="btn-icon"
             onClick={view === "skills" ? goBackToPlugins : goBackToInput}
+            aria-label={t("marketplace.back")}
+            title={t("marketplace.back")}
           >
             <ArrowLeft size={16} />
           </button>
@@ -254,7 +261,8 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
             <input
               type="text"
               value={repoUrl}
-              placeholder="owner/repo or https://github.com/..."
+              placeholder={t("marketplace.urlPlaceholder")}
+              aria-label={t("marketplace.urlAriaLabel")}
               onKeyDown={(e) => {
                 if (urlComposition.isComposing.current) return;
                 if (e.key === "Enter") handleFetchPlugins();
@@ -316,6 +324,7 @@ export default function MarketplacePanel({ folderName, onClose, onInstalled }: P
               type="text"
               value={searchQuery}
               placeholder={t("marketplace.searchPlaceholder")}
+              aria-label={t("marketplace.searchAriaLabel")}
               {...searchComposition.compositionProps}
             />
             <span className="marketplace-count">

@@ -131,13 +131,21 @@ export default function HubShareDialog() {
           {!isSkillMode && (
             <div className="hub-share-section">
               <label className="hub-share-label">
-                {t("share.name")}
+                <span>
+                  {t("share.name")}
+                  <span className="hub-share-required" aria-hidden="true"> *</span>
+                </span>
                 <input
                   type="text"
                   className="hub-share-input"
                   value={shareAgentName}
+                  required
+                  aria-required="true"
                   {...nameInput.compositionProps}
                 />
+                {shareAgentName.trim().length === 0 && (
+                  <span className="hub-share-hint">{t("share.name_required")}</span>
+                )}
               </label>
               <label className="hub-share-label">
                 {t("share.description")}

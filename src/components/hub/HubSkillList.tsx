@@ -9,11 +9,19 @@ import type { SharedSkill } from "../../services/commands/hubCommands";
 function SkillCard({ skill }: { skill: SharedSkill }) {
   const { t } = useTranslation("hub");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const userId = useHubStore((s) => s.userId);
   const loggedIn = useHubStore((s) => s.loggedIn);
   const deleteSharedSkill = useHubStore((s) => s.deleteSharedSkill);
   const isOwner = userId === skill.user_id;
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    const ok = await deleteSharedSkill(skill.id);
+    setDeleting(false);
+    if (ok) setConfirmDelete(false);
+  };
 
   return (
     <div className="hub-card">
@@ -24,10 +32,13 @@ function SkillCard({ skill }: { skill: SharedSkill }) {
           {loggedIn && (
             <div className="hub-install-wrapper">
               <button
-
+                type="button"
                 className="hub-card-install"
                 onClick={() => setShowInstall(!showInstall)}
                 title={t("install.button")}
+                aria-label={t("install.button")}
+                aria-haspopup="menu"
+                aria-expanded={showInstall}
               >
                 <Download size={14} />
               </button>
@@ -36,7 +47,6 @@ function SkillCard({ skill }: { skill: SharedSkill }) {
                   type="skill"
                   skill={skill}
                   onClose={() => setShowInstall(false)}
-
                 />
               )}
             </div>
@@ -47,22 +57,26 @@ function SkillCard({ skill }: { skill: SharedSkill }) {
                 <div className="hub-delete-confirm">
                   <button
                     className="btn-danger-sm"
-                    onClick={() => deleteSharedSkill(skill.id)}
+                    onClick={handleDelete}
+                    disabled={deleting}
                   >
                     {t("delete.confirm")}
                   </button>
                   <button
                     className="btn-secondary-sm"
                     onClick={() => setConfirmDelete(false)}
+                    disabled={deleting}
                   >
                     {t("delete.cancel")}
                   </button>
                 </div>
               ) : (
                 <button
+                  type="button"
                   className="hub-card-delete"
                   onClick={() => setConfirmDelete(true)}
                   title={t("delete.skill")}
+                  aria-label={t("delete.skill")}
                 >
                   <Trash2 size={14} />
                 </button>

@@ -76,7 +76,16 @@ export default function AgentPanel() {
               <div
                 key={agent.id}
                 className="agent-card"
+                role="button"
+                tabIndex={0}
+                aria-label={agent.name}
                 onClick={() => openEditor(agent.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openEditor(agent.id);
+                  }
+                }}
               >
                 <div className="agent-card-header">
                   <div className="agent-card-identity">
@@ -101,6 +110,7 @@ export default function AgentPanel() {
                         className="agent-card-share"
                         onClick={() => openShareDialog(agent.id, agent.folder_name, agent.name, agent.description)}
                         title={t("shareAgent", { context: uiTheme })}
+                        aria-label={t("shareAgent", { context: uiTheme })}
                       >
                         <Upload size={14} />
                       </button>
@@ -109,6 +119,7 @@ export default function AgentPanel() {
                       className="agent-card-edit"
                       onClick={() => openEditor(agent.id)}
                       title={t("editAgent", { context: uiTheme })}
+                      aria-label={t("editAgent", { context: uiTheme })}
                     >
                       <Settings size={14} />
                     </button>
@@ -117,6 +128,7 @@ export default function AgentPanel() {
                         className="agent-card-delete"
                         onClick={() => setDeleteTarget({ id: agent.id, name: agent.name })}
                         title={t("deleteAgent", { context: uiTheme })}
+                        aria-label={t("deleteAgent", { context: uiTheme })}
                       >
                         <Trash2 size={14} />
                       </button>

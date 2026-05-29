@@ -51,7 +51,11 @@
     "localPluginsButton": "로컬 CC 플러그인에서 가져오기",
     "localPluginsHint": "Claude Code에 설치된 플러그인의 스킬을 바로 가져옵니다.",
     "noLocalPlugins": "스킬이 포함된 로컬 플러그인이 없습니다",
-    "skillCount": "스킬 {{count}}개"
+    "skillCount": "스킬 {{count}}개",
+    "urlPlaceholder": "owner/repo 또는 https://github.com/...",
+    "urlAriaLabel": "마켓플레이스 저장소 URL",
+    "searchAriaLabel": "플러그인 검색",
+    "back": "뒤로"
   },
   "credentials": {
     "title": "환경 변수",
@@ -85,7 +89,13 @@
     "categorySystem": "시스템",
     "loading": "로딩 중...",
     "noNativeTools": "등록된 네이티브 도구가 없습니다",
-    "maxIterations": "최대 도구 호출 반복 횟수에 도달했습니다."
+    "maxIterations": "최대 도구 호출 반복 횟수에 도달했습니다.",
+    "tierAuto": "자동",
+    "tierConfirm": "확인",
+    "tierDeny": "거부",
+    "selectAll": "전체 선택",
+    "toggleTool": "{{name}} 켜기/끄기",
+    "tierLabel": "{{name}} 권한 등급"
   },
   "export": {
     "includeConversations": "대화 포함",
@@ -104,7 +114,18 @@
     "temperaturePlaceholder": "기본값",
     "thinkingLabel": "Thinking 모드",
     "thinkingGlobal": "글로벌",
+    "thinkingOn": "켜기",
+    "thinkingOff": "끄기",
+    "thinkingBudgetLabel": "Thinking 예산",
     "networkVisible": "네트워크에 공개",
     "networkVisibleHint": "활성화하면 네트워크의 다른 사용자가 이 에이전트를 선택하여 대화할 수 있습니다."
+  },
+  "avatar": {
+    "alt": "에이전트 아바타",
+    "upload": "아바타 이미지 업로드",
+    "error": "이미지를 불러오지 못했습니다. 다른 파일을 선택하세요."
+  },
+  "persona": {
+    "editorAriaLabel": "{{tab}} 페르소나 내용"
   }
 }

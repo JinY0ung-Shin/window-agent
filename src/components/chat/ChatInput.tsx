@@ -79,8 +79,17 @@ export default function ChatInput() {
           {learningMode && <span className="learning-mode-label">{learningModeLabel}</span>}
         </button>
         {learningModeWarning && (
-          <span className="learning-mode-warning" onClick={dismissWarning}>
+          <span className="learning-mode-warning" role="status">
             {learningModeWarningText}
+            <button
+              type="button"
+              className="learning-mode-warning-dismiss"
+              onClick={dismissWarning}
+              aria-label={t("input.dismissWarning")}
+              title={t("input.dismissWarning")}
+            >
+              <X size={12} />
+            </button>
           </span>
         )}
       </div>
@@ -88,8 +97,14 @@ export default function ChatInput() {
         <div className="pending-attachments">
           {pendingAttachments.map((att, i) => (
             <div key={i} className="pending-attachment-thumb">
-              <img src={att.dataUrl} alt="Attachment preview" />
-              <button className="remove-attachment" onClick={() => removePendingAttachment(i)}>
+              <img src={att.dataUrl} alt={t("input.attachmentPreviewAlt")} />
+              <button
+                type="button"
+                className="remove-attachment"
+                onClick={() => removePendingAttachment(i)}
+                aria-label={t("input.removeAttachment")}
+                title={t("input.removeAttachment")}
+              >
                 <X size={12} />
               </button>
             </div>
@@ -101,7 +116,8 @@ export default function ChatInput() {
           className="image-attach-button"
           onClick={() => fileInputRef.current?.click()}
           disabled={isBusy || pendingAttachments.length >= 4}
-          title={t("input.attachImage", { defaultValue: "Attach image" })}
+          title={pendingAttachments.length >= 4 ? t("input.attachImageLimit") : t("input.attachImage")}
+          aria-label={pendingAttachments.length >= 4 ? t("input.attachImageLimit") : t("input.attachImage")}
         >
           <ImagePlus size={18} />
         </button>
@@ -119,7 +135,7 @@ export default function ChatInput() {
           placeholder={placeholder}
         />
         {isSending || isToolBusy ? (
-          <button className="send-button cancel" onClick={abortStream} title={t("input.cancelTitle")}>
+          <button className="send-button cancel" onClick={abortStream} title={t("input.cancelTitle")} aria-label={t("input.cancelTitle")}>
             <Square size={18} />
           </button>
         ) : (
@@ -127,6 +143,8 @@ export default function ChatInput() {
             className="send-button"
             onClick={flushAndSend}
             disabled={!localValue.trim() && !hasPendingImages}
+            title={t("input.sendTitle")}
+            aria-label={t("input.sendTitle")}
           >
             <Send size={18} />
           </button>

@@ -1,4 +1,5 @@
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { useTranslation } from "react-i18next";
 import { isBrowserTool, parseBrowserResult } from "./toolCallUtils";
 
 interface ToolResultDetailProps {
@@ -8,6 +9,7 @@ interface ToolResultDetailProps {
 }
 
 export default function ToolResultDetail({ toolName, result, isError = false }: ToolResultDetailProps) {
+  const { t } = useTranslation("chat");
   if (toolName === "run_shell") {
     try {
       const parsed = JSON.parse(result);
@@ -45,18 +47,24 @@ export default function ToolResultDetail({ toolName, result, isError = false }: 
             </div>
           )}
           {browserResult.screenshot_path && (
-            <div className="browser-screenshot-frame">
+            <button
+              type="button"
+              className="browser-screenshot-frame"
+              aria-label={t("tool.browserScreenshotAlt")}
+              onClick={(event) => {
+                const img = event.currentTarget.querySelector("img");
+                if (img) {
+                  img.style.maxHeight = img.style.maxHeight === "200px" ? "none" : "200px";
+                }
+              }}
+            >
               <img
                 src={convertFileSrc(browserResult.screenshot_path)}
-                alt="Browser screenshot"
+                alt={t("tool.browserScreenshotAlt")}
                 className="browser-screenshot"
                 style={{ maxHeight: "200px" }}
-                onClick={(event) => {
-                  const img = event.currentTarget;
-                  img.style.maxHeight = img.style.maxHeight === "200px" ? "none" : "200px";
-                }}
               />
-            </div>
+            </button>
           )}
           {browserResult.snapshot && (
             <details open={!browserResult.screenshot_path}>

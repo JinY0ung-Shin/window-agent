@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen, Bot, Clock, Globe, Network, Plus, Settings, Users } from "lucide-react";
 import { useConversationStore } from "../../stores/conversationStore";
@@ -28,6 +28,7 @@ export default function Sidebar() {
   const uiTheme = useSettingsStore((s) => s.uiTheme);
   const companyName = useSettingsStore((s) => s.companyName);
   const { onMouseDown: onDrag, onDoubleClick: onDragDblClick } = useDragRegion();
+  const [avatarErrors, setAvatarErrors] = useState<Set<string>>(new Set());
 
   // Build a map: agentId → most recent conversation's updated_at (DM only)
   const agentLastActivity = useMemo(() => {
@@ -80,26 +81,35 @@ export default function Sidebar() {
       </div>
 
       <div className="sidebar-content">
-        <div
-          className={`menu-item new-chat-btn ${isBootstrapping ? "active" : ""}`}
+        <button
+          type="button"
+          className={`menu-item menu-item-btn new-chat-btn ${isBootstrapping ? "active" : ""}`}
           onClick={() => { setMainView("chat"); handleNewAgent(); }}
         >
           <Plus size={20} />
           <span>{t("sidebarNewButton", { context: uiTheme })}</span>
-        </div>
+        </button>
 
         <div className="conversation-list" data-tour-id="sidebar-agents">
           {sortedAgents.map((agent) => (
-            <div
+            <button
+              type="button"
               key={agent.id}
-              className={`menu-item conversation-item ${isActive(agent.id) ? "active" : ""}`}
+              className={`menu-item menu-item-btn conversation-item ${isActive(agent.id) ? "active" : ""}`}
               onClick={() => { setMainView("chat"); openAgentChat(agent.id); }}
             >
-              {agent.avatar ? (
+              {agent.avatar && !avatarErrors.has(agent.id) ? (
                 <img
                   src={agent.avatar}
                   alt={agent.name}
                   className="conversation-agent-avatar"
+                  onError={() =>
+                    setAvatarErrors((prev) => {
+                      const next = new Set(prev);
+                      next.add(agent.id);
+                      return next;
+                    })
+                  }
                 />
               ) : (
                 <Bot size={22} />
@@ -110,12 +120,13 @@ export default function Sidebar() {
                   <span className="conversation-agent-name">{agent.description}</span>
                 )}
               </div>
-            </div>
+            </button>
           ))}
         </div>
 
-        <div
-          className={`menu-item ${mainView === "agent" ? "active" : ""}`}
+        <button
+          type="button"
+          className={`menu-item menu-item-btn ${mainView === "agent" ? "active" : ""}`}
           onClick={() => toggleView("agent")}
         >
           <Users size={20} />
@@ -123,30 +134,34 @@ export default function Sidebar() {
           {agents.length > 0 && (
             <span className="sidebar-badge">{agents.length}</span>
           )}
-        </div>
-        <div
-          className={`menu-item ${mainView === "network" ? "active" : ""}`}
+        </button>
+        <button
+          type="button"
+          className={`menu-item menu-item-btn ${mainView === "network" ? "active" : ""}`}
           onClick={() => toggleView("network")}
         >
           <Network size={20} />
           <span>{t("network:panel.title")}</span>
-        </div>
-        <div
-          className={`menu-item ${mainView === "vault" ? "active" : ""}`}
+        </button>
+        <button
+          type="button"
+          className={`menu-item menu-item-btn ${mainView === "vault" ? "active" : ""}`}
           onClick={() => toggleView("vault")}
         >
           <BookOpen size={20} />
           <span>{t("vault:title")}</span>
-        </div>
-        <div
-          className={`menu-item ${mainView === "hub" ? "active" : ""}`}
+        </button>
+        <button
+          type="button"
+          className={`menu-item menu-item-btn ${mainView === "hub" ? "active" : ""}`}
           onClick={() => toggleView("hub")}
         >
           <Globe size={20} />
           <span>{t("hub:title")}</span>
-        </div>
-        <div
-          className={`menu-item ${mainView === "team" ? "active" : ""}`}
+        </button>
+        <button
+          type="button"
+          className={`menu-item menu-item-btn ${mainView === "team" ? "active" : ""}`}
           onClick={() => toggleView("team")}
           data-tour-id="sidebar-team"
         >
@@ -155,9 +170,10 @@ export default function Sidebar() {
           {teams.length > 0 && (
             <span className="sidebar-badge">{teams.length}</span>
           )}
-        </div>
-        <div
-          className={`menu-item ${mainView === "cron" ? "active" : ""}`}
+        </button>
+        <button
+          type="button"
+          className={`menu-item menu-item-btn ${mainView === "cron" ? "active" : ""}`}
           onClick={() => toggleView("cron")}
         >
           <Clock size={20} />
@@ -165,15 +181,16 @@ export default function Sidebar() {
           {cronJobs.length > 0 && (
             <span className="sidebar-badge">{cronJobs.length}</span>
           )}
-        </div>
-        <div
-          className={`menu-item settings-btn ${mainView === "settings" ? "active" : ""}`}
+        </button>
+        <button
+          type="button"
+          className={`menu-item menu-item-btn settings-btn ${mainView === "settings" ? "active" : ""}`}
           onClick={() => toggleView("settings")}
           data-tour-id="sidebar-settings"
         >
           <Settings size={20} />
           <span>{t("settings:title")}</span>
-        </div>
+        </button>
       </div>
     </aside>
   );

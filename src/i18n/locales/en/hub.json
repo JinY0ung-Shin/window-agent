@@ -66,6 +66,7 @@
     "step_skills": "Select Skills",
     "step_notes": "Select Notes",
     "name": "Name",
+    "name_required": "Enter a name to share",
     "description": "Description",
     "select_all": "Select all",
     "deselect_all": "Deselect all",

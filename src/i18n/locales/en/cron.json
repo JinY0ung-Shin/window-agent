@@ -55,5 +55,9 @@
   "runResult": "Result",
   "runError": "Error",
   "runStarted": "Started",
-  "runFinished": "Finished"
+  "runFinished": "Finished",
+  "unknownAgent": "Unknown {{term_agent}}",
+  "loadJobsError": "Failed to load jobs",
+  "loadRunsError": "Failed to load run history",
+  "enabledToggle": "Enable {{name}}"
 }

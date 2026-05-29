@@ -1,10 +1,13 @@
 import { i18n } from "../../i18n";
 import type { PeerMessageRow } from "../../services/commands/relayCommands";
+import { useNetworkStore } from "../../stores/networkStore";
 import DeliveryBadge from "./DeliveryBadge";
 import MessageBody from "../chat/MessageBody";
 
 export default function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
   const isOutgoing = msg.direction === "outgoing";
+  const selectedContactId = useNetworkStore((s) => s.selectedContactId);
+  const resendMessage = useNetworkStore((s) => s.resendMessage);
 
   const time = (() => {
     try {
@@ -15,6 +18,13 @@ export default function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
       return "";
     }
   })();
+
+  const handleRetry =
+    isOutgoing && msg.delivery_state === "failed" && selectedContactId
+      ? () => {
+          void resendMessage(selectedContactId, msg.content, msg.target_agent_id);
+        }
+      : undefined;
 
   return (
     <div className={`peer-msg ${isOutgoing ? "outgoing" : "incoming"}`}>
@@ -30,7 +40,7 @@ export default function PeerMessageBubble({ msg }: { msg: PeerMessageRow }) {
         <div className="peer-msg-meta">
           <span className="peer-msg-time">{time}</span>
           {isOutgoing && (
-            <DeliveryBadge state={msg.delivery_state} />
+            <DeliveryBadge state={msg.delivery_state} onRetry={handleRetry} />
           )}
         </div>
       </div>

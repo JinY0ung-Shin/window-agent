@@ -18,10 +18,15 @@ export default function MessageBody({ content, reasoningContent }: MessageBodyPr
   return (
     <>
       {reasoningContent && (
-        <div className="reasoning-toggle" onClick={() => setShowReasoning(!showReasoning)}>
+        <button
+          type="button"
+          className="reasoning-toggle"
+          onClick={() => setShowReasoning(!showReasoning)}
+          aria-expanded={showReasoning}
+        >
           {showReasoning ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <span>{t("thinking.label")}</span>
-        </div>
+        </button>
       )}
       {showReasoning && reasoningContent && (
         <div className="reasoning-content">{reasoningContent}</div>

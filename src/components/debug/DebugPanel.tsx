@@ -47,9 +47,11 @@ function HttpLogItem({ log, t }: { log: HttpLogEntry; t: (key: string) => string
 
   return (
     <div className="debug-log-item">
-      <div
+      <button
+        type="button"
         className="debug-log-summary"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
         <span className="debug-log-expand">
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -72,12 +74,12 @@ function HttpLogItem({ log, t }: { log: HttpLogEntry; t: (key: string) => string
             {log.error}
           </span>
         )}
-      </div>
+      </button>
 
       {expanded && (
         <div className="debug-log-detail">
           <div className="debug-log-section">
-            <span className="debug-log-label">URL</span>
+            <span className="debug-log-label">{t("common:debug.url")}</span>
             <pre className="debug-code-block" style={{ wordBreak: "break-all" }}>{log.url}</pre>
           </div>
           <div className="debug-log-section">
@@ -218,9 +220,11 @@ export default function DebugPanel() {
                 const isExpanded = expandedId === log.id;
                 return (
                   <div key={log.id} className="debug-log-item">
-                    <div
+                    <button
+                      type="button"
                       className="debug-log-summary"
                       onClick={() => setExpandedId(isExpanded ? null : log.id)}
+                      aria-expanded={isExpanded}
                     >
                       <span className="debug-log-expand">
                         {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -236,17 +240,17 @@ export default function DebugPanel() {
                       {log.duration_ms != null && (
                         <span className="debug-log-duration">{log.duration_ms}ms</span>
                       )}
-                    </div>
+                    </button>
 
                     {isExpanded && (
                       <div className="debug-log-detail">
                         <div className="debug-log-section">
-                          <span className="debug-log-label">Input</span>
+                          <span className="debug-log-label">{t("common:debug.input")}</span>
                           <pre className="debug-code-block">{formatJson(log.tool_input)}</pre>
                         </div>
                         {log.tool_output && (
                           <div className="debug-log-section">
-                            <span className="debug-log-label">Output</span>
+                            <span className="debug-log-label">{t("common:debug.output")}</span>
                             <pre className="debug-code-block">{formatJson(log.tool_output)}</pre>
                           </div>
                         )}

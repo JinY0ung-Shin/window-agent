@@ -23,6 +23,8 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
   const [editingSkillContent, setEditingSkillContent] = useState("");
   const [newSkillName, setNewSkillName] = useState("");
   const [showNewSkill, setShowNewSkill] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [confirmDeleteName, setConfirmDeleteName] = useState<string | null>(null);
   const [skillError, setSkillError] = useState("");
   const [showMarketplace, setShowMarketplace] = useState(false);
   const skillContentComposition = useCompositionInput(setEditingSkillContent);
@@ -50,8 +52,9 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
   }, [isOpen, agent, loadAgentSkills]);
 
   const handleCreateSkill = async () => {
-    if (!agent || !newSkillName.trim()) return;
+    if (!agent || !newSkillName.trim() || creating) return;
     setSkillError("");
+    setCreating(true);
     try {
       await createSkill(agent.folder_name, newSkillName.trim());
       setNewSkillName("");
@@ -59,6 +62,8 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
       await loadAgentSkills();
     } catch (e) {
       setSkillError(t("skills.createFailed", { error: toErrorMessage(e) }));
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -89,7 +94,6 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
 
   const handleDeleteSkill = async (skillName: string) => {
     if (!agent) return;
-    if (!confirm(t("skills.deleteSkillConfirm"))) return;
     setSkillError("");
     try {
       await deleteSkill(agent.folder_name, skillName);
@@ -97,6 +101,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
         setEditingSkillName(null);
         setEditingSkillContent("");
       }
+      setConfirmDeleteName(null);
       await loadAgentSkills();
     } catch (e) {
       setSkillError(t("skills.deleteFailed", { error: toErrorMessage(e) }));
@@ -171,6 +176,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                       type="text"
                       value={newSkillName}
                       placeholder={t("skills.skillNamePlaceholder")}
+                      disabled={creating}
                       onKeyDown={(e) => {
                         if (skillNameComposition.isComposing.current) return;
                         if (e.key === "Enter") handleCreateSkill();
@@ -179,8 +185,10 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                       autoFocus
                       {...skillNameComposition.compositionProps}
                     />
-                    <button className="btn-primary" onClick={handleCreateSkill}>{t("skills.createButton")}</button>
-                    <button className="btn-secondary" onClick={() => setShowNewSkill(false)}>{t("common:cancel")}</button>
+                    <button className="btn-primary" onClick={handleCreateSkill} disabled={creating || !newSkillName.trim()}>
+                      {creating ? t("common:saving") : t("skills.createButton")}
+                    </button>
+                    <button className="btn-secondary" onClick={() => setShowNewSkill(false)} disabled={creating}>{t("common:cancel")}</button>
                   </div>
                 )}
 
@@ -200,14 +208,26 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
                       </span>
                     )}
                     {!isDefault && (
-                      <div className="skill-row-actions">
-                        <button onClick={() => handleEditSkill(skill.name)} title={t("common:edit")}>
-                          <Pencil size={14} />
-                        </button>
-                        <button onClick={() => handleDeleteSkill(skill.name)} title={t("common:delete")}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
+                      confirmDeleteName === skill.name ? (
+                        <div className="confirm-delete-row">
+                          <span>{t("skills.deleteSkillConfirm")}</span>
+                          <button className="btn-danger-sm" onClick={() => handleDeleteSkill(skill.name)}>
+                            {t("common:delete")}
+                          </button>
+                          <button className="btn-secondary-sm" onClick={() => setConfirmDeleteName(null)}>
+                            {t("common:cancel")}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="skill-row-actions">
+                          <button onClick={() => handleEditSkill(skill.name)} title={t("common:edit")} aria-label={t("common:edit")}>
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => { setSkillError(""); setConfirmDeleteName(skill.name); }} title={t("common:delete")} aria-label={t("common:delete")}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      )
                     )}
                   </div>
                 ))}
@@ -236,7 +256,7 @@ export default function AgentSkillsPanel({ agent, isDefault, isOpen }: Props) {
             </>
           )}
 
-          {skillError && <div className="skill-error">{skillError}</div>}
+          {skillError && <span className="form-text text-error skill-error">{skillError}</span>}
         </>
       )}
     </div>

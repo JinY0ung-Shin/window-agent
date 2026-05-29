@@ -91,7 +91,7 @@ describe("Sidebar (DM-style)", () => {
       ],
     });
     render(<Sidebar />);
-    const items = screen.getAllByRole("generic").filter(
+    const items = screen.getAllByRole("button").filter(
       (el) => el.classList.contains("conversation-item"),
     );
     // Active Agent (has conv) should come before Old Agent (no conv)

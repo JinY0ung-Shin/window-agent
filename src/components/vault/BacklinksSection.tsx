@@ -39,6 +39,7 @@ export default function BacklinksSection({ noteId, onNavigate }: BacklinksSectio
       <button
         className="vault-backlinks-header"
         onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
       >
         {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         <span>{t("backlinks.title", { count: loading ? 0 : backlinks.length })}</span>
