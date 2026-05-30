@@ -2,15 +2,21 @@
 :root {
   --primary: #6366f1;
   --primary-hover: #4f46e5;
+  --primary-rgb: 99, 102, 241;
+  --accent: var(--primary);
   --bg-color: #f8fafc;
+  --bg: var(--bg-color);
+  --bg-secondary: var(--hover-bg);
   --surface: #ffffff;
   --text-main: #0f172a;
   --text-muted: #64748b;
+  --text-secondary: var(--text-muted);
   --border: #e2e8f0;
 
   --warning: #f59e0b;
   --warning-bg: #fffbeb;
   --danger: #ef4444;
+  --error: var(--danger);
   --danger-hover: #dc2626;
   --danger-bg: #fef2f2;
   --danger-bg-hover: #fee2e2;
@@ -22,6 +28,8 @@
   --code-bg: #f1f5f9;
   --focus-ring: #eef2ff;
   --text-light: #6b7280; /* darkened from #94a3b8 for WCAG AA contrast on light surfaces */
+  --text-dim: var(--text-light);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   --success-bg: #dcfce7;
   --success-hover: #22c55e;
   --warning-text: #d97706;

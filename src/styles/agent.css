@@ -190,7 +190,7 @@
 }
 
 .agent-delete-warning svg {
-  color: var(--danger, #ef4444);
+  color: var(--danger);
   flex-shrink: 0;
 }
 
@@ -209,7 +209,7 @@
 .agent-delete-checkbox input[type="checkbox"] {
   width: 16px;
   height: 16px;
-  accent-color: var(--danger, #ef4444);
+  accent-color: var(--danger);
 }
 
 .agent-delete-footer {
@@ -225,7 +225,7 @@
   padding: 8px 16px;
   border: none;
   border-radius: 8px;
-  background: var(--danger, #ef4444);
+  background: var(--danger);
   color: white;
   font-family: inherit;
   font-size: 0.8125rem;
@@ -1122,8 +1122,8 @@
 }
 
 .marketplace-result-success {
-  color: var(--success, #22c55e);
-  background: color-mix(in srgb, var(--success, #22c55e) 8%, transparent);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 8%, transparent);
 }
 
 .marketplace-result-skip {

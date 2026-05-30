@@ -299,7 +299,7 @@
   gap: 6px;
   margin-top: 6px;
   font-size: 0.82rem;
-  color: #fecdd3;
+  color: var(--danger-border);
 }
 
 /* ── Input Area ── */

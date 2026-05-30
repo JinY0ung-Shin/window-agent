@@ -1,6 +1,6 @@
 [package]
 name = "tauri-app"
-version = "0.18.1"
+version = "0.18.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -64,4 +64,3 @@ winreg = "0.55"
 
 [dev-dependencies]
 tempfile = "3"
-

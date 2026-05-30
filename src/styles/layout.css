@@ -451,14 +451,14 @@
 }
 
 .conv-item-delete:hover {
-  color: var(--danger, #ef4444);
+  color: var(--danger);
   background: rgba(239, 68, 68, 0.1);
 }
 
 .conv-item-delete.confirm {
   opacity: 1;
   color: #fff;
-  background: var(--danger, #ef4444);
+  background: var(--danger);
 }
 
 /* ── Onboarding Animation ── */

@@ -157,6 +157,17 @@ describe("relayCommands", () => {
     expect(invoke).toHaveBeenCalledWith("relay_send_message", {
       contactId: "ct1",
       content: "Hello!",
+      targetAgentId: null,
+    });
+  });
+
+  it("relaySendMessage passes a target agent id when provided", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    await relaySendMessage("ct1", "Hello!", "agent-1");
+    expect(invoke).toHaveBeenCalledWith("relay_send_message", {
+      contactId: "ct1",
+      content: "Hello!",
+      targetAgentId: "agent-1",
     });
   });
 

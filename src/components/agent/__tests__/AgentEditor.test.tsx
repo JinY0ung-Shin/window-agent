@@ -108,7 +108,7 @@ describe("AgentEditor", () => {
     expect(screen.queryByText("해고하기")).not.toBeInTheDocument();
   });
 
-  it("delete button visible and works for non-default agent", async () => {
+  it("delete button opens confirmation and confirm deletes non-default agent", async () => {
     const deleteSpy = vi.fn();
     useAgentStore.setState({
       isEditorOpen: true,
@@ -122,6 +122,9 @@ describe("AgentEditor", () => {
     const deleteBtn = screen.getByText("해고하기");
     expect(deleteBtn).toBeInTheDocument();
     fireEvent.click(deleteBtn);
-    expect(deleteSpy).toHaveBeenCalledWith("test-id");
+
+    expect(screen.getByText("해고 확인")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText("해고하기")[1]);
+    expect(deleteSpy).toHaveBeenCalledWith("test-id", true);
   });
 });

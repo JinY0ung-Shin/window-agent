@@ -804,7 +804,7 @@
 }
 
 .hub-share-result-success {
-  color: var(--success, #22c55e);
+  color: var(--success);
 }
 
 .hub-share-result-error {
@@ -943,7 +943,7 @@
 }
 
 .hub-install-result-success {
-  color: var(--success, #22c55e);
+  color: var(--success);
 }
 
 .hub-install-result-skipped {

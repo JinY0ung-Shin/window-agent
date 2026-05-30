@@ -11,11 +11,14 @@ export async function addCredential(
   id: string,
   name: string,
   value: string,
-  description: string = "",
+  descriptionOrAllowedHosts: string | string[] = "",
   allowedHosts: string[] = [],
 ): Promise<void> {
+  const description = Array.isArray(descriptionOrAllowedHosts) ? "" : descriptionOrAllowedHosts;
+  const hosts = Array.isArray(descriptionOrAllowedHosts) ? descriptionOrAllowedHosts : allowedHosts;
+
   return invoke("add_credential", {
-    request: { id, name, value, description, allowed_hosts: allowedHosts },
+    request: { id, name, value, description, allowed_hosts: hosts },
   });
 }
 
@@ -23,16 +26,19 @@ export async function updateCredential(
   id: string,
   name?: string,
   value?: string,
-  description?: string,
+  descriptionOrAllowedHosts?: string | string[],
   allowedHosts?: string[],
 ): Promise<void> {
+  const description = Array.isArray(descriptionOrAllowedHosts) ? undefined : descriptionOrAllowedHosts;
+  const hosts = Array.isArray(descriptionOrAllowedHosts) ? descriptionOrAllowedHosts : allowedHosts;
+
   return invoke("update_credential", {
     request: {
       id,
       name: name ?? null,
       value: value ?? null,
       description: description ?? null,
-      allowed_hosts: allowedHosts ?? null,
+      allowed_hosts: hosts ?? null,
     },
   });
 }

@@ -1036,13 +1036,13 @@
 }
 
 .directory-badge.known {
-  background: var(--success-bg, rgba(52, 199, 89, 0.12));
-  color: var(--success, #34c759);
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .directory-badge.sent {
-  background: var(--warning-bg, rgba(255, 159, 10, 0.12));
-  color: var(--warning, #ff9f0a);
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .btn-sm {
@@ -1081,13 +1081,13 @@
 }
 
 .contact-item-badge.pending-outgoing {
-  background: var(--warning-bg, rgba(255, 159, 10, 0.12));
-  color: var(--warning, #ff9f0a);
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .contact-item-badge.pending-approval {
-  background: var(--info-bg, rgba(48, 176, 199, 0.12));
-  color: var(--info, #30b0c7);
+  background: var(--info-bg);
+  color: var(--info);
 }
 
 /* ── Agent Picker (custom dropdown) ── */

@@ -35,14 +35,13 @@ describe("CreateNoteDialog", () => {
     expect(screen.getByText("만들기")).toBeInTheDocument();
   });
 
-  it("renders all category radio buttons", () => {
+  it("renders a free-form category input", () => {
     render(
       <CreateNoteDialog isOpen={true} onClose={onClose} defaultAgentId="agent-1" />,
     );
-    expect(screen.getByText("지식")).toBeInTheDocument();
-    expect(screen.getByText("결정")).toBeInTheDocument();
-    expect(screen.getByText("대화")).toBeInTheDocument();
-    expect(screen.getByText("회고")).toBeInTheDocument();
+    const categoryInput = screen.getByPlaceholderText("예: knowledge, api-설계, 회의록");
+    expect(categoryInput).toBeInTheDocument();
+    expect(categoryInput).toHaveValue("knowledge");
   });
 
   it("renders scope radio buttons", () => {
@@ -167,7 +166,7 @@ describe("CreateNoteDialog", () => {
     });
   });
 
-  it("can switch category via radio buttons", async () => {
+  it("can enter a custom category", async () => {
     const createNoteMock = vi.fn().mockResolvedValue({ id: "new-note" });
     useVaultStore.setState({ createNote: createNoteMock });
 
@@ -175,9 +174,8 @@ describe("CreateNoteDialog", () => {
       <CreateNoteDialog isOpen={true} onClose={onClose} defaultAgentId="agent-1" />,
     );
 
-    // category.decision => "결정"
-    const decisionRadio = screen.getByText("결정");
-    fireEvent.click(decisionRadio);
+    const categoryInput = screen.getByPlaceholderText("예: knowledge, api-설계, 회의록");
+    fireEvent.change(categoryInput, { target: { value: "api-설계" } });
 
     const titleInput = screen.getByPlaceholderText("노트 제목");
     fireEvent.change(titleInput, { target: { value: "Decision Note" } });
@@ -187,7 +185,7 @@ describe("CreateNoteDialog", () => {
 
     await waitFor(() => {
       expect(createNoteMock).toHaveBeenCalledWith(
-        expect.objectContaining({ category: "decision" }),
+        expect.objectContaining({ category: "api-설계" }),
       );
     });
   });

@@ -651,8 +651,8 @@ code.shell-info-value {
 }
 
 .shell-info-badge.active {
-  background: var(--success-bg, rgba(52, 199, 89, 0.15));
-  color: var(--success, #34c759);
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 /* ── Plugins Section ── */
@@ -696,7 +696,7 @@ code.shell-info-value {
 
 .plugins-error {
   font-size: 0.82rem;
-  color: var(--error, #ef4444);
+  color: var(--error);
   padding: 4px 0;
 }
 
@@ -788,14 +788,14 @@ code.shell-info-value {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--success, #34c759);
+  color: var(--success);
 }
 
 .plugins-result-err {
   display: flex;
   align-items: center;
   gap: 4px;
-  color: var(--error, #ef4444);
+  color: var(--error);
 }
 
 .plugins-actions {

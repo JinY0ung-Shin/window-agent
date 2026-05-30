@@ -380,12 +380,13 @@ describe("credentialCommands", () => {
 
   it("addCredential passes request object with allowed_hosts", async () => {
     vi.mocked(invoke).mockResolvedValue(undefined);
-    await addCredential("cred1", "API Key", "secret123", ["example.com"]);
+    await addCredential("cred1", "API Key", "secret123", "GitHub access", ["example.com"]);
     expect(invoke).toHaveBeenCalledWith("add_credential", {
       request: {
         id: "cred1",
         name: "API Key",
         value: "secret123",
+        description: "GitHub access",
         allowed_hosts: ["example.com"],
       },
     });
@@ -399,6 +400,7 @@ describe("credentialCommands", () => {
         id: "cred1",
         name: null,
         value: null,
+        description: null,
         allowed_hosts: null,
       },
     });
@@ -406,12 +408,13 @@ describe("credentialCommands", () => {
 
   it("updateCredential passes provided optional fields", async () => {
     vi.mocked(invoke).mockResolvedValue(undefined);
-    await updateCredential("cred1", "New Name", "new-secret", ["new.host"]);
+    await updateCredential("cred1", "New Name", "new-secret", "Updated description", ["new.host"]);
     expect(invoke).toHaveBeenCalledWith("update_credential", {
       request: {
         id: "cred1",
         name: "New Name",
         value: "new-secret",
+        description: "Updated description",
         allowed_hosts: ["new.host"],
       },
     });

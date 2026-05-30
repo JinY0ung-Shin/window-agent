@@ -134,7 +134,7 @@ pub struct CreateAgentRequest {
 | 구분 | 파일 | 저장 방식 | 내용 |
 |------|------|-----------|------|
 | 비밀값 | `credentials-secrets.json` | tauri-plugin-store | credential ID -> 암호화된 실제 값 |
-| 메타데이터 | `credentials_meta.json` | 일반 JSON 파일 | `[{ id, name, allowed_hosts, created_at, updated_at }]` |
+| 메타데이터 | `credentials_meta.json` | 일반 JSON 파일 | `[{ id, name, description, allowed_hosts, created_at, updated_at }]` |
 | 접근 제어 | `TOOL_CONFIG.json` (에이전트별) | 일반 JSON 파일 | `credentials` 섹션에 에이전트별 허용 ID 목록 |
 
 ### 4.2 CredentialMeta 구조
@@ -143,6 +143,7 @@ pub struct CreateAgentRequest {
 pub struct CredentialMeta {
     pub id: String,           // [A-Za-z0-9_-]+ 패턴만 허용
     pub name: String,         // 사용자 표시명
+    pub description: String,  // 용도 설명
     pub allowed_hosts: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -152,8 +153,8 @@ pub struct CredentialMeta {
 ### 4.3 CRUD 커맨드
 
 - `list_credentials` -- 전체 메타데이터 목록
-- `add_credential(id, name, value, allowed_hosts)` -- 비밀값 저장 + 메타데이터 생성
-- `update_credential(id, name?, value?, allowed_hosts?)` -- 부분 업데이트
+- `add_credential(id, name, value, description, allowed_hosts)` -- 비밀값 저장 + 메타데이터 생성
+- `update_credential(id, name?, value?, description?, allowed_hosts?)` -- 부분 업데이트
 - `remove_credential(id)` -- 비밀값 + 메타데이터 삭제
 
 ### 4.4 도구에서의 사용
@@ -291,7 +292,7 @@ pub struct CredentialMeta {
   - `{{credential:KEY}}` 인라인 치환 (command 문자열에서 직접 치환)
 - 실행 결과에서 credential 값 자동 redact (환경변수/인라인 모두)
 - **auto_approve 정책**:
-  - `auto_approve=true`일 때 `run_shell`도 자동 승인 (credential 유무 무관, 환경변수 주입은 투명)
+  - `run_shell`은 에이전트에 credential이 있으면 항상 confirm 유지
   - `browser_type`은 `{{credential:*}}` placeholder 사용 시에만 confirm 유지
   - `manage_schedule`은 항상 confirm (NEVER_AUTO_APPROVE_TOOLS)
 
