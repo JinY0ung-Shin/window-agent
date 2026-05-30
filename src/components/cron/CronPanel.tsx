@@ -5,6 +5,7 @@ import { Clock, Plus, Trash2, Settings, Bot, ChevronDown, ChevronRight, Loader2,
 import { useCronStore } from "../../stores/cronStore";
 import { useAgentStore } from "../../stores/agentStore";
 import CronEditor from "./CronEditor";
+import { listCronRuns } from "../../services/commands/cronCommands";
 import type { CronJob, CronRun } from "../../services/types";
 import { logger } from "../../services/logger";
 import { toErrorMessage } from "../../utils/errorUtils";
@@ -50,9 +51,7 @@ function JobCard({ job }: { job: CronJob }) {
       setRunsLoading(true);
       setRunsError(null);
       try {
-        const r = await import("../../services/commands/cronCommands").then(
-          (m) => m.listCronRuns(job.id, 5),
-        );
+        const r = await listCronRuns(job.id, 5);
         setRuns(r);
       } catch (e) {
         logger.error("Failed to load runs:", e);

@@ -8,6 +8,7 @@ import { refreshDefaultManagerPersona } from "./commands/agentCommands";
 import { emitLifecycleEvent } from "./lifecycleEvents";
 import { registerHeartbeatLifecycle } from "./heartbeatService";
 import { logger } from "./logger";
+import { AGENT_TEMPLATES } from "../data/agentTemplates";
 
 export async function initializeApp(): Promise<void> {
   emitLifecycleEvent({ type: "app:init" });
@@ -148,7 +149,6 @@ export async function seedTemplateAgents(
   templateKeys: string[],
   locale: string,
 ): Promise<void> {
-  const { AGENT_TEMPLATES } = await import("../data/agentTemplates");
   const loadAgents = useAgentStore.getState().loadAgents;
 
   // Get existing agents to check for duplicates

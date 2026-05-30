@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import NoteEditor from "../NoteEditor";
 import type { VaultNote } from "../../../services/vaultTypes";
 
@@ -48,21 +48,21 @@ describe("NoteEditor", () => {
     expect(tagsInput).toBeInTheDocument();
   });
 
-  it("calls onSave with parsed tags when save button clicked", () => {
+  it("calls onSave with parsed tags when save button clicked", async () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
     // common:save => "저장"
     const saveBtn = screen.getByText("저장");
     fireEvent.click(saveBtn);
 
-    expect(onSave).toHaveBeenCalledWith({
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({
       title: "Test Note",
       content: "Some content here",
       tags: ["tag1", "tag2"],
       confidence: 0.8,
-    });
+    }));
   });
 
-  it("parses comma-separated tags correctly, trimming whitespace and filtering empty", () => {
+  it("parses comma-separated tags correctly, trimming whitespace and filtering empty", async () => {
     const note = { ...baseNote, tags: [] };
     render(<NoteEditor note={note} onSave={onSave} onCancel={onCancel} />);
 
@@ -73,11 +73,11 @@ describe("NoteEditor", () => {
     const saveBtn = screen.getByText("저장");
     fireEvent.click(saveBtn);
 
-    expect(onSave).toHaveBeenCalledWith(
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
         tags: ["foo", "bar", "baz"],
       }),
-    );
+    ));
   });
 
   it("calls onCancel directly when no changes made", () => {
@@ -131,16 +131,16 @@ describe("NoteEditor", () => {
     expect(screen.getByTestId("markdown-preview")).toHaveTextContent("Some content here");
   });
 
-  it("handles Ctrl+S keyboard shortcut", () => {
+  it("handles Ctrl+S keyboard shortcut", async () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
     fireEvent.keyDown(window, { key: "s", ctrlKey: true });
-    expect(onSave).toHaveBeenCalled();
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
   });
 
-  it("handles Cmd+S keyboard shortcut", () => {
+  it("handles Cmd+S keyboard shortcut", async () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
     fireEvent.keyDown(window, { key: "s", metaKey: true });
-    expect(onSave).toHaveBeenCalled();
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
   });
 
   it("does not trigger save on plain S key", () => {
@@ -149,7 +149,7 @@ describe("NoteEditor", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("updates confidence slider value", () => {
+  it("updates confidence slider value", async () => {
     render(<NoteEditor note={baseNote} onSave={onSave} onCancel={onCancel} />);
     const slider = screen.getByRole("slider");
     fireEvent.change(slider, { target: { value: "0.5" } });
@@ -157,9 +157,9 @@ describe("NoteEditor", () => {
     const saveBtn = screen.getByText("저장");
     fireEvent.click(saveBtn);
 
-    expect(onSave).toHaveBeenCalledWith(
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ confidence: 0.5 }),
-    );
+    ));
   });
 
   it("detects dirty state from title change", () => {

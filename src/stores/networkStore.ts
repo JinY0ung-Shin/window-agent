@@ -22,11 +22,13 @@ import {
   relayClearThreadMessages,
   relayClearMyChatMessages,
   relayClearAllMyChatMessages,
+  relayGetDirectorySettings,
   type ContactRow,
   type PeerThreadRow,
   type PeerMessageRow,
   type DirectoryPeer,
 } from "../services/commands/relayCommands";
+import { useSettingsStore } from "./settingsStore";
 
 type NetworkStatus = "dormant" | "starting" | "active" | "stopping" | "reconnecting";
 
@@ -160,10 +162,8 @@ export const useNetworkStore = create<NetworkState>((set, get) => ({
 
       // Register directory profile with company name (respect user's existing settings)
       try {
-        const { useSettingsStore } = await import("./settingsStore");
         const companyName = useSettingsStore.getState().companyName;
         if (companyName) {
-          const { relayGetDirectorySettings } = await import("../services/commands/relayCommands");
           const settings = await relayGetDirectorySettings();
           await relayUpdateDirectoryProfile(
             companyName,

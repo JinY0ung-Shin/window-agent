@@ -610,8 +610,6 @@ mod tests {
             },
         ).unwrap();
 
-        let contact = relay_db::get_contact(&db, "c1").unwrap().unwrap();
-
         // Mock AppHandle is not available in unit tests, so we test resolve_agent_id
         // indirectly by checking the fallback logic
         let agents = crate::db::agent_operations::list_agents_impl(&db).unwrap();

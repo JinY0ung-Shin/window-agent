@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import TeamPanel from "../TeamPanel";
 import { useTeamStore } from "../../../stores/teamStore";
 import { useAgentStore } from "../../../stores/agentStore";
@@ -53,6 +53,16 @@ const mockAgents = [
   { id: "agent-2", folder_name: "beta", name: "Beta Agent", avatar: "https://example.com/avatar.png", description: "", model: null, temperature: null, thinking_enabled: null, thinking_budget: null, is_default: false, sort_order: 0, created_at: "", updated_at: "" },
 ];
 
+async function renderTeamPanelWithDetails() {
+  const result = render(<TeamPanel />);
+  if (useTeamStore.getState().teams.length > 0) {
+    await waitFor(() => {
+      expect(result.container.querySelector(".team-card-members")).toBeInTheDocument();
+    });
+  }
+  return result;
+}
+
 describe("TeamPanel", () => {
   it("renders empty state when no teams", () => {
     useTeamStore.setState({
@@ -67,7 +77,7 @@ describe("TeamPanel", () => {
     expect(screen.getByText("아직 팀이 없습니다. 새 팀을 만들어 보세요.")).toBeInTheDocument();
   });
 
-  it("renders team cards when teams exist", () => {
+  it("renders team cards when teams exist", async () => {
     useTeamStore.setState({
       teams: mockTeams,
       loadTeams: vi.fn(),
@@ -75,12 +85,12 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    render(<TeamPanel />);
+    await renderTeamPanelWithDetails();
     expect(screen.getByText("Alpha Team")).toBeInTheDocument();
     expect(screen.getByText("Beta Team")).toBeInTheDocument();
   });
 
-  it("shows team description when present", () => {
+  it("shows team description when present", async () => {
     useTeamStore.setState({
       teams: mockTeams,
       loadTeams: vi.fn(),
@@ -88,11 +98,11 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    render(<TeamPanel />);
+    await renderTeamPanelWithDetails();
     expect(screen.getByText("First team")).toBeInTheDocument();
   });
 
-  it("resolves agent name from agent store", () => {
+  it("resolves agent name from agent store", async () => {
     useTeamStore.setState({
       teams: [mockTeams[0]],
       loadTeams: vi.fn(),
@@ -100,11 +110,11 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    render(<TeamPanel />);
+    await renderTeamPanelWithDetails();
     expect(screen.getByText("Alpha Agent")).toBeInTheDocument();
   });
 
-  it("shows 'Unknown' for unresolved agent", () => {
+  it("shows 'Unknown' for unresolved agent", async () => {
     useTeamStore.setState({
       teams: [{
         ...mockTeams[0],
@@ -115,7 +125,7 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    render(<TeamPanel />);
+    await renderTeamPanelWithDetails();
     expect(screen.getByText("Unknown")).toBeInTheDocument();
   });
 
@@ -130,7 +140,7 @@ describe("TeamPanel", () => {
     expect(loadAgents).toHaveBeenCalled();
   });
 
-  it("shows delete confirmation on trash button click", () => {
+  it("shows delete confirmation on trash button click", async () => {
     useTeamStore.setState({
       teams: [mockTeams[0]],
       loadTeams: vi.fn(),
@@ -138,7 +148,7 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    const { container } = render(<TeamPanel />);
+    const { container } = await renderTeamPanelWithDetails();
 
     const deleteBtn = container.querySelector(".team-card-delete")!;
     fireEvent.click(deleteBtn);
@@ -148,7 +158,7 @@ describe("TeamPanel", () => {
     expect(screen.getByText("취소")).toBeInTheDocument();
   });
 
-  it("cancels delete confirmation", () => {
+  it("cancels delete confirmation", async () => {
     useTeamStore.setState({
       teams: [mockTeams[0]],
       loadTeams: vi.fn(),
@@ -156,7 +166,7 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    const { container } = render(<TeamPanel />);
+    const { container } = await renderTeamPanelWithDetails();
 
     const deleteBtn = container.querySelector(".team-card-delete")!;
     fireEvent.click(deleteBtn);
@@ -170,7 +180,7 @@ describe("TeamPanel", () => {
     expect(container.querySelector(".team-card-delete")).toBeInTheDocument();
   });
 
-  it("calls deleteTeam on confirm delete", () => {
+  it("calls deleteTeam on confirm delete", async () => {
     const deleteTeam = vi.fn();
     useTeamStore.setState({
       teams: [mockTeams[0]],
@@ -180,14 +190,14 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    const { container } = render(<TeamPanel />);
+    const { container } = await renderTeamPanelWithDetails();
 
     const deleteBtn = container.querySelector(".team-card-delete")!;
     fireEvent.click(deleteBtn);
 
     // common:delete => "삭제"
     const confirmBtn = screen.getByText("삭제");
-    fireEvent.click(confirmBtn);
+    await act(async () => { fireEvent.click(confirmBtn); });
 
     expect(deleteTeam).toHaveBeenCalledWith("team-1");
   });
@@ -210,7 +220,7 @@ describe("TeamPanel", () => {
     expect(openTeamEditor).toHaveBeenCalledWith();
   });
 
-  it("opens team editor for editing on settings button click", () => {
+  it("opens team editor for editing on settings button click", async () => {
     const openTeamEditor = vi.fn();
     useTeamStore.setState({
       teams: [mockTeams[0]],
@@ -221,7 +231,7 @@ describe("TeamPanel", () => {
     });
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
 
-    const { container } = render(<TeamPanel />);
+    const { container } = await renderTeamPanelWithDetails();
 
     const editBtn = container.querySelector(".team-card-edit")!;
     fireEvent.click(editBtn);
@@ -254,7 +264,7 @@ describe("TeamPanel", () => {
     expect(screen.queryByTestId("team-editor")).not.toBeInTheDocument();
   });
 
-  it("shows team conversations when they exist", () => {
+  it("shows team conversations when they exist", async () => {
     const mockConversations = [
       {
         id: "conv-1",
@@ -274,11 +284,11 @@ describe("TeamPanel", () => {
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
     useConversationStore.setState({ conversations: mockConversations });
 
-    render(<TeamPanel />);
+    await renderTeamPanelWithDetails();
     expect(screen.getByText("Team Discussion")).toBeInTheDocument();
   });
 
-  it("calls openTeamChat on team card click", () => {
+  it("calls openTeamChat on team card click", async () => {
     const openTeamChat = vi.fn();
     useTeamStore.setState({
       teams: [mockTeams[0]],
@@ -288,7 +298,7 @@ describe("TeamPanel", () => {
     useAgentStore.setState({ agents: mockAgents, loadAgents: vi.fn() });
     useConversationStore.setState({ openTeamChat });
 
-    const { container } = render(<TeamPanel />);
+    const { container } = await renderTeamPanelWithDetails();
     const card = container.querySelector(".team-card")!;
     fireEvent.click(card);
 

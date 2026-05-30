@@ -71,6 +71,8 @@ const resources = {
 };
 
 i18n.use(initReactI18next).init({
+  debug: false,
+  showSupportNotice: false,
   resources,
   lng: localStorage.getItem(LS_LOCALE) || "ko",
   fallbackLng: "ko",

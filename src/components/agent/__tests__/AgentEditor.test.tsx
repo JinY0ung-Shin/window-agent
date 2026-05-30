@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
 import AgentEditor from "../AgentEditor";
 import { useAgentStore } from "../../../stores/agentStore";
 import { makeAgent, EMPTY_PERSONA } from "../../../__tests__/testFactories";
@@ -85,7 +85,7 @@ describe("AgentEditor", () => {
     await act(async () => { render(<AgentEditor />); });
 
     fireEvent.click(screen.getByText("저장"));
-    expect(saveSpy).toHaveBeenCalled();
+    await waitFor(() => expect(saveSpy).toHaveBeenCalled());
   });
 
   it("cancel button calls closeEditor", async () => {

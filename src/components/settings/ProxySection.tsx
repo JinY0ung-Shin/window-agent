@@ -36,7 +36,9 @@ const ProxySection = forwardRef<ProxySectionRef, Props>(function ProxySection({ 
       }).catch((e) => logger.debug("Failed to get browser proxy", e));
       getBrowserNoProxy().then((p) => setBrowserNoProxyState(p ?? ""))
         .catch((e) => logger.debug("Failed to get browser no_proxy", e));
-      getBrowserHeadless().then(setHeadless).catch((e) => logger.debug("Failed to get headless", e));
+      getBrowserHeadless()
+        .then((enabled) => setHeadless(enabled === true))
+        .catch((e) => logger.debug("Failed to get headless", e));
     }
   }, [isOpen]);
 

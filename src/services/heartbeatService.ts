@@ -15,6 +15,7 @@ import { emitLifecycleEvent, onLifecycleEvent } from "./lifecycleEvents";
 import { vaultListNotesWithDecay, vaultArchiveNote } from "./commands/vaultCommands";
 import { readAgentFile } from "./tauriCommands";
 import { logger } from "./logger";
+import { useAgentStore } from "../stores/agentStore";
 
 // ── Types ────────────────────────────────────────────
 
@@ -150,8 +151,6 @@ export function registerHeartbeatLifecycle(): void {
 
   lifecycleUnsubscribe = onLifecycleEvent(async (event) => {
     if (event.type === "session:start") {
-      // Lazy-resolve folderName from agentStore
-      const { useAgentStore } = await import("../stores/agentStore");
       const agent = useAgentStore.getState().agents.find((a) => a.id === event.agentId);
       if (agent) {
         startHeartbeat(event.agentId, agent.folder_name);

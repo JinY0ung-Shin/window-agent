@@ -67,7 +67,9 @@ const ApiServerSection = forwardRef<ApiServerSectionRef, Props>(
         setHealthResult(null);
         setHealthError("");
         fetchModels();
-        getNoProxy().then(setNoProxyEnabled).catch((e) => logger.debug("Failed to get proxy setting", e));
+        getNoProxy()
+          .then((enabled) => setNoProxyEnabled(enabled === true))
+          .catch((e) => logger.debug("Failed to get proxy setting", e));
         relayGetRelayUrl().then(setTempRelayUrl).catch((e) => logger.debug("Failed to get relay URL", e));
       }
     }, [isOpen]);
