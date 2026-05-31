@@ -18,6 +18,10 @@
   transition: color 0.15s, background 0.15s;
 }
 
+.debug-toggle-btn--settings {
+  bottom: 84px;
+}
+
 .debug-toggle-btn:hover {
   color: var(--primary);
   background: var(--bg-color);
@@ -37,10 +41,12 @@
   flex-direction: column;
   transform: translateX(100%);
   transition: transform 0.25s ease-in-out;
+  pointer-events: none;
 }
 
 .debug-panel.open {
   transform: translateX(0);
+  pointer-events: auto;
 }
 
 .debug-panel-header {

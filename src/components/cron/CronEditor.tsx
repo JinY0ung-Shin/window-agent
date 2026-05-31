@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2 } from "lucide-react";
 import Modal from "../common/Modal";
@@ -84,7 +84,7 @@ export default function CronEditor() {
     }
   }, [loadedJob]);
 
-  const validate = (): boolean => {
+  const getValidationErrors = useCallback((): Record<string, string> => {
     const errs: Record<string, string> = {};
 
     if (!name.trim()) errs.name = t("validation.nameRequired");
@@ -111,8 +111,15 @@ export default function CronEditor() {
       // Deeper cron validation is done server-side
     }
 
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+    return errs;
+  }, [agentId, atValue, cronExpr, everyAmount, everyUnit, name, prompt, scheduleType, t]);
+
+  const validationErrors = useMemo(() => getValidationErrors(), [getValidationErrors]);
+  const canSave = Object.keys(validationErrors).length === 0;
+
+  const validate = (): boolean => {
+    setErrors(validationErrors);
+    return Object.keys(validationErrors).length === 0;
   };
 
   const getScheduleValue = (): string => {
@@ -175,7 +182,7 @@ export default function CronEditor() {
           <button
             className="btn-primary"
             onClick={handleSave}
-            disabled={saving || loadingJob}
+            disabled={saving || loadingJob || !canSave}
           >
             {saving && <Loader2 size={14} className="spinning" />}
             {saving ? t("common:saving") : t("save")}

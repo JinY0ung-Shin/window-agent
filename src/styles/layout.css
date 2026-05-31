@@ -421,12 +421,28 @@
   cursor: not-allowed;
 }
 
+.conv-item-text {
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
+}
+
 .conv-item-title {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1;
-  min-width: 0;
+}
+
+.conv-item-meta {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 400;
 }
 
 .conv-item-delete {

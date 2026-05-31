@@ -29,6 +29,15 @@ function groupByDate(conversations: Conversation[], locale: Locale): { key: stri
   return groups;
 }
 
+function formatConversationTime(dateStr: string, locale: Locale): string {
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat(locale === "ko" ? "ko-KR" : "en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 // ── Component ──────────────────────────────────────────
 export default function ConversationSwitcher() {
   const [isOpen, setIsOpen] = useState(false);
@@ -91,6 +100,14 @@ export default function ConversationSwitcher() {
   }, [conversations, currentAgentId, currentConversationId, messages, t]);
 
   const dateGroups = useMemo(() => groupByDate(agentConversations, locale), [agentConversations, locale]);
+  const duplicateTitleCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const conv of agentConversations) {
+      const title = conv.title.trim();
+      counts.set(title, (counts.get(title) ?? 0) + 1);
+    }
+    return counts;
+  }, [agentConversations]);
 
   // Is the chat busy? (streaming, tool running, etc.)
   const isBusy = activeRun !== null || toolRunState !== "idle";
@@ -212,24 +229,32 @@ export default function ConversationSwitcher() {
             {dateGroups.map((group) => (
               <div key={group.key} className="conv-date-group">
                 <div className="conv-date-header">{group.label}</div>
-                {group.convs.map((conv) => (
-                  <div
-                    key={conv.id}
-                    className={`conv-item ${conv.id === currentConversationId ? "active" : ""} ${isBusy ? "disabled" : ""}`}
-                    onClick={() => handleSelect(conv.id)}
-                  >
-                    <span className="conv-item-title">{conv.title}</span>
-                    {!isBusy && (
-                      <button
-                        className={`conv-item-delete ${confirmDeleteId === conv.id ? "confirm" : ""}`}
-                        onClick={(e) => handleDelete(e, conv.id)}
-                        title={confirmDeleteId === conv.id ? t("common:confirm") : t("common:delete")}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
-                  </div>
-                ))}
+                {group.convs.map((conv) => {
+                  const meta = (duplicateTitleCounts.get(conv.title.trim()) ?? 0) > 1
+                    ? formatConversationTime(conv.updated_at, locale)
+                    : "";
+                  return (
+                    <div
+                      key={conv.id}
+                      className={`conv-item ${conv.id === currentConversationId ? "active" : ""} ${isBusy ? "disabled" : ""}`}
+                      onClick={() => handleSelect(conv.id)}
+                    >
+                      <span className="conv-item-text">
+                        <span className="conv-item-title">{conv.title}</span>
+                        {meta && <span className="conv-item-meta">{meta}</span>}
+                      </span>
+                      {!isBusy && (
+                        <button
+                          className={`conv-item-delete ${confirmDeleteId === conv.id ? "confirm" : ""}`}
+                          onClick={(e) => handleDelete(e, conv.id)}
+                          title={confirmDeleteId === conv.id ? t("common:confirm") : t("common:delete")}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ))}
           </div>

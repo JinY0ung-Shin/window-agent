@@ -158,8 +158,12 @@ export default function DebugPanel() {
     }
   };
 
+  if (!isOpen) {
+    return <div className="debug-panel" aria-hidden />;
+  }
+
   return (
-    <div className={`debug-panel ${isOpen ? "open" : ""}`}>
+    <div className="debug-panel open" aria-hidden={false}>
       <div className="debug-panel-header">
         <div className="debug-tab-bar">
           <button

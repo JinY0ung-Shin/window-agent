@@ -46,6 +46,16 @@ export default function NetworkPanel() {
           message={t("panel.inactive")}
           hint={t("panel.inactiveHint")}
           className="network-panel-empty"
+          action={
+            <button
+              type="button"
+              className="btn-primary network-panel-empty-action"
+              onClick={() => setShowSettings(true)}
+            >
+              <Settings size={16} />
+              {t("settingsSection.title")}
+            </button>
+          }
         />
         {showSettings && (
           <NetworkSettingsModal onClose={() => setShowSettings(false)} />

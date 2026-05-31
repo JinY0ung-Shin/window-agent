@@ -113,10 +113,12 @@ export default function MainLayout() {
         <ChatWindow />
       )}
       <button
-        className="debug-toggle-btn"
+        type="button"
+        className={`debug-toggle-btn ${mainView === "settings" ? "debug-toggle-btn--settings" : ""}`}
         onClick={() => setDebugOpen(!isDebugOpen)}
         title={t("layout.toolLog")}
         aria-label={t("layout.toolLog")}
+        aria-expanded={isDebugOpen}
       >
         <Bug size={18} />
       </button>

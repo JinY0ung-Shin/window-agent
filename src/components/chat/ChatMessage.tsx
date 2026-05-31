@@ -79,6 +79,13 @@ export default function ChatMessage({ message, senderInfo }: Props) {
 
   // Agent message with tool_calls — render content + tool call bubbles
   const hasToolCalls = message.type === "agent" && message.tool_calls && message.tool_calls.length > 0;
+  const isWaitingForFirstToken =
+    message.type === "agent" &&
+    message.status === "streaming" &&
+    !message.content &&
+    !message.reasoningContent &&
+    !hasToolCalls &&
+    !isOnboarding;
 
   // Determine if these tool calls are the currently pending ones
   const isCurrentPending = hasToolCalls && (toolRunState === "tool_waiting" || toolRunState === "tool_pending")
@@ -139,7 +146,7 @@ export default function ChatMessage({ message, senderInfo }: Props) {
   const isTeam = !!senderInfo;
 
   return (
-    <div className={`message agent ${isPending && !isOnboarding ? "loading" : ""} ${message.status === "failed" ? "failed" : ""} ${message.status === "streaming" ? "streaming" : ""} ${message.status === "aborted" ? "aborted" : ""}${isTeam ? " team-message team-message-agent" : ""}`}>
+    <div className={`message agent ${(isPending && !isOnboarding) || isWaitingForFirstToken ? "loading" : ""} ${message.status === "failed" ? "failed" : ""} ${message.status === "streaming" ? "streaming" : ""} ${message.status === "aborted" ? "aborted" : ""}${isTeam ? " team-message team-message-agent" : ""}`}>
       <div className={isTeam ? "team-msg-avatar team-msg-avatar-agent" : "avatar"}>
         {senderInfo?.agentAvatar ? (
           <img src={senderInfo.agentAvatar} alt={senderInfo.agentName || tTeam("chat.unknownAgent")} className="team-msg-avatar-img" />
@@ -166,7 +173,7 @@ export default function ChatMessage({ message, senderInfo }: Props) {
           </div>
         )}
         <div className={isTeam ? "team-msg-bubble team-msg-bubble-agent" : "bubble"}>
-          {isPending ? (
+          {isPending || isWaitingForFirstToken ? (
             isOnboarding ? (
               <OnboardingAnimation />
             ) : (
